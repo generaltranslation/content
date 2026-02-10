@@ -1,0 +1,41 @@
+name: Validate MDX Content
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Check for unsafe patterns
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Block import/export statements
+        run: |
+          if grep -rn --include='*.mdx' -E '^\s*(import|export)\s' .; then
+            echo "::error::MDX files must not contain import or export statements."
+            exit 1
+          fi
+
+      - name: Block dangerous HTML tags
+        run: |
+          if grep -rn --include='*.mdx' -Pi '<\s*(script|iframe|object|embed|form|style)[\s>/]' .; then
+            echo "::error::MDX files must not contain <script>, <iframe>, <object>, <embed>, <form>, or <style> tags."
+            exit 1
+          fi
+
+      - name: Block event handler attributes
+        run: |
+          if grep -rn --include='*.mdx' -Pi '\son\w+\s*=' .; then
+            echo "::error::MDX files must not contain on*= event handler attributes."
+            exit 1
+          fi
+
+      - name: Block javascript: URLs
+        run: |
+          if grep -rn --include='*.mdx' -Pi 'javascript\s*:' .; then
+            echo "::error::MDX files must not contain javascript: URLs."
+            exit 1
+          fi
