@@ -1,0 +1,168 @@
+---
+title: Branching
+description: Track translations separately for different git branches
+---
+
+## Overview
+
+Branching allows you to track translations separately for different git branches in your project.
+This is useful when you're working on feature branches that introduce new content or modify existing text, and you want to keep those translations isolated from your main branch until the feature is merged.
+
+When branching is enabled, the CLI automatically detects your current git branch and associates translations with that branch.
+Translations created on a feature branch won't affect your production translations until you merge.
+
+<Callout type="info">
+  Branching is a feature of the GT Cloud and requires a paid plan. If you attempt to create a non-default branch without a paid plan, the CLI will fall back to using the default branch.
+</Callout>
+
+---
+
+## Usage
+
+To enable branching, use the `--enable-branching` flag with the `translate` command:
+
+```bash
+npx gtx-cli translate --enable-branching
+```
+
+By default, the CLI will automatically detect your current git branch. If you want to specify a custom branch name instead:
+
+```bash
+npx gtx-cli translate --enable-branching --branch my-feature-branch
+```
+
+---
+
+## Flags
+
+| Flag                         | Description                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `--enable-branching`         | Enable branching for the project. Required to use branch-based translation tracking.             |
+| `--branch <branch>`          | Specify a custom branch name instead of auto-detecting from git.                                 |
+| `--disable-branch-detection` | Disable automatic detection of branch relationships. Use only the manually specified branch.     |
+
+---
+
+## How it works
+
+When branching is enabled, the CLI performs the following:
+
+1. **Detects the current branch**: Uses git to determine which branch you're currently on.
+
+2. **Identifies the default branch**: Determines which branch is the default (usually `main` or `master`) by checking the remote HEAD reference.
+
+3. **Tracks branch relationships**: Identifies branches that have been merged into the current branch (incoming branches) and the branch the current branch was checked out from (parent branch).
+
+4. **Associates translations with branches**: All translations are tagged with the current branch, keeping them separate from other branches.
+
+5. **Inherits translations from parent branches**: When you create a new branch, translations are automatically inherited from the parent branch, so they are not re-translated and you are not double-charged.
+
+### Translation inheritance
+
+When working on a feature branch, the CLI tracks:
+
+- **Incoming branches**: Branches that have been merged into your current branch. This allows translations from merged branches to be incorporated.
+- **Checked-out branch**: The branch your current branch was created from (typically the default branch). This allows your feature branch to inherit existing translations.
+
+This means that when you create a new feature branch off `main`, your branch will have access to all the existing translations from `main`. Any new translations you create will be associated with your feature branch until it's merged.
+
+After merging the feature branch back into `main`, the translations from the feature branch are automatically incorporated into `main`.
+
+---
+
+## Configuration
+
+You can configure branching options in your `gt.config.json` file:
+
+```json title="gt.config.json"
+{
+  "branchOptions": {
+    "enabled": true,
+    "currentBranch": "my-feature-branch",
+    "autoDetectBranches": true,
+    "remoteName": "origin"
+  }
+}
+```
+
+| Property             | Description                                                                 | Default     |
+| -------------------- | --------------------------------------------------------------------------- | ----------- |
+| `enabled`            | Enable branching for the project                                            | `false`     |
+| `currentBranch`      | Override the current branch name (instead of auto-detect)                   | `undefined` |
+| `autoDetectBranches` | Automatically detect branch relationships (incoming and checked-out branches) | `true`      |
+| `remoteName`         | The git remote name used for branch detection                               | `"origin"`  |
+
+<Callout type="info">
+  CLI flags take precedence over config file options. For example, `--enable-branching` will override `branchOptions.enabled`, and `--disable-branch-detection` will override `branchOptions.autoDetectBranches`.
+</Callout>
+
+---
+
+## Example workflow
+
+Here's a typical workflow using branching:
+
+1. **Create a feature branch**:
+   ```bash
+   git checkout -b feature/new-landing-page
+   ```
+
+2. **Add new translatable content** to your feature branch.
+
+3. **Translate with branching enabled**:
+   ```bash
+   npx gtx-cli translate --enable-branching
+   ```
+   The CLI detects you're on `feature/new-landing-page` and associates all new translations with that branch.
+
+4. **Iterate on your feature** - any additional translations stay on your feature branch.
+
+5. **Merge your feature branch** into `main`:
+   ```bash
+   git checkout main
+   git merge feature/new-landing-page
+   ```
+
+6. **Run translate on main**:
+   ```bash
+   npx gtx-cli translate --enable-branching
+   ```
+   The CLI detects the translations from `feature/new-landing-page` and incorporates those translations into `main`.
+
+---
+
+## Troubleshooting
+
+### Branch not detected
+
+If the CLI cannot detect your current branch, you can specify it manually:
+
+```bash
+npx gtx-cli translate --enable-branching --branch my-branch
+```
+
+### Using a non-standard remote
+
+If your git remote is not named `origin`, configure the remote name in your config:
+
+```json title="gt.config.json"
+{
+  "branchOptions": {
+    "remoteName": "upstream"
+  }
+}
+```
+
+or use the `--remote-name` flag:
+
+```bash
+npx gtx-cli translate --enable-branching --remote-name upstream
+```
+
+### Disabling branch relationship detection
+
+If you only want to use the current branch without tracking incoming or parent branches:
+
+```bash
+npx gtx-cli translate --enable-branching --branch my-branch --disable-branch-detection
+```

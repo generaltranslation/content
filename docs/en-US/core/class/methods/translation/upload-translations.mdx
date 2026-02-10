@@ -1,0 +1,260 @@
+---
+title: uploadTranslations
+description: API reference for the uploadTranslations method to upload pre-existing translation files
+---
+
+## Overview
+
+The `uploadTranslations` method uploads translation files that correspond to previously uploaded source files.
+This is useful when you have pre-existing translations that you want to upload directly rather than generating them through the translation service.
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const result = await gt.uploadTranslations(files, {
+  sourceLocale: 'en'
+});
+```
+
+<Callout type="info">
+  You must have previously uploaded the source files using [`uploadSourceFiles`](/docs/core/class/methods/translation/upload-source-files) before uploading translations.
+</Callout>
+
+## Reference
+
+### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| `files` | `TranslationUpload[]` | Array of source file references with their translations |
+| `options` | `UploadFilesOptions` | Configuration options for the upload |
+
+#### TranslationUpload Structure
+
+```typescript
+type TranslationUpload = {
+  source: FileUpload;      // Reference to existing source file (no content needed)
+  translations: FileUpload[]; // Array of translated files with content
+}
+```
+
+#### FileUpload Structure (for source reference)
+
+| Name | Type | Description |
+|------|------|-------------|
+| `fileName` | `string` | File name matching the previously uploaded source file |
+| `fileFormat` | `FileFormat` | Format of the file (JSON, MDX, MD, XML, etc.) |
+| `fileId?` | `string` | Optional file ID of the source file |
+| `versionId?` | `string` | Optional version ID of the source file |
+
+#### FileUpload Structure (for translations)
+
+| Name | Type | Description |
+|------|------|-------------|
+| `content` | `string` | Raw translated file content as a string |
+| `fileName` | `string` | File name for the translation |
+| `fileFormat` | `FileFormat` | Format of the file (JSON, MDX, MD, XML, etc.) |
+| `locale` | `string` | Target locale of the translation |
+| `fileId?` | `string` | Optional file ID |
+| `versionId?` | `string` | Optional version ID |
+
+#### UploadFilesOptions
+
+| Name | Type | Description |
+|------|------|-------------|
+| `sourceLocale` | `string` | The source locale for the files |
+| `branchId?` | `string` | Optional branch ID to upload to |
+| `timeout?` | `number` | Request timeout in milliseconds |
+
+### Returns
+
+`Promise<UploadFilesResponse>` - Contains upload results and file references.
+
+```typescript
+type UploadFilesResponse = {
+  uploadedFiles: FileReference[];
+  count: number;
+  message: string;
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `uploadedFiles` | `FileReference[]` | Array of uploaded file references |
+| `count` | `number` | Number of files successfully uploaded |
+| `message` | `string` | Status message from the API |
+
+---
+
+## Examples
+
+### Basic usage
+
+Upload translations for previously uploaded source files:
+
+```typescript copy
+import { GT } from 'generaltranslation';
+import fs from 'fs';
+
+const gt = new GT({
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id'
+});
+
+// Assume source file was previously uploaded
+const files = [
+  {
+    source: {
+      fileName: 'common.json',
+      fileFormat: 'JSON' as const,
+      fileId: 'source-file-id',
+      versionId: 'source-version-id'
+    },
+    translations: [
+      {
+        content: fs.readFileSync('./locales/es/common.json', 'utf8'),
+        fileName: 'common.json',
+        fileFormat: 'JSON' as const,
+        locale: 'es'
+      },
+      {
+        content: fs.readFileSync('./locales/fr/common.json', 'utf8'),
+        fileName: 'common.json',
+        fileFormat: 'JSON' as const,
+        locale: 'fr'
+      }
+    ]
+  }
+];
+
+const result = await gt.uploadTranslations(files, {
+  sourceLocale: 'en'
+});
+
+console.log(`Uploaded ${result.count} translation files`);
+```
+
+### Upload after source upload
+
+Complete workflow uploading source files then translations:
+
+```typescript copy
+import { GT } from 'generaltranslation';
+import fs from 'fs';
+
+const gt = new GT({
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id'
+});
+
+// Step 1: Upload source files
+const sourceFiles = [
+  {
+    source: {
+      content: fs.readFileSync('./locales/en/messages.json', 'utf8'),
+      fileName: 'messages.json',
+      fileFormat: 'JSON' as const,
+      locale: 'en'
+    }
+  }
+];
+
+const { uploadedFiles } = await gt.uploadSourceFiles(sourceFiles, {
+  sourceLocale: 'en'
+});
+
+// Step 2: Upload existing translations
+const translationFiles = [
+  {
+    source: {
+      fileName: uploadedFiles[0].fileName,
+      fileFormat: uploadedFiles[0].fileFormat,
+      fileId: uploadedFiles[0].fileId,
+      versionId: uploadedFiles[0].versionId
+    },
+    translations: [
+      {
+        content: fs.readFileSync('./locales/es/messages.json', 'utf8'),
+        fileName: 'messages.json',
+        fileFormat: 'JSON' as const,
+        locale: 'es'
+      },
+      {
+        content: fs.readFileSync('./locales/de/messages.json', 'utf8'),
+        fileName: 'messages.json',
+        fileFormat: 'JSON' as const,
+        locale: 'de'
+      }
+    ]
+  }
+];
+
+const translationResult = await gt.uploadTranslations(translationFiles, {
+  sourceLocale: 'en'
+});
+
+console.log(`Uploaded ${translationResult.count} translations`);
+```
+
+### Batch upload multiple files
+
+Upload translations for multiple source files:
+
+```typescript copy
+import { glob } from 'glob';
+import path from 'path';
+
+async function uploadAllTranslations(
+  sourceRefs: FileReference[],
+  targetLocales: string[]
+) {
+  const files = sourceRefs.map(sourceRef => ({
+    source: {
+      fileName: sourceRef.fileName,
+      fileFormat: sourceRef.fileFormat,
+      fileId: sourceRef.fileId,
+      versionId: sourceRef.versionId
+    },
+    translations: targetLocales
+      .map(locale => {
+        const translationPath = `./locales/${locale}/${sourceRef.fileName}`;
+        try {
+          return {
+            content: fs.readFileSync(translationPath, 'utf8'),
+            fileName: sourceRef.fileName,
+            fileFormat: sourceRef.fileFormat,
+            locale
+          };
+        } catch {
+          // Translation file doesn't exist for this locale
+          return null;
+        }
+      })
+      .filter(Boolean)
+  }));
+
+  const result = await gt.uploadTranslations(files, {
+    sourceLocale: 'en',
+    timeout: 60000
+  });
+
+  return result;
+}
+```
+
+---
+
+## Notes
+
+* Source files must be uploaded first using [`uploadSourceFiles`](/docs/core/class/methods/translation/upload-source-files)
+* The `source` object in each file entry is a reference to an existing source file (content is not needed)
+* Each translation in the `translations` array must include content and a target locale
+* This method is useful for migrating existing translations or uploading human-reviewed translations
+* File references include `branchId` for proper versioning with branching support
+
+## Next steps
+
+* See [`uploadSourceFiles`](/docs/core/class/methods/translation/upload-source-files) to upload source files first
+* See [`enqueueFiles`](/docs/core/class/methods/translation/enqueue-files) to generate translations automatically
+* See [`downloadFile`](/docs/core/class/methods/translation/download-file) to download translations
+* See [`queryFileData`](/docs/core/class/methods/translation/query-file-data) to check translation status

@@ -1,0 +1,187 @@
+---
+title: Configuration
+description: Configure the gt-sanity plugin for your Sanity project
+---
+
+## Overview
+
+The `gtPlugin` function accepts a configuration object to customize translation behavior, locale settings, and document handling.
+
+```typescript title="sanity.config.ts"
+import { gtPlugin } from 'gt-sanity';
+
+export default defineConfig({
+  plugins: [
+    gtPlugin({
+      sourceLocale: 'en',
+      locales: ['es', 'zh', 'ja'], // Replace with your target locales
+      languageField: 'language',
+      singletons: ['siteSettings', 'navigation'],
+    }),
+  ],
+});
+```
+
+## Basic configuration
+
+### Source and Target Locales
+
+Define your source language and target locales:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en', // Source language for content
+  locales: ['es', 'zh', 'ja'], // Target languages for translation
+});
+```
+
+### Language field
+
+Specify which field stores the document's locale. Defaults to `'language'`:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  languageField: 'locale', // By default, documents use 'language' field. Here we use 'locale' instead.
+});
+```
+
+## Document filtering
+
+### Translate specific document types
+
+Limit translation to specific document types:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  translateDocuments: [{ type: 'page' }, { type: 'post' }],
+});
+```
+
+### Translate specific documents
+
+Target specific document IDs:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  translateDocuments: [
+    { documentId: 'homepage' },
+    { documentId: 'about-page' },
+  ],
+});
+```
+
+## Singleton documents
+
+Singletons are Sanity documents that exist as a single instance with translated variants. Configure how translated versions are named:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  singletons: ['siteSettings', 'navigation', 'footer'], // List of singleton document IDs
+  singletonMapping: (docId, locale) => `${docId}-${locale}`, // Optional function to customize the ids of the translated singleton documents
+});
+```
+
+By default, translations for singletons will have randomly generated ids unless `singletonMapping` is provided.
+
+## Ignoring fields
+
+Exclude specific fields from translation:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  ignoreFields: [
+    { fields: [{ property: '$.slug', type: 'slug' }] },
+    { fields: [{ property: '$.category' }] },
+    { fields: [{ property: '$..linkType' }] },
+    { fields: [{ property: '$..frequencies.default' }] },
+  ],
+});
+```
+
+`property` is a [JSONPath](https://goessner.net/articles/JsonPath/) expression that matches one or more fields in documents.
+`type` is an optional parameter to further filter the fields to ignore to specific types.
+
+## Serialization options
+
+Extend the default serialization behavior:
+
+```typescript
+import { attachGTData, gtPlugin } from 'gt-sanity';
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  additionalSerializers: {
+    // Additional serializers for marks (custom annotations)
+    marks: {
+      link: ({ value, children }) =>
+        attachGTData(`<a>${children}</a>`, value, 'markDef'),
+      inlineMath: ({ value, children }) =>
+        attachGTData(`<span>${children}</span>`, value, 'markDef'),
+    },
+  },
+});
+```
+
+See the [Serialization Guide](/docs/sanity/guides/serialization) for details.
+
+## Complete example
+
+```typescript title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { structureTool } from 'sanity/structure';
+import { gtPlugin, TranslationsTab } from 'gt-sanity';
+
+export default defineConfig({
+  name: 'default',
+  title: 'My Project',
+  projectId: 'your-project-id',
+  dataset: 'production',
+
+  plugins: [
+    structureTool({
+      defaultDocumentNode: (S, { schemaType }) => {
+        // Add translations tab to articles and pages
+        if (['article', 'page'].includes(schemaType)) {
+          return S.document().views([
+            S.view.form(),
+            S.view.component(TranslationsTab).title('General Translation'),
+          ]);
+        }
+        return S.document();
+      },
+    }),
+
+    gtPlugin({
+      sourceLocale: 'en',
+      locales: ['es', 'fr', 'de', 'ja', 'zh'],
+      languageField: 'language',
+      singletons: ['siteSettings', 'navigation'],
+      translateDocuments: [{ type: 'article' }, { type: 'page' }],
+      ignoreFields: [
+        {
+          fields: [{ property: 'slug' }, { property: 'publishedAt' }],
+        },
+      ],
+    }),
+  ],
+
+  schema: {
+    types: schemaTypes,
+  },
+});
+```
+
+## Next steps
+
+- [Serialization Guide](/docs/sanity/guides/serialization) - Custom serialization rules
+- [API Reference](/docs/sanity/api/plugin-config) - Full configuration options

@@ -1,0 +1,233 @@
+---
+title: Pluralization 101 in React
+summary: Best practices for rendering plurals in a React web app
+date: 2025-02-17
+authors: [archie]
+tags: ['guide', 'plurals', 'internationalization', 'react', 'nextjs']
+images: ['/static/blogs/plurals.png']
+layout: PostLayout
+---
+
+## What is pluralization?
+
+I often encounter apps that display awkward messages like:
+
+```
+You have 1 new message(s)
+```
+
+This is a telltale sign of a developer who hasn't thought carefully about user experience.
+
+React apps often need pluralization — for notification counts, list lengths, or search results.
+**And it's not that hard to get pluralization right, especially if you only need your app in English.**
+But there are plenty of bad practices new developers fall into, especially for multilingual interfaces.
+
+### Hard-coded plurals
+
+Many projects — including surprisingly large and important ones — hard-code plural logic.
+
+```jsx
+export default function Example({ n }) {
+  return (
+    <p>
+      Displaying {n} item{n === 1 ? '' : 's'}
+    </p>
+  )
+}
+```
+
+But pluralization is often more complex than just adding an "s" to the end of a word.
+Some nouns have irregular plural forms, like "child" and "children".
+Sometimes, other parts of the sentence may also need to change to reflect the changed word, like
+"is" and "are" changing depending on the count.
+
+The table below illustrates some common scenarios:
+
+| Scenario       | Examples                                                    | Notes                                                               |
+| -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
+| Viewer count   | "1 person is watching" <br/> "2 people are watching"        | Irregular noun ("person" → "people") and verb changes needed.       |
+| Item deletion  | "Delete this message?" <br/> "Delete these 2 messages?"     | Demonstrative changes ("this" vs. "these") plus noun pluralization. |
+| Search results | "No results" <br/> "1 result found" <br/> "2 results found" | Different phrasing for zero, one, and multiple results.             |
+
+Using conditional expressions quickly becomes unwieldy.
+
+And it becomes a nightmare when you need to ship your app in other languages.
+What works for English often breaks completely in languages like Polish or Arabic, which have entirely different rules for handling quantities.
+**Companies we work with often put off internationalization
+because of the pain of refactoring hardcoded UI like this.**
+
+---
+
+## English pluralization
+
+In English, using the right plurals in your app is usually straightforward.
+
+For simple noun pluralization, write a utility function:
+
+```jsx
+export function pluralize(
+  count: number,
+  singular: string,
+  plural: string = singular + 's'
+) {
+  return `${count === 1 ? singular : plural}`;
+}
+```
+
+Now there is a single function for handling all our plural logic,
+and it works for irregular plurals too:
+
+```js
+pluralize(2, 'user') // "users"
+pluralize(2, 'person', 'people') // "people"
+pluralize(2, 'child', 'children') // "children"
+```
+
+But what if you need more complicated logic, like:
+
+```
+"No one is watching"
+"1 person is watching"
+"2 people are watching"
+```
+
+At this stage, you should think seriously about a low-maintainence internationalization ("i18n") library.
+
+Although developers often think that i18n libraries are only for multilingual interfaces,
+they can be very useful for plural and variable formatting even in single-language applications.
+
+There are plenty of React i18n libraries, including ours, [gt-react](/docs) (or [gt-next](/docs) if you're using Next.js).
+Displaying an English plural using gt-react is super simple:
+
+```jsx
+import { Plural } from 'gt-react'
+
+function Example({ count }) {
+  return (
+    <Plural n={count} zero={'No one is watching'} one={`${count} person is watching`}>
+      {count} people are watching
+    </Plural>
+  )
+}
+```
+
+UI is conditionally rendered based on the value of `n`.
+
+Most libraries use JavaScript's [`Intl` object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules) to decide which plural form to display.
+This means that in English, you would use the name `"one"` to refer to a singular and `"other"` to refer to a plural.
+Our `<Plural>` component falls back to its children if the number provided to `n` doesn't match any of the provided props.
+
+Using a library here is best practice even for English-only applications, and makes future internationalization much easier.
+
+---
+
+## Internationalization (i18n) and plurals
+
+Shipping a multilingual interface makes displaying plurals much more complicated.
+
+- In Arabic, nouns have different forms depending on whether there are zero, one, two, or many of them
+- In Spanish, German, and Italian, large numbers use periods instead of commas, so 1,000,000 becomes 1.000.000
+- In Hindi, digits are grouped in pairs, so 1,000,000 would become 10,00,000
+
+**For an internationalized app, you should use a dedicated library** which will have its own documentation on how to handle plurals and number formatting.
+
+### Formatting numbers for different languages
+
+You can also use the `Intl` object to [format numbers](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat).
+The easiest way to do this is with the built-in `toLocaleString()` method.
+
+By default, this will use the runtime's current locale:
+
+```javascript
+const n = 1000000
+n.toLocaleString() // displays 1,000,000 when the runtime locale is "en-US" (American English)
+n.toLocaleString('de') // 1.000.000 because the locale has been specified as "de" (German)
+```
+
+gt-react also offers a `<Num>` component which relies on `Intl.NumberFormat` [under the hood](https://github.com/General-Translation/gt-libraries/blob/main/packages/core/src/formatting/format.ts#L14C1-L27C2).
+
+```jsx
+import { Num } from 'gt-react'
+
+// displays 1,000,000 when the language is "en-US"
+// displays 1.000.000 when the language is "de"
+// displays 10,00,000 when the language is "hi"
+export default function Example() {
+  return <Num>1000000</Num>
+}
+```
+
+### Displaying alternate plural forms
+
+The six plural forms supported by JavaScript's `Intl` object are: `zero`, `one`, `two`, `few`, `many`, `other`.
+Although English uses only `one` ("singular") and `other` ("plural"),
+languages like Arabic and Polish have more than just these two forms.
+
+For example, an English-speaking user might expect:
+
+```
+"No one is watching"
+"1 person is watching"
+"2 people are watching"
+```
+
+Whereas an Arabic-speaking user might expect different expressions for singular,
+dual (when the count is exactly two things), and small and large plural forms:
+
+```
+"لا أحد يشاهد"
+"1 شخص يشاهد"
+"2 شخصان يشاهدان"
+"3 أشخاص يشاهدون"
+"11 شخصاً يشاهدون"
+```
+
+This is where an internationalization library becomes essential.
+Every language has its own logic for when and how to display plurals,
+so it's better to rely on a dedicated library to get it right.
+
+A good internationalization library will do two things:
+
+1. Decide which plural form (`one`, `many`, `other`, etc.) to use based on the locale
+2. Locate the translation in the right language which corresponds to that form
+
+**If you already have an internationalization library,
+check their docs for information on plural formatting.**
+Almost all libraries have dedicated documentation on rendering plurals.
+
+### Putting all the building blocks together
+
+If you don't already have an internationalization library, consider gt-react!
+
+gt-react's `<Plural>` component:
+
+- Is a simple, functional way to render plurals correctly
+- Works natively with the `<Num>` formatting component
+- Works natively with the `<T>` translation component, which integrates with our [free translation service](https://generaltranslation.com) to generate plural forms automatically
+
+Putting all the building blocks together, we have a complete multilingual interface:
+
+```jsx
+import { T, Plural, Num } from 'gt-react'
+
+// Works out of the box in 100+ languages
+function Example({ count }) {
+  return (
+    <T>
+      <Plural
+        n={count}
+        zero={'No one is watching'}
+        one={
+          <>
+            <Num>{count}</Num> person is watching
+          </>
+        }
+      >
+        <Num>{count}</Num> people are watching
+      </Plural>
+    </T>
+  )
+}
+```
+
+Interested in learning more? Check out our docs on how to set up [gt-react](https://generaltranslation.com/docs/react/tutorials/quickstart) or [gt-next](https://generaltranslation.com/docs/next/tutorials/quickstart).

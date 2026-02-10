@@ -1,0 +1,206 @@
+---
+title: declareStatic
+description: API reference for the declareStatic() string function
+---
+
+## Overview
+
+The `declareStatic` function allows static function calls or variable expressions inside of a string translation.
+This is useful for writing reusable code, internationalizing fragmented sentences, and preserving word agreement.
+
+```jsx
+const getDisplayName = (condition) => {
+  return condition ? "Brian" : 'Archie';
+};
+
+gt(`${declareStatic(getDisplayName(condition))} says hello.`);
+// Creates two translation entries:
+// "Brian says hello." -> "Brian dice hola."
+// "Archie says hello." -> "Archie dice hola."
+```
+
+This works by generating distinct translations for each possible outcome, which has the benefit of preserving word agreement, conjugation, and word order changes across languages.
+
+<Callout>
+**Multiple Translation Entries:**
+`declareStatic` creates separate translation entries for each possible outcome of the wrapped function, which can significantly increase the number of translations.
+Use this feature judiciously and prefer ICU select statements when the multiplication factor becomes excessive.
+</Callout>
+
+<Callout>
+**Static Analysis:**
+`declareStatic` only can only analyze content that is known at build time.
+Any dynamic content (variables, api calls, etc.) must be wrapped with `declareVar`.
+</Callout>
+
+## Reference
+### Parameters
+
+| Name                  | Type | Description                                                                 |
+|-----------------------|--|-----------------------------------------------------------------------------|
+| `content`        | `T extends string \| boolean \| number \| null \| undefined` | A static function call that returns translatable content.                 |
+
+### Returns
+
+Returns `content` of type `T`.
+
+---
+
+## Behavior
+
+### Build time analysis
+During the build process, the CLI tool:
+1. Analyzes the function wrapped by `declareStatic`
+2. Determines all possible return values from the function (these must be statically analyzable at build time)
+3. Creates separate translation entries for each unique outcome
+
+### Performance considerations
+Like `<Static>`, `declareStatic` multiplies translation entries.
+Each function call with multiple outcomes creates separate translations, and multiple `declareStatic` calls in the same string multiply the total entries exponentially.
+
+---
+
+## Example
+
+### Reusable content
+You can use `declareStatic` to handle fragmented sentences or for reusable content with function calls.
+
+```jsx copy
+import { declareStatic, gt } from '__PACKAGE_NAME__';
+
+function getSubject() {
+  return "boy";
+}
+
+function Component() {
+  const translation1 = gt(`The ${declareStatic(getSubject())} is playing.`);
+  const translation2 = gt(`The ${declareStatic(getSubject())} is having fun.`);
+  const translation3 = gt(`The ${declareStatic(getSubject())} is having a great time.`);
+  return <p>{translation1} {translation2} {translation3}</p>;
+}
+```
+
+### Fragmented sentences
+
+You can use `declareStatic` to handle fragmented sentences with function calls.
+
+```jsx copy
+import { declareStatic, gt } from '__PACKAGE_NAME__';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+function Component({ gender }) {
+  const translation = gt(`The ${declareStatic(getSubject(gender))} is playing.`);
+  return <p>{translation}</p>;
+}
+```
+
+### Agreement
+
+Without `declareStatic`, translating agreement is syntactically heavy.
+You have to add a select statement to handle agreement (plurality, gender, etc.).
+Then, you must also enumerate each possible outcome.
+
+
+```jsx copy
+import { gt } from '__PACKAGE_NAME__';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+function Component({ gender }) {
+  const translation = gt(
+    '{gender, select, boy {The boy is playing.} girl {The girl is playing.} other {}}',
+    {
+      gender: getSubject(gender) ,
+    },
+  );
+  return <p>{translation}</p>;
+}
+```
+
+With `declareStatic`, agreement becomes trivial.
+No select statment is required nor do you need to specify every outcome.
+
+```jsx copy
+import { declareStatic, declareVar, gt } from '__PACKAGE_NAME__';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+function Component({ gender }) {
+  const translation = gt(`The ${declareStatic(getSubject(gender))} is playing.`);
+  return <p>{translation}</p>;
+}
+```
+
+By using `declareStatic`, the CLI tool identifies that `getSubject` has two possible outcomes, and creates a translation entry for each outcome.
+By doing so, agreement is handled automatically.
+- "The boy is playing" -> "*El* niño está jugando"
+- "The girl is playing" -> "*La* niña está jugando"
+
+
+### With variables
+You can combine `declareStatic` with `declareVar` for dynamic content.
+
+```jsx copy
+import { declareStatic, declareVar, gt } from '__PACKAGE_NAME__';
+
+function getGreeting(name) {
+  return name ? `Hello, ${declareVar(name)}` : 'Hello, stranger';
+}
+
+function Component({ name }) {
+  const translation = gt(`${declareStatic(getGreeting(name))}! How are you?`);
+  return <p>{translation}</p>;
+}
+```
+
+### Complex functions
+Functions can contain multiple conditional branches and return statements.
+
+```jsx copy
+import { declareStatic, gt } from '__PACKAGE_NAME__';
+
+function getStatusMessage(status, priority) {
+  if (status === 'complete') {
+    return priority === 'high' ? 'Urgent task completed' : 'Task completed';
+  } else if (status === 'pending') {
+    return priority === 'high' ? 'Urgent task pending' : 'Task pending';
+  }
+  return 'Task status unknown';
+}
+
+function Component({ status, priority }) {
+  const message = gt(`${declareStatic(getStatusMessage(status, priority))}.`);
+  return <p>{message}</p>;
+}
+```
+
+### Inline expressions and logic
+You can embed logic directly inside of the `declareStatic` call.
+
+```jsx copy
+import { declareStatic, gt } from '__PACKAGE_NAME__';
+
+function Component({ gender }) {
+  const message = gt(`The ${declareStatic(gender === 'male' ? 'boy' : 'girl')} is playing.`);
+  return <p>{message}</p>;
+}
+```
+---
+
+## Notes
+* Use `declareStatic` judiciously as it can exponentially increase translation entries
+* All possible outcomes must be statically analyzable at build time
+* Variables within static functions should be wrapped with `declareVar`
+
+## Next steps
+* See [`declareVar`](__DOCS_PATH__/api/strings/declare-var) for marking dynamic content within static functions
+* See [`decodeVars`](__DOCS_PATH__/api/strings/decode-vars) for extracting original values from declared variables
+* See [`<Static>`](__DOCS_PATH__/api/components/static) for the JSX equivalent
+* Read the [release notes](/blog/gt-next_v6_12_0) for more information

@@ -1,0 +1,251 @@
+---
+title: Static
+description: API reference for the Static component
+---
+
+## Overview
+
+The `<Static>` component is used to handle sentence fragmentation and reusable content without sacrificing word agreement, conjugation, and word order changes.
+In the following example, two separate translations are created: "The beautiful boy plays with the ball" and "The beautiful girl plays with the ball".
+
+```jsx
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+<T>
+  The beautiful <Static>{getSubject(gender)}</Static> plays with the ball.
+</T>;
+```
+
+The `<Static>` component tells the CLI tool to dereference a function call and catalog all possible content being returned by that function, treating every return statement as if it had a `<T>` component wrapping it.
+
+<Callout>
+  **Advanced Usage:**
+  The `<Static>` component is an advanced feature and should be used with caution as it can generate deceptively large numbers of translation entries.
+  Furthermore, `<Static>` enforces a strict requirement that all possible content permutations must be statically analyzable.
+</Callout>
+
+For more information, see the release notes for [gt-next@6.8.0](/blog/gt-next_v6_8_0).
+
+---
+
+## Reference
+
+### Props
+
+<TypeTable
+  type={{
+    children: {
+      type: 'function invocation',
+      optional: false,
+    },
+  }}
+/>
+
+### Description
+
+| Prop       | Description                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| `children` | Static content. The CLI tool will analyze all possible return values. |
+
+
+### Returns
+
+`React.JSX.Element` containing the rendered content from the function call, with each possible outcome creating a separate translation entry.
+
+---
+
+## Behavior
+
+### Build time analysis
+
+During the build process, the CLI tool analyzes the children of `<Static>` components and creates separate translation entries for each possible outcome.
+This enables proper grammatical agreement and word order handling across different languages.
+
+### Requirements
+
+The children of `<Static>` components must be determinable at build time. The supported syntax includes:
+
+- String, number, and boolean literals
+- JSX expressions with nested `<Static>` and `<Var>` components
+- Ternary operators
+- Function invocations (that have statically analyzable outcomes)
+
+---
+
+## Examples
+
+### Basic usage
+
+Use `<Static>` to handle dynamic content that affects sentence structure.
+
+```jsx title="BasicExample.jsx" copy
+import { T, Static } from '__PACKAGE_NAME__';
+
+export default function Example({ gender }) {
+  return (
+    <T>
+      The <Static>{gender === 'male' ? 'boy' : 'girl'}</Static> is beautiful.
+    </T>
+  );
+}
+```
+
+This creates two translation entries:
+
+- "The boy is beautiful"
+- "The girl is beautiful"
+
+### With function invocations
+
+Use `<Static>` to handle dynamic content that affects sentence structure from a function invocation.
+
+```jsx title="BasicExample.jsx" copy
+import { T, Static } from '__PACKAGE_NAME__';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+export default function Example({ gender }) {
+  return (
+    <T>
+      The <Static>{getSubject(gender)}</Static> is beautiful.
+    </T>
+  );
+}
+```
+
+### With variables
+
+Combine `<Static>` with `<Var>` for dynamic content within static function returns.
+
+```jsx title="WithVariables.jsx" copy
+import { T, Static, Var } from '__PACKAGE_NAME__';
+
+
+function getTitle(title) {
+  return title === 'Mr.' ? 'Mr.' : 'Ms.';
+}
+
+function getGreeting(title) {
+  return (
+    <>
+      Hello, <Static>{getTitle(title)}</Static>. How are you, <Var>{name}</Var>?
+    </>
+  );
+}
+
+export default function Greeting({ title, name }) {
+  return (
+    <T>
+      <Static>{getGreeting(title)}</Static>
+    </T>
+  );
+}
+```
+
+### Multiple Static components
+
+Be careful when using multiple `<Static>` components as they multiply translation entries.
+
+```jsx title="MultipleStatic.jsx" copy
+import { T, Static } from '__PACKAGE_NAME__';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+function getObject(toy) {
+  return toy === 'ball' ? 'ball' : 'crayon';
+}
+
+export default function PlayExample({ gender, toy }) {
+  return (
+    <T>
+      <Static>{getSubject(gender)}</Static> plays with the{' '}
+      <Static>{getObject(toy)}</Static>.
+    </T>
+  );
+}
+```
+
+This creates four translation entries (2 × 2 combinations):
+
+- "boy plays with the ball"
+- "boy plays with the crayon"
+- "girl plays with the ball"
+- "girl plays with the crayon"
+
+### Supported function syntax
+
+```jsx title="SupportedSyntax.jsx" copy
+function getExamples(key) {
+  switch (key) {
+    case 'literals':
+      if (condition1) {
+        return 'The boy';
+      } else if (condition2) {
+        return 22;
+      } else {
+        return true;
+      }
+    case 'jsx':
+      return (
+        <>
+          Hello, <Static>{getTitle(title)}</Static>. How are you,{' '}
+          <Var>{name}</Var>?
+        </>
+      );
+    case 'ternary':
+      return condition ? 'The boy' : 'The girl';
+    case 'function_calls':
+      return otherStaticFunction();
+  }
+}
+```
+
+---
+
+## Limitations
+
+### Performance impact
+
+Using `<Static>` can create exponential growth in translation entries.
+Each additional `<Static>` component multiplies the total number of translations.
+
+### Variable content
+
+Any dynamic or variable content within static function returns must be wrapped in `<Var>` components.
+
+```jsx
+// Correct
+function getContent() {
+  return (
+    <>
+      Hello, <Var>{userName}</Var>!
+    </>
+  );
+}
+
+// Incorrect - will cause build errors
+function getContent() {
+  return <>Hello, {userName}!</>;
+}
+```
+
+---
+
+## Notes
+
+- The `<Static>` component is designed for handling sentence fragmentation while maintaining grammatical accuracy across languages.
+- Always consider the performance implications of multiple `<Static>` components in a single translation.
+- Treat every return statement in static functions as if wrapped with a `<T>` component.
+- Use `<Static>` judiciously - prefer simpler translation structures when possible.
+
+## Next steps
+
+- For variable content within translations, see the [`<Var>`](__DOCS_PATH__/api/components/var) component.
+- For the main translation component, see [`<T>`](__DOCS_PATH__/api/components/t).
+- For the string equivalent of `<Static>`, see [`declareStatic`](__DOCS_PATH__/api/strings/declare-static).

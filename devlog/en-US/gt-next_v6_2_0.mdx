@@ -1,0 +1,78 @@
+---
+title: gt-next@6.2.0
+date: 2025-08-19
+authors: [ernest]
+tags: ['gt-next', '6.2.0', 'swc', 'plugin', 'build-time', 'linting']
+---
+
+## Overview
+
+In **gt-next 6.2.0**, we've taken a big step toward moving processing from runtime to build time through an **SWC plugin**.
+This approach unlocks new capabilities like compile-time hashing, pre-rendered translations, and stricter validation — all without adding runtime overhead.
+
+To keep things focused, we started small with three key improvements.
+
+- **Compile-time hashing**
+- **Translation on demand**
+- **Build-time linting rules**
+
+---
+
+## Compile-Time Hashing
+
+While a relatively small optimization, we now perform **hash calculations at build time** instead of at runtime.  
+Functions like `getGT()` and server-side `<T>` no longer need to compute and cache hashes on every call, resulting in more consistent performance.
+
+---
+
+## Translation on Demand
+
+One of the biggest pain points for developers has been refreshing the page during development to see real-time string updates.
+
+`getGT()` and `useGT()` follow the familiar i18n pattern:
+
+```tsx title="page.tsx" copy
+export default function Page() {
+  const gt = useGT()
+  // const gt = await getGT(); for server-side
+
+  return (
+    <>
+      {gt('some content to translate')}
+      {gt('some other content to translate')}
+    </>
+  )
+}
+```
+
+We deliberately kept `gt()` synchronous to match other i18n libraries.
+The downside was a `two-step translation process`:
+
+    1.	Register the text with the API.
+    2.	Wait for a second render to display the translated result.
+
+Now, thanks to the compiler, translatable content is scanned ahead of time and passed directly into `useGT()` or `getGT()` at compile time.
+This means translations are immediately available at runtime — no page refreshes.
+
+---
+
+## Build-Time Linting
+
+Previously, detecting incorrect usage of `<T>` components required running `gtx-cli` with a custom linter.
+This created inconsistencies between **development** and **production** behavior.
+
+With 6.2.0, linting rules are now enforced directly in the SWC plugin.
+If any translatable content isn't wrapped in a `<T>` component, you'll get a **build-time error**, ensuring issues are caught early.
+
+---
+
+## Why SWC (for now)?
+
+Our transition from runtime to build time is still in its early stages.
+We're starting with Next.js, but plan to support other frameworks soon.
+Babel plugins offering the same functionality are already on the roadmap.
+
+---
+
+`gt-next 6.2.0` lays the groundwork for a faster, more reliable translation workflow.
+By shifting logic to build time, we're reducing runtime complexity while making translations more immediate and predictable.

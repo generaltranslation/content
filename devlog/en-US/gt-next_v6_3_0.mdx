@@ -1,0 +1,135 @@
+---
+title: gt-next@6.3.0
+date: 2025-08-27
+authors: [ernest]
+tags: ['gt-next', '6.3.0', 'AI Development', 'String translation']
+---
+
+## Overview
+
+In **gt-next 6.3.0**, we're moving closer to a library that is suitable for both human developers and AI developers. Our guiding principle for this release was to **minimize disruption to existing code** while still introducing the essential functionality required for i18n.
+
+To achieve this, we introduce a new `msg()` function for translating strings anywhere in your codebase. Previously, developers had to pass the `gt()` function from `useGT()` or `getGT()` up the call stack in order to translate a string. With `msg()`, you simply wrap the string once, and then pass it through `m()` at render time.
+
+---
+
+## A comparison
+
+Historically, strings had to be wrapped by passing the `gt()` function through multiple layers:
+
+```tsx title="constants.tsx"
+export const greeting1 = 'Hello, world!'
+export const getGreeting2 = (gt: any) => gt('Hello, world!')
+```
+
+```tsx title="Page.tsx"
+import { greeting1, getGreeting2 } from './constants'
+
+export default function Page() {
+  const gt = useGT()
+  return (
+    <div>
+      {greeting1}
+      {getGreeting2(gt)}
+    </div>
+  )
+}
+```
+
+Now, with `msg()`, strings can be declared directly as constants. The only requirement is that you pass them through `m()` (from `useMessages()` or `getMessages()`) when displaying.
+
+```tsx title="constants.tsx"
+export const greeting1 = 'Hello, world!'
+export const greeting2 = msg('Hello, world!')
+```
+
+```tsx title="Page.tsx"
+import { greeting1, greeting2 } from './constants'
+
+export default function Page() {
+  const m = useMessages()
+  return (
+    <div>
+      {greeting1}
+      {m(greeting2)}
+    </div>
+  )
+}
+```
+
+---
+
+## Encoding and decoding
+
+To support interpolation, the `msg()` function returns an encoded message instead of a plain string. The format looks like this:
+
+```text
+<interpolated content>:<base64 encoded string>
+```
+
+The base64-encoded portion contains a JSON object with:
+
+- `$_hash`: Hash of the original string
+- `$_source`: Parameters interpolated into the message
+- `$id`: A custom unique identifier (if provided)
+- `$context`: Context of the message (if specified)
+- Any variables included in the interpolation
+
+This design slightly changes how strings compare directly but ensures minimal impact on typing and code structure. To access the interpolated content, use `decodeMsg()`.
+
+### Why an encoded string?
+
+The alternative to using an encoded string would mean that `msg()` would have to return a custom object type containing the additional metadata. While this works for the encode/decode paradigm, it introduces issues when dealing with strict typing.
+
+We concluded that the best way to minimize the impact of i18n in this scenario would simply be to return a string which contains the metadata, instead.
+
+### Example
+
+Original code without i18n:
+
+```ts title="original.ts"
+const name = 'John'
+const message = `Hello, ${name}!`
+
+if (message.length > 10) {
+  console.log('The message is too long')
+} else {
+  console.log('The message is just the right length')
+}
+```
+
+With `msg()` and `decodeMsg()`:
+
+```ts title="internationalized.ts"
+import { msg, decodeMsg } from 'gt-next'
+
+const name = 'John'
+const message = msg('Hello, {name}!', { name })
+
+if (decodeMsg(message).length > 10) {
+  console.log('The message is too long')
+} else {
+  console.log('The message is just the right length')
+}
+```
+
+## Other
+
+You can also override parameters within the `gt()` function, even if they were already interpolated when calling `msg()`.
+
+```tsx title="Page.tsx"
+import { msg, useMessages } from 'gt-next'
+
+const message = msg('Hello, {name}!', { name: 'John' })
+
+export default function Page() {
+  const m = useMessages()
+  return <div>{m(message, { name: 'Jane' })}</div> // This will return "Hello, Jane!"
+}
+```
+
+---
+
+## Summary
+
+This release focuses on making `gt-next` more developer-friendly while minimizing the overhead of i18n. By eliminating the need to pass the `gt()` function through the call stack, the new `msg()` function provides a cleaner, more intuitive way to translate strings and greatly simplifies the i18n process.

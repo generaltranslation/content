@@ -1,0 +1,149 @@
+---
+title: gt-next@6.8.0
+date: 2025-11-10
+authors: [ernest]
+tags: ['gt-react', 'gt-next', 'gtx-cli', 'v6.8.0', 'static', 'translation', 'i18n']
+---
+
+## Overview
+
+We often find that the more mature a codebase is, the more content is fragmented.
+Sentences become scattered between functions, utilities, logic, and services.
+
+```tsx
+function getSubject(gender) { 
+  return gender === "male" ? "boy" : "girl" 
+}
+function getObject(toy, gender) { 
+  return toy === "ball" ? "ball" : getSubject(gender)
+}
+
+function Component({ gender, toy }) {
+  return (
+    <>
+      <p>
+        The beautiful {getSubject(gender)} plays with the {getObject(toy, gender)}.
+      </p>
+    </>
+  )
+}
+```
+
+When it inevitably comes time to internationalize, developers find that they have painted themselves into a corner.
+Enforcing things like agreement, conjugation, and changes to word order across multiple files is not manageable without a major refactor.
+Traditionally, this meant manually extracting every possible permutation of each sentence and adding them to a translation dictionary.
+
+
+In **gt-next 6.8.0**, we are doubling down on the belief that a strong i18n library adapts to a codebase, rather than the other way around.
+While `gt-next` already translates content inline, it lacks two fundamental features of such a library:
+(1) Support for sentence fragmentation and (2) reusable content while also preserving word agreement, conjugation, or word order changes.
+
+We are introducing the `<Static>` component to allow static function calls directly inside translations.
+
+```tsx
+function getSubject(gender) { 
+  return gender === "male" ? "boy" : "girl" 
+}
+function getObject(type, gender) { 
+  return type === "ball" ? "ball" : getSubject(gender)
+}
+
+function Component({ gender, toy }) {
+  return (
+    <T>
+      <p>
+        The beautiful <Static>{getSubject(gender)}</Static> plays with the <Static>{getObject(toy, gender)}</Static>.
+      </p>
+    </T>
+  )
+}
+```
+
+## Important Considerations
+
+That being said, we strongly emphasize using the `<Static>` component carefully and judiciously.
+The `<Static>` component, while powerful, can also lead to major increases in the number of translation entries.
+If used incorrectly, this could have negative effects on load times for an application.
+
+## How to use `<Static>`
+
+Just like the `<T>` and `<Var>` components, the `<Static>` component is a flag that tells the CLI tool where to and where not to look for translatable content.
+It tells the CLI tool to dereference a function call inside the `<Static>` tags and catalog all possible content being returned by that function.
+Treat every return statement as if it had a `<T>` component wrapping it.
+
+Once the CLI tool has found all possible outputs from a function call, it creates a separate translation entry for each possible output.
+For example, the following code creates two separate translation entries: "The boy is beautiful" and "The girl is beautiful".
+Because a different translation entry exists for each possible output, we can support agreement, conjugation, and word order in a fragmented sentence: "*El* niño es *hermoso*" and "*La* niña es *hermosa*".
+```tsx
+function getSubject(gender) { 
+  return gender === "male" ? "boy" : "girl" 
+}
+function Component({ gender }) {
+  return (
+    <T>
+      The <Static>{getSubject(gender)}</Static> is beautiful.
+    </T>
+  )
+}
+```
+
+## Limitations and Future Improvements
+
+### Multiplication
+
+As mentioned earlier, the `<Static>` component, if used too liberally, can generate a large number of translation entries which could have a negative performance impact on load times.
+For example, consider a component with two `<Static>` components, each wrapping a function invocation with two possible outcomes.
+In this case, four translation entries are created.
+**Every additional `<Static>` component multiplies the number of translations by the number of possible outcomes from each function call.**
+```tsx
+function getSubject(gender) { 
+  return gender === "male" ? "boy" : "girl" 
+}
+function getObject(toy) { 
+  return toy === "ball" ? "ball" : "crayon"
+}
+function Component({ gender, toy }) {
+  return (
+    <T>
+      <Static>{getSubject(gender)}</Static> plays with the <Static>{getObject(toy)}</Static>.
+    </T>
+  )
+}
+```
+
+### Syntax
+
+It is important to treat every return statement as if it had a `<T>` component wrapping it.
+Any variables or function calls that are dynamic must still be wrapped in `<Var>` components.
+
+Currently, `<Static>` only supports function calls as children, but in the future it will be able to support more complex expressions.
+As of `gt-next 6.8.0`, the following syntax is supported for static functions:
+```tsx
+function getExamples(key) {
+  switch (key) {
+    case "string, number, and boolean literals":
+      if (condition1) {
+        return "The boy"
+      } else if (condition2) {
+        return 22
+      } else {
+        return true
+      }
+    case "jsx expressions":
+      return (
+        <>
+          Hello, <Static>{getTitle(title)}</Static>. How are you, <Var>{name}</Var>?
+        </>
+      );
+    case "ternary operators":
+      return condition ? "The boy" : "The girl"      
+    case "function calls":
+      return otherStaticFunction();
+  }
+}
+```
+
+
+## Conclusion
+
+**`gt-next 6.8.0`** introduces the `<Static>` component as a solution to sentence fragmentation without sacrificing translation coverage or proper grammatical agreement.

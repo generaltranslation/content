@@ -1,0 +1,405 @@
+---
+title: Internationalize a Mini Shop
+description: A hands-on React tutorial that internationalizes a simple shop using GT React components, hooks, and shared strings
+---
+
+Get a small, fully local “mini shop” running and translated — no external services, no routing, no UI frameworks. You’ll use the core GT React features end-to-end and see how they fit together in a simple, realistic UI.
+
+Prerequisites: React, basic JavaScript/TypeScript
+
+What you’ll build
+- A single-page “shop” with a product grid and a simple in-memory cart
+- Language switcher and shared navigation labels
+- Properly internationalized numbers, currency, and pluralization
+- Optional: local translation storage for production builds
+
+Links used in this tutorial
+- Provider: [`<GTProvider>`](/docs/react/api/components/gtprovider)
+- Components: [`<T>`](/docs/react/api/components/t), [`<Var>`](/docs/react/api/components/var), [`<Num>`](/docs/react/api/components/num), [`<Currency>`](/docs/react/api/components/currency), [`<DateTime>`](/docs/react/api/components/datetime), [`<Branch>`](/docs/react/api/components/branch), [`<Plural>`](/docs/react/api/components/plural), [`<LocaleSelector>`](/docs/react/api/components/locale-selector)
+- Strings and Shared Strings: [`useGT`](/docs/react/api/strings/use-gt), [`msg`](/docs/react/api/strings/msg), [`useMessages`](/docs/react/api/strings/use-messages)
+- Guides: [Variables](/docs/react/guides/variables), [Branching](/docs/react/guides/branches), [Strings](/docs/react/guides/strings), [Local Translation Storage](/docs/react/guides/local-tx), [Changing Languages](/docs/react/guides/languages)
+
+---
+
+## Install and Wrap Your App
+
+Install packages and wrap your app with the provider.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm i gt-react
+  npm i --save-dev gtx-cli
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn add gt-react
+  yarn add --dev gtx-cli
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun add gt-react
+  bun add --dev gtx-cli
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm add gt-react
+  pnpm add --save-dev gtx-cli
+  ```
+  </Tab>
+</Tabs>
+
+<Callout>
+  Optional: Starter Project (Vite)
+
+  If you’re starting from scratch, scaffold a Vite React + TypeScript app and then install GT packages:
+
+  ```bash copy
+  npm create vite@latest mini-shop -- --template react-ts
+  cd mini-shop
+  npm i gt-react
+  npm i --save-dev gtx-cli
+  ```
+
+  Then add the files in the sections below (e.g., `src/main.tsx`, `src/App.tsx`, `src/components/*`, `src/data.ts`, `src/nav.ts`).
+</Callout>
+
+Create a minimal provider setup.
+
+```tsx title="src/main.tsx" copy
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { GTProvider } from 'gt-react'; // See: /docs/react/api/components/gtprovider
+import App from './App';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <GTProvider locales={["es", "fr"]}> {/* Enable Spanish and French */}
+      <App />
+    </GTProvider>
+  </StrictMode>
+);
+```
+
+Optionally add a `gt.config.json` now (useful later for CI and local storage):
+
+```json title="gt.config.json" copy
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"]
+}
+```
+
+### Development API keys
+
+You can follow this tutorial without keys (it will render the default language). To see live translations and test language switching in development, add development keys.
+
+Learn more in [Production vs Development](/docs/react/concepts/environments).
+
+<Tabs items={["Vite (dev)", "Create React App (dev)", "Get keys"]}>
+  <Tab value="Vite (dev)">
+  ```bash title=".env.local" copy
+  VITE_GT_API_KEY="your-dev-api-key"
+  VITE_GT_PROJECT_ID="your-project-id"
+  ```
+  </Tab>
+  <Tab value="Create React App (dev)">
+  ```bash title=".env.local" copy
+  REACT_APP_GT_API_KEY="your-dev-api-key"
+  REACT_APP_GT_PROJECT_ID="your-project-id"
+  ```
+  </Tab>
+  <Tab value="Get keys">
+  - Dashboard: https://dash.generaltranslation.com/signup
+  - Or via CLI:
+    ```bash copy
+    npx gtx-cli auth
+    ```
+  </Tab>
+</Tabs>
+
+
+
+---
+
+## Seed data and app structure
+
+We’ll hardcode a tiny product array and keep everything client-side. No servers, no routing.
+
+```ts title="src/data.ts" copy
+export type Product = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: 'USD' | 'EUR';
+  inStock: boolean;
+  addedAt: string; // ISO date string
+};
+
+export const products: Product[] = [
+  {
+    id: 'p-1',
+    name: 'Wireless Headphones',
+    description: 'Noise-cancelling over-ear design with 30h battery',
+    price: 199.99,
+    currency: 'USD',
+    inStock: true,
+    addedAt: new Date().toISOString()
+  },
+  {
+    id: 'p-2',
+    name: 'Travel Mug',
+    description: 'Double-wall insulated stainless steel (12oz)',
+    price: 24.5,
+    currency: 'USD',
+    inStock: false,
+    addedAt: new Date().toISOString()
+  }
+];
+```
+
+---
+
+## Shared navigation labels with msg and useMessages
+
+Use [`msg`](/docs/react/api/strings/msg) to mark shared strings in config, then decode them via [`useMessages`](/docs/react/api/strings/use-messages) at render time.
+
+```tsx title="src/nav.ts" copy
+import { msg } from 'gt-react'; // See: /docs/react/api/strings/msg
+
+export const nav = [
+  { label: msg('Home'), href: '#' },
+  { label: msg('Products'), href: '#products' },
+  { label: msg('Cart'), href: '#cart' }
+];
+```
+
+```tsx title="src/components/Header.tsx" copy
+import { LocaleSelector, T } from 'gt-react';
+import { useMessages } from 'gt-react'; // See: /docs/react/api/strings/useMessages
+import { nav } from '../nav';
+
+export default function Header() {
+  const m = useMessages();
+  return (
+    <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+      <T><h1>Mini Shop</h1></T> {/* See: /docs/react/api/components/t */}
+      <nav style={{ display: 'flex', gap: 12 }}>
+        {nav.map(item => (
+          <a key={item.href} href={item.href} title={m(item.label)}>
+            {m(item.label)}
+          </a>
+        ))}
+      </nav>
+      <div style={{ marginLeft: 'auto' }}>
+        <LocaleSelector /> {/* See: /docs/react/api/components/localeSelector */}
+      </div>
+    </header>
+  );
+}
+```
+
+---
+
+## Product cards with T, variables, Branch, and Currency
+
+Use [`<T>`](/docs/react/api/components/t) for JSX translation. Wrap dynamic content with variable components like [`<Var>`](/docs/react/api/components/var), [`<Num>`](/docs/react/api/components/num), [`<Currency>`](/docs/react/api/components/currency), and [`<DateTime>`](/docs/react/api/components/datetime). Handle stock state via [`<Branch>`](/docs/react/api/components/branch).
+
+```tsx title="src/components/ProductCard.tsx" copy
+import { T, Var, Num, Currency, DateTime, Branch } from 'gt-react';
+import type { Product } from '../data';
+
+export default function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void; }) {
+  return (
+    <div style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8 }}>
+      <T>
+        <h3><Var>{product.name}</Var></h3>
+        <p><Var>{product.description}</Var></p>
+        <p>
+          Price: <Currency currency={product.currency}>{product.price}</Currency>
+        </p>
+        <p>
+          Added: <DateTime options={{ dateStyle: 'medium', timeStyle: 'short' }}>{product.addedAt}</DateTime>
+        </p>
+        <Branch
+          branch={product.inStock}
+          true={<p>In stock</p>}
+          false={<p style={{ color: 'tomato' }}>Out of stock</p>}
+        />
+        <button onClick={onAdd} disabled={!product.inStock}>
+          Add to cart
+        </button>
+      </T>
+    </div>
+  );
+}
+```
+
+---
+
+## Cart with Pluralization and Totals
+
+Use [`<Plural>`](/docs/react/api/components/plural) to express “X items in cart” and [`<Currency>`](/docs/react/api/components/currency) for totals. Combine with [`<T>`](/docs/react/api/components/t), [`<Var>`](/docs/react/api/components/var), and [`<Num>`](/docs/react/api/components/num).
+
+```tsx title="src/components/Cart.tsx" copy
+import { T, Plural, Var, Num, Currency } from 'gt-react';
+import type { Product } from '../data';
+
+export default function Cart({ items, onClear }: { items: Product[]; onClear: () => void; }) {
+  const total = items.reduce((sum, p) => sum + p.price, 0);
+  const itemCount = items.length;
+  return (
+    <div style={{ borderTop: '1px solid #eee', paddingTop: 12 }}>
+      <T>
+        <h2>Cart</h2>
+        <Plural
+          n={itemCount}
+          zero={<p>Your cart is empty</p>}
+          one={<p>You have <Num>{itemCount}</Num> item</p>}
+          other={<p>You have <Num>{itemCount}</Num> items</p>}
+        />
+        {items.map((p) => (
+          <p key={p.id}>
+            <Var>{p.name}</Var> — <Currency currency={p.currency}>{p.price}</Currency>
+          </p>
+        ))}
+        <p>
+          Total: <Currency currency={items[0]?.currency || 'USD'}>{total}</Currency>
+        </p>
+        <button onClick={onClear} disabled={itemCount === 0}>Clear cart</button>
+      </T>
+    </div>
+  );
+}
+```
+
+---
+
+## Attributes and Placeholders with `useGT`
+
+Use [`useGT`](/docs/react/api/strings/use-gt) for plain string translations like input placeholders and ARIA labels.
+
+```tsx title="src/components/Search.tsx" copy
+import { useGT } from 'gt-react';
+
+export default function Search({ onQuery }: { onQuery: (q: string) => void; }) {
+  const gt = useGT();
+  return (
+    <input
+      type="search"
+      placeholder={gt('Search products...')}
+      aria-label={gt('Search input')}
+      onChange={(e) => onQuery(e.target.value)}
+      style={{ padding: 8, width: '100%', maxWidth: 320 }}
+    />
+  );
+}
+```
+
+---
+
+## Put it together
+
+A single-page app with in-memory cart and simple search filter.
+
+```tsx title="src/App.tsx" copy
+import { useMemo, useState } from 'react';
+import Header from './components/Header';
+import Search from './components/Search';
+import ProductCard from './components/ProductCard';
+import Cart from './components/Cart';
+import { products } from './data';
+
+export default function App() {
+  const [query, setQuery] = useState('');
+  const [cart, setCart] = useState<string[]>([]);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    return products.filter(p =>
+      p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+    );
+  }, [query]);
+
+  const items = products.filter(p => cart.includes(p.id));
+
+  return (
+    <div style={{ margin: '24px auto', maxWidth: 960, padding: 16 }}>
+      <Header />
+      <div style={{ margin: '16px 0' }}>
+        <Search onQuery={setQuery} />
+      </div>
+      <section id="products" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+        {filtered.map(p => (
+          <ProductCard
+            key={p.id}
+            product={p}
+            onAdd={() => setCart(c => (p.inStock ? [...new Set([...c, p.id])] : c))}
+          />
+        ))}
+      </section>
+      <section id="cart" style={{ marginTop: 24 }}>
+        <Cart
+          items={items}
+          onClear={() => setCart([])}
+        />
+      </section>
+    </div>
+  );
+}
+```
+
+---
+
+## Run locally
+
+Add a simple dev script to your `package.json`, then start the app.
+
+<Tabs items={["Vite", "Create React App"]}>
+  <Tab value="Vite">
+  ```json title="package.json" copy
+  {
+    "scripts": {
+      "dev": "vite"
+    }
+  }
+  ```
+
+  Run:
+
+  ```bash
+  npm run dev
+  ```
+  </Tab>
+  <Tab value="Create React App">
+  ```json title="package.json" copy
+  {
+    "scripts": {
+      "start": "react-scripts start"
+    }
+  }
+  ```
+
+  Run:
+
+  ```bash
+  npm start
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## What you learned
+- Translating JSX with [`<T>`](/docs/react/api/components/t) and handling dynamic content via [`<Var>`](/docs/react/api/components/var), [`<Num>`](/docs/react/api/components/num), [`<Currency>`](/docs/react/api/components/currency), [`<DateTime>`](/docs/react/api/components/datetime)
+- Expressing conditional content with [`<Branch>`](/docs/react/api/components/branch) and quantities with [`<Plural>`](/docs/react/api/components/plural)
+- Translating attributes with [`useGT`](/docs/react/api/strings/use-gt)
+- Sharing navigation/config strings using [`msg`](/docs/react/api/strings/msg) and decoding them with [`useMessages`](/docs/react/api/strings/use-messages)
+- Switching languages with [`<LocaleSelector>`](/docs/react/api/components/locale-selector)
+
+## Next steps
+- Explore: [Variables Guide](/docs/react/guides/variables), [Branching Guide](/docs/react/guides/branches), [Strings Guide](/docs/react/guides/strings), [Changing Languages](/docs/react/guides/languages)

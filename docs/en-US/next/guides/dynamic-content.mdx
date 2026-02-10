@@ -1,0 +1,154 @@
+---
+title: Dynamic Content
+description: How to translate runtime content using server-side translation APIs
+---
+
+Dynamic content translation handles text that isn't available at build time - user-generated content, API responses, or database records. Use [`<Tx>`](/docs/next/api/components/tx) for JSX content and [`tx`](/docs/next/api/strings/tx) for plain strings, both server-side only for security.
+
+<Callout type="warn">
+  **Use sparingly:** Dynamic translation consumes API quota and adds latency. Prefer [`<T>` components](/docs/next/guides/t) with [variable components](/docs/next/guides/variables) whenever possible.
+</Callout>
+
+## When to Use Dynamic Translation
+
+Dynamic translation is for content that truly cannot be known at build time:
+
+### Appropriate use cases
+- **User-generated content**: Chat messages, reviews, social posts
+- **External API responses**: Third-party data, RSS feeds, external services  
+- **Database records**: Dynamic CMS content, user profiles from APIs
+- **Real-time data**: Live notifications, status messages
+
+### Avoid for these cases
+- User names, account numbers → Use [`<Var>`](/docs/next/api/components/var)
+- Conditional messages → Use [branch components](/docs/next/guides/branches)
+- Form validation → Use [string translation](/docs/next/guides/strings)
+- Static configuration → Use [shared strings](/docs/next/guides/shared-strings)
+
+## Quick start
+
+### JSX content with Tx
+```jsx
+import { Tx } from 'gt-next';
+
+async function UserPost({ postContent }) {
+  return (
+    <article>
+      <Tx>{postContent}</Tx>
+    </article>
+  );
+}
+```
+
+### Plain strings with tx
+```jsx
+import { tx } from 'gt-next/server';
+
+async function NotificationBanner({ message }) {
+  const translatedMessage = await tx(message);
+  
+  return (
+    <div className="banner">
+      {translatedMessage}
+    </div>
+  );
+}
+```
+
+## Server-Side Only
+
+Both [`<Tx>`](/docs/next/api/components/tx) and [`tx`](/docs/next/api/strings/tx) are server-side only for security:
+
+```jsx
+// ✅ Server component
+async function ServerComponent() {
+  const translated = await tx(dynamicContent);
+  return <div>{translated}</div>;
+}
+
+// ❌ Client component - won't work
+'use client';
+function ClientComponent() {
+  const translated = await tx(dynamicContent); // Error!
+  return <div>{translated}</div>;
+}
+```
+
+## Examples
+
+### User-generated content
+```jsx
+import { Tx } from 'gt-next';
+
+async function ChatMessage({ message }) {
+  return (
+    <div className="chat-message">
+      <div className="author">{message.author}</div>
+      <Tx>{message.content}</Tx>
+    </div>
+  );
+}
+```
+
+### External API data
+```jsx
+import { tx } from 'gt-next/server';
+
+async function NewsArticle({ article }) {
+  const translatedTitle = await tx(article.title);
+  
+  return (
+    <article>
+      <h1>{translatedTitle}</h1>
+      <p>{article.publishedAt}</p>
+    </article>
+  );
+}
+```
+
+### Mixed content
+```jsx
+import { T, Tx, Var } from 'gt-next';
+
+async function ProductReview({ review }) {
+  return (
+    <div>
+      {/* Static content with variables */}
+      <T>
+        <p><Var>{review.author}</Var> rated this <Var>{review.rating}</Var> stars</p>
+      </T>
+      
+      {/* Dynamic user content */}
+      <Tx>{review.content}</Tx>
+    </div>
+  );
+}
+```
+
+## Common issues
+
+### Avoid overuse
+Don't use dynamic translation for content that can use standard components:
+
+```jsx
+// ❌ Unnecessary
+const content = `Hello, ${userName}!`;
+return <Tx>{content}</Tx>;
+
+// ✅ Use variable components instead
+return (
+  <T>
+    <p>Hello, <Var>{userName}</Var>!</p>
+  </T>
+);
+```
+
+### API quota impact
+Dynamic translation consumes API quota on every request. Use caching and error handling in production applications.
+
+## Next steps
+
+- [Local Translation Guide](/docs/next/guides/local-tx) - Handle translations without API calls
+- [Middleware Guide](/docs/next/guides/middleware) - Language detection and routing
+- API References:
+  - [`<Tx>` Component](/docs/next/api/components/tx)

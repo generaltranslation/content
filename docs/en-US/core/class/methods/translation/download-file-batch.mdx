@@ -1,0 +1,183 @@
+---
+title: downloadFileBatch
+description: API reference for the downloadFileBatch method to download multiple files in a single request
+---
+
+## Overview
+
+The `downloadFileBatch` method downloads multiple source or translation files in a single batch request.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const result = await gt.downloadFileBatch([
+  { fileId: 'file-123', branchId: 'branch-456', locale: 'es' },
+  { fileId: 'file-123', branchId: 'branch-456', locale: 'fr' },
+  { fileId: 'file-123', branchId: 'branch-456', locale: 'de' }
+]);
+```
+
+<Callout>
+**Batch Efficiency:**
+This method is optimized for downloading multiple files in a single API call, reducing network overhead and improving performance compared to multiple individual `downloadFile` calls.
+</Callout>
+
+## Reference
+
+### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| `requests` | `DownloadFileBatchRequest` | Array of file request objects |
+| `options?` | `DownloadFileBatchOptions` | Optional configuration for the download request |
+
+#### DownloadFileBatchRequest
+
+```typescript
+type DownloadFileBatchRequest = {
+  fileId: string;
+  branchId?: string;
+  locale?: string;
+  versionId?: string;
+}[];
+```
+
+| Name | Type | Description |
+|------|------|-------------|
+| `fileId` | `string` | Unique identifier of the file to download |
+| `branchId?` | `string` | Branch ID to download from. If not provided, the default branch will be used |
+| `locale?` | `string` | Target locale for the translation. If not provided, the source file will be downloaded |
+| `versionId?` | `string` | Version ID to download. If not provided, the latest version will be used |
+
+#### DownloadFileBatchOptions
+
+| Name | Type | Description |
+|------|------|-------------|
+| `timeout?` | `number` | Request timeout in milliseconds |
+
+### Returns
+
+`Promise<DownloadFileBatchResult>` - Contains the downloaded files and metadata.
+
+```typescript
+type DownloadFileBatchResult = {
+  files: File[];
+  count: number;
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `files` | `File[]` | Array of downloaded file objects |
+| `count` | `number` | Number of files successfully downloaded |
+
+#### File structure
+
+```typescript
+type File = {
+  fileId: string;
+  branchId?: string;
+  locale?: string;
+  versionId?: string;
+  fileName: string;
+  data: string;
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `fileId` | `string` | File ID |
+| `branchId` | `string` | Branch ID |
+| `locale` | `string` | Locale of the file (if translation) |
+| `versionId` | `string` | Version ID |
+| `fileName` | `string` | Original file name |
+| `data` | `string` | File content as UTF-8 string |
+
+---
+
+## Examples
+
+
+```typescript title="index.ts" copy
+// (1) Create a GT instance
+const targetLocales = ['es', 'fr', 'de'];
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// (2) Upload the file
+const fileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [ { source: fileUpload } ];
+const { uploadedFiles } = await gt.uploadSourceFiles(
+  files,
+  { sourceLocale: 'en' }
+);
+
+// (3) Enqueue the file translation job
+const enqueueResult = await gt.enqueueFiles(
+  uploadedFiles,
+  {
+    sourceLocale: 'en',
+    targetLocales: targetLocales,
+  }
+);
+
+// (4) Wait for all translations to be completed
+const { fileId, versionId, branchId } = uploadedFiles[0];
+const translatedFileQueries = targetLocales.map((locale) => ({
+  fileId,
+  versionId,
+  branchId,
+  locale
+}));
+
+while (true) {
+  const result = await gt.queryFileData({
+    translatedFiles: translatedFileQueries
+  });
+
+  const allCompleted = result.translatedFiles?.every(
+    (file) => file.status === 'completed'
+  );
+
+  if (allCompleted) {
+    break;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+// (5) Download all translations in a batch
+const downloadResult = await gt.downloadFileBatch(
+  targetLocales.map((locale) => ({
+    fileId,
+    branchId,
+    locale
+  }))
+);
+
+downloadResult.files.forEach(file => {
+  console.log(`Downloaded ${file.locale}: ${file.fileName}`);
+});
+```
+
+---
+
+## Notes
+
+* Files are returned as UTF-8 strings
+* Use [`queryFileData`](/docs/core/class/methods/translation/query-file-data) to verify files are ready for download first
+* Files are returned in the same order as the requested items when possible
+* Failed individual file downloads within the batch don't cause the entire batch to fail
+
+## Next steps
+
+* See [`downloadFile`](/docs/core/class/methods/translation/download-file) for single file downloads
+* See [`queryFileData`](/docs/core/class/methods/translation/query-file-data) to verify files are ready for download
+* See [`enqueueFiles`](/docs/core/class/methods/translation/enqueue-files) to start translation jobs

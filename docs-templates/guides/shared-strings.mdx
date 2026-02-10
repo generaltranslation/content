@@ -1,0 +1,418 @@
+---
+title: Shared Strings
+description: How to internationalize strings used across multiple components and files
+---
+
+Shared strings are text values used in multiple places throughout your application - like navigation labels, form messages, or configuration data. Instead of duplicating translation logic everywhere, use [`msg`](__DOCS_PATH__/api/strings/msg) to mark strings for translation and [`useMessages`](__DOCS_PATH__/api/strings/use-messages) to decode them.
+
+## The problem with shared content
+
+Consider this navigation configuration used across your app:
+
+```tsx
+// navData.ts
+export const navData = [
+  {
+    label: 'Home',
+    description: 'The home page',
+    href: '/'
+  },
+  {
+    label: 'About', 
+    description: 'Information about the company',
+    href: '/about'
+  }
+];
+```
+
+To internationalize this, you'd typically need to:
+1. Convert it to a function that accepts a translation function
+2. Update every usage to call the function with `t`
+3. Manage the complexity across your codebase
+
+This creates maintenance overhead and makes your code harder to read. The [`msg`](__DOCS_PATH__/api/strings/msg) function solves this by letting you mark strings for translation in-place, then decode them when needed.
+
+## Quickstart
+
+Use [`msg`](__DOCS_PATH__/api/strings/msg) to mark strings and [`useMessages`](__DOCS_PATH__/api/strings/use-messages) to decode them:
+
+```tsx
+// navData.ts - Mark strings for translation
+import { msg } from '__PACKAGE_NAME__';
+
+export const navData = [
+  {
+    label: msg('Home'),
+    description: msg('The home page'), 
+    href: '/'
+  },
+  {
+    label: msg('About'),
+    description: msg('Information about the company'),
+    href: '/about'
+  }
+];
+```
+
+```tsx
+// Component usage - Decode marked strings
+import { useMessages } from '__PACKAGE_NAME__';
+import { navData } from './navData';
+
+function Navigation() {
+  const m = useMessages();
+  
+  return (
+    <nav>
+      {navData.map((item) => (
+        <a key={item.href} href={item.href} title={m(item.description)}>
+          {m(item.label)}
+        </a>
+      ))}
+    </nav>
+  );
+}
+```
+
+## How shared strings work
+
+The shared string system works in two phases:
+
+1. **Mark Phase**: [`msg`](__DOCS_PATH__/api/strings/msg) encodes strings with translation metadata
+2. **Decode Phase**: [`useMessages`](__DOCS_PATH__/api/strings/use-messages) decodes and translates the strings
+
+```tsx
+// msg() encodes the string with metadata
+const encoded = msg('Hello, world!');
+console.log(encoded); // "Hello, world!:eyIkX2hhc2giOiJkMjA3MDliZGExNjNlZmM2In0="
+
+// useMessages() decodes and translates
+const m = useMessages();
+const translated = m(encoded); // "Hello, world!" in user's language
+```
+
+<Callout type="warn">
+  Encoded strings from [`msg`](__DOCS_PATH__/api/strings/msg) cannot be used directly - they must be decoded with [`useMessages`](__DOCS_PATH__/api/strings/use-messages).
+</Callout>
+
+## Components
+
+Use [`useMessages`](__DOCS_PATH__/api/strings/use-messages) hook:
+
+```tsx
+import { useMessages } from '__PACKAGE_NAME__';
+
+const encodedString = msg('Hello, world!');
+
+function MyComponent() {
+  const m = useMessages();
+  return <div>{m(encodedString)}</div>;
+}
+```
+
+## Getting original strings with decodeMsg
+
+Sometimes you need to access the original string without translation, such as for logging, debugging, or comparisons. Use [`decodeMsg`](__DOCS_PATH__/api/strings/msg#decodemsg) to extract the original text:
+
+```tsx
+import { decodeMsg } from '__PACKAGE_NAME__';
+
+const encoded = msg('Hello, world!');
+const original = decodeMsg(encoded); // "Hello, world!" (original)
+const translated = m(encoded); // "Hello, world!" (in user's language)
+
+// Useful for logging or debugging
+console.log('Original string:', decodeMsg(encoded));
+console.log('Translated string:', m(encoded));
+```
+
+### Use cases for decodeMsg
+
+- **Development & Debugging**: Log original strings for troubleshooting
+- **Fallback Handling**: Use original text when translations fail
+- **String Comparisons**: Compare against known original values
+- **Analytics**: Track original string usage
+
+```tsx
+// Example: Fallback handling
+function getDisplayText(encodedStr) {
+  const m = useMessages();
+  try {
+    return m(encodedStr);
+  } catch (error) {
+    console.warn('Translation failed, using original:', decodeMsg(encodedStr));
+    return decodeMsg(encodedStr);
+  }
+}
+```
+
+## Using variables
+
+For strings with dynamic content, use placeholders and pass variables:
+
+```tsx
+// Mark string with variables
+const items = 100;
+export const pricing = [
+  {
+    name: 'Basic',
+    price: 100,
+    description: msg('The basic plan includes {items} items', { items })
+  }
+];
+```
+
+```tsx
+// Use in component
+function PricingCard() {
+  const m = useMessages();
+  
+  return (
+    <div>
+      <h3>{pricing[0].name}</h3>
+      <p>{m(pricing[0].description)}</p>
+    </div>
+  );
+}
+```
+
+### ICU message format
+For advanced formatting, use ICU syntax:
+
+```tsx
+const count = 10;
+const message = msg('There are {count, plural, =0 {no items} =1 {one item} other {{count} items}} in the cart', { count });
+```
+
+<Callout>
+  Learn more about ICU Message Format in the [Unicode documentation](https://unicode-org.github.io/icu/userguide/format_parse/messages/).
+</Callout>
+
+## Examples
+
+### Navigation configuration
+```tsx
+// config/navigation.ts
+import { msg } from '__PACKAGE_NAME__';
+
+export const mainNav = [
+  {
+    label: msg('Home'),
+    href: '/',
+    icon: 'home'
+  },
+  {
+    label: msg('Products'),
+    href: '/products', 
+    icon: 'package'
+  },
+  {
+    label: msg('About Us'),
+    href: '/about',
+    icon: 'info'
+  }
+];
+
+export const footerLinks = [
+  {
+    title: msg('Company'),
+    links: [
+      { label: msg('About'), href: '/about' },
+      { label: msg('Careers'), href: '/careers' },
+      { label: msg('Contact'), href: '/contact' }
+    ]
+  },
+  {
+    title: msg('Support'), 
+    links: [
+      { label: msg('Help Center'), href: '/help' },
+      { label: msg('Documentation'), href: '/docs' },
+      { label: msg('API Reference'), href: '/api' }
+    ]
+  }
+];
+```
+
+```tsx
+// components/Navigation.tsx
+import { useMessages } from '__PACKAGE_NAME__';
+import { mainNav } from '../config/navigation';
+
+function Navigation() {
+  const m = useMessages();
+  
+  return (
+    <nav>
+      {mainNav.map((item) => (
+        <a key={item.href} href={item.href}>
+          <Icon name={item.icon} />
+          {m(item.label)}
+        </a>
+      ))}
+    </nav>
+  );
+}
+```
+
+### Form configuration
+```tsx
+// config/forms.ts
+import { msg } from '__PACKAGE_NAME__';
+
+export const formMessages = {
+  placeholders: {
+    email: msg('Enter your email address'),
+    password: msg('Enter your password'),
+    message: msg('Type your message here...')
+  },
+  actions: {
+    send: msg('Send Message'),
+    save: msg('Save Changes'),
+    cancel: msg('Cancel')
+  },
+  validation: {
+    required: msg('This field is required'),
+    email: msg('Please enter a valid email address'),
+    minLength: msg('Must be at least {min} characters', { min: 8 }),
+    maxLength: msg('Cannot exceed {max} characters', { max: 100 })
+  },
+  success: {
+    saved: msg('Changes saved successfully'),
+    sent: msg('Message sent successfully'),
+    updated: msg('Profile updated')
+  },
+  errors: {
+    network: msg('Network error - please try again'),
+    server: msg('Server error - please contact support'),
+    timeout: msg('Request timed out - please try again')
+  }
+};
+```
+
+```tsx
+// components/ContactForm.tsx
+import { useMessages } from '__PACKAGE_NAME__';
+import { formMessages } from '../config/forms';
+
+function ContactForm() {
+  const m = useMessages();
+  const [errors, setErrors] = useState({});
+  
+  return (
+    <form>
+      <input 
+        type="email"
+        placeholder={m(formMessages.placeholders.email)}
+        required
+      />
+      {errors.email && <span>{m(formMessages.validation.email)}</span>}
+      
+      <button type="submit">
+        {m(formMessages.actions.send)}
+      </button>
+    </form>
+  );
+}
+```
+
+### Dynamic content generation
+```tsx
+// utils/productData.ts
+import { msg } from '__PACKAGE_NAME__';
+
+function mockProducts() {
+  return [
+    { name: 'iPhone 15', company: 'Apple', category: 'Electronics' },
+    { name: 'Galaxy S24', company: 'Samsung', category: 'Electronics' }
+  ];
+}
+
+export function getProductData() {
+  const products = mockProducts();
+  
+  return products.map(product => ({
+    ...product,
+    description: msg('{name} is a {category} product by {company}', {
+      name: product.name,
+      category: product.category,
+      company: product.company
+    })
+  }));
+}
+```
+
+```tsx
+// components/ProductList.tsx
+import { useMessages } from '__PACKAGE_NAME__';
+import { getProductData } from '../utils/productData';
+
+function ProductList() {
+  const m = useMessages();
+  const products = getProductData();
+  
+  return (
+    <div>
+      {products.map(product => (
+        <div key={product.name}>
+          <h3>{product.name}</h3>
+          <p>{m(product.description)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Common issues
+
+### Using encoded strings directly
+Never use the output of [`msg`](__DOCS_PATH__/api/strings/msg) directly:
+
+```tsx
+// ❌ Wrong - encoded string used directly
+const encoded = msg('Hello, world!');
+return <div>{encoded}</div>; // Shows encoded string, not translation
+
+// ✅ Correct - decode the string first  
+const encoded = msg('Hello, world!');
+const m = useMessages();
+return <div>{m(encoded)}</div>; // Shows proper translation
+```
+
+### Dynamic content in msg()
+Strings must be known at build time:
+
+```tsx
+// ❌ Wrong - dynamic template literal
+const name = 'John';
+const message = msg(`Hello, ${name}`); // Build time error
+
+// ✅ Correct - use variables  
+const name = 'John';
+const message = msg('Hello, {name}', { name });
+```
+
+### Forgetting to decode
+Every [`msg`](__DOCS_PATH__/api/strings/msg) string needs to be decoded:
+
+```tsx
+// ❌ Missing decoding
+const config = {
+  title: msg('Dashboard'),
+  subtitle: msg('Welcome back')
+};
+
+// Later in component - forgot to decode
+return <h1>{config.title}</h1>; // Shows encoded string
+
+// ✅ Correct - decode when using
+const m = useMessages();
+return <h1>{m(config.title)}</h1>; // Shows translated title
+```
+
+## Next steps
+
+- [Dictionaries Guide](__DOCS_PATH__/guides/dictionaries) - Organize translations with structured data
+- [Languages Guide](__DOCS_PATH__/guides/languages) - Configure supported languages
+- API References:
+  - [`msg` Function](__DOCS_PATH__/api/strings/msg)

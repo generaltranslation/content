@@ -1,0 +1,149 @@
+---
+title: downloadFile
+description: API reference for the downloadFile method to download source or translated files
+---
+
+## Overview
+
+The `downloadFile` method downloads the content of a single file as a UTF-8 string.
+Depending on whether a locale is specified, it will either download the source file or the corresponding translation.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+// Download a translation
+const translatedContent = await gt.downloadFile({
+  fileId: 'file-123',
+  branchId: 'branch-456',
+  locale: 'es',
+  versionId: 'version-789'
+});
+
+// Download the source file (no locale specified)
+const sourceContent = await gt.downloadFile({
+  fileId: 'file-123',
+  branchId: 'branch-456'
+});
+```
+
+<Callout>
+  **Translation Status:**
+  When downloading translations, this method only works with completed translations.
+  Use [`queryFileData`](/docs/core/class/methods/translation/query-file-data) first to verify that translations are completed before attempting to download.
+</Callout>
+
+## Reference
+
+### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| `file` | `FileInfo` | File information object specifying which file to download |
+| `options?` | `DownloadFileOptions` | Optional configuration for the download request |
+
+#### FileInfo Structure
+
+| Name | Type | Description |
+|------|------|-------------|
+| `fileId` | `string` | Unique identifier of the file to download |
+| `branchId?` | `string` | Branch ID to download from. If not provided, the default branch will be used |
+| `locale?` | `string` | Target locale of the translation to download. If not provided, the source file will be downloaded |
+| `versionId?` | `string` | Optional version ID for the file. If not provided, the latest version will be used |
+
+#### DownloadFileOptions
+
+| Name | Type | Description |
+|------|------|-------------|
+| `timeout?` | `number` | Request timeout in milliseconds |
+
+### Returns
+
+`Promise<string>` - The file content as a UTF-8 string.
+
+The returned string contains the file content in the same format as the original source file. For translations, all translatable text is converted to the target locale.
+
+---
+
+## Example
+
+```typescript title="index.ts" copy
+// (1) Create a GT instance
+const targetLocales = ['es', 'fr', 'de'];
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// (2) Upload the file
+const fileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [ { source: fileUpload } ];
+const { uploadedFiles } = await gt.uploadSourceFiles(
+  files,
+  { sourceLocale: 'en' }
+);
+
+// (3) Enqueue the file translation job
+const enqueueResult = await gt.enqueueFiles(
+  uploadedFiles,
+  {
+    sourceLocale: 'en',
+    targetLocales: targetLocales,
+  }
+);
+
+// (4) Wait for all translations to be completed
+const { fileId, versionId, branchId } = uploadedFiles[0];
+const translatedFileQueries = targetLocales.map((locale) => ({
+  fileId,
+  versionId,
+  branchId,
+  locale
+}));
+
+while (true) {
+  const result = await gt.queryFileData({
+    translatedFiles: translatedFileQueries
+  });
+
+  const allCompleted = result.translatedFiles?.every(
+    (file) => file.status === 'completed'
+  );
+
+  if (allCompleted) {
+    break;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+// (5) Download a single file
+const spanishContent = await gt.downloadFile({
+  fileId,
+  branchId,
+  locale: 'es'
+});
+
+console.log('Spanish translation:', spanishContent);
+```
+
+
+---
+
+## Notes
+
+* Retrieves downloaded file as a UTF-8 string
+* When a locale is provided, the file must have a completed translation for that locale
+* When no locale is provided, the source file is returned
+* Will fail if file is not found
+
+## Next steps
+
+* See [`queryFileData`](/docs/core/class/methods/translation/query-file-data) to verify translation status before downloading
+* See [`downloadFileBatch`](/docs/core/class/methods/translation/download-file-batch) to download multiple files efficiently
+* See [`uploadSourceFiles`](/docs/core/class/methods/translation/upload-source-files) for the file upload process
+* See [`enqueueFiles`](/docs/core/class/methods/translation/enqueue-files) to start translation jobs

@@ -1,0 +1,196 @@
+---
+title: Static Site Generation
+description: Pre-render internationalized pages at build time for optimal performance
+---
+
+## Overview
+
+Static Site Generation (SSG) pre-renders pages at build time, creating static HTML files that can be served directly without server-side processing.
+When combined with internationalization, SSG generates pre-rendered versions for each locale.
+
+---
+
+## Setup
+
+### Setup requirements
+
+To enable SSG with GT, you need:
+
+1. **App Router with middleware routing** - see [middleware guide](/docs/next/guides/middleware)
+2. **Custom `getLocale` function** - for locale detection during static rendering
+3. **Disable `getRegion`** - region detection is not supported during static rendering
+4. **`generateStaticParams` function** - for generating static parameters for each locale
+5. **Layout files inside of the `/[locale]` directory** - all layout files (so typically `layout.tsx` and `page.tsx`) should be descendants of the `/[locale]` directory
+
+### Step 1: Configure middleware
+
+Set up middleware for dynamic requests (see [middleware guide](/docs/next/guides/middleware)):
+
+```ts
+// proxy.ts (Next.js 16+) or middleware.ts (Next.js 15 and below)
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware();
+
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
+};
+```
+
+### Step 2: Define locale and region detection
+
+Create a `getLocale` and `getRegion` function for locale and region detection during static rendering:
+
+#### Next.js 15.5+
+
+```ts
+// getLocale.ts
+import { locale } from 'next/root-params';
+
+export default async function getLocale() {
+  return await locale();
+}
+```
+
+#### Next.js 15.1-15.4
+
+```ts
+// getLocale.ts
+import { unstable_rootParams } from 'next/server';
+
+export default async function getLocale() {
+  return (await unstable_rootParams())?.locale;
+}
+```
+
+### Step 3: Disable getRegion
+
+Since region detection is not supported during static rendering, you need to overwrite the `getRegion` function to return a fixed region.
+
+```ts
+// getRegion.ts
+export default async function getRegion() {
+  return undefined;
+}
+```
+
+### Step 4: Configure generateStaticParams
+
+Make sure you have [`generateStaticParams`](https://nextjs.org/docs/app/api-reference/functions/generate-static-params) configured for your locales.
+
+```tsx title="page.tsx"
+import { getLocales } from 'gt-next/server';
+
+export async function generateStaticParams() {
+  return getLocales().map((locale) => ({ locale }));
+}
+
+export default async function Page() {
+  ...
+}
+```
+
+### Step 5: Move any layout files inside of the `/[locale]` directory
+
+All files need to have access to the user's locale via the `/[locale]` field in the URL.
+Therefore, they must be descendants of the `/[locale]` directory.
+
+Make sure you move your root layout file to `/[locale]/layout.tsx`.
+
+---
+
+## Additional configuration
+
+If you do not want `getLocale.ts` and `getRegion.ts` in your root directory, you can specify a custom directory in your `next.config.js` file.
+
+```js
+// next.config.js
+export default withGTConfig(nextConfig, {
+  getLocalePath: './src/i18n/getLocale.ts',
+  getRegionPath: './src/i18n/getRegion.ts',
+});
+```
+
+## Common issues
+
+### Next.js version compatibility
+
+For versions earlier than Next.js 15.1, there is no way to access URL path parameters during static generation. You will need to upgrade to Next.js 15.1 or later to use SSG with gt-next.
+
+### Pages not generating statically
+
+If your pages aren't being statically generated, ensure that:
+
+- Your `getLocale` and `getRegion` functions are properly configured
+
+### Production runtime error: "DYNAMIC_SERVER_USAGE"
+
+```text
+⨯ [Error: An error occurred in the Server Components render. The specific message is omitted in production builds to avoid leaking sensitive details. A digest property is included on this error instance which may provide additional details about the nature of the error.] {
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+```
+
+This error occurs when `getLocale` or `getRegion` files do not exist or are not properly configured.
+Double check that [step 2](#step-2-define-locale-and-region-detection) and [step 3](#step-3-disable-getregion) are complete.
+
+### "Export locale doesn't exist in target module"
+
+```text
+./getLocale.ts:2:1
+Export locale doesn't exist in target module
+  1 | // getLocale.ts
+> 2 | import { locale } from 'next/root-params';
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  3 | export default async function getLocale() {
+  4 |   return await locale();
+  5 | }
+```
+
+This error typically occurs when you have a `layout.tsx`, `page.tsx`, etc. file that is not inside of the `/[locale]` directory.
+To fix this issue, make sure that all of your route segment files (so typically `layout.tsx` and `page.tsx`) are descendants of the `/[locale]` directory.
+
+<Callout type="info">
+  During SSG, the only way to resolve a user's locale is via the URL path.
+  So, if we try to execute a `layout.tsx` file outside of the `/[locale]` directory, it will error because it does not have access to this root param.
+  The unintuitive part about this is that when a page renders, so does every `layout.tsx` file wrapping it.
+  So, you could have added SSG to a `page.tsx` file that is very much inside of the `/[locale]` directory, but there is actually a `layout.tsx` file somewhere else responsible for the error.
+</Callout>
+
+<Accordions>
+  <Accordion title="Example of a problematic file structure">
+    <Files>
+      <Folder name="app" defaultOpen={true}>
+        <File name="layout.tsx    <--- Problematic getLocale() invocation" />
+        <Folder name="[locale]">
+          <File name="layout.tsx" />
+          <File name="page.tsx    <--- SSG page" />
+        </Folder>
+      </Folder>
+      <File name="getLocale.ts" />
+      <File name="getRegion.ts" />
+      <File name="next.config.js" />
+      <File name="package.json" />
+      <File name="proxy.ts" />
+    </Files>
+  </Accordion>
+  <Accordion title="But, what if I want to have a layout outside of the `/[locale]` directory?">
+    We strongly recommend against this practice.
+    All route segment files (excluding `not-found.tsx`) should be located inside of the `/[locale]` directory when using SSG.
+
+    But, if you must, you will need two separate root layout files: one inside of the `/[locale]` directory and one outside of it.
+    This way, SSG will only execute the layout inside of the `/[locale]` directory.
+    Additionally, you may have to modify the middleware to route to whatever segments exist outside of the `/[locale]` directory, skipping the localization middleware.
+  </Accordion>
+</Accordions>
+
+
+
+
+---
+
+## Further reading
+
+- Check out the [middleware guide](/docs/next/guides/middleware) required for locale routing
+- Check out the [release notes](/blog/gt-next_v6_10_0) for migrating from legacy SSG pattern
+- See an example app [here](https://github.com/generaltranslation/gt/tree/main/examples/next-ssg)

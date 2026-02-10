@@ -1,0 +1,142 @@
+---
+title: gt-next@6.10.0
+date: 2025-12-03
+authors: [ernest]
+tags: ['gt-next', 'v6.10.0', 'cached components', 'SSG', 'static site generation', 'deprecation', 'i18n']
+---
+
+## Overview
+
+**gt-next 6.10.0** introduces experimental support for cached components while deprecating legacy static request functions from gt-next@6.9.
+
+- **Added experimental cached component support** with `experimentalLocaleResolution`
+- **Deprecated legacy static request functions** from `gt-next@6.9`
+
+---
+
+## Cached Components
+
+To enable cached component support, add `experimentalLocaleResolution: true` to your gt-next configuration and follow [the NextJS Cache Components guide](https://nextjs.org/docs/app/getting-started/cache-components). When using cached components with translatable content, you must pass the `locale` as a parameter to ensure proper cache invalidation across different locales.
+
+Consider this application structure:
+
+```tsx title="page.tsx"
+import { Suspense } from "react";
+import { getLocale, getLocales } from "gt-next/server";
+
+export const generateStaticParams = () => {
+  return getLocales().map(locale => ({ locale }))
+}
+
+async function CachedContent({locale: _locale}: {locale: string}) {
+  "use cache"
+  return (
+    <div>
+      <T><h1>Cached Content</h1></T>
+    </div>
+  )
+}
+export default async function Home() {
+  const locale = await getLocale()
+  return (
+    <div>
+      <CachedContent locale={locale} />
+    </div>
+  );
+}
+```
+
+### The `locale` parameter requirement
+
+Cached components use their parameters as cache keys, any cached component that contains translatable content must accept a `locale` parameter if they are to update when a user's locale changes. For example, `CachedContent` must accept a `locale` parameter to create separate cache entries for each locale. Without this parameter, the component would serve the same cached content regardless of the user's locale.
+
+### Configuration notes
+
+When `experimentalLocaleResolution` is enabled:
+- I18n proxy must be enabled for locale resolution to work (see [I18n Proxy](/docs/next/guides/middleware))
+- It overrides any custom `getLocale` functions (locale resolution happens from the reading the URL path)
+- It disables `getRegion` and `getDomain` functions
+- It conflicts with the deprecated `experimentalEnableSSG` configuration - only one can be enabled at a time
+- You can customize the locale parameter name with `experimentalLocaleResolutionParam` (defaults to `'locale'`)
+
+```js
+export default withGTConfig(nextConfig, {
+  experimentalLocaleResolution: true,
+  // Optionally customize the parameter name
+  experimentalLocaleResolutionParam: 'lang',
+})
+```
+
+---
+
+## Deprecating Legacy Static Request Functions
+
+Following the introduction of static rendering support in gt-next@6.9, we are now deprecating the legacy static request functions (`getStaticLocale`, `getStaticRegion`, `getStaticDomain`) in favor of the standard request functions (`getLocale`, `getRegion`, `getDomain`). 
+
+This deprecation aligns with our goal of simplifying the API surface while maintaining full functionality. The legacy static functions will continue to work but will emit deprecation warnings. We recommend [migrating to the standard request functions](#migration-guide) for consistency.
+
+---
+
+## Migration Guide
+
+### Legacy SSG
+
+Replace deprecated static request functions:
+
+```js title="next.config.js"
+// Before (deprecated)
+export default withGTConfig(nextConfig, {
+  experimentalEnableSSG: true,
+})
+
+// After  
+export default withGTConfig(nextConfig, {
+  // Accessible by default
+})
+```
+
+Remove any custom `getStaticLocale`, `getStaticRegion`, or `getStaticDomain` functions in favor of custom `getLocale`, `getRegion`, or `getDomain` functions. You must add a custom `getLocale` function and disable the `getRegion` function. For more information, see the [SSG guide](/docs/next/guides/ssg).
+
+```ts title="getLocale.ts"
+import { locale } from "next/root-params";
+
+export default async function getLocale() {
+  return await locale();
+}
+```
+
+```ts title="getRegion.ts"
+export default async function getRegion() {
+  return undefined;
+}
+```
+
+### For Cached Components
+
+Enable experimental locale resolution and ensure cached components receive locale parameters:
+
+```js
+const nextConfig = {
+  cacheComponents: true,
+}
+
+// Configuration
+export default withGTConfig(nextConfig, {
+  experimentalLocaleResolution: true,
+})
+```
+
+```tsx
+// Component implementation
+async function MyCachedComponent({locale}: {locale: string}) {
+  "use cache"
+  // Your internationalized content here
+  return <T>Content for <Var>{locale}</Var></T>
+}
+
+// Usage
+export default async function Page() {
+  const locale = await getLocale()
+  return <MyCachedComponent locale={locale} />
+}
+```

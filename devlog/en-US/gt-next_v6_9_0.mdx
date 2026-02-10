@@ -1,0 +1,92 @@
+---
+title: gt-next@6.9.0
+date: 2025-11-18
+authors: [ernest]
+tags: ['gt-next', 'v6.9.0', 'static rendering', 'static site generation', 'translation', 'i18n']
+---
+
+## Overview
+
+**This behavior is currently deprecated, see [gt-next@6.10.0](/blog/gt-next_v6_10_0) for the new behavior.**
+
+Static rendering is a core competency of the Next.js framework, delivering pre-rendered pages at build time for optimal performance and SEO.
+Given this, any Next.js-native library should work seamlessly within this rendering model.
+**gt-next 6.9.0** introduces static rendering support, allowing internationalized applications to leverage Next.js's full static generation capabilities without compromising on locale detection or translation functionality.
+
+## What is Static Rendering?
+
+Static rendering generates HTML at build time rather than on each request.
+While this approach delivers exceptional performance, it presents challenges for i18n libraries that typically rely on request headers, cookies, or middleware to determine user locale.
+During static rendering, these request-time dependencies are unavailable, requiring alternative approaches for locale detection.
+
+---
+
+## Static Rendering Setup
+
+Before configuring gt-next, ensure your Next.js application is set up for static generation by following the [generateStaticParams documentation](https://nextjs.org/docs/app/api-reference/functions/generate-static-params).
+
+The setup involves three key components:
+
+### 1. Enable Static Rendering in Configuration
+
+```js
+export default withGTConfig(nextConfig, {
+  experimentalEnableSSG: true,
+})
+```
+
+### 2. Configure Middleware
+
+Set up middleware for dynamic requests:
+
+```ts
+// proxy.ts (Next.js 16+) or middleware.ts (Next.js 15 and below)
+import { createNextMiddleware } from 'gt-next/middleware'
+
+export default createNextMiddleware();
+
+export const config = {
+  matcher: [
+    "/((?!api|static|.*\\..*|_next).*)",
+  ],
+}
+```
+
+### 3. Define Static Locale Detection
+
+Create a `getStaticLocale` function that determines locale during static rendering. This function only runs during static generation - during SSR, the default behavior (reading headers, cookies, etc.) is used.
+
+#### Next.js 15.5+
+```ts
+// getStaticLocale.ts
+import { locale } from "next/root-params";
+
+export default async function getStaticLocale() {
+  return await locale();
+}
+```
+
+#### Next.js 15.1-15.4
+```ts
+// getStaticLocale.ts  
+import { unstable_rootParams } from "next/server";
+
+export default async function getStaticLocale() {
+  return (await unstable_rootParams())?.locale;
+}
+```
+
+*`getStaticRegion` can be called for customizing region detection during static rendering.*
+
+---
+
+## Benefits
+
+**Next.js Native**: Leverages Next.js's built-in root params system for static rendering compatibility.
+
+---
+
+## Additional Features
+
+Beyond static generation, this release also introduces support for custom `getLocale()` and `getRegion()` functions that can be configured for both SSR and static rendering environments.
+

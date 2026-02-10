@@ -1,0 +1,224 @@
+---
+title: Variable Components
+description: How to use variable components for dynamic content within translations
+---
+
+Variable components allow you to safely include dynamic content within [`<T>`](__DOCS_PATH__/api/components/t) components. They handle formatting and localization locally without sending data to the translation API, making them perfect for sensitive information like usernames, account numbers, and financial data.
+
+## Available components
+
+- [`<Var>`](__DOCS_PATH__/api/components/var): Raw dynamic content without formatting
+- [`<Num>`](__DOCS_PATH__/api/components/num): Numbers with locale-specific formatting
+- [`<Currency>`](__DOCS_PATH__/api/components/currency): Currency values with symbols and formatting
+- [`<DateTime>`](__DOCS_PATH__/api/components/datetime): Dates and times with locale conventions
+
+## Quickstart
+
+Variable components work inside [`<T>`](__DOCS_PATH__/api/components/t) to handle dynamic content:
+
+```jsx
+import { T, Var, Num, Currency, DateTime } from '__PACKAGE_NAME__';
+
+function UserProfile({ user }) {
+  return (
+    <T>
+      <p>Welcome back, <Var>{user.name}</Var>!</p>
+      <p>You have <Num>{user.itemCount}</Num> items.</p>
+      <p>Balance: <Currency currency="USD">{user.balance}</Currency></p>
+      <p>Last login: <DateTime>{user.lastLogin}</DateTime></p>
+    </T>
+  );
+}
+```
+
+## How variable components work
+
+Variable components solve the dynamic content problem by:
+
+1. **Wrapping dynamic values** so they can be used inside [`<T>`](__DOCS_PATH__/api/components/t)
+2. **Handling formatting locally** using the browser's built-in i18n APIs
+3. **Keeping data private** - content is never sent to the translation API
+4. **Providing localization** based on the user's current locale
+
+```jsx
+// ❌ This breaks - dynamic content in <T>
+<T><p>Hello {username}</p></T>
+
+// ✅ This works - dynamic content wrapped
+<T><p>Hello <Var>{username}</Var></p></T>
+```
+
+## Component guide
+
+### Var - Raw dynamic content
+
+Use [`<Var>`](__DOCS_PATH__/api/components/var) for any dynamic content that doesn't need special formatting:
+
+```jsx
+// User information
+<T>
+  <p>Hello, <Var>{user.name}</Var>!</p>
+  <p>Your account ID is <Var>{user.accountId}</Var></p>
+</T>
+
+// Conditional rendering
+<T>
+  Dashboard: <Var>{isAdmin ? <AdminPanel /> : <UserPanel />}</Var>
+</T>
+```
+
+### Num - Formatted numbers
+
+Use [`<Num>`](__DOCS_PATH__/api/components/num) for numbers that should follow locale formatting rules:
+
+```jsx
+// Basic number formatting
+<T>
+  You have <Num>{itemCount}</Num> items in your cart.
+</T>
+
+// Standalone usage (equivalent to number.toLocaleString())
+<Badge><Num>{totalItems}</Num></Badge>
+
+// Custom formatting options
+<T>
+  Distance: <Num options={{ maximumFractionDigits: 2 }}>{distance}</Num> km
+</T>
+```
+
+### Currency - Money values
+
+Use [`<Currency>`](__DOCS_PATH__/api/components/currency) for monetary amounts:
+
+```jsx
+// Basic currency formatting (defaults to "USD")
+<T>
+  Your total is <Currency>{total}</Currency>.
+</T>
+
+// Different currencies
+<T>
+  Price: <Currency currency="EUR">{price}</Currency>
+</T>
+
+// Custom formatting
+<Currency 
+  currency="USD" 
+  options={{ minimumFractionDigits: 0 }}
+>
+  {roundedAmount}
+</Currency>
+```
+
+### DateTime - Dates and times
+
+Use [`<DateTime>`](__DOCS_PATH__/api/components/datetime) for dates and times:
+
+```jsx
+// Basic date formatting
+<T>
+  Order placed on <DateTime>{orderDate}</DateTime>
+</T>
+
+// Time formatting
+<T>
+  Last updated: <DateTime options={{ timeStyle: 'short' }}>{timestamp}</DateTime>
+</T>
+
+// Custom date format
+<DateTime options={{ 
+  year: 'numeric', 
+  month: 'long', 
+  day: 'numeric' 
+}}>
+  {eventDate}
+</DateTime>
+```
+
+## Privacy and security
+
+### Data stays local
+Variable components handle all formatting locally using the browser's [Intl APIs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl). **No dynamic content is sent to the translation API**, making them perfect for:
+
+- User names and personal information
+- Account numbers and IDs
+- Financial data and balances
+- Private timestamps and dates
+
+```jsx
+// Safe - sensitive data stays local
+<T>
+  Account balance: <Currency currency="USD">{balance}</Currency>
+  Last login: <DateTime>{lastLoginTime}</DateTime>
+</T>
+```
+
+### Important exception
+Be careful with nested [`<T>`](__DOCS_PATH__/api/components/t) components inside variable components:
+
+```jsx
+// ⚠️ The inner <T> content WILL be sent for translation
+<T>
+  <Var>
+    <T>Hello, world!</T>  {/* This gets translated */}
+    {privateData}         {/* This stays local */}
+  </Var>
+</T>
+```
+
+## Standalone usage
+
+Variable components can be used outside of [`<T>`](__DOCS_PATH__/api/components/t) for pure formatting:
+
+```jsx
+// These work like their respective .toLocale*() methods
+<span><Num>{count}</Num></span>                    // count.toLocaleString()
+<span><Currency currency="USD">{price}</Currency></span>  // price formatting
+<span><DateTime>{date}</DateTime></span>           // date.toLocaleDateString()
+```
+
+## Common issues
+
+### Ignoring localization options
+
+For [`<Currency>`](__DOCS_PATH__/api/components/currency), make sure to pass the `currency` prop to specify the currency type. This ensures that the correct currency symbol and formatting are used when displaying the value:
+
+```jsx
+// ❌ Defaults to USD - may not be what users expect
+<T>
+  The item costs <Currency>{price}</Currency>
+</T>
+
+// ✅ Explicitly specify the currency
+<T>
+  The item costs <Currency currency="EUR">{price}</Currency>
+</T>
+```
+
+Other components also have optional props that allow you to customize the formatting:
+
+```jsx
+// Basic formatting
+<T>
+  <Num>{count}</Num> items in stock
+</T>
+
+// Custom formatting
+<T>
+  <Num options={{ style: 'percent' }}>{percentage}</Num> completion rate
+</T>
+
+// Date formatting
+<T>
+  Last updated: <DateTime options={{ dateStyle: 'short' }}>{lastUpdate}</DateTime>
+</T>
+```
+
+## Next steps
+
+- [Branching Components Guide](__DOCS_PATH__/guides/branches) - Add conditional logic to your translations
+- [String Translation Guide](__DOCS_PATH__/guides/strings) - Translate plain text without JSX
+- API References:
+  - [`<Var>` Component](__DOCS_PATH__/api/components/var)
+  - [`<Num>` Component](__DOCS_PATH__/api/components/num)
+  - [`<Currency>` Component](__DOCS_PATH__/api/components/currency)

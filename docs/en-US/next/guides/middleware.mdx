@@ -1,0 +1,145 @@
+---
+title: Middleware
+description: Automatic language detection and URL routing based on user preferences
+---
+
+Middleware automatically detects user language preferences and redirects them to the appropriate localized version of your site.
+It uses browser settings, geolocation, and user preferences to serve the right language before any content loads.
+
+<Callout>
+  **File location:** Place `proxy.ts` in your project root, at the same level as your `app/` directory - not inside it. `proxy.ts` (Next.js 16+) or `middleware.ts` (Next.js 15 and below)
+</Callout>
+
+## Setup
+
+### Step 1: Create dynamic route
+Create a `[locale]` directory in your `app/` folder and move all pages inside it:
+
+<Files>
+  <Folder name="my-app" defaultOpen={true}>
+    <File name="proxy.ts" />
+    <Folder name="app" defaultOpen={true}>
+      <Folder name="[locale]" defaultOpen={true}>
+        <File name="layout.tsx" />
+        <File name="page.tsx" />
+        <Folder name="about">
+          <File name="page.tsx" />
+        </Folder>
+      </Folder>
+      <Folder name="api">
+        <File name="route.ts" />
+      </Folder>
+    </Folder>
+    <File name="next.config.js" />
+  </Folder>
+</Files>
+
+### Step 2: Add middleware
+Create `proxy.ts` in your project root:
+
+```ts
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware();
+
+export const config = {
+  // Match all paths except API routes, static files, and Next.js internals
+  matcher: ['/((?!api|static|.*\\..*|_next).*)']
+};
+```
+
+This enables automatic language detection and URL routing with locale prefixes like `/en/about`, `/es/about`.
+
+## Language detection
+
+The middleware detects user language preferences in this order:
+
+1. **URL locale** - `/es/about` → Spanish
+2. **User cookie** - Previous language selection  
+3. **Browser headers** - `Accept-Language` header
+4. **Default locale** - Configured fallback language
+
+The middleware automatically handles browser language detection and cookie persistence without additional configuration.
+
+## Localized paths
+
+Customize URL paths for different languages:
+
+```ts
+export default createNextMiddleware({
+  pathConfig: {
+    // English: /en/products, Chinese: /zh/产品
+    "/products": {
+      "zh": "/产品"
+    },
+    
+    // Dynamic routes: /en/product/123, /zh/产品/123
+    "/product/[id]": {
+      "zh": "/产品/[id]"
+    }
+  }
+});
+```
+
+## URL Structure
+
+By default, your default locale will **not** be prefixed with a locale code:
+
+```
+/about     → /about        (default locale: English)
+/about     → /es/about     (Spanish)
+/about     → /fr/about     (French)
+```
+
+### Add prefix to default locale
+To prefix all locales including the default:
+
+```ts
+export default createNextMiddleware({
+  prefixDefaultLocale: true
+});
+```
+
+Result:
+```
+/about     → /en/about     (English, with prefix)
+/about     → /es/about     (Spanish, with prefix)
+/about     → /fr/about     (French, with prefix)
+```
+
+## Common issues
+
+### Missing dynamic route
+All pages must be inside `[locale]/`:
+
+```
+❌ Wrong:
+app/
+├── page.tsx
+└── about/page.tsx
+
+✅ Correct:
+app/
+└── [locale]/
+    ├── page.tsx
+    └── about/page.tsx
+```
+
+### Matcher configuration
+Exclude API routes and static files:
+
+```ts
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)']
+};
+```
+
+<Callout>
+  Test your middleware configuration thoroughly - incorrect matchers can cause infinite redirects or break static assets.
+</Callout>
+
+## Next steps
+
+- [SSG Guide](/docs/next/guides/ssg) - Static generation with locale routing
+- [RTL Support](/docs/next/guides/rtl) - Right-to-left languages  
+- API References:

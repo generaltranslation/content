@@ -1,0 +1,95 @@
+---
+title: generaltranslation@8.1.0
+date: 2025-12-06
+authors: [ernest]
+tags: ['generaltranslation', '8.1.0', 'formatting', 'text-truncation', 'locale-aware']
+---
+
+## Overview
+
+**generaltranslation@8.1.0** introduces `formatCutoff()`, a locale-aware text truncation function that handles character limits with appropriate terminators for different languages.
+
+---
+
+## Motivation
+
+UI text truncation typically relies on CSS `text-overflow: ellipsis` or simple string slicing, but these approaches don't account for locale-specific conventions. Different languages use different ellipsis characters, spacing, and punctuation rules when text is cut off.
+
+Additionally, when AI translations are constrained to character limits, there's often a need to strictly enforce those limits on the client side as a fallback.
+
+---
+
+## Usage
+
+`formatCutoff()` is available both as a GT instance method and standalone function:
+
+```javascript
+import { GT, formatCutoff } from 'generaltranslation'
+
+const gt = new GT({ targetLocale: 'en-US' })
+
+// Basic truncation
+gt.formatCutoff('Hello, world!', { maxChars: 9 })
+// Returns: 'Hello, w…'
+
+// Standalone function
+formatCutoff('Hello, world!', { 
+  locales: 'fr-FR', 
+  maxChars: 9 
+})
+// Returns: 'Hello, w\u202F…'  // Note the narrow space before ellipsis
+```
+
+### Negative maxChars
+
+Negative values slice from the end and prepend the terminator:
+
+```javascript
+gt.formatCutoff('Hello, world!', { maxChars: -4 })
+// Returns: '…ld!'
+```
+
+### Locale-specific terminators
+
+Different locales use different ellipsis styles:
+
+```javascript
+// Chinese and Japanese use double ellipsis
+formatCutoff('你好世界', { locales: 'zh-CN', maxChars: 4 })
+// Returns: '你好……'
+
+// French uses narrow non-breaking space before ellipsis  
+formatCutoff('Bonjour', { locales: 'fr-FR', maxChars: 6 })
+// Returns: 'Bonj\u202F…'
+```
+
+### Custom terminators
+
+Override default behavior with custom terminators and separators:
+
+```javascript
+gt.formatCutoff('Long text here', {
+  maxChars: 13,
+  terminator: '...',
+  separator: ' '
+})
+// Returns: 'Long text ...'
+```
+
+### No terminator
+
+Use the `'none'` style to truncate without any terminator:
+
+```javascript
+gt.formatCutoff('Hello, world!', {
+  maxChars: 5,
+  style: 'none'
+})
+// Returns: 'Hello'
+```
+
+---
+
+## Foundation for UI libraries
+
+This functionality serves as the base layer for UI-specific implementations in `gt-react` and `gt-next`, which will expose subsets of this functionality appropriate for their frameworks.

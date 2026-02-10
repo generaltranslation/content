@@ -1,0 +1,249 @@
+---
+title: Plugin Configuration
+description: API reference for gtPlugin configuration options
+---
+
+## Overview
+
+The `gtPlugin` function configures General Translation for your Sanity Studio.
+
+```typescript
+import { gtPlugin } from 'gt-sanity'
+
+gtPlugin(config: GTPluginConfig)
+```
+
+## GTPluginConfig
+
+<TypeTable
+  type={{
+    sourceLocale: {
+      type: 'string',
+      description: 'Source language code (e.g., "en")',
+    },
+    locales: { type: 'string[]', description: 'Array of target locale codes' },
+    apiKey: {
+      type: 'string',
+      description: 'GT API key (optional if using secrets document)',
+      optional: true,
+    },
+    projectId: {
+      type: 'string',
+      description: 'GT project ID (optional if using secrets document)',
+      optional: true,
+    },
+    languageField: {
+      type: 'string',
+      description: 'Document field storing locale. Default: "language"',
+      optional: true,
+    },
+    singletons: {
+      type: 'string[]',
+      description: 'Document IDs treated as singletons',
+      optional: true,
+    },
+    singletonMapping: {
+      type: '(docId: string, locale: string) => string',
+      description:
+        'Function to generate translated singleton IDs. Default: "${docId}-${locale}"',
+      optional: true,
+    },
+    ignoreFields: {
+      type: 'IgnoreFields[]',
+      description: 'Fields to exclude from translation',
+      optional: true,
+    },
+    translateDocuments: {
+      type: 'TranslateDocumentFilter[]',
+      description: 'Filter which documents can be translated',
+      optional: true,
+    },
+    secretsNamespace: {
+      type: 'string',
+      description:
+        'Namespace for credentials document. Default: "generaltranslation"',
+      optional: true,
+    },
+    additionalStopTypes: {
+      type: 'string[]',
+      description: 'Additional types to skip during serialization',
+      optional: true,
+    },
+    additionalSerializers: {
+      type: 'Record<string, Serializer>',
+      description: 'Custom HTML serializers for block types',
+      optional: true,
+    },
+    additionalDeserializers: {
+      type: 'Record<string, Deserializer>',
+      description: 'Custom HTML deserializers',
+      optional: true,
+    },
+    additionalBlockDeserializers: {
+      type: 'BlockDeserializer[]',
+      description: 'Custom block-level deserializers',
+      optional: true,
+    },
+    customMapping: {
+      type: '(source: string, locale: string) => string',
+      description: 'Custom locale mapping function',
+      optional: true,
+    },
+  }}
+/>
+
+## IgnoreFields
+
+Configure fields to exclude from translation:
+
+```typescript
+type IgnoreFields = {
+  documentId?: string;
+  fields?: Array<{
+    property: string;
+    type?: string;
+  }>;
+};
+```
+
+### Example
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  ignoreFields: [
+    // Ignore slug on all documents
+    {
+      fields: [{ property: 'slug' }],
+    },
+    // Ignore specific fields on document with id 'article'
+    {
+      documentId: 'article',
+      fields: [{ property: 'internalNotes' }, { property: 'canonical' }],
+    },
+  ],
+});
+```
+
+## TranslateDocumentFilter
+
+Filter which documents are available for translation:
+
+```typescript
+type TranslateDocumentFilter = {
+  documentId?: string; // Specific document ID
+  type?: string; // Document type
+};
+```
+
+### Example
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  translateDocuments: [
+    { type: 'article' },
+    { type: 'page' },
+    { documentId: 'homepage' },
+  ],
+});
+```
+
+## Serializer
+
+Custom function to convert a Sanity block to HTML:
+
+```typescript
+type Serializer = (props: {
+  value: any;
+  isInline?: boolean;
+  children?: string;
+}) => string;
+```
+
+### Example
+
+```typescript
+import { attachGTData, gtPlugin } from 'gt-sanity';
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  additionalSerializers: {
+    link: ({ value, children }) =>
+      attachGTData(`<a>${children}</a>`, value, 'markDef'),
+  },
+});
+```
+
+## Default stop types
+
+These types are preserved but not sent for translation:
+
+```typescript
+const defaultStopTypes = [
+  'reference',
+  'crossDatasetReference',
+  'date',
+  'datetime',
+  'file',
+  'geopoint',
+  'image',
+  'number',
+  'slug',
+  'url',
+];
+```
+
+Add more with `additionalStopTypes`:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  additionalStopTypes: ['codeBlock', 'mathFormula'],
+});
+```
+
+## Complete example
+
+```typescript title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { attachGTData, gtPlugin } from 'gt-sanity';
+
+export default defineConfig({
+  plugins: [
+    gtPlugin({
+      // Required
+      sourceLocale: 'en',
+      locales: ['es', 'fr', 'de', 'ja'],
+
+      // Document handling
+      languageField: 'language',
+      singletons: ['siteSettings', 'navigation'],
+      singletonMapping: (id, locale) => `${id}_${locale}`,
+
+      // Filtering
+      translateDocuments: [{ type: 'article' }, { type: 'page' }],
+      ignoreFields: [{ fields: [{ property: 'slug' }] }],
+
+      // Serialization - Do not use this unless you know what you are doing!
+      additionalSerializers: {
+        // Additional serializers for marks (custom annotations)
+        marks: {
+          link: ({ value, children }) =>
+            attachGTData(`<a>${children}</a>`, value, 'markDef'),
+          inlineMath: ({ value, children }) =>
+            attachGTData(`<span>${children}</span>`, value, 'markDef'),
+        },
+      },
+    }),
+  ],
+});
+```
+
+## Next steps
+
+- [Configuration Guide](/docs/sanity/guides/configuration) - Configuration patterns
+- [Serialization Guide](/docs/sanity/guides/serialization) - Custom serialization

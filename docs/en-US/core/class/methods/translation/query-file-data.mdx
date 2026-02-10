@@ -1,0 +1,187 @@
+---
+title: queryFileData
+description: API reference for the queryFileData method to query source and translation file data
+---
+
+## Overview
+
+The `queryFileData` method queries data about one or more source or translation files.
+This is useful for monitoring translation progress, checking completion status, and determining which translations are available.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const result = await gt.queryFileData({
+  sourceFiles: [
+    { fileId: 'file-123', versionId: 'version-456', branchId: 'branch-789' }
+  ],
+  translatedFiles: [
+    { fileId: 'file-123', versionId: 'version-456', branchId: 'branch-789', locale: 'es' }
+  ]
+});
+```
+
+## Reference
+
+### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| `data` | `FileDataQuery` | Object containing source and translation file queries |
+| `options?` | `CheckFileTranslationsOptions` | Optional configuration for the request |
+
+#### FileDataQuery
+
+```typescript
+type FileDataQuery = {
+  sourceFiles?: {
+    fileId: string;
+    versionId: string;
+    branchId: string;
+  }[];
+  translatedFiles?: {
+    fileId: string;
+    versionId: string;
+    branchId: string;
+    locale: string;
+  }[];
+}
+```
+
+| Name | Type | Description |
+|------|------|-------------|
+| `sourceFiles?` | `object[]` | Array of source file queries |
+| `translatedFiles?` | `object[]` | Array of translated file queries |
+
+#### CheckFileTranslationsOptions
+
+| Name | Type | Description |
+|------|------|-------------|
+| `timeout?` | `number` | Request timeout in milliseconds |
+
+### Returns
+
+`Promise<FileDataResult>` - Contains source and translation file data.
+
+```typescript
+type FileDataResult = {
+  sourceFiles?: {
+    fileId: string;
+    versionId: string;
+    branchId: string;
+    sourceLocale: string;
+    locales: string[];
+    fileName: string;
+    fileFormat: string;
+    dataFormat: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }[];
+  translatedFiles?: {
+    fileId: string;
+    versionId: string;
+    branchId: string;
+    locale: string;
+    status: 'completed' | 'pending' | 'failed';
+    completedAt: string | null;
+    approvedAt: string | null;
+    publishedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }[];
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sourceFiles` | `object[]` | Array of source file data |
+| `translatedFiles` | `object[]` | Array of translation status data |
+
+---
+
+## Examples
+
+### Basic usage
+
+Query data for specific source and translation files:
+
+```typescript title="index.ts" copy
+// (1) Create a GT instance
+const targetLocales = ['es', 'fr', 'de'];
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// (2) Upload the file
+const fileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [ { source: fileUpload } ];
+const { uploadedFiles } = await gt.uploadSourceFiles(
+  files,
+  { sourceLocale: 'en' }
+);
+
+// (3) Enqueue the file translation job
+const enqueueResult = await gt.enqueueFiles(
+  uploadedFiles,
+  {
+    sourceLocale: 'en',
+    targetLocales: targetLocales,
+  }
+);
+
+// (4) Wait for all translations to be completed
+const { fileId, versionId, branchId } = uploadedFiles[0];
+const translatedFileQueries = targetLocales.map((locale) => ({
+  fileId,
+  versionId,
+  branchId,
+  locale
+}));
+
+while (true) {
+  const result = await gt.queryFileData({
+    translatedFiles: translatedFileQueries
+  });
+
+  const allCompleted = result.translatedFiles?.every(
+    (file) => file.status === 'completed'
+  );
+
+  if (allCompleted) {
+    break;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+// (5) Download the files
+const downloadResult = await gt.downloadFileBatch(
+  translatedFileQueries.map(({ fileId, branchId, locale }) => ({
+    fileId,
+    branchId,
+    locale
+  }))
+);
+```
+
+---
+
+## Notes
+
+* Translation status includes `pending`, `completed`, and `failed` states
+* Completed translations may still require approval before being published
+* Use this method for efficient status checking when monitoring multiple translation jobs
+* All file queries require `branchId` for proper versioning
+
+## Next steps
+
+* Check out the [Quickstart](/docs/core/quickstart#translate-your-first-file) for a complete example of how to use this method
+* See [`downloadFile`](/docs/core/class/methods/translation/download-file) to download completed translations
+* See [`enqueueFiles`](/docs/core/class/methods/translation/enqueue-files) to create translation jobs
+* See [`querySourceFile`](/docs/core/class/methods/translation/query-source-file) to get source file and translation information

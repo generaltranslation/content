@@ -1,0 +1,148 @@
+---
+title: Sanity Quickstart
+description: Integrate General Translation with Sanity CMS using gt-sanity
+---
+
+**Prerequisites:** Sanity Studio v3+, existing Sanity project
+
+## Installation
+
+Install the `gt-sanity` package in your Sanity studio directory:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash 
+  npm install gt-sanity
+  ``` 
+  </Tab>
+  <Tab value="yarn">
+  ```bash 
+  yarn add gt-sanity
+  ```
+  </Tab>
+
+  <Tab value="bun">
+  ```bash 
+  bun add gt-sanity
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash 
+  pnpm add gt-sanity
+  ```
+  </Tab>
+</Tabs>
+
+## Configuration
+
+<Steps>
+  <Step title="Add the plugin to your Sanity config">
+    ```typescript title="sanity.config.ts"
+    import { defineConfig } from 'sanity'
+    import { gtPlugin } from 'gt-sanity'
+
+    export default defineConfig({
+      // ... your existing config
+      plugins: [
+        gtPlugin({
+          sourceLocale: 'en',
+          locales: ['es', 'zh', 'ja'] // Replace with your target locales
+        })
+      ]
+    })
+    ```
+
+  </Step>
+
+  <Step title="Set up API credentials">
+
+In your Studio folder, create a file called `populateSecrets.js` with the following content:
+
+```javascript title="populateSecrets.js"
+import { getCliClient } from 'sanity/cli';
+
+const client = getCliClient({ apiVersion: '2025-09-15' });
+
+client.createOrReplace({
+  // The `.` in this _id will ensure the document is private
+  // even in a public dataset!
+  _id: 'generaltranslation.secrets',
+  _type: 'generaltranslationSettings',
+  secret: process.env.GT_API_KEY,
+  project: process.env.GT_PROJECT_ID,
+});
+```
+
+Next, get a production API key at [dash.generaltranslation.com](https://dash.generaltranslation.com).
+
+Run the script with your credentials:
+
+```bash
+GT_API_KEY=your-api-key GT_PROJECT_ID=your-project-id npx sanity exec populateSecrets.js --with-user-token
+```
+
+Verify that the document was created using the Vision Tool in the Studio and query `*[_id == 'generaltranslation.secrets']`.
+
+Note: If you have multiple datasets, you'll have to do this across all of them.
+
+If the document was found in your dataset(s), delete `populateSecrets.js`.
+
+    <Callout type="warn">
+      These credentials will be stored in your Sanity database. By default, they are stored in the `generaltranslation.secrets` document, which is private by default, even in a public dataset.
+      However, if you have concerns about this being exposed to authenticated users of your studio, you can control access to this path with [role-based access control](https://www.sanity.io/docs/access-control).
+    </Callout>
+
+  </Step>
+
+  <Step title="Add the Translations tab to documents">
+    Configure your document structure to include the translations view:
+
+    ```typescript title="sanity.config.ts"
+    import { defineConfig } from 'sanity'
+    import { structureTool } from 'sanity/structure'
+    import { gtPlugin, TranslationsTab } from 'gt-sanity'
+
+    export default defineConfig({
+      // ... your config
+      plugins: [
+        structureTool({
+          structure: (S) =>
+            S.list()
+              .title('Content')
+              .items(S.documentTypeListItems()),
+          defaultDocumentNode: (S, { schemaType }) => {
+            return S.document().views([
+              S.view.form(),
+              S.view
+                .component(TranslationsTab)
+                .title('General Translation')
+            ])
+          }
+        }),
+        gtPlugin({
+          sourceLocale: 'en',
+          locales: ['es', 'zh', 'ja'] // Replace with your target locales
+        })
+      ]
+    })
+    ```
+
+  </Step>
+</Steps>
+
+## Usage
+
+Once configured, you can translate documents directly from your Sanity Studio:
+
+1. Open any document in your Studio
+2. Click the **General Translation** tab
+3. Select target languages
+4. Click **Generate Translations** to send content for translation
+5. By default, the plugin will automatically import the translations as back into your document, as soon as they are ready.
+6. Additionally, imported documents will be automatically scanned for references to other documents, and will be automatically patched to point to the correct translations for those documents.
+
+## Next steps
+
+- [Configuration Guide](/docs/sanity/guides/configuration) - Customize plugin behavior
+- [Serialization Guide](/docs/sanity/guides/serialization) - Custom serialization rules
+- [API Reference](/docs/sanity/api/plugin-config) - Full configuration options

@@ -1,0 +1,148 @@
+---
+title: gtx-cli@2.3.0
+date: 2025-09-12
+authors: [fernando]
+tags: ['gtx-cli', '2.3.0', 'translate', 'upload', 'setup']
+---
+
+## Overview
+
+In **gtx-cli 2.3.0**, we updated the behavior of the `translate` and `upload` commands and increased visibility into the translation pipeline.
+
+---
+
+## Translate
+
+Historically, `translate` both triggered translations **and** ran a one-time project setup in the background (generating context and glossary you see on your [dashboard](https://generaltranslation.com/dashboard/project/context)).
+
+On smaller projects this was fast; on larger codebases, setup could take long enough to trigger a timeout, making it look like there was a translation failure.
+
+While users were given the impression that `translate` failed, setup would complete asynchronously and translations would be generated but not downloaded, leading to incomplete and confusing UX.
+
+### Setup
+
+Setup is now a separate step. We optimized it to make timeouts rare.
+
+But because we realize setup can still fail, translation no longer “depends” on setup finishing. Now the pipeline looks something like this:
+
+- **Upload:** send files and confirm success.
+- **Setup (only if needed):** start a setup job and wait; if it fails or times out, we move on.
+- **Translate:** create translation jobs based on the files you already uploaded.
+
+If setup completes in time, great. If it fails or times out, we continue and tell you what happened. You still get translations.
+
+What you'll see when you run `npx gtx-cli translate`:
+
+```bash
+Starting translation...
+
+Files to translate:
+  - your/file/path.mdx
+  - ...
+
+Uploading files to General Translation API...
+✔ Files uploaded successfully
+
+Setting up project...
+
+# If setup succeeds
+Setup successfully completed.
+
+# If setup times out
+⚠ Setup timed out — proceeding without setup: Timed out while waiting for setup generation
+
+# If setup fails
+⚠ Setup failed — proceeding without setup: <error message>
+
+# In any case, we continue to translations
+Creating 12 translation(s)
+[0/12] translations completed
+your/file/path.mdx [es]
+```
+
+With this change, we can now guarantee that your translations will generate even in the off chance setup fails.
+
+We also like that it gives you more visiblity into how and where we generate the content that influences your translations, and it makes adding new setup steps worry-free since they will never stop translation from happening.
+
+---
+
+## Upload
+
+We've also made `upload` more flexible. Earlier versions assumed you always sent a source file together with its translations. That doesn't fit every workflow. Now you can:
+
+- Upload **source files only** (no translations yet).
+- Upload **sources + translations together**.
+
+We still auto-detect translations from your repo structure and config. Once you upload, you'll immediately see files in your [dashboard](https://generaltranslation.com/dashboard/project/translations).
+
+If this is your `gt.config.json`:
+
+```json
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": {
+    "json": { "include": ["src/i18n/en/**/*.json"] }
+  }
+}
+```
+
+Running `npx gtx-cli upload`:
+
+```bash
+# Sources only (no local translations found):
+Starting upload...
+
+Files to upload:
+  - src/i18n/en/common.json -> es, fr
+  ...
+
+Uploading 1 file(s) to General Translation...
+✔ Files uploaded successfully
+
+Done!
+
+# In your dashboard, you'll see:
+#   src/i18n/en/common.json
+# with no corresponding translations yet.
+```
+
+If local translations are present and auto-detected:
+
+```bash
+Starting upload...
+
+Files to upload:
+  - src/i18n/en/common.json -> es, fr
+
+Uploading 3 file(s) to General Translation...
+✔ Files uploaded successfully
+
+Done!
+
+# In your dashboard, you'll see:
+#   src/i18n/en/common.json
+# plus translated versions in Spanish and French in the locale dropdown.
+```
+
+If a locale's translation file is missing, we upload the source and skip the missing translation.
+
+If you have local translations but only want to upload sources, remove locales from `gt.config.json` before running `upload`:
+
+```json
+{
+  "defaultLocale": "en",
+  "locales": [],
+  "files": {
+    "json": { "include": ["src/i18n/en/**/*.json"] }
+  }
+}
+```
+
+### Uploads overwrite existing translations
+
+> **Heads-up:** When you run `upload`, any translated file we detect and upload for a given file/locale **replaces** what's currently stored for that file/locale.
+>
+> - To upload sources only, remove target locales from `gt.config.json` before `upload`.
+> - If you need to review changes first, use a separate project or export current translations before uploading.
+> - Missing translations are skipped; present translations are replaced.

@@ -1,0 +1,89 @@
+---
+title: gt-next@6.12.0
+date: 2025-12-15
+authors: [ernest]
+tags: ['gt-next', 'v6.12.0', 'declareStatic', 'declareVar', 'decodeVars', 'translation', 'i18n', 'string functions', 'sentence fragmentation']
+---
+
+## Overview
+
+In [gt-next@6.8.0](/blog/gt-next_v6_8_0), we introduced the `<Static>` component to address sentence fragmentation and code reuse in JSX content.
+The component allows static function calls directly inside translations while preserving word agreement, conjugation, and word order changes across languages.
+However, this left a gap for string-based translations using `gt()` and `msg()`.
+Like with JSX, many applications rely heavily on string construction through utility functions, especially in mature codebases where translatable content is scattered across services, utilities, and business logic.
+
+**gt-next 6.12.0** bridges this gap by introducing `declareStatic()` - the string equivalent of the `<Static>` component - along with supporting functions `declareVar()` and `decodeVars()`.
+
+
+## Core Functionality
+
+### `declareStatic()`
+
+Works similarly to `<Static>` but for string functions. The CLI analyzes all possible return paths and creates separate translation entries for each outcome.
+
+```tsx
+const getDisplayName = (name) => {
+  return name ? declareVar(name) : 'Someone';
+};
+
+gt(`${declareStatic(getDisplayName(name))} says hello.`);
+```
+
+### `declareVar()`
+
+The string equivalent of `<Var>` - marks dynamic content within `declareStatic()` functions that should be excluded from hash calculations and handled as variables at runtime.
+It does this by wrapping dynamic content in an ICU-compatible select statement that resolves to the original dynamic content during interpolation.
+
+```tsx
+const greeting = "Hello, " + declareVar(name);
+// "Hello, {_gt_, select, other {name}}"
+```
+
+### `decodeVars()`
+
+Because `declareVar()` adds ICU-compatible markers in source text, adding `declareVar()` on its own can create issues for existing string-processing logic.
+To extract extract the original value, you just need to wrap the source string in `decodeVars()`.
+
+```tsx
+const greeting = "Hello, " + declareVar("Brian");
+// "Hello, {_gt_, select, other {Brian}}"
+const decodedGreeting = decodeVars(greeting);
+// "Hello, Brian"
+```
+
+## Additional Improvements
+
+### Enhanced String Functions
+
+Both `gt()` and `msg()` now support string concatenation for **static strings** only:
+
+```tsx
+gt("Hello " + "world");
+msg("Welcome, " + "Brian");
+```
+
+### Expanded `<Static>` Support
+
+Up until this point, the `<Static>` component only supported function invocations as children.
+Now, it can support arbitrary JSX expressions resolvable at build time such as nexted jsx text, ternary operators, conditional statements, and function calls.
+
+```tsx
+function getDisplayName(name) {
+  return name ? <Var>{name}</Var> : 'Someone';
+};
+...
+<T>
+  <Static>
+    Hello {getDisplayName("Brian")}!
+    {
+      isFriend ? " How are you?" : " What's up?"
+    }
+  </Static>
+</T>
+```
+
+## Performance Considerations
+
+Like `<Static>`, `declareStatic()` multiplies translation entries.
+Each function call with multiple outcomes creates separate translations, and multiple `declareStatic()` calls in the same string multiply the total entries exponentially.
+Use this feature judiciously and prefer ICU select statements when the multiplication factor becomes excessive.

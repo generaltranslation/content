@@ -1,0 +1,328 @@
+---
+title: Branching Components
+description: How to use branching components for conditional content within translations
+---
+
+Branching components enable conditional content rendering within [`<T>`](__DOCS_PATH__/api/components/t) components. They handle dynamic logic like if/else statements and pluralization rules while ensuring all content variations can be properly translated.
+
+## Available components
+
+- [`<Branch>`](__DOCS_PATH__/api/components/branch): Conditional content based on values or states
+- [`<Plural>`](__DOCS_PATH__/api/components/plural): Automatic pluralization using locale-specific rules
+
+## Quickstart
+
+Branching components work inside [`<T>`](__DOCS_PATH__/api/components/t) to handle conditional logic:
+
+```jsx
+import { T, Branch, Plural, Num, Var } from '__PACKAGE_NAME__';
+
+function NotificationPanel({ user, messageCount }) {
+  return (
+    <T>
+      <Branch 
+        branch={user.status}
+        online={<p><Var>{user.name}</Var> is currently online</p>}
+        away={<p><Var>{user.name}</Var> is away</p>}
+      >
+        <p><Var>{user.name}</Var> status unknown</p>
+      </Branch>
+      
+      <Plural
+        n={messageCount}
+        one={<p>You have <Num>{messageCount}</Num> message</p>}
+        other={<p>You have <Num>{messageCount}</Num> messages</p>}
+      />
+    </T>
+  );
+}
+```
+
+## How branching components work
+
+Branching components solve conditional rendering within translations by:
+
+1. **Replacing ternary operators** and conditional logic inside [`<T>`](__DOCS_PATH__/api/components/t)
+2. **Providing fallback content** when conditions don't match expected values
+3. **Enabling translation** of all possible content variations
+4. **Following locale rules** for pluralization automatically
+
+```jsx
+// ❌ This breaks - conditional logic in <T>
+<T><p>{isActive ? 'User is active' : 'User is inactive'}</p></T>
+
+// ✅ This works - conditional logic with branching
+<T>
+  <Branch 
+    branch={isActive} 
+    true={<p>User is active</p>}
+    false={<p>User is inactive</p>}
+  />
+</T>
+```
+
+## Component guide
+
+### Branch - Conditional content
+
+Use [`<Branch>`](__DOCS_PATH__/api/components/branch) for any conditional rendering based on values or states:
+
+```jsx
+// User status display
+<T>
+  <Branch 
+    branch={user.role}
+    admin={<p>Administrator Dashboard</p>}
+    user={<p>User Dashboard</p>}
+    guest={<p>Guest Access</p>}
+  >
+    <p>Access level unknown</p>
+  </Branch>
+</T>
+
+// Boolean conditions
+<T>
+  <Branch 
+    branch={isLoggedIn}
+    true={<p>Welcome back!</p>}
+    false={<p>Please log in</p>}
+  />
+</T>
+
+// Subscription tiers
+<T>
+  <Branch
+    branch={subscription.tier}
+    free={<p>Upgrade to unlock premium features</p>}
+    premium={<p>Enjoy your premium experience</p>}
+    enterprise={<p>Contact support for enterprise solutions</p>}
+  >
+    <p>Subscription status unavailable</p>
+  </Branch>
+</T>
+```
+
+### Plural - Smart pluralization
+
+Use [`<Plural>`](__DOCS_PATH__/api/components/plural) for content that changes based on quantity:
+
+```jsx
+// Basic pluralization
+<T>
+  <Plural
+    n={itemCount}
+    one={<p><Num>{itemCount}</Num> item in cart</p>}
+    other={<p><Num>{itemCount}</Num> items in cart</p>}
+  />
+</T>
+
+// Zero handling
+<T>
+  <Plural
+    n={notifications}
+    zero={<p>No new notifications</p>}
+    one={<p><Num>{notifications}</Num> notification</p>}
+    other={<p><Num>{notifications}</Num> notifications</p>}
+  />
+</T>
+
+// Complex pluralization (follows Unicode CLDR rules)
+<T>
+  <Plural
+    n={days}
+    zero={<p>Due today</p>}
+    one={<p>Due in <Num>{days}</Num> day</p>}
+    few={<p>Due in <Num>{days}</Num> days</p>}
+    many={<p>Due in <Num>{days}</Num> days</p>}
+    other={<p>Due in <Num>{days}</Num> days</p>}
+  />
+</T>
+```
+
+### Combining with variable components
+
+Branching and variable components work together seamlessly:
+
+```jsx
+<T>
+  <Branch
+    branch={order.status}
+    pending={
+      <p>
+        Order <Var>{order.id}</Var> is pending. 
+        Total: <Currency currency="USD">{order.total}</Currency>
+      </p>
+    }
+    shipped={
+      <p>
+        Order <Var>{order.id}</Var> shipped on <DateTime>{order.shippedDate}</DateTime>
+      </p>
+    }
+    delivered={
+      <p>Order <Var>{order.id}</Var> was delivered successfully</p>
+    }
+  >
+    <p>Order status unknown</p>
+  </Branch>
+</T>
+```
+
+## When to use branching components
+
+### Replace ternary operators
+Convert conditional logic for use within [`<T>`](__DOCS_PATH__/api/components/t):
+
+```jsx
+// ❌ Can't use ternary in <T>
+<T>{isActive ? <p>Active user</p> : <p>Inactive user</p>}</T>
+
+// ✅ Use Branch instead
+<T>
+  <Branch 
+    branch={isActive}
+    true={<p>Active user</p>}
+    false={<p>Inactive user</p>}
+  />
+</T>
+```
+
+### Handle multiple conditions
+Replace switch statements or multiple if/else conditions:
+
+```jsx
+// ❌ Complex conditional logic
+<T>
+  {status === 'loading' ? <p>Loading...</p> : 
+   status === 'error' ? <p>Error occurred</p> : 
+   status === 'success' ? <p>Success!</p> : 
+   <p>Unknown status</p>}
+</T>
+
+// ✅ Clean branching logic
+<T>
+  <Branch
+    branch={status}
+    loading={<p>Loading...</p>}
+    error={<p>Error occurred</p>}
+    success={<p>Success!</p>}
+  >
+    <p>Unknown status</p>
+  </Branch>
+</T>
+```
+
+### Pluralization rules
+Replace manual plural handling:
+
+```jsx
+// ❌ Manual pluralization
+<T>{count === 1 ? <p>1 item</p> : <p>{count} items</p>}</T>
+
+// ✅ Automatic pluralization
+<T>
+  <Plural
+    n={count}
+    one={<p><Num>{count}</Num> item</p>}
+    other={<p><Num>{count}</Num> items</p>}
+  />
+</T>
+```
+
+## Standalone usage
+
+Branching components can be used outside [`<T>`](__DOCS_PATH__/api/components/t) for pure logic without translation:
+
+```jsx
+// Pure conditional rendering
+<Branch
+  branch={theme}
+  dark={<DarkModeIcon />}
+  light={<LightModeIcon />}
+>
+  <DefaultIcon />
+</Branch>
+
+// Pure pluralization
+<Plural
+  n={count}
+  one={<SingleItemComponent />}
+  other={<MultipleItemsComponent />}
+/>
+```
+
+## Common issues
+
+### Missing branch keys
+Always provide fallback content for unmatched values:
+
+```jsx
+// ❌ No fallback for unexpected values
+<Branch
+  branch={userRole}
+  admin={<AdminPanel />}
+  user={<UserPanel />}
+  // What if userRole is "moderator"?
+/>
+
+// ✅ Always include fallback
+<Branch
+  branch={userRole}
+  admin={<AdminPanel />}
+  user={<UserPanel />}
+>
+  <DefaultPanel /> {/* Fallback for any other value */}
+</Branch>
+```
+
+### Incomplete plural forms
+Provide necessary plural forms for your default locale:
+
+```jsx
+// ❌ Missing "other" form
+<Plural
+  n={count}
+  one={<p>1 item</p>}
+  // What about 0, 2, 3, etc.?
+/>
+
+// ✅ Include required forms
+<Plural
+  n={count}
+  zero={<p>No items</p>}
+  one={<p>1 item</p>}
+  other={<p>{count} items</p>}
+/>
+```
+
+### Complex nested logic
+Although this works, we recommend keeping branching logic simple and avoid deep nesting:
+
+```jsx
+// ❌ Complex nested branching
+<Branch branch={status}>
+  <Branch branch={subStatus}>
+    {/* Hard to read and maintain */}
+  </Branch>
+</Branch>
+
+// ✅ Flatten logic or use multiple components
+<Branch
+  branch={`${status}-${subStatus}`}
+  active-online={<ActiveOnline />}
+  active-offline={<ActiveOffline />}
+  inactive-online={<InactiveOnline />}
+>
+  <DefaultState />
+</Branch>
+```
+
+<Callout>
+  Learn more about pluralization rules in the [Unicode CLDR documentation](https://cldr.unicode.org/index/cldr-spec/plural-rules).
+</Callout>
+
+## Next steps
+
+- [String Translation Guide](__DOCS_PATH__/guides/strings) - Translate plain text without JSX
+- [Dynamic Content Guide](/docs/key-concepts/dynamic-content) - Handle runtime translation
+- API References:
+  - [`<Branch>` Component](__DOCS_PATH__/api/components/branch)

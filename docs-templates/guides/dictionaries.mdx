@@ -1,0 +1,325 @@
+---
+title: Dictionaries
+description: How to use traditional dictionary-based translation patterns
+---
+
+Dictionaries provide a traditional approach to organizing translations in nested objects with key-value pairs. While [`<T>` components](__DOCS_PATH__/guides/t) are the recommended approach, dictionaries can be useful for migration from other i18n libraries or when you prefer centralized translation storage.
+
+<Callout>
+  **Recommendation:** Use [`<T>` components](__DOCS_PATH__/guides/t) for new projects. Dictionaries are supported primarily for migration and compatibility with existing translation workflows.
+</Callout>
+
+## Dictionary vs component translation
+
+### Dictionary pattern
+```tsx
+// dictionary.ts
+export default {
+  greetings: {
+    hello: 'Hello, world!',
+    welcome: 'Welcome, {name}!'
+  }
+};
+
+// Component usage
+function MyComponent() {
+  const d = useTranslations();
+  return <div>{d('greetings.hello')}</div>;
+}
+```
+
+### Component pattern
+```tsx
+// Direct component usage - recommended
+function MyComponent() {
+  return <T><div>Hello, world!</div></T>;
+}
+```
+
+## Trade-offs
+
+### Dictionary advantages
+- **Centralized storage** - All translations in one place
+- **Industry standard** - Familiar pattern from other i18n libraries
+- **Migration friendly** - Easy to port existing translations
+
+### Dictionary disadvantages
+- **Complexity** - More setup and configuration required
+- **Maintainability** - Content separated from usage makes updates harder
+- **Debuggability** - Harder to trace translations back to components
+- **Readability** - Keys don't show actual content
+
+## Quickstart
+
+### Step 1: Create dictionary
+Create a dictionary file in your project root or `src` directory:
+
+```ts title="dictionary.ts"
+const dictionary = {
+  greetings: {
+    hello: 'Hello, world!',
+    welcome: 'Welcome to our app!'
+  },
+  navigation: {
+    home: 'Home',
+    about: 'About',
+    contact: 'Contact'
+  }
+};
+
+export default dictionary;
+```
+
+Or use JSON format:
+```json title="dictionary.json"
+{
+  "greetings": {
+    "hello": "Hello, world!",
+    "welcome": "Welcome to our app!"
+  },
+  "navigation": {
+    "home": "Home", 
+    "about": "About",
+    "contact": "Contact"
+  }
+}
+```
+
+Then you pass it to your [`<GTProvider>`](__DOCS_PATH__/api/components/gtprovider) component:
+
+```jsx title="index.js" copy
+import dictionary from "./dictionary.js";
+import config from "./gt.config.json";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    {/* [!code highlight] */}
+    <GTProvider {...config} dictionary={dictionary}>
+      <App />
+    </GTProvider>
+  </StrictMode>
+);
+```
+
+### Step 2: Use in components
+
+The [`useTranslations`](__DOCS_PATH__/api/dictionary/use-translations) hook lets you access dictionary entries:
+
+```tsx
+import { useTranslations } from '__PACKAGE_NAME__';
+
+function MyComponent() {
+  const d = useTranslations();
+  
+  return (
+    <div>
+      <h1>{d('greetings.hello')}</h1>
+      <p>{d('greetings.welcome')}</p>
+    </div>
+  );
+}
+```
+
+## Using variables
+
+Add variables to dictionary entries using `{variable}` syntax:
+
+```ts title="dictionary.ts"
+const dictionary = {
+  user: {
+    greeting: 'Hello, {name}!',
+    itemCount: 'You have {count} items',
+    orderTotal: 'Total: ${amount}'
+  }
+};
+```
+
+```tsx
+function UserDashboard() {
+  const d = useTranslations();
+  
+  return (
+    <div>
+      <h1>{d('user.greeting', { name: 'Alice' })}</h1>
+      <p>{d('user.itemCount', { count: 5 })}</p>
+      <p>{d('user.orderTotal', { amount: 99.99 })}</p>
+    </div>
+  );
+}
+```
+
+## Using prefixes
+
+Scope dictionary access to specific sections using prefixes:
+
+```ts title="dictionary.ts"
+const dictionary = {
+  dashboard: {
+    header: {
+      welcome: 'Welcome back!',
+      lastLogin: 'Last login: {date}'
+    },
+    stats: {
+      totalUsers: 'Total Users: {count}',
+      activeUsers: 'Active Users: {count}'
+    }
+  }
+};
+```
+
+```tsx
+function DashboardHeader() {
+  // Prefix limits access to 'dashboard.header'
+  const d = useTranslations('dashboard.header');
+  
+  return (
+    <header>
+      <h1>{d('welcome')}</h1> {/* -> dashboard.header.welcome */}
+      <p>{d('lastLogin', { date: 'Today' })}</p> {/* -> dashboard.header.lastLogin */}
+    </header>
+  );
+}
+
+function DashboardStats() {
+  // Different prefix for stats section
+  const d = useTranslations('dashboard.stats');
+  
+  return (
+    <div>
+      <p>{d('totalUsers', { count: 1000 })}</p> {/* -> dashboard.stats.totalUsers */}
+      <p>{d('activeUsers', { count: 150 })}</p> {/* -> dashboard.stats.activeUsers */}
+    </div>
+  );
+}
+```
+
+## Multiple language support
+
+### Automatic translation (recommended)
+Most users should use [`loadTranslations`](__DOCS_PATH__/api/config/load-translations) to automatically generate translations from your base dictionary:
+
+```ts title="dictionary.ts"  
+const dictionary = {
+  common: {
+    save: 'Save',
+    cancel: 'Cancel',
+    delete: 'Delete'
+  },
+  forms: {
+    required: 'This field is required',
+    email: 'Please enter a valid email'
+  }
+};
+
+export default dictionary;
+```
+
+Then create a `loadTranslations` function to load generated translation files:
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  const translations = await import(`./_gt/${locale}.json`);
+  return translations.default;
+}
+```
+
+Pass it to your `<GTProvider>`:
+
+```tsx title="src/index.tsx"
+import loadTranslations from './loadTranslations';
+import dictionary from './dictionary';
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <GTProvider
+      {...config}
+      dictionary={dictionary}
+      loadTranslations={loadTranslations}
+    >
+      <App />
+    </GTProvider>
+  </StrictMode>
+);
+```
+
+GT automatically generates translations for other languages based on your base dictionary. Run `npx gtx-cli translate` to generate translations for all configured languages.
+
+### Manual translation files (migration)
+For migration from other i18n libraries or manual translation management, use [`loadDictionary`](__DOCS_PATH__/api/config/load-dictionary):
+
+```ts title="src/loadDictionary.ts"
+export default async function loadDictionary(locale: string) {
+  const translations = await import(`../public/locales/${locale}.json`);
+  return translations.default;
+}
+```
+
+This loads JSON translation files from your `public/locales/` directory:
+
+<Files>
+  <Folder name="my-app" defaultOpen={true}>
+    <Folder name="public" defaultOpen={true}>
+      <Folder name="locales" defaultOpen={true}>
+        <File name="es.json" />
+        <File name="fr.json" />
+        <File name="de.json" />
+      </Folder>
+    </Folder>
+    <Folder name="src">
+      <File name="loadDictionary.ts" />
+    </Folder>
+  </Folder>
+</Files>
+
+<Callout>
+  **Choose the right approach:** Use [`loadTranslations`](__DOCS_PATH__/api/config/load-translations) for new projects with automatic translation generation, or [`loadDictionary`](__DOCS_PATH__/api/config/load-dictionary) when migrating existing translation files.
+</Callout>
+
+## Production setup
+
+### Build process
+Add translation to your build pipeline:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gtx-cli translate && <...YOUR_BUILD_COMMAND...>"
+  }
+}
+```
+
+### Development vs production behavior
+- **Development**: Dictionary entries translated on-demand with dev API key
+- **Production**: All dictionary translations pre-built during build step
+
+## Combining with components
+
+Dictionaries and [`<T>` components](__DOCS_PATH__/guides/t) can work together:
+
+```tsx
+function MixedApproach() {
+  const d = useTranslations();
+  
+  return (
+    <div>
+      {/* Dictionary for simple strings */}
+      <h1>{d('page.title')}</h1>
+      
+      {/* T component for complex JSX */}
+      <T>
+        <p>This is a <strong>complex message</strong> with <a href="/link">links</a>.</p>
+      </T>
+      
+      {/* Dictionary for form labels */}
+      <label>{d('forms.email')}</label>
+    </div>
+  );
+}
+```
+
+## Next steps
+
+- [Languages Guide](__DOCS_PATH__/guides/languages) - Configure supported languages and locale settings
+- [Dynamic Content Guide](/docs/key-concepts/dynamic-content) - Handle runtime translation needs
+- API References:
+  - [`useTranslations` Hook](__DOCS_PATH__/api/dictionary/use-translations)

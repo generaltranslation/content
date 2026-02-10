@@ -1,0 +1,100 @@
+---
+title: Serialization
+description: Customize how Sanity documents are serialized for translation
+---
+
+## Overview
+
+The plugin converts Sanity documents to HTML for translation, then deserializes translated HTML back to Sanity format. You can customize this process for specific field types.
+
+## How serialization works
+
+1. **Serialize**: `gt-sanity` converts document to HTML
+2. **Translate**: HTML is sent to the General Translation API for translation. Content is re-arranged and re-formatted for the target locale.
+3. **Deserialize**: `gt-sanity` parses translated HTML and merges it with the original document
+
+## Default behavior
+
+### Translated types
+
+The serializer recursively processes these types:
+
+- Strings and text fields
+- Portable Text blocks (paragraphs, headings, lists, etc.)
+- Nested objects
+- Arrays
+
+### Skipped types (stop types)
+
+These types are preserved and not sent for translation:
+
+```typescript
+const defaultStopTypes = [
+  'reference',
+  'crossDatasetReference',
+  'date',
+  'datetime',
+  'file',
+  'geopoint',
+  'image',
+  'number',
+  'slug',
+  'url',
+];
+```
+
+## Custom serializers
+
+In some cases, some fields may not be serialized or deserialized correctly by default. In these cases, you may need to add custom serialization rules for specific block types.
+
+```typescript title="sanity.config.ts"
+import { attachGTData, gtPlugin } from 'gt-sanity';
+
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  additionalSerializers: {
+    // Additional serializers for marks (custom annotations)
+    marks: {
+      link: ({ value, children }) =>
+        attachGTData(`<a>${children}</a>`, value, 'markDef'),
+      inlineMath: ({ value, children }) =>
+        attachGTData(`<span>${children}</span>`, value, 'markDef'),
+    },
+  },
+});
+```
+
+In the above example, we use `attachGTData` to embed additional data into the serialized HTML, which is then used by the deserializer to help merge the translated HTML back into the original document.
+
+### Serializer function signature
+
+```typescript
+type Serializer = (props: {
+  value: any; // The Sanity block/field value
+  isInline?: boolean; // Whether this is an inline element
+  children?: string; // Serialized child content
+}) => string; // Returns HTML string
+```
+
+## Additional stop types
+
+Prevent specific types from being translated:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  additionalStopTypes: [
+    'codeBlock', // Code snippets
+    'embedCode', // Third-party embeds
+    'mathFormula', // LaTeX/math content
+    'technicalId', // Internal identifiers
+  ],
+});
+```
+
+## Next steps
+
+- [Configuration Guide](/docs/sanity/guides/configuration) - Plugin configuration options
+- [API Reference](/docs/sanity/api/plugin-config) - Serialization class APIs

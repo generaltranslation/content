@@ -1,0 +1,296 @@
+---
+title: Strings
+description: How to internationalize plain text strings using useGT
+---
+
+String translation provides direct access to text translations without JSX, perfect for attributes, object properties, and plain text values. Use [`useGT`](__DOCS_PATH__/api/strings/use-gt) in __FRAMEWORK_NAME__ components for string translation.
+
+## Quickstart
+
+```jsx
+import { useGT } from '__PACKAGE_NAME__';
+
+function MyComponent() {
+  const gt = useGT();
+  return (
+    <input 
+      placeholder={gt('Enter your email')}
+      title={gt('Email address field')}
+    />
+  );
+}
+```
+
+## When to use string translation
+
+String translation is ideal when you need plain text rather than JSX:
+
+### HTML attributes
+```jsx
+const gt = useGT();
+
+<input 
+  placeholder={gt('Search products...')}
+  aria-label={gt('Product search input')}
+  title={gt('Type to search our catalog')}
+/>
+```
+
+### Object properties
+```jsx
+const gt = useGT();
+
+const user = {
+  name: 'John',
+  role: 'admin',
+  bio: gt('Experienced software developer with 5 years in React'),
+  status: gt('Currently available for projects')
+};
+```
+
+### Configuration & constants
+```jsx
+const gt = useGT();
+
+const navigationItems = [
+  { label: gt('Home'), href: '/' },
+  { label: gt('Products'), href: '/products' },
+  { label: gt('Contact'), href: '/contact' }
+];
+```
+
+### When to use T instead
+Use the [`<T>` component](__DOCS_PATH__/api/components/t) for JSX content:
+
+```jsx
+// ✅ Use <T> for JSX content
+<T><p>Welcome to <strong>our store</strong>!</p></T>
+
+// ✅ Use string translation for plain text
+<input placeholder={gt('Search products')} />
+```
+
+## Using variables
+
+### Basic variables
+Replace placeholders with dynamic values:
+
+```jsx
+const gt = useGT();
+const itemCount = 5;
+
+// String with placeholder
+const message = gt('You have {count} items in your cart', { count: itemCount });
+// Result: "You have 5 items in your cart"
+```
+
+### Multiple variables
+```jsx
+const gt = useGT();
+const order = { id: 'ORD-123', total: 99.99, date: '2024-01-15' };
+
+const confirmation = gt(
+  'Order {orderId} for ${total} was placed on {date}',
+  { 
+    orderId: order.id, 
+    total: order.total, 
+    date: order.date 
+  }
+);
+```
+
+### ICU message format
+For advanced formatting, use ICU syntax:
+
+```jsx
+const gt = useGT();
+translate('There are {count, plural, =0 {no items} =1 {one item} other {{count} items}} in the cart', { count: 10 });
+```
+
+<Callout>
+  Learn more about ICU Message Format in the [Unicode documentation](https://unicode-org.github.io/icu/userguide/format_parse/messages/).
+</Callout>
+
+## Examples
+
+### Form inputs
+```jsx
+import { useGT } from '__PACKAGE_NAME__';
+
+function ContactForm() {
+  const gt = useGT();
+  
+  return (
+    <form>
+      <input 
+        type="email"
+        placeholder={gt('Enter your email address')}
+        aria-label={gt('Email input field')}
+      />
+      <textarea 
+        placeholder={gt('Tell us about your project...')}
+        aria-label={gt('Project description')}
+      />
+      <button type="submit">
+        {gt('Send Message')}
+      </button>
+    </form>
+  );
+}
+```
+
+### Navigation menu
+```jsx
+import { useGT } from '__PACKAGE_NAME__';
+
+function Navigation() {
+  const gt = useGT();
+  
+  const menuItems = [
+    { label: gt('Home'), href: '/', icon: 'home' },
+    { label: gt('About Us'), href: '/about', icon: 'info' },
+    { label: gt('Services'), href: '/services', icon: 'briefcase' },
+    { label: gt('Contact'), href: '/contact', icon: 'mail' }
+  ];
+
+  return (
+    <nav>
+      {menuItems.map((item) => (
+        <a key={item.href} href={item.href} title={item.label}>
+          <Icon name={item.icon} />
+          {item.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+```
+
+### Dynamic content factory
+```jsx
+// utils/productData.js
+export function getProductMessages(gt) {
+  return {
+    categories: [
+      { id: 'electronics', name: gt('Electronics') },
+      { id: 'clothing', name: gt('Clothing') },
+      { id: 'books', name: gt('Books') }
+    ],
+    statusMessages: {
+      available: gt('In stock and ready to ship'),
+      backordered: gt('Currently backordered - ships in 2-3 weeks'),  
+      discontinued: gt('This item has been discontinued')
+    },
+    errors: {
+      notFound: gt('Product not found'),
+      outOfStock: gt('Sorry, this item is currently out of stock')
+    }
+  };
+}
+
+// components/ProductCard.jsx
+import { useGT } from '__PACKAGE_NAME__';
+import { getProductMessages } from '../utils/productData';
+
+function ProductCard({ product }) {
+  const gt = useGT();
+  const messages = getProductMessages(gt);
+  
+  return (
+    <div>
+      <h3>{product.name}</h3>
+      <p>{messages.statusMessages[product.status]}</p>
+      <span>{messages.categories.find(c => c.id === product.categoryId)?.name}</span>
+    </div>
+  );
+}
+```
+
+### Component with document title
+```jsx
+import { useGT } from '__PACKAGE_NAME__';
+import { useEffect } from 'react';
+
+function ProductPage() {
+  const gt = useGT();
+  
+  useEffect(() => {
+    document.title = gt('Product Catalog - Find What You Need');
+    
+    // Update meta description
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute('content', gt('Browse our extensive collection of high-quality products'));
+    }
+  }, [gt]);
+  
+  return (
+    <div>
+      <h1>{gt('Featured Products')}</h1>
+      <p>{gt('Check out our latest and most popular items')}</p>
+    </div>
+  );
+}
+```
+
+## Common issues
+
+### Dynamic content at runtime
+Strings must be known at build time - you cannot translate dynamic content:
+
+```jsx
+// ❌ Dynamic content won't work
+function MyComponent() {
+  const [userMessage, setUserMessage] = useState('');
+  const gt = useGT();
+  
+  return <p>{gt(userMessage)}</p>; // This will fail
+}
+
+// ✅ Use predefined strings
+function MyComponent() {
+  const [messageType, setMessageType] = useState('welcome');
+  const gt = useGT();
+  
+  const messages = {
+    welcome: gt('Welcome to our app!'),
+    goodbye: gt('Thanks for visiting!')
+  };
+  
+  return <p>{messages[messageType]}</p>;
+}
+```
+
+### Hook rules violations
+Follow React hook rules when using [`useGT`](__DOCS_PATH__/api/strings/use-gt):
+
+```jsx
+// ❌ Don't call hooks conditionally
+function MyComponent({ showMessage }) {
+  if (showMessage) {
+    const gt = useGT(); // Hook rule violation
+    return <p>{gt('Hello!')}</p>;
+  }
+  return null;
+}
+
+// ✅ Always call hooks at top level
+function MyComponent({ showMessage }) {
+  const gt = useGT();
+  
+  if (showMessage) {
+    return <p>{gt('Hello!')}</p>;
+  }
+  return null;
+}
+```
+
+<Callout>
+  For truly dynamic content that needs runtime translation, see the [Dynamic Content Guide](/docs/key-concepts/dynamic-content).
+</Callout>
+
+## Next steps
+
+- [Dynamic Content Guide](/docs/key-concepts/dynamic-content) - Handle runtime translation
+- [Shared Strings Guide](__DOCS_PATH__/guides/shared-strings) - Organize reusable translations
+- API References:

@@ -1,0 +1,151 @@
+---
+title: Local Translation Storage
+description: Store translations in your app bundle instead of using a CDN
+---
+
+## What are local translations?
+
+Local translations are stored in your app's bundle, as opposed to being fetched from a CDN (Content Distribution Network). When you add the `gtx-cli translate` command to your build process, this generates translations in JSON format. The final step is getting these translations into your app where they can be used.
+
+There are two ways to do this:
+
+1. **In your app's bundle** (local): Save translations to your app's bundle after generation
+2. **In a CDN** (default): Fetch translations from a CDN at runtime
+
+By default, `__PACKAGE_NAME__` fetches translations from the General Translation CDN. When translating your app using our API, translations are automatically saved to our CDN.
+
+<Callout>
+  **Default behavior:** GT uses CDN storage by default. Only switch to local storage if you need the specific benefits it provides.
+</Callout>
+
+## Trade-offs
+
+### Benefits of local translations
+- **Faster load times**: Local translations are served directly from your app, loading faster than translations served from a CDN
+- **No reliance on external services**: Your app's ability to load translations isn't dependent on CDN uptime. If translations aren't found for a locale, the app automatically falls back to the default language
+- **Works offline**: Translations are bundled with your app
+
+### Drawbacks of local translations
+- **Increased bundle size**: Local translations increase your app's bundle size, potentially making the app slower to load initially
+- **Content management**: To edit a translation, you must redeploy your app with the new translation every time you make changes
+
+
+## Setup
+
+### Step 1: Create load function
+Add a `loadTranslations.[js|ts]` file under `./src` with the following content:
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  const t = await import(`./_gt/${locale}.json`);
+  return t.default;
+}
+```
+
+### Step 2: Configure GTProvider
+Pass `loadTranslations` as a prop to the [`<GTProvider>`](__DOCS_PATH__/api/components/gtprovider) component:
+
+```tsx title="src/App.tsx"
+import { GTProvider } from '__PACKAGE_NAME__';
+import loadTranslations from './loadTranslations';
+
+export default function App() {
+  return (
+    <GTProvider loadTranslations={loadTranslations} locales={['es', 'fr']}>
+      <YourApp />
+    </GTProvider>
+  );
+}
+```
+
+### Step 3: Configure CLI
+Run the configuration command and select local storage:
+
+```bash
+npx gtx-cli configure
+```
+
+When prompted:
+- **Save to CDN?** Select "No"  
+- **Translation directory:** The CLI will automatically use `./src/_gt`
+
+Alternatively, you can manually configure the `gt.config.json` file to use local translations. See the [CLI Configuration docs](/docs/cli/reference/config) for more information.
+
+### Step 4: Generate translations
+Now when you run the translate command, translations will be automatically downloaded and included in your codebase:
+
+```bash
+npx gtx-cli translate
+```
+
+Translations will be stored in `src/_gt/` and bundled with your app.
+
+## Build integration
+
+### React build process
+Add translation generation to your build script:
+
+```json
+{
+  "scripts": {
+    "build": "npx gtx-cli translate && <...YOUR_BUILD_COMMAND...>"
+  }
+}
+```
+
+### CI/CD pipeline
+```yaml
+# .github/workflows/deploy.yml
+- name: Generate Translations
+  run: npx gtx-cli translate
+  
+- name: Build Application  
+  run: npm run build
+```
+
+## Common issues
+
+### Missing translation files
+Ensure translations are generated before building:
+
+```bash
+# ❌ Build without translations
+<...YOUR_BUILD_COMMAND...>
+
+# ✅ Generate translations first
+npx gtx-cli translate && <...YOUR_BUILD_COMMAND...>
+```
+
+### Import path errors
+Match your directory structure in the load function:
+
+```ts
+// ❌ Wrong path
+const t = await import(`../translations/${locale}.json`);
+
+// ✅ Correct path for src/_gt
+const t = await import(`./_gt/${locale}.json`);
+```
+
+### Large bundle size
+Consider code splitting for apps with many languages:
+
+```ts
+// Load translations only when needed
+export default async function loadTranslations(locale: string) {
+  // Only load if locale is active
+  if (locale === getCurrentLocale()) {
+    const translations = await import(`./_gt/${locale}.json`);
+    return translations.default;
+  }
+  return {};
+}
+```
+
+<Callout>
+  Local storage works best for apps with stable translations that don't need frequent updates.
+</Callout>
+
+## Next steps
+
+- [Languages Guide](__DOCS_PATH__/guides/languages) - Configure supported languages
