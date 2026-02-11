@@ -33,10 +33,8 @@ Visit [https://generaltranslation.com/docs](https://generaltranslation.com/docs)
 
 ## Community
 
-The team can be found on [Discord](https://discord.gg/W99K6fchSu) where you can ask questions, voice ideas, and share your projects.
-
-You can also open discussions on [GitHub](https://github.com/generaltranslation/gt/discussions).
+The team can be found on [Discord](https://discord.gg/W99K6fchSu) where you can ask questions and voice ideas.
 
 ## Contributing
 
-Contributions are welcome and highly appreciated. Please read our [Contributing Guide](CONTRIBUTING.md) before submitting a pull request.
+If you've found an error or have a suggestion, see our [Contributing Guide](CONTRIBUTING.md).

@@ -1,15 +1,17 @@
 # Contributing to General Translation Content
 
-Thank you for your interest in improving our documentation, blog, and devlog content. This guide covers everything you need to know to submit a content contribution.
+If you've found an error in our docs or have a suggestion, we're open to contributions. Please read through this guide before opening a pull request.
+
+> When contributing to this repo, you must agree that you have authored 100% of the content, that you have the necessary rights to the content, and that the content you contribute may be provided under the project license.
 
 ## How to contribute
 
 1. **Fork** this repository
-2. **Create a branch** for your changes (e.g. `fix/typo-in-quickstart`, `docs/add-caching-guide`)
+2. **Create a branch** for your changes (e.g. `fix/typo-in-quickstart`)
 3. **Make your edits** following the conventions below
 4. **Open a pull request** against `main`
 
-A maintainer will review your PR. CI checks will run automatically to validate your changes.
+A maintainer will review your PR. CI checks will run automatically to validate your changes. Please note that blog posts and devlog entries are written by the General Translation team -- external contributions to docs are more likely to be accepted.
 
 ## Content structure
 
@@ -92,5 +94,4 @@ These restrictions exist because MDX files are executed during the build. If you
 ## Helpful links
 
 - [Live documentation](https://generaltranslation.com/docs)
-- [Discord community](https://discord.gg/W99K6fchSu)
-- [GitHub Discussions](https://github.com/generaltranslation/gt/discussions)
+- [Discord](https://discord.gg/W99K6fchSu)
