@@ -23,14 +23,12 @@ Install the `gt-react-native` and `gtx-cli` packages:
   ```bash
   npm i gt-react-native
   npm i -D gtx-cli
-  cd ios && pod install
   ```
   </Tab>
   <Tab value="yarn">
   ```bash
   yarn add gt-react-native
   yarn add --dev gtx-cli
-  cd ios && pod install
   ```
   </Tab>
 
@@ -38,14 +36,12 @@ Install the `gt-react-native` and `gtx-cli` packages:
   ```bash
   bun add gt-react-native
   bun add --dev gtx-cli
-  cd ios && pod install
   ```
   </Tab>
   <Tab value="pnpm">
   ```bash
   pnpm add gt-react-native
   pnpm add --save-dev gtx-cli
-  cd ios && pod install
   ```
   </Tab>
 </Tabs>
@@ -73,16 +69,22 @@ Here we have specified that we will translate our project into French and Spanis
 
 ### Environment variables
 
-Add to your `.env` file for development hot-reloading and on-demand translations:
+Add to your `.env.local` file for development hot-reloading and on-demand translations:
 
-```bash title=".env"
-GT_API_KEY="your-dev-api-key"
-GT_PROJECT_ID="your-project-id"
+```bash title=".env.local"
+EXPO_PUBLIC_GT_DEV_API_KEY="your-dev-api-key"
+EXPO_PUBLIC_GT_PROJECT_ID="your-project-id"
 ```
 
 <Callout type="warn">
-  **Dev vs prod keys:** Use a `gtx-dev-` key locally. Use a `gtx-api-` key in CI/CD if you run `gtx-cli translate` during deploy.
-  Never expose `GT_API_KEY` to the browser or commit it to source control.
+  **Dev vs prod keys:** Use a `gtx-dev-` key locally. Use a production key (`gtx-api-`) in CI/CD if you run `gtx-cli translate` during deploy.
+  Never expose production API keys in your app bundle or commit them to source control.
+
+  Example production environment variables:
+  ```bash title=".env"
+  GT_API_KEY="your-production-api-key"
+  GT_PROJECT_ID="your-project-id"
+  ```
 </Callout>
 
 Get your free API keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or run:
@@ -149,8 +151,8 @@ export default function RootLayout() {
     <GTProvider
       config={gtConfig}
       loadTranslations={loadTranslations}
-      projectId='your-project-id'
-      devApiKey='your-dev-api-key' // only needed for development
+      projectId={process.env.EXPO_PUBLIC_GT_PROJECT_ID}
+      devApiKey={process.env.EXPO_PUBLIC_GT_DEV_API_KEY} // only needed for development
     >
       {children}
     </GTProvider>
@@ -160,10 +162,10 @@ export default function RootLayout() {
 
 ### Polyfills
 
-### Babel plugin
-
 Because the React Native JS runtime does not automatically polyfill the `Intl` object, you need to polyfill it manually.
-You can either use the either use the babel plugin, or polyfill manually.
+You can either use the babel plugin or polyfill manually.
+
+#### Babel plugin
 
 For the babel plugin, under `entryPointFilePath` just specify the entry point of your app (can often be found in the `"main"` field of your `package.json`).
 
@@ -190,7 +192,7 @@ export default function (api) {
 }
 ```
 
-### Manual polyfilling
+#### Manual polyfilling
 
 If you run into issues with the babel plugin, you can polyfill manually.
 You will need to npm install and then polyfill the base imports as well as locale-specific imports.
@@ -261,14 +263,27 @@ In development, translations happen on-demand (you'll see a brief loading time).
 
 <Accordions>
   <Accordion title="'GtReactNative' could not be found">
-  ```bash
-  ERROR  [Invariant Violation: TurboModuleRegistry.getEnforcing(...): 'GtReactNative' could not be found. Verify that a module by this name is registered in the native binary.]
-  ```
-    This error occurs when the `gt-react-native` module is not found in the native binary.
-    This means that you will have to install (`cd ios && pod install`) and rebuild your app.
+    ```bash
+    ERROR  [Invariant Violation: TurboModuleRegistry.getEnforcing(...): 'GtReactNative' could not be found. Verify that a module by this name is registered in the native binary.]
+    ```
+    This error occurs when the `gt-react-native` native module hasn't been linked into your app binary. Common causes:
 
-    This can also be caused by using an expo build.
-    Make sure to switch to a development build by running `npx expo start --dev-client` or `npx expo run:ios`/`npx expo run:android`.
+    1. **You're using Expo Go instead of a development build.** Expo Go doesn't support custom native modules. Switch to a development build:
+      ```bash
+      npx expo run:ios
+      # or
+      npx expo run:android
+      ```
+
+    2. **Pods are out of date (iOS).** If you're already using a development build, try reinstalling pods:
+      ```bash
+      cd ios && pod install && cd ..
+      ```
+      If that doesn't work, try a clean install:
+      ```bash
+      cd ios && rm -rf build Pods Podfile.lock && pod install && cd ..
+      ```
+
   </Accordion>
   <Accordion title="Why do languages take a long time to load in dev?">
     **On-Demand Translation**
@@ -277,7 +292,7 @@ In development, translations happen on-demand (you'll see a brief loading time).
     This happens because your app is being translated in real time.
     We refer to this process as an "on-demand translation".
 
-    This **only happens in dev** so you can easily prototype your website in different languages.
+    This **only happens in dev** so you can easily prototype your app in different languages.
     All translations are preloaded in production, so there will be no delay.
     Follow our guide on [shipping to production](/docs/react-native/tutorials/quickdeploy).
 
@@ -287,7 +302,7 @@ In development, translations happen on-demand (you'll see a brief loading time).
     For example, "apple" can be a fruit or a technology company.
 
     To fix this, you can provide more context to the translation with the `context` prop.
-    The [`<T>`](/docs/react-native/api/components/t), [`useGT`](/docs/react-native/api/strings/use-gt) functions all support a `context` prop.
+    The [`<T>`](/docs/react-native/api/components/t) component and [`useGT`](/docs/react-native/api/strings/use-gt) hook both support a `context` prop.
     For example:
     ```jsx
     <T context="the technology company">Apple</T>

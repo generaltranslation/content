@@ -5,7 +5,7 @@ description: Easily internationalize your React Native App with gt-react-native
 
 <Callout type='warn'>
   `gt-react-native` is still experimental and may not work for all projects.
-  Please let us know if you encounter any issues by [on GitHub](https://github.com/generaltranslation/gt/issues).
+  Please let us know if you encounter any issues by [opening an issue on GitHub](https://github.com/generaltranslation/gt/issues).
 </Callout>
 
 <Callout type='info'>
@@ -83,7 +83,7 @@ GT_PROJECT_ID="your-project-id"
 
 <Callout type="warn">
   **Dev vs prod keys:** Use a `gtx-dev-` key locally. Use a `gtx-api-` key in CI/CD if you run `gtx-cli translate` during deploy.
-  Never expose `GT_API_KEY` to the browser or commit it to source control.
+  Never expose production API keys in your app bundle or commit them to source control.
 </Callout>
 
 Get your free API keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or run:
@@ -112,20 +112,23 @@ To avoid using the General Translation platform, just don't set any environment 
 
 ### Loading translations
 
-You can use the `loadTranslations` function to load translations from a custom source.
-This is useful when you need to load translations from a different source, such as a custom API.
+Next, create a `loadTranslations.ts` file in your project root.
+This will handle pulling translations from the `content/[locale].json` files.
 
 ```tsx title="loadTranslations.ts"
-export default async function loadTranslations(locale: string) {
-  try {
-    const t = await import(`../public/_gt/${locale}.json`);
-    return t.default;
-  } catch (error) {
-    console.warn(`Failed to load translations for locale ${locale}:`, error);
-    return {};
-  }
+// Metro does not support dynamic imports,
+// so we must specify the translations for each locale manually.
+const translations: Record<string, any> = {
+  fr: require("./content/fr.json"),
+  es: require("./content/es.json"),
+};
+
+export function loadTranslations(locale: string) {
+  return translations[locale] ?? {};
 }
 ```
+
+You can also use the `loadTranslations` function to load translations from a custom source, such as a remote API.
 
 ### `GTProvider` [#provider]
 
@@ -133,33 +136,38 @@ The [`GTProvider`](/docs/react-native/api/components/gtprovider) component provi
 
 Add the [`GTProvider`](/docs/react-native/api/components/gtprovider) to your root component:
 
-```tsx title="main.tsx"
+```tsx title="App.tsx"
 import { GTProvider } from 'gt-react-native';
-import gtConfig from '../gt.config.json';
-import loadTranslations from './loadTranslations.ts';
+import gtConfig from './gt.config.json';
+import { loadTranslations } from './loadTranslations';
 
-createRoot(document.getElementById('root')!).render(
-  <GTProvider
-    config={gtConfig}
-    loadTranslations={loadTranslations}
-    projectId='your-project-id'
-    devApiKey='your-dev-api-key'
-  >
-    <App />
-  </GTProvider>
-);
+export default function App() {
+  return (
+    <GTProvider
+      config={gtConfig}
+      loadTranslations={loadTranslations}
+      projectId='your-project-id'
+      devApiKey='your-dev-api-key' // only needed for development
+    >
+      {/* your app content */}
+    </GTProvider>
+  );
+}
 ```
 ### Polyfills
 
-### Babel plugin
-
 Because the React Native JS runtime does not automatically polyfill the `Intl` object, you need to polyfill it manually.
-You can either use the either use the babel plugin, or polyfill manually.
+You can either use the babel plugin or polyfill manually.
+
+#### Babel plugin
 
 For the babel plugin, under `entryPointFilePath` just specify the entry point of your app (can often be found in the `"main"` field of your `package.json`).
 
 ```js title="babel.config.js"
 import gtPlugin from 'gt-react-native/plugin';
+import { createRequire } from 'module';
+import gtConfig from './gt.config.json' with { type: 'json' };
+const require = createRequire(import.meta.url);
 
 export default function (api) {
   return {
@@ -168,8 +176,7 @@ export default function (api) {
         gtPlugin,
         {
           locales: [gtConfig.defaultLocale, ...gtConfig.locales],
-          // for expo - entryPointFilePath: require.resolve('expo-router/entry')
-          entryPointFilePath: path.resolve(__dirname, 'index.jsx'),
+          entryPointFilePath: require.resolve('./index.jsx'),
         },
       ],
     ],
@@ -177,7 +184,7 @@ export default function (api) {
 }
 ```
 
-### Manual polyfilling
+#### Manual polyfilling
 
 If you run into issues with the babel plugin, you can polyfill manually.
 You will need to npm install and then polyfill the base imports as well as locale-specific imports.
@@ -228,12 +235,13 @@ Now you can start internationalizing your content. There are two main approaches
 Wrap JSX elements to translate them using the [`<T>`](/docs/react-native/api/components/t) component:
 
 ```tsx
+import { Text } from 'react-native';
 import { T } from 'gt-react-native';
 
 function Welcome() {
   return (
     <T>
-      <h1>Welcome to our app!</h1>
+      <Text>Welcome to our app!</Text>
     </T>
   );
 }
@@ -242,14 +250,15 @@ function Welcome() {
 For dynamic content, use [variable components](/docs/react-native/guides/variables) like [`<Var>`](/docs/react-native/api/components/var):
 
 ```tsx
+import { Text } from 'react-native';
 import { T, Var } from 'gt-react-native';
 
 function Greeting({ user }) {
   return (
     <T>
-      <p>
+      <Text>
         Hello, <Var>{user.name}</Var>!
-      </p>
+      </Text>
     </T>
   );
 }
@@ -262,15 +271,16 @@ See the guide on [using the `<T>` component](/docs/react-native/guides/t) for mo
 For attributes, labels, and plain text using the [`useGT`](/docs/react-native/api/strings/use-gt) hook:
 
 ```tsx
+import { TextInput } from 'react-native';
 import { useGT } from 'gt-react-native';
 
 function ContactForm() {
   const gt = useGT();
 
   return (
-    <input
+    <TextInput
       placeholder={gt('Enter your email')}
-      aria-label={gt('Email input field')}
+      accessibilityLabel={gt('Email input field')}
     />
   );
 }
@@ -294,30 +304,13 @@ Test your translations by switching languages:
    }
    ```
 
-2. **Start your dev server**:
+2. **Start your app**:
 
-   <Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
-      <Tab value="npm">
-      ```bash
-      npm run dev
-      ```
-      </Tab>
-      <Tab value="yarn">
-      ```bash
-      yarn run dev
-      ```
-      </Tab>
-      <Tab value="bun">
-      ```bash
-      bun run dev
-      ```
-      </Tab>
-      <Tab value="pnpm">
-      ```bash
-      pnpm run dev
-      ```
-      </Tab>
-   </Tabs>
+   ```bash
+   npx react-native run-ios
+   # or
+   npx react-native run-android
+   ```
 
 3. Visit your development app and change languages via the locale selection dropdown.
 
@@ -340,7 +333,7 @@ In development, translations happen on-demand (you'll see a brief loading time).
     This happens because your app is being translated in real time.
     We refer to this process as an "on-demand translation".
 
-    This **only happens in dev** so you can easily prototype your website in different languages.
+    This **only happens in dev** so you can easily prototype your app in different languages.
     All translations are preloaded in production, so there will be no delay.
     Follow our guide on [shipping to production](/docs/react-native/tutorials/quickdeploy).
 
@@ -350,7 +343,7 @@ In development, translations happen on-demand (you'll see a brief loading time).
     For example, "apple" can be a fruit or a technology company.
 
     To fix this, you can provide more context to the translation with the `context` prop.
-    The [`<T>`](/docs/react-native/api/components/t), [`useGT`](/docs/react-native/api/strings/use-gt) functions all support a `context` prop.
+    The [`<T>`](/docs/react-native/api/components/t) component and [`useGT`](/docs/react-native/api/strings/use-gt) hook both support a `context` prop.
     For example:
     ```jsx
     <T context="the technology company">Apple</T>
