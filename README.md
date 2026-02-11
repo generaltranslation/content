@@ -26,7 +26,6 @@ This repo contains the public documentation, blog posts, devlog entries, and aut
 | `blog/` | Blog posts (MDX) |
 | `devlog/` | Devlog / release note posts (MDX) |
 | `authors/` | Author profiles (MDX) |
-| `ui.en-US.json` | UI translation strings |
 
 ## Documentation
 
