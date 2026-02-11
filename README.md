@@ -33,7 +33,7 @@ Visit [https://generaltranslation.com/docs](https://generaltranslation.com/docs)
 
 ## Community
 
-The team can be found on [Discord](https://discord.gg/W99K6fchSu) where you can ask questions and voice ideas.
+For any questions, the team can be found on [Discord](https://discord.gg/W99K6fchSu).
 
 ## Contributing
 
