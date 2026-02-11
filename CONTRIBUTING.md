@@ -89,7 +89,7 @@ To keep the content repo safe, the following are **blocked by CI** and will caus
 - `on*=` event handler attributes (e.g. `onclick`, `onerror`)
 - `javascript:` URLs
 
-These restrictions exist because MDX files are executed during the build. If you need custom components, propose the change in the main [gt-cloud](https://github.com/generaltranslation/gt-cloud) repository instead.
+These restrictions exist because MDX files are executed during the build.
 
 ## Helpful links
 

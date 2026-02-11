@@ -15,7 +15,7 @@
 
 ## About
 
-This repo contains the public documentation, blog posts, devlog entries, and author profiles for [generaltranslation.com](https://generaltranslation.com). Content is written in MDX and rendered by the landing app via a git submodule.
+Documentation, blog posts, devlog entries, and author profiles for [generaltranslation.com](https://generaltranslation.com). All content is written in MDX.
 
 ## Structure
 
