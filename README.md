@@ -29,7 +29,7 @@ Documentation, blog posts, devlog entries, and author profiles for [generaltrans
 
 ## Documentation
 
-Visit [https://generaltranslation.com/docs](https://generaltranslation.com/docs) to view the live documentation.
+Visit [generaltranslation.com/docs](https://generaltranslation.com/docs) to view the live documentation.
 
 ## Community
 
