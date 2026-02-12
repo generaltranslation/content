@@ -60,7 +60,7 @@ This will contain your project's configuration.
 ```json title="gt.config.json"
 {
   "defaultLocale": "en",
-  "locales": ["fr", "es"],
+  "locales": ["fr", "zh"],
   "files": {
     "gt": {
       "output": "content/[locale].json"
@@ -119,8 +119,8 @@ This will handle pulling translations from the `content/[locale].json` files.
 // Metro does not support dynamic imports,
 // so we must specify the translations for each locale manually.
 const translations: Record<string, any> = {
-  fr: require("./content/fr.json"),
-  es: require("./content/es.json"),
+  fr: require("@/content/fr.json"),
+  zh: require("@/content/zh.json"),
 };
 
 export function loadTranslations(locale: string) {
@@ -164,24 +164,22 @@ You can either use the babel plugin or polyfill manually.
 For the babel plugin, under `entryPointFilePath` just specify the entry point of your app (can often be found in the `"main"` field of your `package.json`).
 
 ```js title="babel.config.js"
-import gtPlugin from 'gt-react-native/plugin';
-import { createRequire } from 'module';
-import gtConfig from './gt.config.json' with { type: 'json' };
-const require = createRequire(import.meta.url);
+const gtPlugin = require('gt-react-native/plugin');
+const gtConfig = require('./gt.config.json');
 
-export default function (api) {
-  return {
-    plugins: [
-      [
-        gtPlugin,
-        {
-          locales: [gtConfig.defaultLocale, ...gtConfig.locales],
-          entryPointFilePath: require.resolve('./index.jsx'),
-        },
-      ],
+module.exports = {
+  presets: ['module:@react-native/babel-preset'],
+  plugins: [
+    [
+      gtPlugin,
+      {
+        locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+        entryPointFilePath: require.resolve(__dirname, 'App.tsx'),
+      },
     ],
-  };
-}
+  ],
+};
+
 ```
 
 #### Manual polyfilling
@@ -320,11 +318,24 @@ In development, translations happen on-demand (you'll see a brief loading time).
 
 <Accordions>
   <Accordion title="'GtReactNative' could not be found">
-  ```bash
- ERROR  [Invariant Violation: TurboModuleRegistry.getEnforcing(...): 'GtReactNative' could not be found. Verify that a module by this name is registered in the native binary.]
-  ```
+    ```bash
+    ERROR  [Invariant Violation: TurboModuleRegistry.getEnforcing(...): 'GtReactNative' could not be found. Verify that a module by this name is registered in the native binary.]
+    ```
     This error occurs when the `gt-react-native` module is not found in the native binary.
     This means that you will have to install (`cd ios && pod install`) and rebuild your app.
+  </Accordion>
+  <Accordion title="You are using invalid locale codes in your configuration.">
+    ```text
+    @generaltranslation/react-core: Error: You are using invalid locale codes in your configuration.
+    You must either specify a list of valid locales or use "customMapping" to specify aliases for the following invalid locales: en, fr, zh. 
+    ```
+    This error typically occurs when locales are not being properly polyfilled. Make sure that you have either polyfilled the locales manually or are using the babel plugin correctly.
+
+    If you make updates to the babel plugin, you need to clear the cache to make sure the changes are applied.
+
+    ```bash
+    npx react-native start --reset-cache
+    ```
   </Accordion>
   <Accordion title="Why do languages take a long time to load in dev?">
     **On-Demand Translation**
