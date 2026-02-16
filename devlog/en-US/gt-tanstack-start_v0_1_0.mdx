@@ -1,0 +1,134 @@
+---
+title: gt-tanstack-start@0.1.0
+date: 2026-02-16
+authors: [ernest]
+tags: ['gt-tanstack-start', 'v0.1.0', 'tanstack-start', 'tanstack', 'i18n', 'translation', 'vite']
+---
+
+## Overview
+
+`gt-tanstack-start` is a first attempt at providing i18n support tailored for TanStack Start.
+
+> **This library is experimental.** It's still in its infancy, and we are very open to feedback. If you need translation in a production environment with TanStack, we recommend using `gt-react` for now.
+
+---
+
+## What's Included
+
+- **`initializeGT()`** — Configures the i18n manager for TanStack Start. Call this once at the top of your root route file.
+- **`GTProvider`** — Wraps your app with translation context, with built-in SSR detection and locale resolution tailored to TanStack Start.
+- **`getTranslations()`** — An async function designed to be called in your root loader to pass translations into the provider.
+- **`getLocale()`** — Returns the resolved locale for the current request.
+- **`<T>`, `<Var>`, `<LocaleSelector>`** — Re-exported from `gt-react` so you can import everything from a single package.
+
+---
+
+## Quick Start
+
+### Install
+
+```bash
+npm install gt-tanstack-start
+```
+
+### Configure `gt.config.json`
+
+```json
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "zh"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+### Set Environment Variables
+
+```env
+VITE_GT_PROJECT_ID=your-project-id
+VITE_GT_DEV_API_KEY=your-dev-api-key
+```
+
+### Create a Translation Loader
+
+```ts
+// loadTranslations.ts
+export async function loadTranslations(locale: string) {
+  const translations = await import(`./src/_gt/${locale}.json`);
+  return translations.default;
+}
+```
+
+### Set Up Your Root Route
+
+```tsx
+// __root.tsx
+import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router';
+import {
+  initializeGT,
+  GTProvider,
+  getTranslations,
+  getLocale,
+} from 'gt-tanstack-start';
+import gtConfig from '../../gt.config.json';
+import { loadTranslations } from '../../loadTranslations';
+
+initializeGT({
+  ...gtConfig,
+  projectId: import.meta.env.VITE_GT_PROJECT_ID,
+  devApiKey: import.meta.env.VITE_GT_DEV_API_KEY,
+  loadTranslations,
+});
+
+export const Route = createRootRoute({
+  loader: async () => ({
+    translations: await getTranslations(),
+    locale: getLocale(),
+  }),
+  shellComponent: RootDocument,
+});
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  const { translations, locale } = Route.useLoaderData();
+  return (
+    <html lang={locale}>
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <GTProvider translations={translations}>
+          {children}
+        </GTProvider>
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+```
+
+### Translate Content
+
+```tsx
+import { T } from 'gt-tanstack-start';
+
+export default function Page() {
+  return (
+    <T>
+      <p>This gets translated automatically.</p>
+    </T>
+  );
+}
+```
+
+---
+
+## Looking Forward
+
+This is v0.1.0 — the foundation is here, but there's plenty more to build.
+SSG and locale routing are some of the next features we are looking to add in upcoming releases.
+
+If you're interested in trying it out, feedback is very welcome.
+Drop by our [Discord](https://discord.gg/generaltranslation) or open an issue on [GitHub](https://github.com/generaltranslation/gt/issues).
