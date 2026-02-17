@@ -1,0 +1,111 @@
+---
+title: withGT
+description: API reference for the withGT request wrapper
+---
+
+## Overview
+
+The `withGT` function wraps a callback to provide locale context for translation functions.
+In a Node.js server, each request typically serves a different user with a different locale.
+`withGT` sets the locale for all translation functions called within the callback.
+
+```js
+import { withGT } from 'gt-node';
+
+app.get('/api/greeting', (req, res) => {
+  withGT(req.locale, () => {
+    // Translation functions inside here use req.locale
+  });
+});
+```
+
+<Callout>
+  **Request Context:**
+  `withGT` uses async local storage under the hood to scope the locale to the current request.
+  All calls to `getGT` and `getMessages` within the callback will use the provided locale.
+</Callout>
+
+## Reference
+
+### Parameters
+
+<TypeTable
+  type={{
+    "locale": {
+      type: 'string',
+      optional: false,
+    },
+    "fn": {
+      type: '() => T',
+      optional: false,
+    },
+  }}
+/>
+
+### Description
+
+| Param | Description |
+| ----- | ----------- |
+| `locale` | A [locale code](/docs/core/locales) (e.g., `'es'`, `'fr-CA'`) to use for translations within the callback. |
+| `fn` | A callback function to execute with the given locale context. Can be synchronous or asynchronous. |
+
+### Returns
+
+`T` — the return value of the callback function `fn`.
+
+---
+
+## Examples
+
+### Express middleware
+
+```js title="server.js"
+import express from 'express';
+import { initializeGT, withGT, getGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const app = express();
+
+app.use((req, res, next) => {
+  const locale = req.headers['accept-language']?.split(',')[0] || 'en-US';
+  withGT(locale, () => {
+    next();
+  });
+});
+
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({ message: gt('Hello, world!') });
+});
+```
+
+### Wrapping an async handler
+
+```js title="handler.js"
+import { withGT, getGT } from 'gt-node';
+
+export async function handleRequest(locale: string) {
+  return withGT(locale, async () => {
+    const gt = await getGT();
+    return gt('Welcome to our app!');
+  });
+}
+```
+
+---
+
+## Notes
+
+- `initializeGT` must be called before `withGT` is used. If not, an error will be thrown.
+- The locale context is scoped to the callback and does not leak to other concurrent requests.
+- `withGT` works with both synchronous and asynchronous callbacks.
+
+## Next steps
+
+- See [`initializeGT`](/docs/node/api/initialize-gt) for initial setup.
+- See [`getGT`](/docs/node/api/get-gt) for translating strings within a request context.
