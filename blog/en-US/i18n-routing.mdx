@@ -8,61 +8,25 @@ images: ['/static/blogs/i18n-routing.png']
 layout: PostLayout
 ---
 
-## Why i18n routing matters
+## What is i18n routing?
 
-We often encounter multilingual apps where the language is stored in a cookie or query parameter:
+In a multilingual Next.js app, every page needs to exist in multiple languages. i18n routing means putting the language in the URL — `/en/about`, `/fr/about`, `/es/about` — so that each language version has its own shareable, indexable address.
+
+Without locale-based routing, you end up storing the language in a cookie or query parameter:
 
 ```
 myapp.com/about?lang=fr
 ```
 
-This is a telltale sign of a developer who hasn't thought carefully about internationalization.
+This causes real problems. Search engines can't index your French and English pages separately. Users can't share a link to the French version — the recipient just sees whatever language is in their own cookie. And first-time visitors have no way to land directly on the right language.
 
-Next.js apps that support multiple languages need proper i18n routing — for SEO, for shareable links, and for user experience.
-**And it's not that hard to get routing right, especially with the right middleware.**
-But there are plenty of bad practices new developers fall into, especially when building for more than two or three languages.
-
-### Hard-coded locale logic
-
-Many projects — including surprisingly large and important ones — hard-code locale detection and routing.
-
-```tsx
-// Don't do this
-export default function middleware(req: NextRequest) {
-  const locale = req.cookies.get('locale')?.value || 'en';
-  const url = req.nextUrl.clone();
-  url.pathname = `/${locale}${url.pathname}`;
-  return NextResponse.rewrite(url);
-}
-```
-
-This approach breaks in all sorts of ways:
-the locale is invisible to search engines, users can't share localized links,
-and there's no detection of the browser's preferred language.
-
-The table below illustrates some common problems:
-
-| Problem              | What happens                                                          | Impact                                                                |
-| -------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| No locale in URL     | `/about` looks the same for English and French users                  | Search engines can't index different language versions separately.      |
-| Cookie-only locale   | User shares a link, recipient sees a different language                | Broken sharing experience.                                            |
-| No language detection | First-time visitors always see English, even if their browser is set to French | Poor first impression for international users.                        |
-
-A few extra lines of manual code quickly becomes unmaintainable.
-
-And it gets worse when you need localized URL paths.
-What works for `/en/about` and `/fr/about` falls apart when French users expect `/fr/a-propos`
-and Chinese users expect `/zh/关于`.
-**Companies we work with often put off i18n routing
-because of the pain of handling all these edge cases manually.**
+The fix is straightforward: put the locale in the URL path and use Next.js middleware to handle detection and redirects.
 
 ---
 
-## Basic i18n routing in Next.js
+## Setting up the `[locale]` segment
 
-In Next.js, the standard approach to i18n routing is to use a `[locale]` dynamic segment combined with middleware.
-
-First, restructure your `app/` directory to nest pages under `[locale]`:
+The standard Next.js pattern is to nest all your pages under a `[locale]` dynamic segment:
 
 ```
 app/
@@ -73,9 +37,9 @@ app/
         └── page.tsx
 ```
 
-Then, create a middleware file in your project root. In Next.js 16+, this is `proxy.ts`. In Next.js 15 and below, it's `middleware.ts`.
+Then middleware intercepts every request, determines the locale, and routes accordingly. In Next.js 16+, this file is `proxy.ts`. In Next.js 15 and below, it's `middleware.ts`.
 
-A naive implementation might look like this:
+Here's a minimal implementation:
 
 ```ts title="proxy.ts"
 import { NextRequest, NextResponse } from 'next/server';
@@ -102,19 +66,20 @@ export default function middleware(req: NextRequest) {
 }
 ```
 
-This works for simple cases. But it's missing:
-- Cookie persistence (users who switch language lose their preference on reload)
-- Proper locale standardization (is `zh-Hant-TW` the same as `zh-TW`?)
-- Handling of the default locale prefix (should `/en/about` redirect to `/about`?)
-- Localized URL paths (`/fr/about` vs `/fr/a-propos`)
+This works for basic cases, but it's missing a lot:
 
-At this stage, you should think seriously about a dedicated i18n routing library.
+- **Cookie persistence** — users who switch language lose their preference on reload
+- **Locale standardization** — is `zh-Hant-TW` the same as `zh-TW`?
+- **Default locale handling** — should `/en/about` redirect to `/about`?
+- **Localized paths** — `/fr/about` vs `/fr/a-propos`
 
-Although developers often think middleware is simple enough to write by hand,
-the edge cases accumulate fast — and a well-tested library handles all of them.
+These edge cases accumulate fast. In practice, most teams are better off using a dedicated i18n routing library rather than maintaining hand-written middleware.
 
-There are several Next.js i18n libraries, including ours, [gt-next](https://generaltranslation.com/docs/next/tutorials/quickstart).
-Setting up i18n routing with gt-next is three lines:
+---
+
+## Using a library for i18n routing
+
+There are several Next.js i18n libraries available. With ours, [gt-next](https://generaltranslation.com/docs/next/tutorials/quickstart), the entire middleware setup is three lines:
 
 ```ts title="proxy.ts"
 import { createNextMiddleware } from 'gt-next/middleware';
@@ -126,39 +91,36 @@ export const config = {
 };
 ```
 
-The middleware automatically detects the user's locale from the URL, cookies, and browser `Accept-Language` header, then routes them to the correct `[locale]` path.
+The middleware automatically detects the user's locale from the URL, cookies, and `Accept-Language` header, then routes to the correct `[locale]` path.
 
-Using a library here is best practice even for simple two-language apps, and makes adding more languages trivial later.
+Even for a simple two-language app, using a library saves time — and it makes adding new languages trivial later.
 
 ---
 
 ## How locale detection works
 
-A good i18n middleware needs to determine the user's preferred language from multiple sources, with a clear priority order.
+A good i18n middleware determines the user's language from multiple sources, with a clear priority order. gt-next's `createNextMiddleware` checks:
 
-gt-next's `createNextMiddleware` checks the following sources, in order:
+1. **URL pathname** — if the path starts with `/es/about`, that locale is used
+2. **Locale cookie** — if the user previously selected a language via a language switcher
+3. **`Accept-Language` header** — the browser sends preferred languages with every request
+4. **Default locale** — the fallback in your `gt.config.json`
 
-1. **URL pathname** — if the path starts with a locale prefix like `/es/about`, that locale is used
-2. **Locale cookie** — if the user previously selected a language (e.g., via a language switcher), that preference is stored in a cookie
-3. **Browser `Accept-Language` header** — the browser sends the user's preferred languages with every request
-4. **Default locale** — the fallback configured in your `gt.config.json`
-
-The first match wins. This means a URL with a locale always takes priority,
-and the browser header is only used for first-time visitors with no cookie and no locale in the URL.
+The first match wins. URLs always take priority. The browser header is only used for first-time visitors with no cookie and no locale in the URL.
 
 ### Handling the default locale prefix
 
-By default, gt-next does **not** add a prefix for the default locale:
+By default, gt-next omits the prefix for the default locale:
 
 ```
-/about     → English (default, no prefix)
+/about     → English (default)
 /es/about  → Spanish
 /fr/about  → French
 ```
 
-This keeps your default-language URLs clean. Under the hood, the middleware rewrites `/about` to `/en/about` internally so Next.js can resolve the `[locale]` segment, but the user never sees the prefix.
+Under the hood, `/about` is rewritten to `/en/about` so Next.js can resolve the `[locale]` segment, but the user never sees the prefix.
 
-If you prefer every locale to have a prefix (useful for some SEO strategies), enable it:
+To require a prefix for all locales (useful for some SEO strategies):
 
 ```ts title="proxy.ts"
 export default createNextMiddleware({
@@ -166,25 +128,15 @@ export default createNextMiddleware({
 });
 ```
 
-Now all URLs are prefixed:
-
-```
-/en/about  → English
-/es/about  → Spanish
-/fr/about  → French
-```
-
-A user visiting `/about` will be redirected to `/en/about`.
+Now `/about` redirects to `/en/about`.
 
 ---
 
 ## Localized URL paths
 
-Sometimes `/en/about` and `/fr/about` aren't enough.
-French users might expect `/fr/a-propos`, and Chinese users might expect `/zh/关于`.
+For many languages, keeping English words in URLs isn't ideal. French users might expect `/fr/a-propos` instead of `/fr/about`, and Chinese users might expect `/zh/关于`.
 
-This is where most hand-written middleware solutions fall apart.
-gt-next supports localized paths through the `pathConfig` option:
+gt-next handles this with `pathConfig`:
 
 ```ts title="proxy.ts"
 export default createNextMiddleware({
@@ -205,38 +157,31 @@ export default createNextMiddleware({
 });
 ```
 
-The keys in `pathConfig` are the **shared paths** — the path structure used in your `app/[locale]/` directory.
-The values are the localized paths that users see in their browser.
+The keys are the **shared paths** matching your `app/[locale]/` directory. The values are the localized paths users see in the browser. The middleware maps between them automatically:
 
-The middleware handles the mapping automatically:
+- `/fr/a-propos` resolves to `app/[locale]/about/page.tsx`
+- Dynamic segments work too — `/fr/produit/123` maps to `app/[locale]/product/[id]/page.tsx`
+- English paths with no localized version use the shared path: `/en/about`
 
-- A French user visiting `/fr/a-propos` sees the localized URL, but Next.js internally resolves it to `app/[locale]/about/page.tsx`
-- Dynamic segments like `[id]` work too — `/fr/produit/123` maps to `app/[locale]/product/[id]/page.tsx`
-- English paths with no localized version just use the shared path: `/en/about`
+Your file structure stays clean regardless of how many languages you support.
 
-This means your file structure stays clean and consistent regardless of how many languages you support.
+### Why this matters for SEO
 
-### Why localized paths matter for SEO
+Search engines treat URLs as content signals. `/fr/a-propos` tells Google this is a French page about "about us" — `/fr/about` sends mixed signals with an English word in a French URL.
 
-Search engines treat URLs as part of the content signal.
-A URL like `/fr/a-propos` is a much stronger signal to Google
-that this page is French content about "about us"
-than `/fr/about` — which still contains an English word.
-
-Localized paths also improve click-through rates in search results.
-French users are more likely to click a result with `/fr/a-propos` in the URL than `/fr/about`.
+Localized paths also improve click-through rates. Users are more likely to click a search result with a URL in their own language.
 
 ---
 
-## Putting it all together
+## Complete example
 
-Here's a complete example combining all the features — locale detection, default locale handling, and localized paths:
+Here's a full setup combining locale detection, default locale handling, and localized paths:
 
 ```ts title="proxy.ts"
 import { createNextMiddleware } from 'gt-next/middleware';
 
 export default createNextMiddleware({
-  prefixDefaultLocale: false, // clean URLs for the default locale
+  prefixDefaultLocale: false,
   pathConfig: {
     "/about": {
       "fr": "/a-propos",
@@ -260,23 +205,17 @@ export const config = {
 With this setup:
 
 - First-time visitors are routed based on their browser language
-- Returning visitors keep their language preference via cookies
-- The default locale gets clean URLs without a prefix
+- Returning visitors keep their preference via cookies
+- The default locale gets clean, unprefixed URLs
 - French and Spanish users see localized paths
 - Dynamic routes work automatically
-- Your `app/` directory uses a single shared structure
-
-The middleware handles locale standardization under the hood
-(so `zh-Hant-TW` and `zh-TW` resolve correctly),
-and validates all configured locales on startup.
+- Locale variants like `zh-Hant-TW` resolve correctly
 
 ---
 
 ## Next steps
 
-Ready to add i18n routing to your Next.js app? Check out these resources:
-
-- [gt-next quickstart](https://generaltranslation.com/docs/next/tutorials/quickstart) to set up the full i18n stack
-- [Middleware guide](/docs/next/guides/middleware) for detailed documentation
-- [`createNextMiddleware` API reference](/docs/next/api/middleware/create-next-middleware) for all configuration options
-- [Localized paths guide](/docs/next/guides/middleware#localized-paths) for advanced path configuration
+- [gt-next quickstart](https://generaltranslation.com/docs/next/tutorials/quickstart) — set up the full i18n stack
+- [Middleware guide](/docs/next/guides/middleware) — detailed middleware documentation
+- [`createNextMiddleware` API reference](/docs/next/api/middleware/create-next-middleware) — all configuration options
+- [Localized paths guide](/docs/next/guides/middleware#localized-paths) — advanced path configuration
