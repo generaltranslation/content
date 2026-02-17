@@ -1,0 +1,111 @@
+---
+title: "Next.js i18n: your code is the source of truth"
+summary: Translation keys separate content from where it's used. Here's the case for keeping them together.
+date: 2026-02-17
+authors: [default]
+tags: ['guide', 'internationalization', 'nextjs', 'i18n', 'gt-next', 'app-router', 'tutorial']
+layout: PostLayout
+---
+
+Internationalization in JavaScript has settled into a flawed convention: extract every user-facing string into a JSON file, assign it a key, and reference that key in your components. `t('home.hero.title')` instead of the text itself. Your UI lives in one place, your content lives in another.
+
+This works. Thousands of apps ship this way. But it's not a great developer experience.
+
+The key-based model means reading `t('checkout.summary.total')` in a code review tells you nothing — you have to open a JSON file to see what changed. Keys have to be invented, namespaced, and kept in sync. Stale translations accumulate because nobody knows which keys are still in use. The problem is widespread enough that entire categories of tooling exist just to manage it: IDE extensions that auto-suggest keys, type generators that validate them, linters that flag unused ones. These tools are solving a problem that a poorly designed paradigm created.
+
+Content should not be separated from where it's used. A component that renders a heading, a paragraph, and a button should be the single source of truth for what those elements say — not a proxy that points to strings stored somewhere else. When your code and your translations are two parallel systems, they drift. Invariably.
+
+What if the library worked the other way around — adapting to your code instead of asking you to restructure it? Here's what i18n should look like.
+
+## The `<T>` component
+
+```tsx
+import { T } from 'gt-next';
+
+function Hero() {
+  return (
+    <T>
+      <h1>Ship your product worldwide</h1>
+      <p>Reach every market without rewriting your app.</p>
+    </T>
+  );
+}
+```
+
+Wrap your JSX in [`<T>`](https://generaltranslation.com/docs/next/api/components/t). The English text stays right where you wrote it. When a user visits in Spanish or Japanese, the content inside `<T>` is translated — structure, formatting, and all.
+
+No keys. No JSON files. No cross-referencing. The source of truth is your code.
+
+### Dynamic content
+
+The standard approach to interpolation in i18n — ICU message format strings like `{count, plural, one {# item} other {# items}}` — works, but it's a mini-language embedded in a string embedded in a JSON file. It's powerful and unintuitive in equal measure.
+
+With the [`<T>`](https://generaltranslation.com/docs/next/api/components/t) pattern, dynamic values stay in JSX. Mark runtime values with [`<Var>`](https://generaltranslation.com/docs/next/api/components/var) so they're inserted as-is rather than translated:
+
+```tsx
+import { T, Var } from 'gt-next';
+
+function WelcomeBanner({ user }) {
+  return (
+    <T>
+      <h1>Welcome back, <Var>{user.name}</Var></h1>
+      <p>You have <Var>{user.notifications}</Var> new notifications.</p>
+    </T>
+  );
+}
+```
+
+For locale-aware formatting, components like [`<Num>`](https://generaltranslation.com/docs/next/api/components/num) and [`<Currency>`](https://generaltranslation.com/docs/next/api/components/currency) handle the differences automatically — `1,234.56` in English, `1.234,56` in German — without ICU syntax.
+
+### Translating strings
+
+Not everything is JSX. For attributes, placeholders, and `aria-label` values, the [`useGT`](https://generaltranslation.com/docs/next/api/strings/use-gt) hook translates inline strings:
+
+```tsx
+import { useGT } from 'gt-next';
+
+function SearchBar() {
+  const gt = useGT();
+
+  return (
+    <input
+      placeholder={gt('Search for products...')}
+      aria-label={gt('Product search input')}
+    />
+  );
+}
+```
+
+For async contexts, [`getGT`](https://generaltranslation.com/docs/next/api/strings/get-gt) does the same thing.
+
+## Setup
+
+The syntax above comes from [gt-next](https://generaltranslation.com/docs/next), an open-source i18n library for Next.js App Router. Getting started takes one command:
+
+```bash copy
+npx gtx-cli@latest init
+```
+
+The [setup wizard](https://generaltranslation.com/docs/cli/init) installs dependencies, wraps your Next.js config with [`withGTConfig`](https://generaltranslation.com/docs/next/api/config/with-gt-config), adds [`GTProvider`](https://generaltranslation.com/docs/next/api/components/gtprovider) to your root layout, creates a [`gt.config.json`](https://generaltranslation.com/docs/cli/reference/config) with your locales, and sets up dev API keys — all interactively.
+
+Once that's done, wrap content in `<T>`, run your dev server, and switch locales. Translations happen on-demand in development so you can see your app in any language immediately.
+
+gt-next also works [fully standalone](https://generaltranslation.com/docs/next/concepts/stand-alone) without API keys — you supply your own translation files and the library handles the rest.
+
+## Deployment
+
+In production, translations are pre-generated. No on-demand translation, no latency.
+
+1. **Get a production API key** from [dash.generaltranslation.com](https://dash.generaltranslation.com). Production keys start with `gtx-api-` (different from the `gtx-dev-` keys used locally).
+
+2. **Add the translate step to your build:**
+
+```json title="package.json" copy
+{
+  "scripts": {
+    "build": "npx gtx-cli translate --publish && next build"
+  }
+}
+```
+
+The [`translate`](https://generaltranslation.com/docs/cli/translate) command scans your codebase for all `<T>`, `gt()`, and `getGT()` usage, generates translations, and publishes them to a CDN. When your app builds, every locale is ready.
