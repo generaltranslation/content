@@ -1,0 +1,103 @@
+---
+title: getMessages
+description: API reference for the getMessages function
+---
+
+## Overview
+
+The `getMessages` function is an async function that returns a resolver for pre-registered messages.
+Use it together with [`msg`](/docs/next/api/strings/msg) to register strings at build time and resolve their translations at runtime.
+
+```js
+import { msg, getMessages } from 'gt-node';
+
+// Register at build time (or module scope)
+const greeting = msg('Hello, world!');
+
+// Resolve at runtime
+const m = await getMessages();
+const translated = m(greeting);
+```
+
+<Callout>
+  **Request Context Required:**
+  `getMessages` must be called within a [`withGT`](/docs/node/api/with-gt) callback so it knows which locale to use.
+</Callout>
+
+## Reference
+
+### Parameters
+
+None.
+
+### Returns
+
+A promise that resolves to a message resolution function `m`:
+
+```ts
+Promise<(encodedMsg: string | null | undefined, options?: InlineResolveOptions) => string | null | undefined>
+```
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `encodedMsg` | `string \| null \| undefined` | An encoded message string returned by `msg()`. Returns `null`/`undefined` if given `null`/`undefined`. |
+| `options?` | `InlineResolveOptions` | Optional variable values to interpolate into the resolved message. |
+
+---
+
+## Examples
+
+### Basic usage
+
+```js title="messages.js"
+import { msg } from 'gt-node';
+
+// Register messages at module scope
+export const GREETING = msg('Hello, world!');
+export const WELCOME = msg('Welcome, {name}!');
+```
+
+```js title="handler.js"
+import { withGT, getMessages } from 'gt-node';
+import { GREETING, WELCOME } from './messages';
+
+function handleRequest(locale: string) {
+  return withGT(locale, async () => {
+    const m = await getMessages();
+    return {
+      greeting: m(GREETING),
+      welcome: m(WELCOME, { name: 'Alice' }),
+    };
+  });
+}
+```
+
+### With variables
+
+Pass variables as the second argument to interpolate values:
+
+```js title="handler.js"
+import { msg, getMessages, withGT } from 'gt-node';
+
+const ORDER_STATUS = msg('Order {orderId} is {status}.');
+
+function getOrderMessage(locale: string, orderId: string, status: string) {
+  return withGT(locale, async () => {
+    const m = await getMessages();
+    return m(ORDER_STATUS, { orderId, status });
+  });
+}
+```
+
+---
+
+## Notes
+
+- `msg` registers a string for build-time translation. `getMessages` resolves it at runtime.
+- This pattern is useful for strings defined at module scope (constants, enums, error messages) that need to be translated per-request.
+- If `null` or `undefined` is passed to `m`, it returns `null` or `undefined` respectively.
+
+## Next steps
+
+- See [`getGT`](/docs/node/api/get-gt) for translating inline strings directly.
+- See [`withGT`](/docs/node/api/with-gt) for setting up the locale context.
