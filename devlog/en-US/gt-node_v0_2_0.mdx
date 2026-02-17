@@ -1,0 +1,91 @@
+---
+title: gt-node@0.2.0
+date: 2026-02-17
+authors: [ernest]
+tags: ['gt-node', 'v0.2.0', 'node', 'express', 'i18n', 'async-local-storage', 'server-side']
+---
+
+## Overview
+
+**IMPORTANT** This library is still experimental and may be subject to breaking changes.
+
+`gt-node` brings General Translation to server-side JavaScript. It works in **Node.js**, **Bun**, and **Deno**.
+
+By establishing a per-request context via `AsyncLocalStorage`, `gt-node` lets you import translation functions directly from the library:
+
+```js
+const gt = await getGT();
+```
+
+This mirrors the API in our other libraries like `gt-next` when working with async functions.
+
+---
+
+## What's Included
+
+- **`initializeGT()`** — Configures the i18n singleton. Call once at server startup.
+- **`withGT(locale, fn)`** — Wraps a request handler to scope the locale. All translation calls inside the callback use the provided locale. All routes must be wrapped in `withGT`.
+- **`getGT()`** — Returns a translation function for inline strings. Supports variable interpolation and ICU message format.
+
+---
+
+## Quick Start (Express)
+
+### Install
+
+```bash
+npm install gt-node
+```
+
+### Initialize
+
+```js title="server.js"
+import express from 'express';
+import { initializeGT, withGT, getGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const app = express();
+```
+
+### Add locale middleware
+
+Extract the locale from request headers (or cookies, query params — however your app determines locale) and wrap each request with `withGT`:
+
+```js title="server.js"
+app.use((req, res, next) => {
+  const locale = req.headers['accept-language']?.split(',')[0] || 'en-US';
+  withGT(locale, () => next());
+});
+```
+
+### Translate
+
+```js title="server.js"
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({ message: gt('Hello, world!') });
+});
+
+app.listen(3000);
+```
+
+### Translate and deploy
+
+```bash
+npx gtx-cli translate --publish
+```
+
+That's it. Strings are picked up by the GT compiler at build time, translated during CD, and resolved per-request at runtime.
+
+---
+
+## Looking Forward
+
+`gt-node` and `gt-tanstack-start` are the first two libraries built on the `gt-i18n` singleton architecture. Expect more framework adapters to follow the same pattern.
+
+Feedback welcome on [Discord](https://discord.gg/generaltranslation) or [GitHub](https://github.com/generaltranslation/gt/issues).
