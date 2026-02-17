@@ -1,0 +1,128 @@
+---
+title: gt-node@0.2.0
+date: 2026-02-17
+authors: [ernest]
+tags: ['gt-node', 'v0.2.0', 'node', 'express', 'i18n', 'async-local-storage', 'server-side']
+---
+
+## Overview
+
+`gt-node` brings General Translation to server-side JavaScript runtimes.
+
+The core challenge with server-side i18n is **per-request locale scoping** — your server handles many users concurrently, each with a different locale. `gt-node` solves this using [Node.js `AsyncLocalStorage`](https://nodejs.org/api/async_context.html#class-asynclocalstorage), which means it works in any runtime that supports this API:
+
+- **Node.js** (v16.4+)
+- **Bun**
+- **Deno**
+- **Cloudflare Workers** (with the `nodejs_compat` flag)
+
+Because `AsyncLocalStorage` is a widely adopted standard across JavaScript runtimes, `gt-node` is effectively runtime-agnostic despite the name.
+
+---
+
+## Architecture
+
+Under the hood, `gt-node` builds on the centralized `gt-i18n` singleton — the same foundation that powers [`gt-tanstack-start`](/devlog/gt-tanstack-start_v0_1_0). Each framework adapter extends the `I18nManager` class with its own storage adapter:
+
+- **`gt-node`** uses `AsyncStorageAdapter` (backed by `AsyncLocalStorage`)
+- **`gt-tanstack-start`** uses `TanstackStorageAdapter` (backed by TanStack's server context)
+
+This design means the core translation logic — string resolution, message decoding, variable interpolation — lives in `gt-i18n` and is shared across all adapters. Adding support for a new runtime or framework is a matter of writing a new storage adapter, not reimplementing translation.
+
+---
+
+## What's Included
+
+- **`initializeGT()`** — Configures the i18n singleton. Call once at server startup.
+- **`withGT(locale, fn)`** — Wraps a request handler to scope the locale using `AsyncLocalStorage`. All translation calls inside the callback use the provided locale.
+- **`getGT()`** — Returns a translation function for inline strings. Supports variable interpolation and ICU message format.
+- **`getMessages()`** — Resolves pre-registered `msg()` strings. Useful for constants, error messages, and shared strings defined at module scope.
+- **`msg()`**, **`declareStatic()`**, **`declareVar()`** — Re-exported from `gt-i18n` for string registration and variable declaration.
+
+---
+
+## Quick Start (Express)
+
+### Install
+
+```bash
+npm install gt-node
+```
+
+### Initialize
+
+```js title="server.js"
+import express from 'express';
+import { initializeGT, withGT, getGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const app = express();
+```
+
+### Add locale middleware
+
+Extract the locale from request headers (or cookies, query params — however your app determines locale) and wrap each request with `withGT`:
+
+```js title="server.js"
+app.use((req, res, next) => {
+  const locale = req.headers['accept-language']?.split(',')[0] || 'en-US';
+  withGT(locale, () => next());
+});
+```
+
+### Translate
+
+```js title="server.js"
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({ message: gt('Hello, world!') });
+});
+
+app.listen(3000);
+```
+
+### Translate and deploy
+
+```bash
+npx gtx-cli translate --publish
+```
+
+That's it. Strings are picked up by the GT compiler at build time, translated during CD, and resolved per-request at runtime.
+
+---
+
+## Using Shared Strings
+
+For strings defined at module scope — error messages, status labels, constants — use `msg()` with `getMessages()`:
+
+```js title="messages.js"
+import { msg } from 'gt-node';
+
+export const ERRORS = {
+  NOT_FOUND: msg('Resource not found'),
+  UNAUTHORIZED: msg('You must be logged in to access this resource'),
+};
+```
+
+```js title="handler.js"
+import { getMessages } from 'gt-node';
+import { ERRORS } from './messages';
+
+// Inside a withGT callback:
+const m = await getMessages();
+res.status(404).json({ error: m(ERRORS.NOT_FOUND) });
+```
+
+---
+
+## Looking Forward
+
+`gt-node` and `gt-tanstack-start` are the first two libraries built on the `gt-i18n` singleton architecture. Expect more framework adapters to follow the same pattern — each one a thin layer over the shared core.
+
+If you're building on a runtime that supports `AsyncLocalStorage`, `gt-node` should work today.
+Feedback welcome on [Discord](https://discord.gg/generaltranslation) or [GitHub](https://github.com/generaltranslation/gt/issues).
