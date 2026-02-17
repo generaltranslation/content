@@ -1,0 +1,125 @@
+---
+title: "Why Your Preview Deployments Are Breaking Your Translations"
+summary: "If you're running GT translations in CI/CD across multiple branches, you might be silently overwriting production translations. Here's why — and the one-flag fix."
+date: 2025-02-17
+authors: [default]
+tags: ['guide', 'branching', 'CI/CD', 'preview deployments', 'internationalization', 'i18n', 'gtx-cli']
+images: ['/static/blogs/branching.png']
+layout: PostLayout
+---
+
+## The setup that works — until it doesn't
+
+You've done everything right. You've integrated [General Translation](https://generaltranslation.com) into your app, wired up the `<T>` component, added your supported locales, and set up `npx gtx-cli translate` in your CI/CD pipeline. Every push triggers a build, translations get generated, and your app ships in multiple languages.
+
+It works perfectly — as long as you're only deploying from one branch.
+
+The moment your team starts working on multiple branches with preview deployments, things start to quietly break. No error messages. No failed builds. Just translations that silently disappear or revert, and users seeing the wrong content.
+
+## What's actually happening
+
+Here's the scenario. Your team has two branches in flight:
+
+- **`main`** — your production branch, fully translated
+- **`feature/new-pricing-page`** — a feature branch with new copy, deployed to a preview environment
+
+Both branches have CI/CD pipelines that run `npx gtx-cli translate` on every push. Seems fine. But here's the problem: **without branching enabled, every `translate` call writes to the same translation namespace.**
+
+That means:
+
+### 1. Preview deployments overwrite production translations
+
+When `feature/new-pricing-page` runs `translate`, it pushes its translations to the same place `main` reads from. If your app fetches the latest translations from the GT CDN, **production users may suddenly see translations from an unfinished feature branch.**
+
+Your preview deployment just leaked into production — not your code, but your translations.
+
+### 2. Large diffs cause translation churn
+
+The `translate` command compares your current content against the *previous version* to determine what's changed. When two branches diverge significantly, each `translate` call sees a large diff relative to whatever the other branch last pushed.
+
+Content that exists on `main` but not on `feature/new-pricing-page` looks like it was deleted. Content on the feature branch that doesn't exist on `main` looks brand new. **Every time either branch runs `translate`, it effectively un-does the other branch's work.**
+
+The result: translations that aren't shared between the two branches get retranslated on every push. You burn through your translation quota, and the translations themselves are unstable — flickering between two states depending on which branch deployed last.
+
+### 3. It gets worse with more branches
+
+With two branches, translations flip-flop. With three or four feature branches all running `translate` in CI, it becomes a free-for-all. Each branch overwrites the last, and your translation state becomes essentially random — determined by whichever pipeline happened to finish most recently.
+
+## The fix: one flag
+
+The solution is exactly one flag:
+
+```bash
+npx gtx-cli translate --enable-branching
+```
+
+That's it. When branching is enabled, the CLI automatically detects your current git branch and **isolates translations per branch**. Translations on `feature/new-pricing-page` stay on that branch. Production translations on `main` are untouched.
+
+### How it works under the hood
+
+When you enable branching, the CLI does several things automatically:
+
+1. **Detects your current branch** from git
+2. **Identifies the default branch** (usually `main` or `master`) via the remote HEAD
+3. **Tracks branch relationships** — which branches have been merged in, and which branch yours was created from
+4. **Tags all translations** with the current branch name
+
+This means each branch gets its own isolated set of translations. No more overwrites, no more churn.
+
+### Translation inheritance
+
+You might be wondering: "If translations are isolated per branch, do I have to retranslate everything when I create a new branch?"
+
+No. When you create a feature branch off `main`, branching automatically **inherits all existing translations from `main`**. Only new or modified content gets translated. You're not double-charged for translations that already exist.
+
+When you merge the feature branch back into `main`, the translations come with it. The whole lifecycle is handled automatically.
+
+## Setting it up
+
+You can enable branching in your CI/CD pipeline by adding the flag to your translate command:
+
+```bash
+npx gtx-cli translate --enable-branching
+```
+
+Or configure it permanently in your `gt.config.json`:
+
+```json title="gt.config.json"
+{
+  "branchOptions": {
+    "enabled": true
+  }
+}
+```
+
+If you need to override the detected branch name (for example, in CI environments where git info isn't available), you can specify it manually:
+
+```bash
+npx gtx-cli translate --enable-branching --branch my-feature-branch
+```
+
+## When do you need this?
+
+**You need branching if:**
+
+- Multiple developers push to different branches
+- You have preview/staging deployments that run `translate`
+- Your CI/CD pipeline translates on every push or PR
+- You read translations from the GT CDN at runtime
+
+**You probably don't need it if:**
+
+- You only translate from `main` (e.g., only on merge to production)
+- You're a solo developer working on one branch at a time
+
+## The takeaway
+
+If you're using General Translation with any kind of multi-branch workflow and preview deployments, **enable branching**. It's one flag, zero configuration beyond that, and it prevents a whole class of subtle, hard-to-debug translation issues.
+
+Your production translations shouldn't depend on which feature branch deployed last.
+
+```bash
+npx gtx-cli translate --enable-branching
+```
+
+For full details, see the [branching documentation](https://generaltranslation.com/docs/cli/branching).
