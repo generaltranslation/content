@@ -1,0 +1,699 @@
+---
+title: How to Internationalize a Next.js App Router Application
+summary: A practical, step-by-step next.js internationalization tutorial covering server components, client components, routing, and production deployment with gt-next
+date: 2026-02-16
+authors: [default]
+tags: ['guide', 'internationalization', 'nextjs', 'i18n', 'gt-next', 'app-router', 'tutorial']
+layout: PostLayout
+---
+
+If you're building a Next.js application and need to support multiple languages, you've come to the right place. This next.js internationalization tutorial walks you through everything — from understanding how i18n works in the App Router architecture to deploying a fully multilingual production app.
+
+By the end of this guide, you'll have a working Next.js i18n setup with locale-based routing, translated JSX components, translated strings, and a production-ready deployment pipeline.
+
+## How i18n Works in App Router
+
+Next.js App Router introduced a fundamental shift in how React applications render. Components are **server components by default**, which changes how internationalization works compared to the old Pages Router.
+
+### Server Components vs Client Components
+
+In the App Router, there are two rendering environments:
+
+- **Server Components** run on the server at request time (or build time for static pages). They can be `async`, access the filesystem, and never ship JavaScript to the browser. Most of your pages and layouts will be server components.
+- **Client Components** run in the browser (and are pre-rendered on the server). They handle interactivity — state, effects, event handlers. You opt into them with `'use client'` at the top of a file.
+
+This distinction matters for i18n because:
+
+1. **Server components** can use `async` translation functions that resolve at render time. The translated content is sent as HTML — no client-side JavaScript needed.
+2. **Client components** need translation data loaded into the React tree via a context provider, then accessed through hooks.
+
+A good i18n library needs to handle both environments seamlessly. With `gt-next`, server components use `getGT` (an async function), while client components use the `useGT` hook — same API shape, different execution models.
+
+### The Layout/Page Architecture
+
+App Router uses a nested layout system. Your root `layout.tsx` wraps every page, making it the natural place to:
+
+- Set the `<html lang>` attribute for SEO and accessibility
+- Wrap the app in a translation provider for client components
+- Configure locale detection
+
+```tsx title="app/layout.tsx"
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+We'll expand this layout as we set up gt-next in the next section.
+
+## Installing and Configuring gt-next
+
+### Step 1: Install the Packages
+
+```bash copy
+npm i gt-next
+npm i -D gtx-cli
+```
+
+`gt-next` is the runtime library. `gtx-cli` is the CLI tool for generating and managing translations during your build process.
+
+### Step 2: Configure `withGTConfig`
+
+`withGTConfig` is the entry point for configuring gt-next. It wraps your Next.js config and sets up the translation pipeline, including an SWC plugin that processes your translation markers at build time.
+
+```ts title="next.config.ts" copy
+import { withGTConfig } from 'gt-next/config';
+
+const nextConfig = {
+  // your existing Next.js configuration
+};
+
+export default withGTConfig(nextConfig);
+```
+
+Locale configuration lives in a separate `gt.config.json` file in your project root. This file is shared between the runtime library and the CLI:
+
+```json title="gt.config.json" copy
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "de", "ja", "zh"]
+}
+```
+
+This tells gt-next your app's source language is English and you want to support Spanish, French, German, Japanese, and Chinese.
+
+### Step 3: Add `GTProvider`
+
+The `GTProvider` component feeds translation data to client components. Add it to your root layout:
+
+```tsx title="app/layout.tsx" copy
+import { GTProvider } from 'gt-next';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <body>
+        <GTProvider>
+          {children}
+        </GTProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+Server components don't need the provider — they access translations directly. But any client component that uses `useGT`, `useMessages`, or other client-side hooks needs to be a descendant of `GTProvider`.
+
+### Step 4: Environment Variables
+
+For development, add your API credentials to `.env.local`:
+
+```bash title=".env.local" copy
+GT_API_KEY="gtx-dev-your-dev-key"
+GT_PROJECT_ID="your-project-id"
+```
+
+Get your free keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup), or run:
+
+```bash copy
+npx gtx-cli auth
+```
+
+Development keys (prefixed `gtx-dev-`) enable on-demand translation — as you browse your app in different locales, content is translated in real time. This is great for prototyping but isn't used in production.
+
+> **Note:** `gt-next` works fully standalone without any API keys. Without them, you supply your own translation files. The General Translation platform adds automatic AI translations and a CDN, but it's optional.
+
+## Locale-Based Routing with Middleware
+
+To serve different languages at different URLs (e.g., `/es/about` for Spanish, `/fr/about` for French), you need two things: a dynamic route segment and middleware.
+
+### Step 1: Create a `[locale]` Route Segment
+
+Move all your pages inside a `[locale]` directory:
+
+```
+app/
+└── [locale]/
+    ├── layout.tsx
+    ├── page.tsx
+    ├── about/
+    │   └── page.tsx
+    └── dashboard/
+        └── page.tsx
+```
+
+Every page now receives `locale` as a route parameter.
+
+### Step 2: Add Middleware
+
+Create a `middleware.ts` file (or `proxy.ts` for Next.js 16+) in your project root:
+
+```ts title="middleware.ts" copy
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware();
+
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)']
+};
+```
+
+That's it. The middleware automatically:
+
+1. Checks the URL for a locale prefix (`/es/...`)
+2. Falls back to a stored cookie (returning visitors)
+3. Falls back to the browser's `Accept-Language` header
+4. Defaults to your `defaultLocale`
+
+The user is redirected to the correct locale-prefixed URL, and your `[locale]` route parameter is populated.
+
+### Customizing URL Prefixes
+
+By default, the default locale has no prefix (`/about` instead of `/en/about`). To prefix all locales:
+
+```ts title="middleware.ts" copy
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware({
+  prefixDefaultLocale: true
+});
+```
+
+You can also create localized paths:
+
+```ts title="middleware.ts" copy
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware({
+  pathConfig: {
+    "/products": {
+      "es": "/productos",
+      "fr": "/produits"
+    },
+    "/about": {
+      "es": "/sobre-nosotros",
+      "fr": "/a-propos"
+    }
+  }
+});
+```
+
+This means `/es/productos` and `/en/products` both resolve to the same page, improving SEO for each locale.
+
+### Updating Your Layout for Locale
+
+With the `[locale]` route in place, update your layout to set the `lang` attribute:
+
+```tsx title="app/[locale]/layout.tsx" copy
+import { GTProvider } from 'gt-next';
+
+export default async function RootLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+
+  return (
+    <html lang={locale}>
+      <body>
+        <GTProvider>
+          {children}
+        </GTProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+Setting `<html lang={locale}>` is critical for SEO and screen readers.
+
+## Translating JSX with the `<T>` Component
+
+The `<T>` component is the primary way to translate JSX content in gt-next. Wrap any JSX, and it gets translated:
+
+```tsx title="app/[locale]/page.tsx" copy
+import { T } from 'gt-next';
+
+export default function HomePage() {
+  return (
+    <main>
+      <T>
+        <h1>Welcome to our platform</h1>
+        <p>Build something amazing with our tools.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+The `<T>` component works in both server and client components. In server components, translation happens at build time (or on the server). In client components, translation data is loaded from the provider.
+
+### Handling Dynamic Content with Variables
+
+When your JSX contains dynamic values — user names, counts, dates — you need to tell gt-next what's variable and what's translatable. Use the `<Var>` component:
+
+```tsx copy
+import { T, Var } from 'gt-next';
+
+function WelcomeBanner({ userName }: { userName: string }) {
+  return (
+    <T>
+      <h1>Welcome back, <Var>{userName}</Var>!</h1>
+      <p>We're glad to see you again.</p>
+    </T>
+  );
+}
+```
+
+`<Var>` marks content that should be inserted as-is into the translation (not translated). This is essential for user-generated content, proper nouns, or any value that changes at runtime.
+
+### Numbers, Dates, and Currencies
+
+gt-next provides specialized variable components that handle locale-aware formatting:
+
+```tsx copy
+import { T, Num, Currency, DateTime } from 'gt-next';
+
+function OrderSummary({ order }: { order: Order }) {
+  return (
+    <T>
+      <p>
+        Order placed on <DateTime>{order.date}</DateTime>
+      </p>
+      <p>
+        <Num>{order.itemCount}</Num> items totaling{' '}
+        <Currency currency="USD">{order.total}</Currency>
+      </p>
+    </T>
+  );
+}
+```
+
+`<Num>` formats numbers according to the user's locale (e.g., `1,234.56` in English vs `1.234,56` in German). `<Currency>` formats monetary values. `<DateTime>` formats dates and times.
+
+### Pluralization
+
+For content that changes based on a count, use the `<Plural>` component:
+
+```tsx copy
+import { T, Plural, Num } from 'gt-next';
+
+function CartStatus({ itemCount }: { itemCount: number }) {
+  return (
+    <T>
+      <Plural
+        n={itemCount}
+        zero={<p>Your cart is empty.</p>}
+        one={<p>You have <Num /> item in your cart.</p>}
+        other={<p>You have <Num /> items in your cart.</p>}
+      />
+    </T>
+  );
+}
+```
+
+Pluralization rules vary wildly across languages (Arabic has six plural forms!). The `<Plural>` component handles this automatically based on CLDR plural rules for each locale.
+
+### Adding Context for Better Translations
+
+Sometimes a word is ambiguous. "Bank" could be a financial institution or a river bank. Add context to help the translation engine:
+
+```tsx copy
+<T context="financial institution">
+  <p>Find your nearest bank branch.</p>
+</T>
+```
+
+## String Translation with `useGT` and `getGT`
+
+Not everything is JSX. You often need translated strings for attributes, `aria-label` values, `placeholder` text, page titles, and other places where you can't use JSX components.
+
+### Client Components: `useGT`
+
+```tsx title="components/SearchBar.tsx" copy
+'use client';
+
+import { useGT } from 'gt-next';
+
+export function SearchBar() {
+  const gt = useGT();
+
+  return (
+    <div>
+      <input
+        type="search"
+        placeholder={gt('Search for products...')}
+        aria-label={gt('Product search input')}
+      />
+      <button>{gt('Search')}</button>
+    </div>
+  );
+}
+```
+
+`useGT` returns a function `gt` that translates strings. It works inside any client component that's a descendant of `GTProvider`.
+
+### Server Components: `getGT`
+
+For server components, use the async `getGT` function:
+
+```tsx title="app/[locale]/page.tsx" copy
+import { getGT } from 'gt-next/server';
+
+export default async function ProductsPage() {
+  const gt = await getGT();
+
+  return (
+    <div>
+      <h1>{gt('Our Products')}</h1>
+      <p>{gt('Browse our catalog of high-quality items.')}</p>
+    </div>
+  );
+}
+```
+
+### Variables in Strings
+
+Both `useGT` and `getGT` support variables using curly-brace placeholders:
+
+```tsx copy
+const gt = useGT();
+
+// Simple variable
+gt('Hello, {name}!', { variables: { name: userName } });
+
+// Multiple variables
+gt('Showing {count} results for "{query}"', {
+  variables: { count: resultCount, query: searchQuery }
+});
+```
+
+### Adding Context to Strings
+
+Just like `<T>`, you can add context to string translations:
+
+```tsx copy
+gt('Spring', { context: 'the season, not a mechanical spring' });
+```
+
+## Shared Strings with `msg`
+
+Real apps have strings that appear in multiple places — navigation labels, form validation messages, button text. Duplicating `gt()` calls everywhere creates maintenance headaches.
+
+The `msg` function solves this by letting you mark strings for translation in plain data files, then decode them in components.
+
+### Step 1: Define Shared Strings
+
+```ts title="config/navigation.ts" copy
+import { msg } from 'gt-next';
+
+export const navItems = [
+  { label: msg('Home'), href: '/' },
+  { label: msg('Products'), href: '/products' },
+  { label: msg('About Us'), href: '/about' },
+  { label: msg('Contact'), href: '/contact' },
+];
+```
+
+`msg` encodes the string with translation metadata. It doesn't translate anything yet — it just marks the string.
+
+### Step 2: Decode in Components
+
+In client components, use `useMessages`:
+
+```tsx title="components/Navbar.tsx" copy
+'use client';
+
+import { useMessages } from 'gt-next';
+import { navItems } from '../config/navigation';
+
+export function Navbar() {
+  const m = useMessages();
+
+  return (
+    <nav>
+      {navItems.map((item) => (
+        <a key={item.href} href={item.href}>
+          {m(item.label)}
+        </a>
+      ))}
+    </nav>
+  );
+}
+```
+
+In server components, use `getMessages`:
+
+```tsx title="app/[locale]/layout.tsx" copy
+import { getMessages } from 'gt-next/server';
+import { navItems } from '../config/navigation';
+
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  const m = await getMessages();
+
+  return (
+    <div>
+      <header>
+        <nav>
+          {navItems.map((item) => (
+            <a key={item.href} href={item.href}>
+              {m(item.label)}
+            </a>
+          ))}
+        </nav>
+      </header>
+      {children}
+    </div>
+  );
+}
+```
+
+### A Real-World Example: Form Validation
+
+```ts title="config/forms.ts" copy
+import { msg } from 'gt-next';
+
+export const validation = {
+  required: msg('This field is required'),
+  email: msg('Please enter a valid email address'),
+  minLength: msg('Must be at least {min} characters', { min: 8 }),
+  maxLength: msg('Cannot exceed {max} characters', { max: 255 }),
+  passwordMismatch: msg('Passwords do not match'),
+};
+```
+
+```tsx title="components/SignupForm.tsx" copy
+'use client';
+
+import { useMessages } from 'gt-next';
+import { validation } from '../config/forms';
+
+export function SignupForm() {
+  const m = useMessages();
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function validate(formData: FormData) {
+    const newErrors: Record<string, string> = {};
+    if (!formData.get('email')) {
+      newErrors.email = m(validation.required);
+    }
+    if ((formData.get('password') as string)?.length < 8) {
+      newErrors.password = m(validation.minLength);
+    }
+    setErrors(newErrors);
+  }
+
+  return (
+    <form>
+      <input name="email" type="email" />
+      {errors.email && <span className="error">{errors.email}</span>}
+
+      <input name="password" type="password" />
+      {errors.password && <span className="error">{errors.password}</span>}
+
+      <button type="submit">{m(msg('Create Account'))}</button>
+    </form>
+  );
+}
+```
+
+The beauty of `msg` is that your data files remain plain JavaScript objects. Navigation configs, form schemas, dropdown options — they stay declarative and readable while being fully translatable.
+
+## Getting Translations: Standalone vs GT Platform
+
+gt-next gives you two paths for obtaining translations:
+
+### Option 1: General Translation Platform (Recommended)
+
+The fastest way to ship. Add your API keys, and translations are generated automatically:
+
+1. **Development**: On-demand translation as you browse your app in different locales
+2. **Production**: Pre-generate translations during your CI/CD build
+
+```bash copy
+npx gtx-cli translate
+```
+
+This command scans your codebase for all `<T>`, `gt()`, and `msg()` usage, sends the source strings to the General Translation API, and stores the translations on a CDN (or locally — your choice).
+
+Add it to your build script:
+
+```json title="package.json" copy
+{
+  "scripts": {
+    "build": "npx gtx-cli translate && next build"
+  }
+}
+```
+
+### Option 2: Standalone (Bring Your Own Translations)
+
+If you want to manage translations yourself — using human translators, a different TMS, or your own workflow — gt-next supports that too. Don't set any environment variables, and the library works as a standard i18n framework.
+
+First, generate source files:
+
+```bash copy
+npx gtx-cli generate
+```
+
+This creates JSON files containing all your translatable strings. Translate them however you like, then load them into your app:
+
+```ts title="src/loadTranslations.ts" copy
+export default async function loadTranslations(locale: string) {
+  const translations = await import(`../public/_gt/${locale}.json`);
+  return translations.default;
+}
+```
+
+`withGTConfig` automatically detects this file in your `src/` directory or project root and loads translations from it.
+
+### Local Storage vs CDN
+
+When using the General Translation platform, you can choose where translations are stored:
+
+- **CDN (default)**: Translations are fetched at runtime from General Translation's CDN. Zero impact on bundle size, always up-to-date.
+- **Local**: Translations are downloaded during build and bundled with your app. Faster load times, works offline, but increases bundle size.
+
+Configure this with:
+
+```bash copy
+npx gtx-cli configure
+```
+
+## Production Checklist
+
+Before shipping your multilingual app, walk through this checklist.
+
+### SEO
+
+**Set the `lang` attribute** on your `<html>` element. We covered this in the layout section:
+
+```tsx
+<html lang={locale}>
+```
+
+**Add `hreflang` tags** to tell search engines about your language variants. In your layout or a `Head` component:
+
+```tsx title="app/[locale]/layout.tsx" copy
+import { getLocale } from 'gt-next/server';
+
+export async function generateMetadata() {
+  const locale = await getLocale();
+
+  return {
+    alternates: {
+      languages: {
+        'en': '/en',
+        'es': '/es',
+        'fr': '/fr',
+        'de': '/de',
+      },
+    },
+  };
+}
+```
+
+**Translate your metadata**. Page titles and descriptions should be translated too:
+
+```tsx title="app/[locale]/page.tsx" copy
+import { getGT } from 'gt-next/server';
+
+export async function generateMetadata() {
+  const gt = await getGT();
+
+  return {
+    title: gt('Welcome to Our Platform'),
+    description: gt('Build multilingual applications with ease.'),
+  };
+}
+```
+
+### Performance
+
+**Pre-generate translations in CI/CD.** Never rely on on-demand translation in production. Add `npx gtx-cli translate` to your build script.
+
+**Consider local translations for performance-critical apps.** If your app needs to work offline or you want zero network requests for translation data, store translations locally.
+
+**Use server components for translated content when possible.** Server-rendered translations add zero JavaScript to the client bundle.
+
+### Testing
+
+**Add a locale selector** to make manual testing easy:
+
+```tsx copy
+import { LocaleSelector } from 'gt-next';
+
+function Header() {
+  return (
+    <header>
+      <nav>{/* ... */}</nav>
+      <LocaleSelector />
+    </header>
+  );
+}
+```
+
+**Test RTL languages.** If you support Arabic, Hebrew, or other right-to-left languages, make sure your layout adapts. gt-next provides utilities for detecting text direction.
+
+**Check for text expansion.** German text is often 30% longer than English. Japanese can be more compact. Verify your UI doesn't break with longer or shorter translations.
+
+**Test with the production translation flow.** Run `npx gtx-cli translate` locally and verify the output before deploying.
+
+### Quick Setup Shortcut
+
+If you want to skip the manual setup, gt-next includes an automatic configuration wizard:
+
+```bash copy
+npx gtx-cli@latest init
+```
+
+This walks you through every step interactively — installing dependencies, creating config files, setting up middleware, and wrapping your layout with `GTProvider`.
+
+## Wrapping Up
+
+Next.js i18n in the App Router doesn't have to be painful. Here's what we covered:
+
+1. **Architecture**: Server components use async translation functions; client components use hooks via a provider.
+2. **Setup**: `withGTConfig` in `next.config.ts`, `GTProvider` in your layout, locales in `gt.config.json`.
+3. **Routing**: A `[locale]` dynamic segment plus `createNextMiddleware` for automatic language detection.
+4. **JSX Translation**: The `<T>` component with `<Var>`, `<Num>`, `<Plural>`, and other variable components.
+5. **String Translation**: `useGT` for client components, `getGT` for server components.
+6. **Shared Strings**: `msg` to mark strings in data files, `useMessages`/`getMessages` to decode them.
+7. **Deployment**: `npx gtx-cli translate` in your build pipeline, with CDN or local storage options.
+8. **Production**: `lang` attributes, `hreflang` tags, translated metadata, and thorough testing.
+
+Start by installing gt-next and running the setup wizard. You can have a working multilingual app in minutes, then refine from there.
+
+```bash copy
+npm i gt-next
+npm i -D gtx-cli
+npx gtx-cli@latest init
+```
+
+Happy internationalizing. 🌍
