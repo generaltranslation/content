@@ -1,0 +1,330 @@
+---
+title: Node.js Quickstart
+description: Easily internationalize your Node.js server with gt-node
+---
+
+**Prerequisites:** Node.js 18+
+
+<Callout type='info'>
+  **Quick Setup:** Try `npx gtx-cli@latest` for automatic configuration. See the
+  [Setup Wizard](/docs/cli/init) guide or use our [AI tools
+  integration](/docs/overview/ai-tools).
+</Callout>
+
+## Installation
+
+Install the `gt-node` and `gtx-cli` packages:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm i gt-node
+  npm i -D gtx-cli
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn add gt-node
+  yarn add --dev gtx-cli
+  ```
+  </Tab>
+
+  <Tab value="bun">
+  ```bash
+  bun add gt-node
+  bun add --dev gtx-cli
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm add gt-node
+  pnpm add --save-dev gtx-cli
+  ```
+  </Tab>
+</Tabs>
+
+## Configuration
+
+### `initializeGT`
+
+The [`initializeGT`](/docs/node/api/initialize-gt) function configures General Translation for use in your Node.js application.
+It must be called once before any translation functions are used — typically at the top of your server's entry file.
+
+```js title="server.js"
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+```
+
+Create a [`gt.config.json`](/docs/cli/reference/config) file in your project root:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en-US",
+  "locales": ["es", "fr"]
+}
+```
+
+Customize the locales for your project. See [supported locales](/docs/platform/supported-locales) for options.
+
+### Environment variables
+
+Add to your `.env` file for development on-demand translations:
+
+```bash title=".env"
+GT_API_KEY="your-dev-api-key"
+GT_PROJECT_ID="your-project-id"
+```
+
+<Callout type="warn">
+  **Dev vs prod keys:** Use a `gtx-dev-` key locally. Use a `gtx-api-` key in CI/CD if you run `gtx-cli translate` during deploy.
+  Never expose `GT_API_KEY` publicly or commit it to source control.
+</Callout>
+
+Get your free API keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or run:
+
+```bash
+npx gtx-cli auth
+```
+
+<Accordions>
+  <Accordion title="Can I use my own translations?">
+  `gt-node` is an i18n library that can work standalone without any environment variables.
+  Without them, the library will act very similarly to other i18n libraries, and will still have core internationalization functionality.
+
+However, `gt-node` also offers a native integration with the General Translation platform.
+This integration unlocks additional functionality in the library, such as:
+
+- Translation Hot Reloading in Development
+- Automatic AI translations
+- Syncing translations with the General Translation platform
+
+To avoid using the General Translation platform, just don't set any environment variables.
+
+  </Accordion>
+</Accordions>
+
+---
+
+## Usage
+
+Now you can start internationalizing your server. There are two main approaches:
+
+### Set locale context with `withGT`
+
+Each request needs a locale context. Use [`withGT`](/docs/node/api/with-gt) to wrap your request handlers — it uses async local storage under the hood so translation functions know which locale to use:
+
+```js title="server.js"
+import { withGT } from 'gt-node';
+
+app.use((req, res, next) => {
+  const locale = req.headers['accept-language']?.split(',')[0] || 'en-US';
+  withGT(locale, () => next());
+});
+```
+
+### Inline strings with `getGT`
+
+For translating strings directly inside request handlers, use [`getGT`](/docs/node/api/get-gt):
+
+```js title="server.js"
+import { getGT } from 'gt-node';
+
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({
+    message: gt('Hello, world!'),
+    welcome: gt('Welcome, {name}!', { name: 'Alice' }),
+  });
+});
+```
+
+See the [`getGT` API reference](/docs/node/api/get-gt) for more information.
+
+### Pre-registered strings with `msg`
+
+For strings defined outside of request handlers (constants, error messages, enums), use [`msg`](/docs/node/api/strings/msg) to register them at module scope and [`getMessages`](/docs/node/api/get-messages) to resolve translations at runtime:
+
+```js title="messages.js"
+import { msg } from 'gt-node';
+
+export const GREETING = msg('Hello, world!');
+export const WELCOME = msg('Welcome, {name}!');
+export const ORDER_STATUS = msg('Order {orderId} is {status}.');
+```
+
+```js title="handler.js"
+import { getMessages } from 'gt-node';
+import { GREETING, WELCOME, ORDER_STATUS } from './messages.js';
+
+app.get('/api/status', async (req, res) => {
+  const m = await getMessages();
+  res.json({
+    greeting: m(GREETING),
+    welcome: m(WELCOME, { name: 'Alice' }),
+    order: m(ORDER_STATUS, { orderId: '123', status: 'shipped' }),
+  });
+});
+```
+
+See the [`msg`](/docs/node/api/strings/msg) and [`getMessages`](/docs/node/api/get-messages) API references for more information.
+
+---
+
+## Full example
+
+Here's a complete Express server with `gt-node`:
+
+```js title="server.js"
+import express from 'express';
+import { initializeGT, withGT, getGT, msg, getMessages } from 'gt-node';
+
+// Initialize GT before anything else
+initializeGT({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+// Pre-register constant strings
+const ERROR_NOT_FOUND = msg('Resource not found.');
+
+const app = express();
+
+// Set locale context for each request
+app.use((req, res, next) => {
+  const locale = req.headers['accept-language']?.split(',')[0] || 'en-US';
+  withGT(locale, () => next());
+});
+
+// Inline translation with getGT
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({ message: gt('Hello, world!') });
+});
+
+// Pre-registered message translation with getMessages
+app.get('/api/not-found', async (req, res) => {
+  const m = await getMessages();
+  res.status(404).json({ error: m(ERROR_NOT_FOUND) });
+});
+
+app.listen(3000, () => console.log('Server running on port 3000'));
+```
+
+---
+
+## Testing your app
+
+Test your translations by starting your server and making requests with different `Accept-Language` headers:
+
+```bash
+# Default (English)
+curl http://localhost:3000/api/greeting
+
+# Spanish
+curl -H "Accept-Language: es" http://localhost:3000/api/greeting
+
+# French
+curl -H "Accept-Language: fr" http://localhost:3000/api/greeting
+```
+
+In development, translations happen on-demand (you'll see a brief delay). In production, translations are pre-generated by the CLI.
+
+### Troubleshooting
+
+<Accordions>
+  <Accordion title="Why do translations take a long time in dev?">
+    **On-Demand Translation**
+
+    You may notice when loading translations in development, responses will take a few seconds.
+    This happens because your strings are being translated in real time.
+    We refer to this process as an "on-demand translation".
+
+    This **only happens in dev** so you can easily prototype your server in different languages.
+    All translations are preloaded in production, so there will be no delay.
+    Follow our guide on [shipping to production](#deployment).
+
+  </Accordion>
+  <Accordion title="Why are some translations inaccurate?">
+    The most likely cause of an inaccurate translation is ambiguous wording.
+    For example, "apple" can be a fruit or a technology company.
+
+    To fix this, you can provide more context to the translation with the `$context` option.
+    The [`getGT`](/docs/node/api/get-gt) and [`msg`](/docs/node/api/strings/msg) functions both support context.
+    For example:
+    ```js
+    gt('Apple', { $context: 'the technology company' });
+    ```
+
+  </Accordion>
+</Accordions>
+
+---
+
+## Deployment
+
+For production, you need to pre-translate content since runtime translation is disabled.
+
+1. **Get a production API key** from [dash.generaltranslation.com](https://dash.generaltranslation.com).
+
+   Production keys begin with `gtx-api-` (different from dev keys which start with `gtx-dev-`).
+
+2. **Add to your CI/CD environment**:
+
+   ```bash
+   GT_PROJECT_ID=your-project-id
+   GT_API_KEY=gtx-api-your-production-key
+   ```
+
+   <Callout type='warn'>
+     **Never** publicly expose your GT_API_KEY production key.
+   </Callout>
+
+3. **Run the translate command** to translate your content:
+
+   ```bash
+   npx gtx-cli translate
+   ```
+
+   You can configure the behavior of the translate command with the [`gt.config.json`](/docs/cli/reference/config) file.
+
+   See the [CLI Tool](/docs/cli/translate) reference guide for more information.
+
+4. **Update your build script** to translate before building:
+   ```json title="package.json"
+   {
+     "scripts": {
+       "build": "npx gtx-cli translate && <...YOUR_BUILD_COMMAND...>"
+     }
+   }
+   ```
+
+<Accordions>
+  <Accordion title="What if I'm not using the General Translation platform?">
+    If you're not using the General Translation platform, you can still use `gt-node` in production.
+
+    However, you'll need to manually translate your content before deploying your application.
+
+    Instead of running `translate`, run the `generate` command to generate JSON files containing all of your translation data (in your source language).
+
+    ```bash
+    npx gtx-cli generate
+    ```
+
+    Then, you'll need to manually edit / translate these files, and load them into your application with the `loadTranslations` option in [`initializeGT`](/docs/node/api/initialize-gt).
+
+  </Accordion>
+</Accordions>
+
+## Next steps
+
+- [`initializeGT`](/docs/node/api/initialize-gt) — Full configuration options
+- [`withGT`](/docs/node/api/with-gt) — Locale context for requests
+- [`getGT`](/docs/node/api/get-gt) — Inline string translation
+- [`msg` & `getMessages`](/docs/node/api/get-messages) — Pre-registered message translation
+- [CLI Tool](/docs/cli/translate) — Translation workflow reference
