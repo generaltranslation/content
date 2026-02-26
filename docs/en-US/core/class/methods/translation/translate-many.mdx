@@ -14,82 +14,101 @@ const gt = new GT({
   projectId: 'your-project-id'
 });
 
-const result = await gt.translateMany([
-  { source: 'Hello, world!' },
-  { source: 'Welcome to our app' },
-  { source: 'Click here to continue' }
-], { targetLocale: 'es' });
+const results = await gt.translateMany(
+  ['Hello, world!', 'Welcome to our app', 'Click here to continue'],
+  'es'
+);
 ```
 
 ---
 
 ## Reference
 
+### Overload 1: Array of entries
+
+```typescript
+translateMany(
+  sources: TranslateManyEntry[],
+  options: string | TranslateOptions,
+  timeout?: number
+): Promise<TranslateManyResult>
+```
+
+Returns a `TranslateManyResult` (an array of `TranslationResult` objects) in the same order as the input.
+
+### Overload 2: Record of entries
+
+```typescript
+translateMany(
+  sources: Record<string, TranslateManyEntry>,
+  options: string | TranslateOptions,
+  timeout?: number
+): Promise<Record<string, TranslationResult>>
+```
+
+When given a record keyed by hash, returns a record keyed by the same hashes.
+
 ### Parameters
 
 <TypeTable
   type={{
     "sources": {
-      type: 'Entry[]',
+      type: 'TranslateManyEntry[] | Record<string, TranslateManyEntry>',
+      description: 'Array or record of entries to translate.',
       optional: false,
     },
-    "globalMetadata?": {
-      type: '{ targetLocale: string } & EntryMetadata',
+    "options": {
+      type: 'string | TranslateOptions',
+      description: 'Target locale string (shorthand) or an options object.',
+      optional: false,
+    },
+    "timeout?": {
+      type: 'number',
+      description: 'Optional request timeout in milliseconds.',
       optional: true,
     }
   }}
 />
 
+### TranslateManyEntry
+
+Each entry can be a plain string or an object with source content and optional metadata:
+
+```typescript
+type TranslateManyEntry = string | { source: Content; metadata?: EntryMetadata };
+```
+
+### TranslateOptions
+
+```typescript
+type TranslateOptions = {
+  targetLocale: string;
+  sourceLocale?: string;
+  modelProvider?: string;
+};
+```
+
 ### Parameters description
 
 | Parameter | Description |
 |-----------|-------------|
-| `sources` | Array of `Entry` objects containing source content and optional per-item metadata |
-| `globalMetadata` | Global metadata applied to all entries, including the required `targetLocale` |
-
-### Entry object structure
-
-Each entry in the `sources` array can contain:
-
-```typescript
-interface Entry {
-  source: Content;           // The content to translate
-  targetLocale?: string;     // Override global target locale
-  context?: string;          // Translation context for this entry
-  tags?: string[];          // Tags for categorization
-  // ... other EntryMetadata properties
-}
-```
+| `sources` | Array or record of `TranslateManyEntry` items. Each can be a plain string or an object with `source` and optional `metadata`. |
+| `options` | A target locale string (e.g., `'es'`) or an options object with `targetLocale`, optional `sourceLocale`, and `modelProvider`. |
+| `timeout` | Optional request timeout in milliseconds. |
 
 ### Returns
 
-```typescript
-Promise<TranslateManyResult>
-```
-
-The result contains translated entries and any error information:
-
-```typescript
-interface TranslateManyResult {
-  translations: Array<TranslationResult | TranslationError>;
-  metadata: {
-    totalRequests: number;
-    successCount: number;
-    errorCount: number;
-    processingTime: number;
-  };
-}
-```
+- **Array input** → `Promise<TranslateManyResult>` (`TranslationResult[]`), same order as input
+- **Record input** → `Promise<Record<string, TranslationResult>>`, keyed by the same hashes
 
 ---
 
 ## Behavior
 
-### Global vs Per-Item Metadata
+### Array vs Record
 
-- **Global metadata** is applied to all entries as defaults
-- **Per-item metadata** overrides global settings for specific entries
-- Target locale can be overridden per entry
+- **Array**: Entries are hashed internally; results are returned in input order.
+- **Record**: Keys are treated as hashes; the response is a record with the same keys.
 
 ### Error handling strategy
 
@@ -97,34 +116,61 @@ interface TranslateManyResult {
 - Each result indicates success or failure independently  
 - Partial success scenarios are fully supported
 
-### Locale resolution
+### Options shorthand
 
-- Global target locale is used as default for all entries
-- Per-entry target locales override the global setting
-- All locales are resolved through custom mapping if configured
+You can pass a string as the `options` parameter as a shorthand for `{ targetLocale: string }`:
+
+```typescript
+// These are equivalent:
+await gt.translateMany(['Hello', 'Goodbye'], 'es');
+await gt.translateMany(['Hello', 'Goodbye'], { targetLocale: 'es' });
+```
 
 ---
 
 ## Examples
 
-```typescript
-const menuItems = await gt.translateMany([
-  { source: 'Home' },
-  { source: 'About' },
-  { source: 'Products' },
-  { source: 'Contact' }
-], {
-  targetLocale: 'fr',
-  context: 'Navigation menu items'
-});
+### Array of strings
 
-menuItems.translations.forEach((result, index) => {
-  if ('translation' in result) {
+```typescript
+const results = await gt.translateMany(
+  ['Home', 'About', 'Products', 'Contact'],
+  'fr'
+);
+
+results.forEach((result, index) => {
+  if (result.success) {
     console.log(`Item ${index}: ${result.translation}`);
   } else {
     console.error(`Item ${index} failed: ${result.error}`);
   }
 });
+```
+
+### Array with metadata
+
+```typescript
+const results = await gt.translateMany(
+  [
+    { source: 'Hello, world!', metadata: { dataFormat: 'ICU' } },
+    { source: 'Goodbye, world!' }
+  ],
+  { targetLocale: 'es' }
+);
+```
+
+### Record (keyed by hash)
+
+```typescript
+const results = await gt.translateMany(
+  {
+    'greeting-hash': 'Hello, world!',
+    'farewell-hash': 'Goodbye, world!'
+  },
+  'es'
+);
+
+console.log(results['greeting-hash'].translation);
 ```
 
 ---
@@ -133,11 +179,10 @@ menuItems.translations.forEach((result, index) => {
 
 - Translates multiple items in a single API request
 - Translation failures in one entry don't affect others
-- Results maintain the same order as input entries
-- Global metadata is merged with per-entry metadata (per-entry takes precedence)
+- Results maintain the same order as input entries (array) or same keys (record)
 
 ## Next steps
 
 - Learn about single translations with [translate](/docs/core/class/methods/translation/translate)
-- Explore [Entry and EntryMetadata types](/docs/core/types/Entry)
+- Explore [TranslateManyEntry type](/docs/core/types/Entry)
 - Understand [TranslateManyResult structure](/docs/core/types/translate-many-result)
