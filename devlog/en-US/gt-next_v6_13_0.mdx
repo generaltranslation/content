@@ -1,0 +1,80 @@
+---
+title: gt-next@6.13.0
+date: 2026-02-25
+authors: [ernest]
+tags: ['gt-next', 'gt-i18n', 'v6.13.0', 'msg', 'string-registration', 'arrays', 'i18n']
+---
+
+## Overview
+
+`msg()` now accepts arrays.
+
+Previously, registering a list of related strings meant wrapping each one individually:
+
+```tsx
+const confirmations = [
+  msg("Yes"),
+  msg("Yup"),
+  msg("Right"),
+  msg("Absolutely"),
+  msg("Exactly"),
+];
+```
+
+This has two problems. First, every line requires a `msg()` call. Second, related strings often need the same metadata — `$context`, `$id`, etc. — and that metadata must be inlined because the CLI resolves it at build time. For strings like "Right" or "Exactly" that are ambiguous in isolation, you end up repeating `$context` on every entry:
+
+```tsx
+const confirmations = [
+  msg("Yes"),
+  msg("Yup"),
+  msg("Right", { $context: "As in a confirmation" }),
+  msg("Absolutely", { $context: "As in a confirmation" }),
+  msg("Exactly", { $context: "As in a confirmation" }),
+];
+```
+
+Now you can do this instead:
+
+```tsx
+const confirmations = msg([
+  "Yes",
+  "Yup",
+  "Right",
+  "Absolutely",
+  "Exactly",
+], { $context: "Confirmation responses" });
+```
+
+## Design
+
+### Id generation
+
+When `$id` is specified, each item in the array gets an index-based id: `${id}.0`, `${id}.1`, etc.
+
+```tsx
+const greetings = msg([
+  "Hi",
+  "Hello",
+  "Howdy",
+], { $id: "greeting" });
+// "Hi"    → id: "greeting.0"
+// "Hello" → id: "greeting.1"
+// "Howdy" → id: "greeting.2"
+```
+
+## Why not objects?
+
+It was tempting to extend this to objects, but we decided against it. Objects typically mix translatable and non-translatable fields:
+
+```tsx
+{
+  id: 'planning.v1',           // don't translate
+  message: 'Not yet enabled',  // translate
+}
+```
+
+There's no clean way to express which fields should be registered without introducing more syntax. Arrays don't have this problem — every element is a string to translate.
+
+## Future
+
+Array support for `gt()` is a natural next step. Both `gt()` and `msg()` are registration functions, so parity between them makes sense. This also extends to `m()`, since `msg()` and `m()` are often used together — `m()` accepting arrays guarantees that passing the output of `msg()` to `m()` won't break.
