@@ -1,103 +1,82 @@
 ---
-title: Entry
-description: Type definition for translation entries used in batch translation operations
+title: TranslateManyEntry
+description: Type definition for translation entries used in translate and translateMany operations
 ---
 
 ## Overview
 
-`Entry` represents a translation request object for batch translation operations with [`translateMany`](/docs/core/class/methods/translation/translate-many).
+`TranslateManyEntry` represents the input type for [`translate`](/docs/core/class/methods/translation/translate) and [`translateMany`](/docs/core/class/methods/translation/translate-many). It can be a plain string or an object with source content and optional metadata.
 
 ```typescript
-type Entry = {
-  source: Content;
-  targetLocale?: string;
-  metadata?: EntryMetadata;
-};
+type TranslateManyEntry = string | { source: Content; metadata?: EntryMetadata };
 ```
 
-## Properties
+## Variants
+
+### String
+
+A plain string is the simplest form — it will be translated as-is:
+
+```typescript
+'Hello, world!'
+```
+
+### Object
+
+An object with `source` and optional `metadata`:
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `source` | `Content` | Source content to translate |
-| `targetLocale?` | `string` | Target locale (falls back to instance targetLocale) |
 | `metadata?` | `EntryMetadata` | Optional metadata for translation customization |
 
 ### Content type
 
 ```typescript
-type Content = JsxChildren | I18nextMessage | IcuMessage | string;
+type Content = JsxChildren | IcuMessage | StringMessage | I18nextMessage;
 ```
-
-### EntryMetadata
-
-```typescript
-type EntryMetadata = {
-  context?: string;
-  id?: string;
-  hash?: string;
-  dataFormat?: DataFormat;
-  sourceLocale?: string;
-  actionType?: ActionType;
-  timeout?: number;
-  regionCode?: string;
-  scriptCode?: string;
-};
-```
-
-### ActionType
-
-```typescript
-type ActionType = 'standard' | 'fast' | string;
-```
-
-- `'standard'` - Higher quality translation model
-- `'fast'` - Lower latency translation model
 
 ---
 
 ## Examples
 
-### Basic usage
-
-```typescript copy
-import { Entry } from 'generaltranslation';
-
-const entries: Entry[] = [
-  {
-    source: 'Hello, world!',
-    targetLocale: 'es'
-  },
-  {
-    source: 'Good morning',
-    targetLocale: 'de',
-    metadata: {
-      context: 'Formal greeting',
-      actionType: 'standard'
-    }
-  }
-];
-```
-
-### With translateMany()
+### Plain strings
 
 ```typescript copy
 import { GT } from 'generaltranslation';
 
-const gt = new GT({
-  apiKey: 'your-api-key',
-  sourceLocale: 'en'
-});
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
 
-const entries: Entry[] = [
-  { source: 'Home', targetLocale: 'es' },
-  { source: 'About', targetLocale: 'es' }
+// Single string
+const result = await gt.translate('Hello, world!', 'es');
+
+// Array of strings
+const results = await gt.translateMany(['Home', 'About', 'Contact'], 'es');
+```
+
+### Objects with metadata
+
+```typescript copy
+import { GT, TranslateManyEntry } from 'generaltranslation';
+
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const entries: TranslateManyEntry[] = [
+  { source: 'Hello, world!' },
+  {
+    source: '{count, plural, other {{count} items}}',
+    metadata: {
+      dataFormat: 'ICU',
+      context: 'Item count display'
+    }
+  }
 ];
 
-const results = await gt.translateMany(entries);
+const results = await gt.translateMany(entries, { targetLocale: 'es' });
 ```
 
 ## Related types
 
 * [`EntryMetadata`](/docs/core/types/entry-metadata) - Metadata options
 * [`TranslateManyResult`](/docs/core/types/translate-many-result) - Batch translation results
+* [`Content`](/docs/core/types/Content) - Content type union

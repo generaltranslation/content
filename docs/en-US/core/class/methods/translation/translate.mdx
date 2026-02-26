@@ -31,87 +31,53 @@ The `translate` method requires both `apiKey` (or `devApiKey`) and `projectId` t
 
 ### Parameters
 
-The `translate` method has multiple overloads for different content types:
-
-#### Text content
 <TypeTable
   type={{
     "source": {
-      type: 'string',
+      type: 'TranslateManyEntry',
+      description: 'The content to translate. Can be a plain string or an object with source and metadata.',
       optional: false,
     },
-    "targetLocale": {
-      type: 'string',
+    "options": {
+      type: 'string | TranslateOptions',
+      description: 'Target locale string (shorthand) or an options object with targetLocale and other settings.',
       optional: false,
     },
-    "metadata?": {
-      type: 'EntryMetadata',
+    "timeout?": {
+      type: 'number',
+      description: 'Optional request timeout in milliseconds.',
       optional: true,
     }
   }}
 />
 
-#### JSX content
-<TypeTable
-  type={{
-    "source": {
-      type: 'JsxChildren',
-      optional: false,
-    },
-    "targetLocale": {
-      type: 'string',
-      optional: false,
-    },
-    "metadata?": {
-      type: 'Omit<EntryMetadata, "dataFormat"> & { dataFormat?: "JSX" }',
-      optional: true,
-    }
-  }}
-/>
+### TranslateManyEntry
 
-#### ICU message format
-<TypeTable
-  type={{
-    "source": {
-      type: 'IcuMessage',
-      optional: false,
-    },
-    "targetLocale": {
-      type: 'string',
-      optional: false,
-    },
-    "metadata?": {
-      type: 'Omit<EntryMetadata, "dataFormat"> & { dataFormat?: "ICU" }',
-      optional: true,
-    }
-  }}
-/>
+The `source` parameter accepts either a plain string or an object:
 
-#### i18next Format
-<TypeTable
-  type={{
-    "source": {
-      type: 'I18nextMessage',
-      optional: false,
-    },
-    "targetLocale": {
-      type: 'string',
-      optional: false,
-    },
-    "metadata?": {
-      type: 'Omit<EntryMetadata, "dataFormat"> & { dataFormat?: "I18NEXT" }',
-      optional: true,
-    }
-  }}
-/>
+```typescript
+type TranslateManyEntry = string | { source: Content; metadata?: EntryMetadata };
+```
+
+### TranslateOptions
+
+The `options` parameter can be a locale string (shorthand for `targetLocale`) or an object:
+
+```typescript
+type TranslateOptions = {
+  targetLocale: string;
+  sourceLocale?: string;
+  modelProvider?: string;
+};
+```
 
 ### Parameters description
 
 | Parameter | Description |
 |-----------|-------------|
-| `source` | The content to translate. Can be plain text, JSX elements, ICU messages, or i18next messages |
-| `targetLocale` | BCP-47 locale code for the target language (e.g., 'es', 'fr-CA') |
-| `metadata` | Optional translation context including context, tags, and formatting options |
+| `source` | The content to translate. A plain string or an object with `source` (Content) and optional `metadata` (EntryMetadata). |
+| `options` | A target locale string (e.g., `'es'`) or an options object with `targetLocale`, optional `sourceLocale`, and `modelProvider`. |
+| `timeout` | Optional request timeout in milliseconds. |
 
 ### Returns
 
@@ -140,24 +106,48 @@ The method automatically detects content type based on the `source` parameter:
 - Custom locale mappings are applied if configured
 - Canonical locale codes are used for API requests
 
-### Context enhancement
+### Options shorthand
 
-When custom mapping includes region or script codes for the target locale, they are automatically added to the metadata for improved translation accuracy.
+You can pass a string as the `options` parameter as a shorthand for `{ targetLocale: string }`:
+
+```typescript
+// These are equivalent:
+await gt.translate('Hello', 'es');
+await gt.translate('Hello', { targetLocale: 'es' });
+```
 
 ---
 
 ## Examples
 
+### Simple string translation
 
 ```typescript
-const gt = new GT({
-  apiKey: 'your-api-key',
-  projectId: 'your-project-id'
-});
-
 const result = await gt.translate('Welcome to our application', 'fr');
-console.log(result); 
-// "Bienvenue dans notre application"
+```
+
+### With options object
+
+```typescript
+const result = await gt.translate('Welcome to our application', {
+  targetLocale: 'fr',
+  sourceLocale: 'en',
+});
+```
+
+### With source metadata
+
+```typescript
+const result = await gt.translate(
+  { source: '{count, plural, other {{count} items}}', metadata: { dataFormat: 'ICU', context: 'Item count display' } },
+  { targetLocale: 'es' }
+);
+```
+
+### With timeout
+
+```typescript
+const result = await gt.translate('Hello, world!', 'es', 5000);
 ```
 
 ---
@@ -165,6 +155,7 @@ console.log(result);
 ## Notes
 
 - Translates a given string to a target locale and returns a promise
+- Uses `translateMany` under the hood with a single entry
 
 ## Next steps
 
