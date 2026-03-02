@@ -80,6 +80,28 @@ The API is the **"General Translation API"**, not "General Translations API".
 
 You may abbreviate to **"GT"** when it's clear from context that you mean General Translation.
 
+## Headings
+
+- Use **sentence case**: capitalize the first word and proper nouns only.
+  - ✅ `## Common issues`
+  - ❌ `## Common Issues`
+- For step-by-step guides, use H3 with numbered steps: `### Step 1: Create dictionary`
+
+## Lists
+
+- Use `-` for bullet lists (except in `## Notes` sections of API pages, which use `*`).
+- **Fragment list items** (not full sentences): no trailing period.
+  - ✅ `- **Centralized storage** - All translations in one place`
+- **Full-sentence list items**: end with a period.
+  - ✅ `* The \`<Num>\` component formats numbers according to a user's locale.`
+
+## Punctuation
+
+- **Oxford comma**: Use the Oxford comma in series for clarity.
+  - ✅ "supports `<Currency>`, `<DateTime>`, and `<Num>`"
+- **Em dashes**: Avoid em dashes (`—`). Use spaced hyphens (` - `) or restructure the sentence instead.
+- **"i.e." and "e.g."**: Always follow with a comma: `i.e., ...`, `e.g., 'en', 'es-MX'`.
+
 ## Code Examples
 
 ### Language tags
@@ -145,7 +167,11 @@ Before adding a link, verify the target page exists. If a page doesn't exist yet
 
 ## Callouts
 
-In the docs, use the `<Callout>` component for tips, warnings, and notes:
+In the docs, use the `<Callout>` component for tips, warnings, and notes.
+
+Supported types: `info`, `warn`, `error`.
+
+Always start callout content with a **bold lead phrase** followed by a colon:
 
 ```mdx
 <Callout type='info'>
@@ -153,12 +179,11 @@ In the docs, use the `<Callout>` component for tips, warnings, and notes:
 </Callout>
 
 <Callout type="warn">
-  **For Production Use Only!**
-  This command should not be used in development.
+  **For Production Use Only!** This command should not be used in development.
 </Callout>
 ```
 
-Supported types: `info`, `warn`, `error`.
+Common bold leads: `**Note:**`, `**Quick Setup:**`, `**Recommendation:**`, `**Default behavior:**`, `**File location:**`.
 
 ## Tables
 
@@ -206,6 +231,98 @@ fix: correct grammar and typos across templates and generated docs
 - "not occur during for" → "not occur in" (8 files)
 - "will not translated" → "will not be translated" (4 files)
 ```
+
+## Page Structure
+
+### API reference pages
+
+Follow this section order:
+
+1. `## Overview` — brief description
+2. `## Reference` — with subsections: `### Props`, `### Description`, `### Returns`, `### Throws`
+3. `## Examples` — code samples with `copy` attribute on code blocks
+4. `## Notes` — bullet list (use `*` marker) of important details
+5. `## Next steps` — links to related pages
+
+Separate major sections with horizontal rules (`---`).
+
+### Guide pages
+
+Follow this section order:
+
+1. Introductory paragraph
+2. `## Quickstart` (if applicable)
+3. Topic sections
+4. `## Common issues` (if applicable)
+5. `## Next steps`
+
+Do not use horizontal rules between sections in guides.
+
+### "Next steps" format
+
+End pages with a `## Next steps` section containing a bullet list of links:
+
+```markdown
+## Next steps
+
+- [Display text](/docs/path) - Brief description of where the link leads
+```
+
+## Common Components
+
+### Correct/incorrect examples
+
+Use ✅/❌ emoji in code comments and prose to flag correct and incorrect patterns:
+
+```jsx
+// ❌ Wrong - dynamic content not wrapped
+<T>Hello {name}</T>
+
+// ✅ Correct - use Variable components
+<T>Hello <Var>{name}</Var></T>
+```
+
+### Package manager tabs
+
+Always list all four package managers in this order:
+
+```mdx
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+```
+
+### Directory structures
+
+Use `<Files>`, `<Folder>`, and `<File>` components instead of ASCII tree diagrams.
+
+### Accordions
+
+Use `<Accordions>` / `<Accordion>` for troubleshooting and optional content. The title should be a question:
+
+```mdx
+<Accordion title="Why do languages take a long time to load in dev?">
+```
+
+### Props documentation
+
+Pair a `<TypeTable>` component (for type info) with a markdown table (for prose descriptions). Use this column order: Prop, Description.
+
+### Custom anchors
+
+Add custom anchors to headings for stable linking:
+
+```markdown
+### Using variables [#variables]
+```
+
+## Template Placeholders
+
+Templates in `docs-templates/` use these placeholders, which are replaced during generation:
+
+| Placeholder | Meaning |
+| --- | --- |
+| `__DOCS_PATH__` | Base path for docs links (e.g., `/docs/next`) |
+| `__PACKAGE_NAME__` | Package name (e.g., `gt-next`) |
+| `__FRAMEWORK_NAME__` | Framework name (e.g., `Next.js`) |
 
 ## CI Restrictions
 
