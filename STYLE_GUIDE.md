@@ -164,7 +164,7 @@ For API references in code-centric contexts, wrap component/function names in ba
 
 ### Verify links exist
 
-Before adding a link, verify the target page exists. Broken links are one of the most common issues in this repo. If a page doesn't exist yet, either omit the link or note it as "coming soon".
+Before adding a link, verify the target page exists. If a page doesn't exist yet, either omit the link or note it as "coming soon".
 
 ## Callouts
 
