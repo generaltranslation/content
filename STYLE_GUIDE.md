@@ -101,6 +101,8 @@ Always write **"General Translation"** (singular). Never "General Translations".
 
 The API is the **"General Translation API"**, not "General Translations API".
 
+You may abbreviate to **"GT"** when it's clear from context that you mean General Translation.
+
 ## Code Examples
 
 ### Language tags
