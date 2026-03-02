@@ -127,15 +127,6 @@ npm i gt-next
 
 Common tags used in these docs: `tsx`, `jsx`, `ts`, `js`, `bash`, `json`, `yaml`, `html`, `markdown`.
 
-### Variable naming conventions
-
-- Use **`t`** (not `d`) for the translation function returned by `useTranslations()` or `getTranslations()`:
-
-```tsx
-const t = useTranslations();
-t('greeting.hello');
-```
-
 ### Code highlighting
 
 Use `// [!code highlight]` for highlighting specific lines in code blocks (Fumadocs syntax).
