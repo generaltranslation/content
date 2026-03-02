@@ -168,7 +168,7 @@ Before adding a link, verify the target page exists. If a page doesn't exist yet
 
 ## Callouts
 
-Use the `<Callout>` component for tips, warnings, and notes:
+In the docs, use the `<Callout>` component for tips, warnings, and notes:
 
 ```mdx
 <Callout type='info'>
