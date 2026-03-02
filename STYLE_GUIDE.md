@@ -91,6 +91,10 @@ Package names (`gt-next`, `gt-react`, `gtx-cli`, `generaltranslation`) should al
 - Use **"an"** before vowel sounds: "an HTML element", "an LLM", "an API key"
 - Use **"a"** before consonant sounds: "a URL", "a user"
 
+### "Data" is singular
+
+Treat **"data"** as a singular noun: "the data is stored", not "the data are stored".
+
 ### Referring to General Translation
 
 Always write **"General Translation"** (singular). Never "General Translations".
