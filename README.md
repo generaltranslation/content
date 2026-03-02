@@ -26,6 +26,7 @@ Documentation, blog posts, devlog entries, and author profiles for [generaltrans
 | `blog/` | Blog posts (MDX) |
 | `devlog/` | Devlog / release note posts (MDX) |
 | `authors/` | Author profiles (MDX) |
+| `logos/` | Brand assets and logo files in multiple formats and backgrounds |
 
 ## Documentation
 
