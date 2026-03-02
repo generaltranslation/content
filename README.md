@@ -31,6 +31,8 @@ Documentation, blog posts, devlog entries, and author profiles for [generaltrans
 
 Visit [generaltranslation.com/docs](https://generaltranslation.com/docs) to view the live documentation.
 
+For docs writing conventions, see the [Docs Style Guide](docs/STYLE_GUIDE.md).
+
 ## Community
 
 For any questions, the team can be found on [Discord](https://discord.gg/W99K6fchSu).

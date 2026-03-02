@@ -1,6 +1,6 @@
 # General Translation Docs Style Guide
 
-This guide documents the conventions and patterns used across the General Translation documentation. Follow these rules when writing or reviewing content in this repo.
+This guide documents the conventions and patterns used across the General Translation documentation. Follow these rules when writing or reviewing docs content.
 
 ---
 
@@ -19,29 +19,6 @@ Every MDX file must start with a YAML frontmatter block.
 ---
 title: Page Title
 description: A brief description of the page
----
-```
-
-### Blog posts
-
-```yaml
----
-title: Post Title
-summary: A one-line summary
-date: 2025-01-15
-authors: [author-slug]
-tags: ['tag1', 'tag2']
----
-```
-
-### Devlog entries
-
-```yaml
----
-title: Release Title
-date: 2025-01-15
-authors: [author-slug]
-tags: ['package-name', 'version']
 ---
 ```
 
@@ -220,8 +197,6 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - `fix:` for corrections (typos, broken links, grammar)
 - `docs:` for new content or significant rewrites
 - `feat:` for new pages or features
-- `blog:` / `devlog:` for blog/devlog-specific changes
-
 Keep the subject line concise. Use the body for details when a PR touches multiple files:
 
 ```
