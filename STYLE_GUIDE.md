@@ -91,23 +91,6 @@ Package names (`gt-next`, `gt-react`, `gtx-cli`, `generaltranslation`) should al
 - Use **"an"** before vowel sounds: "an HTML element", "an LLM", "an API key"
 - Use **"a"** before consonant sounds: "a URL", "a user"
 
-### Common corrections
-
-| ✅ Correct | ❌ Incorrect |
-| --- | --- |
-| Oftentimes | Often times |
-| one-stop shop | one stop shop |
-| step-by-step | step by step (when used as adjective) |
-| fall back (verb) | fallback (verb) |
-| fallback (noun/adj) | fall back (noun/adj) |
-| nested | nexted |
-| original | originial |
-| preferred | perferred |
-| "is" for singular subjects | "are" for singular subjects |
-| "will not be translated" | "will not translated" |
-| "If you want to" | "If want to" |
-| "will not occur in production" | "will not occur during for production" |
-
 ### Referring to General Translation
 
 Always write **"General Translation"** (singular). Never "General Translations".
