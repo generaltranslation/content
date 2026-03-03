@@ -7,7 +7,7 @@ If you've found an error in our docs or have a suggestion, we're open to contrib
 ## How to contribute
 
 1. **Fork** this repository
-2. **Create a branch** for your changes (e.g., `fix/typo-in-quickstart`)
+2. **Create a branch** for your changes (e.g. `fix/typo-in-quickstart`)
 3. **Make your edits** following the conventions below
 4. **Open a pull request** against `main`
 
@@ -27,7 +27,7 @@ A maintainer will review your PR. CI checks will run automatically to validate y
 
 - All content files use `.mdx` (Markdown with JSX support).
 - Use standard Markdown syntax: headings, lists, code blocks, links, images, tables.
-- Use fenced code blocks with a language identifier (e.g., ` ```tsx `).
+- Use fenced code blocks with a language identifier (e.g. ` ```tsx `).
 - Keep lines reasonably short for readable diffs.
 
 ## Frontmatter requirements
@@ -86,7 +86,7 @@ To keep the content repo safe, the following are **blocked by CI** and will caus
 
 - `import` or `export` statements in MDX files
 - `<script>`, `<iframe>`, `<object>`, `<embed>`, `<form>`, or `<style>` tags
-- `on*=` event handler attributes (e.g., `onclick`, `onerror`)
+- `on*=` event handler attributes (e.g. `onclick`, `onerror`)
 - `javascript:` URLs
 
 These restrictions exist because MDX files are executed during the build.
