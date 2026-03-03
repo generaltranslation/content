@@ -100,7 +100,7 @@ You may abbreviate to **"GT"** when it's clear from context that you mean Genera
 - **Oxford comma**: Use the Oxford comma in series for clarity.
   - ✅ "supports `<Currency>`, `<DateTime>`, and `<Num>`"
 - **Em dashes**: Avoid em dashes (`—`). Use spaced hyphens (` - `) or restructure the sentence instead.
-- **"i.e." and "e.g."**: Always follow with a comma: `i.e., ...`, `e.g., 'en', 'es-MX'`.
+- **"i.e." and "e.g."**: No comma needed after the abbreviation: `e.g. 'en'`, `i.e. the default locale`.
 
 ## Code Examples
 
