@@ -47,6 +47,7 @@ Use the **official capitalization and spelling** for all product and technology 
 | `gt-react` | GT React, gt react |
 | `gtx-cli` | GTX CLI (in prose, use backticks: `gtx-cli`) |
 | `gt.config.json` | GT config, gt config json |
+| Quickstart | Quick Start, Quick start, quick start |
 
 Package names (`gt-next`, `gt-react`, `gtx-cli`, `generaltranslation`) should always appear in **backticks** when referenced in prose.
 
