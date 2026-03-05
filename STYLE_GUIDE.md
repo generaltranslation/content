@@ -63,6 +63,10 @@ Package names (`gt-next`, `gt-react`, `gt`, `generaltranslation`) should always 
 | Verb ("to log in") | "log in to the dashboard" | "login to the dashboard" |
 | Noun/adjective | "the login page" | "the log in page" |
 
+### "inline" not "in-line"
+
+Always write **"inline"** (one word, no hyphen): "inline translations", "inline content".
+
 ### Articles
 
 - Use **"an"** before vowel sounds: "an HTML element", "an LLM", "an API key"
@@ -99,8 +103,7 @@ You may abbreviate to **"GT"** when it's clear from context that you mean Genera
 
 - **Oxford comma**: Use the Oxford comma in series for clarity.
   - ✅ "supports `<Currency>`, `<DateTime>`, and `<Num>`"
-- **Em dashes**: Avoid em dashes (`—`). Use spaced hyphens (` - `) or restructure the sentence instead.
-- **"i.e." and "e.g."**: No comma needed after the abbreviation: `e.g. 'en'`, `i.e. the default locale`.
+- **"i.e." and "e.g."**: A comma after the abbreviation is optional. Both `e.g. 'en'` and `e.g., 'en'` are acceptable.
 
 ## Code Examples
 
