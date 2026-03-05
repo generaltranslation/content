@@ -1,0 +1,205 @@
+---
+title: Locale Aliases and SEO
+description: Use custom locale aliases for URL routing while maintaining BCP 47 compliance for search engines
+---
+
+Locale aliases let you use custom locale codes in your URLs (e.g. `/cn/` instead of `/zh/`) while keeping your SEO metadata compliant with the [BCP 47 standard](https://www.w3.org/International/articles/language-tags/) that search engines expect.
+
+## Why aliases?
+
+BCP 47 locale codes like `zh` (Chinese) or `zh-Hant` (Traditional Chinese) are the standard for identifying languages on the web.
+However, you might want different codes in your URL paths for branding, readability, or regional reasons — for example, using `/cn/` instead of `/zh/` for your Chinese audience.
+
+GT supports this through **custom mapping** in your `gt.config.json`. The alias is used for routing and URL paths, while the canonical BCP 47 code is used wherever search engines need it.
+
+<Callout type="warn">
+**SEO requirement:** Search engines only recognize [BCP 47 locale codes](https://www.w3.org/International/articles/language-tags/).
+Using non-standard codes like `cn` in `hreflang` attributes or `<html lang>` will cause search engines to ignore your locale signals.
+</Callout>
+
+## Setup
+
+### Step 1: Configure custom mapping
+
+Add a `customMapping` entry to your `gt.config.json` for each alias:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en-US",
+  "locales": ["en-US", "cn", "ja", "zh-Hant"],
+  "customMapping": {
+    "cn": {
+      "code": "zh",
+      "name": "Mandarin"
+    }
+  }
+}
+```
+
+Here, `cn` is the alias used in URLs and middleware routing, and `zh` is the canonical BCP 47 code.
+
+### Step 2: Use middleware as normal
+
+The [middleware](/docs/next/guides/middleware) and `[locale]` dynamic route work with your alias codes out of the box. Users visiting `/cn/about` will be served Chinese content — no special handling needed for routing.
+
+## BCP 47 compliance for SEO
+
+While aliases work seamlessly for routing, there are three places where you **must** use the canonical BCP 47 code instead of the alias:
+
+1. The `lang` attribute on your `<html>` tag
+2. Alternate link tags in your page metadata
+3. Alternate entries in your sitemap
+
+GT provides the `resolveCanonicalLocale()` method to convert aliases back to their BCP 47 codes. You can access it via `getGTClass` from `gt-next/server`:
+
+```ts
+import { getGTClass } from 'gt-next/server';
+
+const gtInstance = getGTClass();
+const canonicalLocale = gtInstance.resolveCanonicalLocale('cn');
+// Returns: "zh"
+```
+
+For non-aliased locales, `resolveCanonicalLocale()` returns the input unchanged:
+
+```ts
+gtInstance.resolveCanonicalLocale('ja');     // "ja"
+gtInstance.resolveCanonicalLocale('en-US');  // "en-US"
+```
+
+### 1. HTML `lang` attribute
+
+The `<html lang>` attribute tells browsers and search engines what language the page is in. It must be a valid BCP 47 code.
+
+In your root layout, resolve the locale before passing it to the `<html>` tag:
+
+```tsx title="app/[locale]/layout.tsx"
+import { getGTClass } from 'gt-next/server';
+
+export default function RootLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: { locale: string };
+}) {
+  const gtInstance = getGTClass();
+  const canonicalLocale = gtInstance.resolveCanonicalLocale(params.locale);
+
+  return (
+    <html lang={canonicalLocale}>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+Without this, a page at `/cn/about` would incorrectly render `<html lang="cn">`, which search engines don't recognize.
+
+### 2. Metadata alternates
+
+Alternate links tell search engines which versions of a page exist in other languages. The `hreflang` attribute must use BCP 47 codes.
+
+```tsx title="app/[locale]/layout.tsx"
+import type { Metadata } from 'next';
+import { getGTClass } from 'gt-next/server';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { locale: string };
+}): Promise<Metadata> {
+  const gtInstance = getGTClass();
+  const locales = ['en-US', 'cn', 'ja', 'zh-Hant'];
+
+  // Build alternates with canonical BCP 47 codes as keys
+  const languages: Record<string, string> = {};
+  for (const locale of locales) {
+    const canonical = gtInstance.resolveCanonicalLocale(locale);
+    languages[canonical] = `https://example.com/${locale}`;
+  }
+
+  // Add x-default for the default locale
+  languages['x-default'] = 'https://example.com';
+
+  return {
+    alternates: {
+      canonical: `https://example.com/${params.locale}`,
+      languages,
+    },
+  };
+}
+```
+
+This produces correct `<link>` tags in the page head:
+
+```html
+<link rel="alternate" hreflang="en-US" href="https://example.com/en-US" />
+<link rel="alternate" hreflang="zh" href="https://example.com/cn" />
+<link rel="alternate" hreflang="ja" href="https://example.com/ja" />
+<link rel="alternate" hreflang="zh-Hant" href="https://example.com/zh-Hant" />
+<link rel="alternate" hreflang="x-default" href="https://example.com" />
+```
+
+Notice that the `hreflang` values use canonical codes (`zh`, not `cn`), while the `href` URLs still use the alias paths (`/cn/`).
+
+### 3. Sitemap alternates
+
+If you use a [dynamic sitemap](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap), apply the same pattern:
+
+```ts title="app/sitemap.ts"
+import type { MetadataRoute } from 'next';
+import { getGTClass } from 'gt-next/server';
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  const gtInstance = getGTClass();
+  const locales = ['en-US', 'cn', 'ja', 'zh-Hant'];
+  const baseUrl = 'https://example.com';
+
+  const pages = ['', '/about', '/pricing'];
+
+  return pages.map((page) => {
+    // Build language alternates with canonical codes
+    const languages: Record<string, string> = {};
+    for (const locale of locales) {
+      const canonical = gtInstance.resolveCanonicalLocale(locale);
+      languages[canonical] = `${baseUrl}/${locale}${page}`;
+    }
+
+    return {
+      url: `${baseUrl}${page}`,
+      lastModified: new Date(),
+      alternates: {
+        languages,
+      },
+    };
+  });
+}
+```
+
+This generates sitemap XML with proper `hreflang` attributes:
+
+```xml
+<url>
+  <loc>https://example.com</loc>
+  <xhtml:link rel="alternate" hreflang="en-US" href="https://example.com/en-US" />
+  <xhtml:link rel="alternate" hreflang="zh" href="https://example.com/cn" />
+  <xhtml:link rel="alternate" hreflang="ja" href="https://example.com/ja" />
+  <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://example.com/zh-Hant" />
+</url>
+```
+
+## Common mistakes
+
+| Mistake | Impact | Fix |
+|---|---|---|
+| Using alias code in `<html lang>` | Search engines can't identify the page language | Use `resolveCanonicalLocale()` for the `lang` attribute |
+| Using alias code in `hreflang` | Search engines ignore the alternate link | Use `resolveCanonicalLocale()` for `hreflang` values |
+| Missing `x-default` alternate | No fallback for users whose language isn't listed | Add `x-default` pointing to your default locale URL |
+| Inconsistent alternates between HTML and sitemap | Conflicting signals confuse crawlers | Use `resolveCanonicalLocale()` in both places |
+
+## Next steps
+
+- Learn about [middleware](/docs/next/guides/middleware) for locale-based URL routing
+- See [`resolveCanonicalLocale`](/docs/core/class/methods/locales/resolve-canonical-locale) API reference
+- Configure [`customMapping`](/docs/cli/reference/config) in your `gt.config.json`
