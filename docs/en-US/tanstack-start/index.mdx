@@ -1,0 +1,255 @@
+---
+title: TanStack Start Quickstart
+description: Internationalize your TanStack Start app with gt-tanstack-start
+---
+
+**Prerequisites:** TanStack Start project with React 16.8+
+
+<Callout type="warn">
+  **Experimental:** `gt-tanstack-start` is under active development and not yet recommended for production use.
+</Callout>
+
+## Installation
+
+Install `gt-tanstack-start`, `gt-react`, and the `gt` CLI:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm i gt-tanstack-start gt-react
+  npm i -D gt
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn add gt-tanstack-start gt-react
+  yarn add --dev gt
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun add gt-tanstack-start gt-react
+  bun add --dev gt
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm add gt-tanstack-start gt-react
+  pnpm add --save-dev gt
+  ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  `gt-react` is required as a direct dependency so the `gt` CLI can detect `<T>` components in your source code.
+</Callout>
+
+## Configuration
+
+### `gt.config.json`
+
+Create a `gt.config.json` in your project root:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+<Callout>
+  Translation files **must** be inside `src/` for Vite's dynamic imports to work. Using `public/` will not work.
+</Callout>
+
+### Translation loader
+
+Create a `loadTranslations.ts` file in your project root:
+
+```ts title="loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  const translations = await import(`./src/_gt/${locale}.json`);
+  return translations.default;
+}
+```
+
+### Root route setup
+
+Update `src/routes/__root.tsx` to initialize GT and provide translations:
+
+```tsx title="src/routes/__root.tsx"
+import {
+  HeadContent,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router'
+import {
+  initializeGT,
+  GTProvider,
+  getTranslations,
+  getLocale,
+  LocaleSelector,
+} from 'gt-tanstack-start'
+import gtConfig from '../../gt.config.json'
+import loadTranslations from '../../loadTranslations'
+
+// Initialize GT at the module level
+initializeGT({
+  ...gtConfig,
+  loadTranslations,
+})
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    ],
+  }),
+  loader: async () => {
+    return {
+      translations: await getTranslations(),
+      locale: getLocale(),
+    }
+  },
+  shellComponent: RootDocument,
+})
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  const { translations, locale } = Route.useLoaderData()
+  return (
+    <html lang={locale}>
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <GTProvider translations={translations}>
+          <LocaleSelector />
+          {children}
+        </GTProvider>
+        <Scripts />
+      </body>
+    </html>
+  )
+}
+```
+
+## Usage
+
+Wrap content in `<T>` to translate it. Import `<T>` from `gt-react`:
+
+```tsx title="src/routes/index.tsx"
+import { createFileRoute } from '@tanstack/react-router'
+import { T } from 'gt-react'
+
+export const Route = createFileRoute('/')({ component: Home })
+
+function Home() {
+  return (
+    <T>
+      <h1>Welcome to our app!</h1>
+      <p>This content is automatically translated.</p>
+    </T>
+  )
+}
+```
+
+<Callout type="info">
+  Import `<T>` from `gt-react` (not `gt-tanstack-start`). The `gt` CLI scans for `gt-react` imports to find translatable content.
+</Callout>
+
+## Generate translations
+
+### Using General Translation (recommended)
+
+Run the `gt translate` command to generate translations:
+
+```bash
+npx gt translate
+```
+
+This sends your content to the General Translation API and downloads translated JSON files to `src/_gt/`.
+
+You'll need environment variables for the API:
+
+```bash title=".env"
+GT_API_KEY="your-api-key"
+GT_PROJECT_ID="your-project-id"
+```
+
+Get your free API keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or run:
+
+```bash
+npx gt auth
+```
+
+### Manual translations
+
+If you prefer to manage translations yourself:
+
+1. Generate source language files:
+
+   ```bash
+   npx gt generate
+   ```
+
+2. Translate the generated JSON files manually
+
+3. Place them at `src/_gt/{locale}.json`
+
+## Testing
+
+Start the dev server:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm run dev
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn dev
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun run dev
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm dev
+  ```
+  </Tab>
+</Tabs>
+
+Visit [localhost:3000](http://localhost:3000) and use the locale selector to switch languages. Translations are loaded from local JSON files, so language switching is instant.
+
+## Deployment
+
+Add the translation step to your build script:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && vite build"
+  }
+}
+```
+
+## Example app
+
+See the complete working example: [tanstack-start-basic](https://github.com/generaltranslation/gt/tree/main/examples/tanstack-start-basic)
+
+---
+
+## Next steps
+
+- Read the [overview](/docs/tanstack-start/introduction) for a deeper look at the API
+- Learn about [variable components](/docs/react/guides/variables) like `<Var>`, `<Num>`, and `<Currency>`
+- Explore the [`<T>` component](/docs/react/api/components/t) API reference
