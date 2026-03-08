@@ -1,0 +1,174 @@
+---
+title: Custom locale detection
+description: How to customize locale detection with get_locale, and how the default behavior works
+---
+
+## Default behavior
+
+When no `get_locale` callback is provided to [`initialize_gt`](/docs/python/api/initialize-gt), GT automatically detects the user's locale from the HTTP `Accept-Language` header on every request:
+
+1. Reads the `Accept-Language` header (e.g. `en-US,en;q=0.9,es;q=0.8`)
+2. Parses it into a list of locales sorted by quality value (highest first)
+3. Matches against your configured `locales` to find the best fit
+4. Falls back to `default_locale` if no match is found
+
+This means out of the box, users get content in whatever language their browser requests — as long as you have translations for it.
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+  ```python
+  from flask import Flask
+  from gt_flask import initialize_gt
+
+  app = Flask(__name__)
+
+  # No get_locale — defaults to Accept-Language parsing
+  initialize_gt(
+      app,
+      default_locale="en",
+      locales=["es", "fr"],
+  )
+  ```
+  </Tab>
+  <Tab value="FastAPI">
+  ```python
+  from fastapi import FastAPI
+  from gt_fastapi import initialize_gt
+
+  app = FastAPI()
+
+  # No get_locale — defaults to Accept-Language parsing
+  initialize_gt(
+      app,
+      default_locale="en",
+      locales=["es", "fr"],
+  )
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## Custom `get_locale`
+
+To override the default, pass a `get_locale` callback to `initialize_gt`. It receives the request object and must return a locale string.
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+  ```python
+  from flask import Flask
+  from gt_flask import initialize_gt
+
+  app = Flask(__name__)
+
+  def get_locale(request) -> str:
+      # Check query parameter first
+      locale = request.args.get("lang")
+      if locale:
+          return locale
+
+      # Then check a cookie
+      locale = request.cookies.get("locale")
+      if locale:
+          return locale
+
+      # Fall back to default
+      return "en"
+
+  initialize_gt(
+      app,
+      default_locale="en",
+      locales=["es", "fr"],
+      get_locale=get_locale,
+  )
+  ```
+  </Tab>
+  <Tab value="FastAPI">
+  ```python
+  from fastapi import FastAPI, Request
+  from gt_fastapi import initialize_gt
+
+  app = FastAPI()
+
+  def get_locale(request: Request) -> str:
+      # Check query parameter first
+      locale = request.query_params.get("lang")
+      if locale:
+          return locale
+
+      # Then check a cookie
+      locale = request.cookies.get("locale")
+      if locale:
+          return locale
+
+      # Fall back to default
+      return "en"
+
+  initialize_gt(
+      app,
+      default_locale="en",
+      locales=["es", "fr"],
+      get_locale=get_locale,
+  )
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## How it works internally
+
+- **FastAPI**: `initialize_gt` registers an HTTP middleware that runs on every request. If `get_locale` is provided, it calls `get_locale(request)`. Otherwise it parses `Accept-Language`. The resolved locale is set on the `I18nManager`, which [`t()`](/docs/python/api/t) reads from.
+
+- **Flask**: `initialize_gt` registers a `before_request` hook with the same logic.
+
+---
+
+## Common patterns
+
+### URL path prefix
+
+Extract the locale from the URL path (e.g. `/es/about`, `/fr/home`):
+
+```python
+def get_locale(request) -> str:
+    parts = request.url.path.strip("/").split("/")
+    supported = {"es", "fr", "de"}
+    if parts and parts[0] in supported:
+        return parts[0]
+    return "en"
+```
+
+### User profile
+
+Look up the locale from an authenticated user's preferences:
+
+```python
+def get_locale(request) -> str:
+    user = get_current_user(request)  # your auth logic
+    if user and user.preferred_locale:
+        return user.preferred_locale
+    return "en"
+```
+
+### Subdomain
+
+Detect locale from a subdomain like `es.example.com`:
+
+```python
+def get_locale(request) -> str:
+    host = request.headers.get("host", "")
+    subdomain = host.split(".")[0]
+    if subdomain in ("es", "fr", "de"):
+        return subdomain
+    return "en"
+```
+
+---
+
+## Notes
+
+- Your `get_locale` function should always return a valid locale string
+- If it returns a locale you don't have translations for, `t()` will fall back to the original content in `default_locale`
+- The function receives the raw framework request object — `Request` for FastAPI, Flask's `request` for Flask
+- You can use [`get_locale()`](/docs/python/api/get-locale) elsewhere in your code to read back the resolved locale
