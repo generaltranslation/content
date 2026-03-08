@@ -7,7 +7,7 @@ description: API reference for the declare_static function
 
 `declare_static` marks content as statically analyzable so that the GT CLI can extract all possible translation entries at build time.
 
-It is an **identity function** — it returns exactly what you pass in. Its purpose is as a marker for static analysis. When the GT CLI scans your code, it recognizes `declare_static(...)` calls and determines all possible return values, creating a separate translation entry for each.
+It is an **identity function** — it returns exactly what you pass in. Its purpose is as a marker for static analysis.
 
 ```python
 from gt_flask import declare_static, t  # or from gt_fastapi
@@ -34,108 +34,9 @@ Returns `content` unchanged. The function is an identity — its purpose is as a
 
 ---
 
-## Why use `declare_static`?
-
-### Preserving word agreement
-
-Languages have grammatical rules (gender, plurality, case) that affect surrounding words. Without `declare_static`, a single translation entry can't handle agreement:
-
-```python
-# Without declare_static — one translation, no agreement possible
-message = t(f"The {get_subject(gender)} is playing.")
-# "The boy is playing." and "The girl is playing." share one translation
-```
-
-With `declare_static`, the CLI creates separate entries for each outcome:
-
-```python
-# With declare_static — separate translations, agreement preserved
-message = t(f"The {declare_static(get_subject(gender))} is playing.")
-```
-
-This produces two translation entries:
-- `"The boy is playing."` → `"El niño está jugando."`
-- `"The girl is playing."` → `"La niña está jugando."`
-
-Notice how Spanish uses "El" vs "La" depending on the subject — agreement is handled automatically.
-
-### Reusable content with function calls
-
-```python
-from gt_flask import declare_static, t
-
-def get_subject() -> str:
-    return "boy"
-
-translation1 = t(f"The {declare_static(get_subject())} is playing.")
-translation2 = t(f"The {declare_static(get_subject())} is having fun.")
-```
-
----
-
-## How it works
-
-1. **At build time**, the GT CLI analyzes expressions wrapped by `declare_static`
-2. It determines all possible return values (these must be statically analyzable)
-3. It creates separate translation entries for each unique outcome
-4. **At runtime**, `declare_static` is just an identity function — it returns its argument unchanged
-
----
-
-## Examples
-
-### Inline expressions
-
-You can embed logic directly inside `declare_static`:
-
-```python
-from gt_flask import declare_static, t
-
-message = t(f"The {declare_static('boy' if gender == 'male' else 'girl')} is playing.")
-```
-
-### Function calls
-
-Wrap function calls that have a known set of return values:
-
-```python
-from gt_flask import declare_static, t
-
-def get_status_label(status: str) -> str:
-    if status == "complete":
-        return "completed"
-    elif status == "pending":
-        return "pending"
-    return "unknown"
-
-message = t(f"Task is {declare_static(get_status_label(status))}.")
-```
-
-### With `declare_var`
-
-Combine `declare_static` with [`declare_var`](/docs/python/api/declare-var) when you need dynamic content inside a static expression:
-
-```python
-from gt_flask import declare_static, declare_var, t
-
-def get_greeting(name: str | None) -> str:
-    if name:
-        return f"Hello, {declare_var(name)}"
-    return "Hello, stranger"
-
-message = t(f"{declare_static(get_greeting(name))}! How are you?")
-```
-
----
-
-## Performance considerations
-
-`declare_static` multiplies translation entries. Each call with N possible outcomes creates N entries, and multiple `declare_static` calls in the same string multiply exponentially. Use judiciously.
-
----
-
 ## Notes
 
 - All possible outcomes must be statically analyzable at build time
 - Dynamic content (user input, API data) inside `declare_static` should be wrapped with [`declare_var`](/docs/python/api/declare-var)
 - Use [`decode_vars`](/docs/python/api/decode-vars) to extract original values from declared variables
+- See the [declare_static tutorial](/docs/python/tutorials/declare-static) for detailed examples and usage patterns
