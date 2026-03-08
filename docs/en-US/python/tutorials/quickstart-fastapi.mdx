@@ -1,0 +1,137 @@
+---
+title: FastAPI Quickstart
+description: Internationalize your FastAPI application with gt-fastapi
+---
+
+**Prerequisites:** Python 3.10+
+
+<Callout type="warn">
+  **Experimental:** The Python libraries are under active development and may be subject to breaking changes.
+</Callout>
+
+## Installation
+
+Install the `gt-fastapi` package:
+
+```bash
+pip install gt-fastapi
+```
+
+## Configuration
+
+### `initialize_gt`
+
+The [`initialize_gt`](/docs/python/api/initialize-gt) function configures General Translation for your FastAPI application.
+It must be called during app initialization.
+
+```python title="main.py"
+from fastapi import FastAPI
+from gt_fastapi import initialize_gt
+
+app = FastAPI()
+
+initialize_gt(
+    app,
+    default_locale="en",
+    locales=["en", "es", "fr"],
+    project_id="your-project-id",
+)
+```
+
+### Environment variables
+
+Add to your `.env` file:
+
+```bash title=".env"
+GT_API_KEY="your-api-key"
+GT_PROJECT_ID="your-project-id"
+```
+
+## Translating strings
+
+Use the [`t`](/docs/python/api/t) function to translate strings:
+
+```python title="routes.py"
+from gt_fastapi import t
+
+@app.get("/")
+async def hello():
+    return {"message": t("Hello, world!")}
+```
+
+### Using variables
+
+Pass keyword arguments to interpolate variables:
+
+```python
+from gt_fastapi import t
+
+greeting = t("Hello, {name}!", name="Alice")
+```
+
+The variable `name` will not be translated — only the surrounding text.
+
+### ICU MessageFormat
+
+`gt-fastapi` supports ICU MessageFormat for plurals, selects, and more:
+
+```python
+from gt_fastapi import t
+
+message = t(
+    "{count, plural, =0 {No items} =1 {One item} other {{count} items}}",
+    count=5,
+)
+```
+
+### Non-translatable variables
+
+Use [`declare_var`](/docs/python/api/declare-var) to mark values that should not be translated in ICU strings:
+
+```python
+from gt_fastapi import t, declare_var
+
+message = t(
+    "Welcome to {brand}!",
+    brand=declare_var("General Translation", name="brand"),
+)
+```
+
+## Locale detection
+
+By default, `gt-fastapi` detects the user's locale from the `Accept-Language` header.
+You can provide a custom locale detection function:
+
+```python
+def get_locale(request):
+    return request.headers.get("X-Locale", "en")
+
+initialize_gt(
+    app,
+    default_locale="en",
+    locales=["en", "es", "fr"],
+    get_locale=get_locale,
+)
+```
+
+## Custom translations
+
+You can provide your own translation loader instead of using the GT CDN:
+
+```python
+def load_translations(locale: str) -> dict[str, str]:
+    # Load translations from your own source
+    ...
+
+initialize_gt(
+    app,
+    default_locale="en",
+    locales=["en", "es", "fr"],
+    load_translations=load_translations,
+)
+```
+
+## Next steps
+
+- See the [API Reference](/docs/python/api) for detailed function documentation.
+- Learn about the core [`generaltranslation`](/docs/python/api/gt) package for locale utilities and formatting.

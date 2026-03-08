@@ -1,0 +1,148 @@
+---
+title: initialize_gt
+description: API reference for the initialize_gt setup function
+---
+
+## Overview
+
+The `initialize_gt` function configures General Translation for use in a FastAPI or Flask application.
+It sets up locale detection, translation loading, and middleware.
+
+<Tabs items={['FastAPI', 'Flask']}>
+  <Tab value="FastAPI">
+  ```python
+  from fastapi import FastAPI
+  from gt_fastapi import initialize_gt
+
+  app = FastAPI()
+
+  initialize_gt(
+      app,
+      default_locale="en",
+      locales=["en", "es", "fr"],
+      project_id="your-project-id",
+  )
+  ```
+  </Tab>
+  <Tab value="Flask">
+  ```python
+  from flask import Flask
+  from gt_flask import initialize_gt
+
+  app = Flask(__name__)
+
+  initialize_gt(
+      app,
+      default_locale="en",
+      locales=["en", "es", "fr"],
+      project_id="your-project-id",
+  )
+  ```
+  </Tab>
+</Tabs>
+
+<Callout>
+  **Required Setup:**
+  `initialize_gt` must be called before using `t` or any other translation function.
+  Call it once during your application's initialization.
+</Callout>
+
+## Reference
+
+### Parameters
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `app` | `FastAPI` or `Flask` | — | The application instance. |
+| `default_locale` | `str` | `"en"` | The source/default locale for your application. |
+| `locales` | `list[str] \| None` | `None` | List of target locales your application supports. |
+| `project_id` | `str \| None` | `None` | Your GT project ID, used for loading translations from the CDN. |
+| `cache_url` | `str \| None` | `None` | Override the CDN base URL for translation loading. |
+| `get_locale` | `Callable \| None` | `None` | Custom locale detection callback. Receives the request object and returns a locale string. |
+| `load_translations` | `Callable[[str], dict[str, str]] \| None` | `None` | Custom translation loader function. Receives a locale string and returns a dictionary of translations. Overrides CDN loading. |
+| `eager_loading` | `bool` | `True` | Whether to load all translations at startup. |
+
+### Returns
+
+An `I18nManager` instance.
+
+---
+
+## Behavior
+
+### Locale detection
+
+By default, `initialize_gt` sets up middleware that detects the user's locale from the `Accept-Language` header.
+The detected locale is matched against the configured `locales` list.
+
+If a custom `get_locale` function is provided, it will be used instead.
+
+### Translation loading
+
+Translations can be loaded in two ways:
+
+1. **CDN (default):** If a `project_id` is provided, translations are loaded from the General Translation CDN.
+2. **Custom loader:** If `load_translations` is provided, it is called with a locale string and should return a `dict[str, str]` mapping translation hashes to translated strings.
+
+### Eager loading
+
+When `eager_loading` is `True` (default) and `locales` is provided, all translations are loaded at startup:
+
+- **FastAPI:** Translations are loaded during the application lifespan startup event.
+- **Flask:** Translations are loaded synchronously when `initialize_gt` is called.
+
+---
+
+## Example
+
+### Custom locale detection
+
+```python
+from fastapi import FastAPI, Request
+from gt_fastapi import initialize_gt
+
+app = FastAPI()
+
+def get_locale(request: Request) -> str:
+    # Check a cookie first, then fall back to header
+    locale = request.cookies.get("locale")
+    if locale:
+        return locale
+    return request.headers.get("accept-language", "en").split(",")[0]
+
+initialize_gt(
+    app,
+    default_locale="en",
+    locales=["en", "es", "fr", "de"],
+    get_locale=get_locale,
+)
+```
+
+### Custom translation loader
+
+```python
+import json
+from pathlib import Path
+from flask import Flask
+from gt_flask import initialize_gt
+
+app = Flask(__name__)
+
+def load_translations(locale: str) -> dict[str, str]:
+    path = Path(f"translations/{locale}.json")
+    if path.exists():
+        return json.loads(path.read_text())
+    return {}
+
+initialize_gt(
+    app,
+    default_locale="en",
+    locales=["en", "es", "fr"],
+    load_translations=load_translations,
+)
+```
+
+## Next steps
+
+- See [`t`](/docs/python/api/t) for translating strings.
+- See [`GT`](/docs/python/api/gt) for the core locale utilities class.

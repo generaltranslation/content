@@ -1,0 +1,228 @@
+---
+title: GT
+description: API reference for the GT class — locale utilities, formatting, and translation
+---
+
+## Overview
+
+The `GT` class is the core driver for General Translation in Python.
+It provides locale utilities, number/date/currency formatting, and translation methods.
+
+```python
+from generaltranslation import GT
+
+gt = GT(
+    api_key="your-api-key",
+    project_id="your-project-id",
+    source_locale="en",
+    locales=["es", "fr", "de"],
+)
+```
+
+<Callout>
+  For most web applications, use [`initialize_gt`](/docs/python/api/initialize-gt) from `gt-fastapi` or `gt-flask` instead.
+  The `GT` class is useful for scripts, CLI tools, or custom integrations.
+</Callout>
+
+## Constructor
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `api_key` | `str \| None` | `None` | GT API key. Falls back to `GT_API_KEY` env var. |
+| `dev_api_key` | `str \| None` | `None` | Dev API key. Falls back to `GT_DEV_API_KEY` env var. |
+| `project_id` | `str \| None` | `None` | GT project ID. Falls back to `GT_PROJECT_ID` env var. |
+| `base_url` | `str \| None` | `None` | API base URL override. |
+| `source_locale` | `str \| None` | `None` | Source locale (BCP 47). |
+| `target_locale` | `str \| None` | `None` | Default target locale (BCP 47). |
+| `locales` | `list[str] \| None` | `None` | List of approved target locales. |
+| `custom_mapping` | `CustomMapping \| None` | `None` | Custom locale alias mapping. |
+
+---
+
+## Locale methods
+
+### `is_valid_locale(locale)`
+
+Check if a locale code is valid.
+
+```python
+gt.is_valid_locale("en-US")  # True
+gt.is_valid_locale("xx-YY")  # False
+```
+
+### `standardize_locale(locale)`
+
+Standardize a BCP 47 locale code.
+
+```python
+gt.standardize_locale("en_us")  # "en-US"
+```
+
+### `get_locale_name(locale)`
+
+Get the display name of a locale.
+
+```python
+gt.get_locale_name("es")  # "Spanish"
+```
+
+### `get_locale_emoji(locale)`
+
+Get the flag emoji for a locale.
+
+```python
+gt.get_locale_emoji("fr")  # "🇫🇷"
+```
+
+### `get_locale_direction(locale)`
+
+Get the text direction for a locale.
+
+```python
+gt.get_locale_direction("ar")  # "rtl"
+gt.get_locale_direction("en")  # "ltr"
+```
+
+### `get_locale_properties(locale)`
+
+Get detailed properties for a locale (name, emoji, direction, region, etc.).
+
+```python
+props = gt.get_locale_properties("ja")
+```
+
+### `determine_locale(locales, approved_locales)`
+
+Find the best matching locale from a list of candidates against approved locales.
+
+```python
+best = gt.determine_locale(["en-GB", "fr"], ["en-US", "fr"])
+# "en-US" or "fr" depending on matching rules
+```
+
+### `requires_translation(source_locale, target_locale)`
+
+Check if translation is needed between two locales.
+
+```python
+gt.requires_translation("en", "en-US")  # False (same language)
+gt.requires_translation("en", "es")     # True
+```
+
+### `is_same_language(*locales)`
+
+Check if multiple locales represent the same language.
+
+```python
+gt.is_same_language("en-US", "en-GB")  # True
+```
+
+### `is_same_dialect(*locales)`
+
+Check if multiple locales represent the same dialect.
+
+```python
+gt.is_same_dialect("en-US", "en-US")  # True
+gt.is_same_dialect("en-US", "en-GB")  # False
+```
+
+---
+
+## Formatting methods
+
+### `format_num(number, **options)`
+
+Format a number for the configured locale.
+
+```python
+gt.format_num(1234567)         # "1,234,567"
+gt.format_num(0.75, options={"style": "percent"})  # "75%"
+```
+
+**Options:** `style` (`"decimal"`, `"percent"`), `notation` (`"standard"`, `"compact"`), `use_grouping`, `minimum_fraction_digits`, `maximum_fraction_digits`, `minimum_integer_digits`.
+
+### `format_currency(value, currency, **options)`
+
+Format a currency value.
+
+```python
+gt.format_currency(29.99, "USD")  # "$29.99"
+gt.format_currency(29.99, "EUR", options={"currency_display": "name"})  # "29.99 euros"
+```
+
+**Options:** `currency_display` (`"symbol"`, `"name"`, `"code"`), `currency_sign` (`"standard"`, `"accounting"`).
+
+### `format_date_time(value, **options)`
+
+Format a datetime value.
+
+```python
+from datetime import datetime
+
+gt.format_date_time(datetime.now(), options={"date_style": "long"})
+# "March 7, 2026"
+```
+
+**Options:** `date_style` and `time_style` (`"full"`, `"long"`, `"medium"`, `"short"`).
+
+### `format_list(items, **options)`
+
+Format a list of items with locale-aware conjunctions.
+
+```python
+gt.format_list(["Alice", "Bob", "Charlie"])
+# "Alice, Bob, and Charlie"
+```
+
+**Options:** `type` (`"conjunction"`, `"disjunction"`, `"unit"`), `style` (`"long"`, `"short"`, `"narrow"`).
+
+### `format_relative_time(value, unit, **options)`
+
+Format a relative time value.
+
+```python
+gt.format_relative_time(-3, "day")  # "3 days ago"
+gt.format_relative_time(1, "hour")  # "in 1 hour"
+```
+
+### `format_message(message, **options)`
+
+Format an ICU MessageFormat string with variables.
+
+```python
+gt.format_message(
+    "{count, plural, =0 {No messages} =1 {One message} other {{count} messages}}",
+    variables={"count": 5},
+)
+# "5 messages"
+```
+
+---
+
+## Translation methods
+
+These methods are `async` and require an API key and project ID.
+
+### `await translate(source, options)`
+
+Translate a single string.
+
+```python
+result = await gt.translate("Hello, world!", {"target_locale": "es"})
+```
+
+### `await translate_many(sources, options)`
+
+Translate multiple strings in a batch.
+
+```python
+results = await gt.translate_many(
+    ["Hello", "Goodbye"],
+    {"target_locale": "es"},
+)
+```
+
+## Next steps
+
+- See [`initialize_gt`](/docs/python/api/initialize-gt) for web framework integration.
+- See [Formatting](/docs/python/api/format) for standalone formatting functions.
