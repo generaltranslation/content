@@ -109,7 +109,7 @@ You may abbreviate to **"GT"** when it's clear from context that you mean Genera
 
 ### Language tags
 
-Always use a language identifier on fenced code blocks:
+Use a language identifier on fenced code blocks when the content is code. If the content is plaintext, the language tag is optional — you can omit it.
 
 ````markdown
 ```tsx
@@ -124,6 +124,10 @@ npm i gt-next
 {
   "defaultLocale": "en"
 }
+```
+
+```
+This is plaintext — no language tag needed.
 ```
 ````
 
