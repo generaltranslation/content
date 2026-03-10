@@ -1,6 +1,6 @@
 ---
-title: "Python Shouldn't Be Left Out of i18n"
-summary: "gt-flask and gt-fastapi bring the same inline translation pattern to Python web frameworks."
+title: "gt-flask and gt-fastapi"
+summary: "New Python packages for inline translation in Flask and FastAPI."
 date: 2026-03-10
 authors: [default]
 tags: ['devlog', 'python', 'i18n', 'flask', 'fastapi', 'gt-flask', 'gt-fastapi']
@@ -8,17 +8,12 @@ images: ['/static/blogs/gt-python.png']
 layout: PostLayout
 ---
 
-Most i18n tooling assumes you're writing JavaScript. If your backend is Python, you're stuck wiring together gettext, Babel, and a patchwork of framework-specific middleware. The result is a translation system that lives outside your code and requires its own build step to maintain.
+We released [`gt-flask`](https://pypi.org/project/gt-flask) and [`gt-fastapi`](https://pypi.org/project/gt-fastapi) -- Python packages that bring the same [inline translation model](/blog/nextjs-i18n-code-is-the-source-of-truth) we use in `gt-next` and `gt-react` to Flask and FastAPI.
 
-We wrote about this problem in the context of React -- [translation keys separate content from where it's used](/blog/nextjs-i18n-code-is-the-source-of-truth). The same applies server-side. Your route handler says one thing; your `.po` file says another. They drift apart.
-
-## gt-flask and gt-fastapi
-
-[`gt-flask`](https://pypi.org/project/gt-flask) and [`gt-fastapi`](https://pypi.org/project/gt-fastapi) are new Python packages that bring General Translation's inline translation model to Flask and FastAPI.
-
-Setup requires initializing GT with your app instance, then using the `t()` function inline:
+## Usage
 
 ```python
+from flask import Flask
 from gt_flask import initialize_gt, t
 
 app = Flask(__name__)
@@ -27,33 +22,23 @@ initialize_gt(app)
 @app.get("/")
 def index():
     return {"message": t("Hello, world!")}
+
+@app.get("/greet")
+def greet():
+    return {"message": t("Hello, {name}!", name=user.name)}
 ```
 
-Variables are keyword arguments:
+The source string is the source of truth. No key files, no `.po` files. `t()` resolves the current locale via framework middleware, looks up a translation by hash, interpolates variables, and falls back to the source string if no translation exists.
 
-```python
-t("Hello, {name}!", name=user.name)
-```
+Python-specific metadata kwargs (`_context`, `_id`, `_max_chars`) handle disambiguation and constraints using underscore-prefixed keyword arguments.
 
-No key files. No extraction step separate from your deploy. The string in your source code is the source of truth -- the same principle behind [`gt-next`](/blog/gt-next) and `gt-react`.
+## CLI support
 
-## How it works
+The GT CLI now extracts `t()` calls from Python source files. See the [companion dev log](/blog/gt-cli-python-support) for details on `gt upload` and `gt translate` with Python projects.
 
-The libraries hook into each framework's middleware to resolve the current locale per request. At runtime, `t()` hashes the source string, looks up a translation for the current locale, interpolates variables, and returns the result. If no translation exists, it falls back to the source string.
+## Status
 
-Metadata kwargs (`_context`, `_id`, `_max_chars`) handle disambiguation and constraints, following the same conventions as the JavaScript libraries.
-
-## Why this matters
-
-Python runs a significant share of the web's backend infrastructure. Django, Flask, and FastAPI power APIs that return user-facing strings -- error messages, email templates, API responses consumed by mobile clients. These strings need translation just as much as frontend JSX does.
-
-The existing Python i18n ecosystem is functional but old. gettext dates to the 1990s. Babel's last major release was years ago. Neither integrates with a modern translation pipeline that can push and pull translations as part of a CI/CD workflow.
-
-GT's [CLI tool](/docs/cli) now supports Python projects (more on that in the [next post](/blog/gt-cli-python-support)), which means `gt upload` and `gt translate` work the same way whether your project is Next.js, React, or Flask.
-
-## Current status
-
-These packages are experimental. The API surface is small and intentionally minimal. We're iterating on the translation loading interface and plan to add Django support.
+Experimental. API surface is intentionally minimal. Django support is planned.
 
 - [`gt-flask`](https://pypi.org/project/gt-flask) -- Flask integration
 - [`gt-fastapi`](https://pypi.org/project/gt-fastapi) -- FastAPI integration
