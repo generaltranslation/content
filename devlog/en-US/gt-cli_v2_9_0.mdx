@@ -1,0 +1,114 @@
+---
+title: gt-cli@2.9.0
+date: 2026-03-10
+authors: [default]
+tags: ['gt-cli', 'v2.9.0', 'twilio', 'content-templates', 'i18n', 'whatsapp', 'sms']
+---
+
+## Overview
+
+The `gt` CLI now supports Twilio Content JSON as a file format. If you use Twilio's Content Template Builder to send structured messages over WhatsApp, SMS, or RCS, you can now translate those templates with the same `gt upload` and `gt translate` workflow you already use for your app.
+
+## Why this matters
+
+Twilio Content Templates are JSON files that define structured messages -- text with variables, quick-reply buttons, cards with media and actions. These templates contain user-facing strings: button labels, body text, card titles. If you're sending messages in multiple languages, those strings need translation.
+
+The current approach is to create a separate content template per language manually through the Twilio Console or API. Each template gets its own SID, its own approval cycle, and its own maintenance burden. There's no single source of truth for what a message says across languages.
+
+With this CLI update, you write the template once in your default language and let `gt translate` handle the rest.
+
+## Walkthrough
+
+Say you're building a customer support flow over WhatsApp using Twilio. You have a quick-reply template that greets the user and offers three options:
+
+```json
+{
+  "friendly_name": "support_greeting",
+  "language": "en",
+  "variables": { "1": "Customer" },
+  "types": {
+    "twilio/quick-reply": {
+      "body": "Hi, {{1}}. Thanks for contacting support. How can we help?",
+      "actions": [
+        { "title": "Check order status", "id": "order_status" },
+        { "title": "Return an item", "id": "return_item" },
+        { "title": "Speak with an agent", "id": "speak_agent" }
+      ]
+    },
+    "twilio/text": {
+      "body": "Hi, {{1}}. Thanks for contacting support. How can we help?"
+    }
+  }
+}
+```
+
+The `body` fields and `title` values in `actions` are all translatable strings. The `{{1}}` variable placeholder, the `id` fields, and the structural keys are not.
+
+### Step 1: Configure
+
+Add `twilioContentJson` to your `gt.config.json` file configuration:
+
+```json
+{
+  "defaultLocale": "en",
+  "locales": ["en", "es", "fr", "ja"],
+  "files": {
+    "twilioContentJson": {
+      "include": ["twilio/**/*.json"],
+      "output": "twilio/translations/{locale}/{fileName}"
+    }
+  }
+}
+```
+
+### Step 2: Upload
+
+```bash
+npx gt@latest upload
+```
+
+The CLI reads the Twilio Content JSON files, identifies them by the `twilioContentJson` file type, and uploads the translatable content. It handles these files separately from regular JSON -- the data format is `STRING` rather than `JSX`, matching how Twilio templates use plain text with variable placeholders.
+
+### Step 3: Translate
+
+```bash
+npx gt@latest translate
+```
+
+Translations are generated for each configured locale. The output preserves the Twilio JSON structure -- only the string values change.
+
+The Spanish output might look like:
+
+```json
+{
+  "friendly_name": "support_greeting",
+  "language": "es",
+  "variables": { "1": "Customer" },
+  "types": {
+    "twilio/quick-reply": {
+      "body": "Hola, {{1}}. Gracias por contactar con soporte. ¿En qué podemos ayudarte?",
+      "actions": [
+        { "title": "Ver estado del pedido", "id": "order_status" },
+        { "title": "Devolver un artículo", "id": "return_item" },
+        { "title": "Hablar con un agente", "id": "speak_agent" }
+      ]
+    },
+    "twilio/text": {
+      "body": "Hola, {{1}}. Gracias por contactar con soporte. ¿En qué podemos ayudarte?"
+    }
+  }
+}
+```
+
+Each translated file is a valid Twilio Content JSON template that can be uploaded directly to the Twilio Content API as a new locale-specific template.
+
+## What's supported
+
+The CLI accepts any Twilio Content JSON file. This includes all content types: `twilio/text`, `twilio/quick-reply`, `twilio/call-to-action`, `twilio/card`, `twilio/carousel`, and others. The CLI doesn't parse the Twilio schema specifically -- it treats the file as JSON and translates string values, so new content types work without CLI changes.
+
+## Links
+
+- [CLI Python support](/devlog/gt-cli_v2_8_0)
+- [CLI documentation](/docs/cli)
+- [Twilio Content Types overview](https://www.twilio.com/docs/content/content-types-overview)
+- [Source](https://github.com/generaltranslation/gt/pull/1099)
