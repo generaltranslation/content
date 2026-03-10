@@ -1,0 +1,54 @@
+---
+title: "gt push Now Works With Python"
+summary: "The GT CLI tool can now extract and register translation strings from Python source files."
+date: 2026-03-10
+authors: [default]
+tags: ['devlog', 'cli', 'python', 'i18n', 'gt-flask', 'gt-fastapi']
+images: ['/static/blogs/gt-cli-python-support.png']
+layout: PostLayout
+---
+
+The `gt` CLI (v2.8.0) now supports Python projects. Running `gt push` in a Flask or FastAPI project will extract `t()` calls from your Python source files and register them with the GT platform -- the same workflow that already exists for `gt-next` and `gt-react`.
+
+## What changed
+
+A new `@generaltranslation/python-extractor` package parses Python source files and extracts translation calls. The CLI auto-detects Python projects by checking for `gt-flask` or `gt-fastapi` in your `pyproject.toml`, `requirements.txt`, or `setup.py`.
+
+The extractor handles:
+
+- `t("string literal")` calls with keyword variable interpolation
+- `declare_var()` for marking dynamic f-string expressions as variables
+- `declare_static()` for embedding static expressions that should be evaluated at extraction time
+- Aliased imports (`from gt_flask import t as translate`)
+- Metadata kwargs (`_context`, `_id`, `_max_chars`)
+
+## Why a single CLI matters
+
+Before this, translating a Python backend meant a completely separate pipeline from your frontend. Your React app used `gt push` and `gt translate`; your Flask API used whatever you cobbled together with gettext or manual JSON files.
+
+Now it's one command for both. A monorepo with a Next.js frontend and a FastAPI backend can run `gt push` once from the root and register every translatable string across both codebases. Translations come back through the same platform, the same dashboard, the same API.
+
+This is the argument we made in [the gt-python post](/blog/gt-python): translation tooling shouldn't be framework-specific. The [CLI docs](/docs/cli) cover the full command reference.
+
+## Example
+
+Given a Flask route:
+
+```python
+from gt_flask import t
+
+@app.get("/error")
+def error():
+    return {"error": t("Something went wrong. Please try again.", _context="error page")}
+```
+
+Running `gt push` extracts the string, hashes it, and registers it with the platform. Running `gt translate` generates translations for your configured locales.
+
+## What's next
+
+Django support in the Python libraries. Broader file-format support in the extractor. The goal is for `gt push` to be the single entry point for registering translatable content regardless of framework or language.
+
+- [gt-python packages](/blog/gt-python)
+- [CLI documentation](/docs/cli)
+- [Source (CLI)](https://github.com/generaltranslation/gt)
+- [Source (Python)](https://github.com/generaltranslation/gt-python)
