@@ -1,0 +1,332 @@
+---
+title: Next.js Quickstart
+description: Add multiple languages to your Next.js app in under 10 minutes
+---
+
+By the end of this guide, your Next.js app will display content in multiple languages, with a language switcher your users can interact with.
+
+**Prerequisites:**
+- A Next.js app using the **App Router** (Next.js 13+)
+- Node.js 18+
+
+<Callout type='info'>
+  **Want automatic setup?** Run `npx gt@latest` to configure everything with the [Setup Wizard](/docs/cli/init). This guide covers manual setup.
+</Callout>
+
+---
+
+## Step 1: Install the packages
+
+`gt-next` is the library that powers translations in your app. `gt` is the CLI tool that prepares translations for production.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm i gt-next
+  npm i -D gt
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn add gt-next
+  yarn add --dev gt
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun add gt-next
+  bun add --dev gt
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm add gt-next
+  pnpm add --save-dev gt
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## Step 2: Configure your Next.js config
+
+`gt-next` uses a Next.js plugin called **`withGTConfig`** to set up internationalization at build time. Wrap your existing Next.js config with it:
+
+```ts title="next.config.ts"
+import { withGTConfig } from 'gt-next/config';
+
+const nextConfig = {};
+
+export default withGTConfig(nextConfig);
+```
+
+This plugin reads your translation settings and wires everything together behind the scenes. No other changes to your Next.js config are needed.
+
+---
+
+## Step 3: Create a translation config file
+
+Create a **`gt.config.json`** file in your project root. This tells the library which languages you support:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": ".gt/[locale].json"
+    }
+  }
+}
+```
+
+- **`defaultLocale`** — the language your app is written in (your source language).
+- **`locales`** — the languages you want to translate into. Pick any from the [supported locales list](/docs/platform/supported-locales).
+- **`files.gt.output`** — where the CLI saves translation files. `[locale]` is replaced with each language code (e.g., `.gt/es.json`).
+
+Add `.gt/` to your **`.gitignore`** — these files are generated, not hand-written:
+
+```txt title=".gitignore"
+.gt/
+```
+
+---
+
+## Step 4: Add the GTProvider to your layout
+
+The **`GTProvider`** component gives your entire app access to translations. It must wrap your app at the root layout level:
+
+```tsx title="app/layout.tsx"
+import { GTProvider } from 'gt-next';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <body>
+        <GTProvider>
+          {children}
+        </GTProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+`GTProvider` is a **server component** — it loads translations on the server and passes them down to your client components.
+
+---
+
+## Step 5: Mark content for translation
+
+Now, wrap any text you want translated with the **`<T>`** component. `<T>` stands for "translate":
+
+```tsx title="app/page.tsx"
+import { T } from 'gt-next';
+
+export default function Home() {
+  return (
+    <main>
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content will be translated automatically.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+You can wrap as much or as little JSX as you want inside `<T>`. Everything inside it — text, nested elements, even formatting — gets translated as a unit.
+
+---
+
+## Step 6: Add a language switcher
+
+Drop in a **`<LocaleSelector>`** so users can change languages:
+
+```tsx title="app/page.tsx"
+import { T, LocaleSelector } from 'gt-next';
+
+export default function Home() {
+  return (
+    <main>
+      <LocaleSelector />
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content will be translated automatically.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+`LocaleSelector` renders a dropdown populated with the languages from your `gt.config.json`.
+
+---
+
+## Step 7: Set up environment variables (optional)
+
+To see translations in development, you need API keys from General Translation. These enable **on-demand translation** — your app translates content in real time as you develop.
+
+Create a **`.env.local`** file:
+
+```bash title=".env.local"
+GT_API_KEY="your-api-key"
+GT_PROJECT_ID="your-project-id"
+```
+
+Get your free keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or by running:
+
+```bash
+npx gt auth
+```
+
+<Callout type="warn">
+  For development, use a key starting with `gtx-dev-`. Production keys (`gtx-api-`) are for CI/CD only.
+
+  Never expose `GT_API_KEY` to the browser or commit it to source control.
+</Callout>
+
+<Accordions>
+  <Accordion title="Can I use gt-next without API keys?">
+    Yes. Without API keys, `gt-next` works as a standard i18n library. You won't get on-demand translation in development, but you can still:
+    - Provide your own translation files manually
+    - Use all components (`<T>`, `<Var>`, `LocaleSelector`, etc.)
+    - Run `npx gt generate` to create translation file templates, then translate them yourself
+  </Accordion>
+</Accordions>
+
+---
+
+## Step 8: See it working
+
+Start your dev server:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm run dev
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn dev
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun dev
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm dev
+  ```
+  </Tab>
+</Tabs>
+
+Open [http://localhost:3000](http://localhost:3000) and use the language dropdown to switch languages. You should see your content translated.
+
+<Callout type="info">
+  In development, translations happen on-demand — you may see a brief loading state the first time you switch to a new language. In production, translations are pre-generated and load instantly.
+</Callout>
+
+---
+
+## Step 9: Translate strings (not just JSX)
+
+For plain strings — like `placeholder` attributes, `aria-label` values, or `alt` text — use the **`useGT`** hook. It works in both server and client components:
+
+```tsx title="app/contact/page.tsx"
+import { useGT } from 'gt-next';
+
+export default function ContactPage() {
+  const gt = useGT();
+
+  return (
+    <form>
+      <input
+        placeholder={gt('Enter your email')}
+        aria-label={gt('Email input field')}
+      />
+      <button type="submit">{gt('Send')}</button>
+    </form>
+  );
+}
+```
+
+<Accordions>
+  <Accordion title="Need an async version for server components?">
+    If you prefer `async/await` in server components, import `getGT` from `gt-next/server`:
+
+    ```tsx
+    import { getGT } from 'gt-next/server';
+
+    export default async function Page() {
+      const gt = await getGT();
+      return <p>{gt('Hello')}</p>;
+    }
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Step 10: Deploy to production
+
+In production, translations are pre-generated at build time (no real-time API calls). Add the translate command to your build script:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && next build"
+  }
+}
+```
+
+Set your **production** environment variables in your hosting provider (Vercel, Netlify, etc.):
+
+```bash
+GT_PROJECT_ID=your-project-id
+GT_API_KEY=gtx-api-your-production-key
+```
+
+<Callout type="warn">
+  Production keys start with `gtx-api-` (not `gtx-dev-`). Get one from [dash.generaltranslation.com](https://dash.generaltranslation.com). Never prefix it with `NEXT_PUBLIC_`.
+</Callout>
+
+That's it — your app is now multilingual. 🎉
+
+---
+
+## Troubleshooting
+
+<Accordions>
+  <Accordion title="The language isn't changing when I use the dropdown">
+    `gt-next` stores the user's language preference in a cookie called `generaltranslation.locale`. If you previously tested with a different language, this cookie may override your selection. Clear your cookies and try again.
+
+    - [Chrome](https://support.google.com/chrome/answer/95647)
+    - [Firefox](https://support.mozilla.org/en-US/kb/delete-cookies-remove-info-websites-stored)
+    - [Safari](https://support.apple.com/en-mn/guide/safari/sfri11471/16.0/mac/11.0)
+  </Accordion>
+  <Accordion title="Translations are slow in development">
+    This is expected. In development, translations happen on-demand (your content is translated in real time via the API). This delay **does not exist in production** — all translations are pre-generated by `npx gt translate`.
+  </Accordion>
+  <Accordion title="Some translations are inaccurate">
+    Ambiguous text can lead to inaccurate translations. For example, "apple" could mean the fruit or the company. Add a `context` prop to help:
+
+    ```jsx
+    <T context="the technology company">Apple</T>
+    ```
+
+    Both `<T>`, `useGT()`, and `getGT()` support the `context` option.
+  </Accordion>
+</Accordions>
+
+---
+
+## Next steps
+
+- [**`<T>` Component Guide**](/docs/next/guides/t) — Learn about variables, plurals, and advanced translation patterns
+- [**String Translation Guide**](/docs/next/guides/strings) — Deep dive into `useGT` and `getGT`
+- [**Variable Components**](/docs/next/guides/variables) — Handle dynamic content with `<Var>`, `<Num>`, `<Currency>`, and `<DateTime>`
+- [**Deploying to Production**](/docs/next/tutorials/quickdeploy) — CI/CD setup, caching, and performance optimization
