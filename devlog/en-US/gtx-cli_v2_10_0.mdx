@@ -1,0 +1,91 @@
+---
+title: gtx-cli@2.10.0
+date: 2026-03-12
+authors: [fernando]
+tags: ['gtx-cli', '2.10.0', 'metadata', 'context', 'json', 'yaml', 'translation-quality']
+---
+
+## Overview
+
+**gtx-cli 2.10.0** adds support for **keyed metadata** on JSON and YAML translation files. These are per-key translation instructions that give you granular control over how individual strings are translated.
+
+Until now, translation context for keyed files operated at the project level. Style controls, glossary entries, and locale-specific rules applied broadly across all your content. Keyed metadata lets you go a level deeper, attaching specific translation hints directly to individual keys in your files.
+
+---
+
+## What it looks like
+
+You create a companion metadata file that lives next to your source file and mirrors its key structure. At the leaf level, instead of strings, you provide metadata objects with translation instructions:
+
+```json title="translations.json"
+{
+  "nav": {
+    "home": "Home",
+    "bank": "Bank",
+    "save": "Save"
+  },
+  "alerts": {
+    "new_lead": "You have a new lead!"
+  }
+}
+```
+
+```json title="translations.metadata.json"
+{
+  "nav": {
+    "home": {
+      "context": "Baseball term — home plate on a diamond. NOT a house."
+    },
+    "bank": {
+      "context": "Riverbank — the side of a river. NOT a financial institution."
+    },
+    "save": {
+      "context": "Sports term — a goalkeeper preventing a goal. NOT saving data.",
+      "maxChars": 12
+    }
+  },
+  "alerts": {
+    "new_lead": {
+      "context": "Sales/CRM context. A 'lead' is a potential customer.",
+      "maxChars": 30
+    }
+  }
+}
+```
+
+The companion file must live in the same directory as the source file and follow the naming convention `{name}.metadata.json` (or `.metadata.yaml` for YAML files). The CLI picks it up automatically when you run `npx gtx translate`.
+
+With per-key context, "Bank" translates to "Ribera" (riverbank) instead of the possible "Banco" (financial institution), and "Save" becomes "Parada" (goalkeeper's save) instead of "Guardar" (to store). For strings that are already unambiguous, you don't need to provide metadata at all — only add entries for the keys that benefit from it.
+
+---
+
+## Supported fields
+
+We currently support three metadata fields:
+
+- **`context`** — translation instructions for a specific string. This is the most impactful field: use it to disambiguate words, specify domain terminology, or clarify intent.
+- **`maxChars`** — a maximum character limit on the translated output. This is best-effort: the engine will use shorter synonyms and concise phrasing to fit, but won't truncate a translation to an unfeasible length.
+- **`sourceCode`** — surrounding source code context for a string. Lets you show the engine where and how the string is used in your codebase, which helps it make better decisions about tone, terminology, and phrasing.
+
+All fields are optional on a per-key basis. For full details and examples of each field, see the [keyed metadata reference](/docs/cli/reference/keyed-metadata).
+
+---
+
+## YAML support
+
+The same approach works for YAML files. Create a `.metadata.yaml` companion with the same key structure:
+
+```yaml title="translations.metadata.yaml"
+ui:
+  buttons:
+    save:
+      context: "Sports term — a goalkeeper's save. NOT saving data."
+    draft:
+      context: "Beer on tap, as in 'draft beer'. NOT a document version."
+  labels:
+    date:
+      context: "The edible fruit of the date palm. NOT a calendar date."
+    chips:
+      context: "British English: hot fried potato strips (french fries). NOT crisps or microchips."
+```
+

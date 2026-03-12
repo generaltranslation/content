@@ -1,0 +1,203 @@
+---
+title: Keyed metadata
+description: Per-key translation metadata for JSON and YAML files
+---
+
+## Overview
+
+Keyed metadata lets you attach translation instructions to individual keys in your JSON and YAML files. You provide a companion `.metadata.json` or `.metadata.yaml` file that mirrors the source file's key structure, with metadata objects at the leaf level.
+
+The CLI automatically detects companion metadata files, validates them against the source structure, and sends them to the translation engine.
+
+---
+
+## File structure
+
+A companion metadata file must:
+
+- Live in the same directory as the source file
+- Follow the naming convention `{name}.metadata.{ext}` (e.g., `translations.metadata.json` for `translations.json`)
+- Mirror the key structure of the source file
+
+```
+translations.json           # source strings
+translations.metadata.json  # per-key metadata
+```
+
+The metadata file mirrors the source key structure, with metadata objects at the leaves instead of strings:
+
+```json title="translations.json"
+{
+  "nav": {
+    "home": "Home",
+    "bank": "Bank",
+    "save": "Save"
+  },
+  "alerts": {
+    "new_lead": "You have a new lead!"
+  }
+}
+```
+
+```json title="translations.metadata.json"
+{
+  "nav": {
+    "bank": {
+      "context": "Riverbank — the side of a river. NOT a financial institution."
+    },
+    "save": {
+      "context": "Sports term — a goalkeeper preventing a goal. NOT saving data.",
+      "maxChars": 12
+    }
+  },
+  "alerts": {
+    "new_lead": {
+      "context": "Sales/CRM context. A 'lead' is a potential customer.",
+      "maxChars": 30
+    }
+  }
+}
+```
+
+Not every key needs metadata — `home` has no entry above and translates normally. Only provide entries for keys that need specific translation instructions.
+
+---
+
+## Field reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `context` | `string` | No | Translation instructions for this specific string |
+| `maxChars` | `number` | No | Maximum character count for the translated output |
+| `sourceCode` | `Record<string, { before: string; target: string; after: string }[]>` | No | Surrounding source code context, keyed by file path |
+
+---
+
+## Fields
+
+### `context`
+
+Type: `string`
+
+Translation instructions applied to a specific string. Use this to disambiguate words with multiple meanings, specify domain terminology, or clarify the intended interpretation.
+
+```json
+{
+  "bank": {
+    "context": "Riverbank. The side of a river where land meets water, NOT a financial institution."
+  }
+}
+```
+
+### `maxChars`
+
+Type: `number`
+
+A maximum character limit on the translated output. The engine will use shorter synonyms, abbreviations, or concise phrasing to fit within the limit. This is best-effort. If the limit is unfeasible for the source content, the full translation is returned.
+
+```json
+{
+  "save": {
+    "maxChars": 10
+  }
+}
+```
+
+### `sourceCode`
+
+Type: `Record<string, { before: string; target: string; after: string }[]>`
+
+Surrounding source code context for a string. Keyed by file path, with each entry containing:
+
+- `before` — lines of source code above the target line
+- `target` — the line containing the string being translated
+- `after` — lines of source code below the target line
+
+Multiple entries per file are supported if the same string appears in different locations.
+
+```json
+{
+  "new_lead": {
+    "sourceCode": {
+      "components/Dashboard.tsx": [
+        {
+          "before": "function NotificationBanner({ type }) {\n  const gt = useGT();",
+          "target": "  const msg = gt('You have a new lead!');",
+          "after": "  return <Banner variant=\"success\">{msg}</Banner>;\n}"
+        }
+      ]
+    }
+  }
+}
+```
+
+### Combined example
+
+All three fields on a single key:
+
+```json
+{
+  "save_button": {
+    "context": "Sports term. A goalkeeper's save — preventing a goal from being scored. NOT saving data.",
+    "maxChars": 12,
+    "sourceCode": {
+      "components/MatchStats.tsx": [
+        {
+          "before": "const stats = useMatchStats();\nconst gt = useGT();",
+          "target": "const label = gt('Save');",
+          "after": "return <StatBadge icon={<GoalkeeperIcon />}>{label}: {stats.saves}</StatBadge>;"
+        }
+      ]
+    }
+  }
+}
+```
+
+---
+
+## YAML
+
+Works the same way with `.metadata.yaml` or `.metadata.yml` companions:
+
+```yaml title="translations.metadata.yaml"
+ui:
+  buttons:
+    save:
+      context: "Sports term. A goalkeeper's save, NOT saving data."
+      maxChars: 12
+    draft:
+      context: "Beer on tap, as in 'draft beer'. NOT a document version."
+  labels:
+    date:
+      context: "The edible fruit of the date palm. NOT a calendar date."
+```
+
+---
+
+## Validation
+
+The CLI validates the metadata file against the source file's structure. The process exits with an error if:
+
+- A metadata key does not exist in the source file
+- A metadata value is a primitive where the source has a nested object
+- A metadata value is an array where the source has an object (or vice versa)
+- The root type (array vs object) does not match the source
+- The metadata file is not parsable
+
+---
+
+## Schema support
+
+Keyed metadata works with JSON schemas (`include` and `composite`) and YAML schemas (`include`). The metadata is automatically transformed through the same schema pipeline as the source content, so key paths align at translation time regardless of file structure.
+
+---
+
+## Companion file filtering
+
+Companion metadata files are automatically matched to the corresponding source file. They are not translated as standalone files. This only applies when the corresponding source file exists in the file list. A `.metadata.json` file without a matching source file is treated as a regular file.
+
+---
+
+## Re-translation behavior
+
+Changes to the metadata file alone do not trigger re-translation if the source content has not changed. To apply updated metadata, the source content must also change.
