@@ -1,0 +1,74 @@
+---
+title: gt-react@10.12.0
+date: 2026-03-16
+authors: [ernest]
+tags: ['gt-react', 'gt-i18n', 'v10.12.0', 't', 'string-translation', 'browser', 'synchronous', 'i18n']
+---
+
+## Overview
+
+`gt-react` now exports a `t()` function for synchronous, module-level string translation in the browser.
+
+Until now, translating strings in `gt-react` required either a React hook (`useGT`) or an async server-side function (`getGT`). Both work well inside their intended contexts, but neither covers a common case: translating strings at the module level — outside of React components, before render, in plain utility files.
+
+`t()` fills that gap. It's a synchronous function you can call anywhere in browser code:
+
+```tsx
+import { t } from 'gt-react';
+
+const greeting = t('Hello, world!');
+```
+
+No hooks, no async, no component tree required.
+
+## How it works
+
+`t()` resolves translations synchronously from a pre-loaded cache. That cache is populated by `bootstrap()`, a new async setup function that loads all translations for the current locale before your app renders:
+
+```tsx
+import gtConfig from '../gt.config.json';
+import { bootstrap } from 'gt-react/browser';
+
+function getTranslations(locale: string) {
+  return import(`./_gt/${locale}.json`);
+}
+
+await bootstrap({
+  ...gtConfig,
+  getTranslations,
+});
+
+await import('./main.tsx');
+```
+
+Because `bootstrap()` runs before the app mounts, `t()` always has translations available — no loading states, no async boundaries.
+
+## Variables
+
+`t()` supports variable interpolation, same as `msg()`:
+
+```tsx
+t('Hello, {name}!', { name: 'John' });  // → "Hola, John!"
+```
+
+## Where it fits
+
+`gt-react` now has three ways to translate strings, each for a different context:
+
+| Function | Context | Sync/Async | Where |
+|----------|---------|------------|-------|
+| `t()` | Module-level | Sync | Browser only |
+| `useGT()` | React components | Sync (hook) | Browser |
+| `getGT()` | Server | Async | Server only |
+
+`t()` is the right choice when you need translations outside the React component tree — constants files, utility functions, configuration objects, router definitions, or anything that runs at module scope in the browser.
+
+## CLI support
+
+The CLI already recognizes `t()` calls for string extraction, same as `msg()`. No configuration changes needed — `npx gtx-cli translate` picks up `t()` strings automatically.
+
+## Design notes
+
+`t()` is browser-only. If called on the server (where `window` is undefined), it logs a warning and falls back to the source string. This is intentional — server-side translation should use `getGT()`, which can load translations asynchronously.
+
+The underlying mechanism is a `resolvedCache` in the translations manager that gets populated whenever translations are loaded. `bootstrap()` triggers that initial load; after that, `t()` reads from the cache with zero overhead.
