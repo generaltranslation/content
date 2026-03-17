@@ -1,0 +1,95 @@
+---
+title: gt-react@10.12.0
+date: 2026-03-16
+authors: [ernest]
+tags: ['gt-react', 'gt-i18n', 'v10.12.0', 't', 'string-translation', 'browser', 'synchronous', 'i18n']
+---
+
+## Overview
+
+`gt-react` now exports a `t()` function for synchronous, module-level string translation in the browser.
+
+Until now, translating strings in `gt-react` required React context-based hooks like `useGT`. Hooks work well inside components, but they can't cover a common case: translating strings at the module level — outside of React components, before render, in plain utility files.
+
+`t()` fills that gap. It's a synchronous function you can call anywhere in browser code:
+
+```tsx
+import { t } from 'gt-react/browser';
+
+const greeting = t('Hello, world!');
+```
+
+No hooks, no async, no component tree required.
+
+## Why this approach
+
+The core idea behind this PR is experimenting with moving away from the React context approach to translation. By operating outside the component tree, `t()` enables more interesting patterns — most notably, module-level translation. Strings can be translated where they're defined, not where they're rendered.
+
+This comes with trade-offs:
+
+- **Client-side only.** `t()` works in client-side React applications only. It relies on browser module execution to load translations before the app renders.
+- **Full page reload to change languages.** Because translations are resolved at module load time, switching locales requires re-executing the modules — meaning a full page refresh. There's no hot-swapping of languages mid-session.
+
+On the other hand, the developer experience is a major improvement. No wrapping strings in hooks, no component-level plumbing, no async boundaries — just a function call.
+
+The existing React context approaches (`useGT`, `<T>`, etc.) are not going anywhere. This is an additional option for projects where the trade-offs make sense.
+
+## How it works
+
+`t()` resolves translations synchronously from translations that have been loaded ahead of time. Those translations are populated by `bootstrap()`, a new async setup function that loads all translations for the current locale before your app renders.
+
+You need to change the entry point of your app to run `bootstrap()` first. Typically that would be `main.tsx`, but you can change the entry point in your `index.html`.
+
+```tsx
+// bootstrap.tsx (new entry point)
+import gtConfig from '../gt.config.json';
+import { bootstrap } from 'gt-react/browser';
+
+async function getTranslations(locale: string) {
+  return import(`./_gt/${locale}.json`);
+}
+
+await bootstrap({
+  ...gtConfig,
+  getTranslations,
+});
+
+await import('./main.tsx');
+```
+
+The `getTranslations` function is async — it loads the translations first, and then the React app is imported and executed. This is how `t()` has access at the module level: by the time any module calls `t()`, translations are already available.
+
+This only works on client-side React apps because module-level code re-executes when you load it in the browser. And because we need to re-execute modules to change the translated content, switching locales requires a full page reload.
+
+<Callout>
+**Experimental:** This feature currently requires a client-side only React application.
+</Callout>
+
+## Variables
+
+`t()` supports variable interpolation, same as `msg()`:
+
+```tsx
+import { t } from 'gt-react/browser';
+
+t('Hello, {name}!', { name: 'John' });  // → "Hola, John!"
+```
+
+## Where it fits
+
+`t()` is the right choice when you need translations outside the React component tree — constants files, utility functions, configuration objects, router definitions, or anything that runs at module scope in the browser.
+
+Keep in mind:
+
+- **This does not integrate with the rest of the `gt-react` system yet.** You need to do the bootstrap setup described above. It's a standalone approach.
+- **Client-side only.** Server-side translation should use React context-based hooks like `useGT`.
+
+## Design notes
+
+`t()` is browser-only. If called on the server (where `window` is undefined), it logs a warning and falls back to the source string. This is intentional — server-side translation should use the existing React context-based hooks.
+
+---
+
+## API reference
+
+See the [full `t()` API reference](/docs/react/api/strings/t-function) for parameters, return types, and setup details.

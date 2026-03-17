@@ -1,0 +1,176 @@
+---
+title: t
+description: API reference for the t() synchronous string translation function
+---
+
+## Overview
+
+The `t` function is a synchronous, module-level string translation function for client-side React applications.
+
+```jsx
+import { t } from 'gt-react/browser';
+
+const greeting = t('Hello, world!');
+```
+
+Unlike `useGT` (which requires React context) or `msg` (which encodes strings for later resolution), `t()` returns the translated string directly. It can be called anywhere in browser code — including at module scope, outside of React components.
+
+<Callout type="warn">
+**Experimental:** `t()` is an experimental feature. It is designed for client-side only React applications and does not yet integrate with React context (e.g., `<GTProvider>`, `useGT`). If called on the server, it logs a warning and returns the source string.
+</Callout>
+
+---
+
+## Setup
+
+`t()` depends on `bootstrap()` to load translations before your app renders. You need to change the entry point of your app to run `bootstrap()` first.
+
+Typically the entry point is `main.tsx`. You'll create a new file (e.g., `bootstrap.tsx`) and point your `index.html` to it instead.
+
+### 1. Create the bootstrap entry point
+
+```tsx
+// bootstrap.tsx
+import gtConfig from '../gt.config.json';
+import { bootstrap } from 'gt-react/browser';
+
+async function getTranslations(locale: string) {
+  return import(`./_gt/${locale}.json`);
+}
+
+await bootstrap({
+  ...gtConfig,
+  getTranslations,
+});
+
+await import('./main.tsx');
+```
+
+### 2. Update your `index.html`
+
+```html
+<!-- Change the script src to your new bootstrap file -->
+<script type="module" src="/src/bootstrap.tsx"></script>
+```
+
+### 3. Use `t()` anywhere
+
+```tsx
+import { t } from 'gt-react/browser';
+
+// Module-level — runs at import time
+const navItems = [
+  { label: t('Home'), path: '/' },
+  { label: t('About'), path: '/about' },
+  { label: t('Contact'), path: '/contact' },
+];
+
+export default function Nav() {
+  return (
+    <nav>
+      {navItems.map(item => (
+        <a key={item.path} href={item.path}>{item.label}</a>
+      ))}
+    </nav>
+  );
+}
+```
+
+<Callout>
+**Standalone setup:** `t()` does not currently integrate with the rest of the `gt-react` system (e.g., `<GTProvider>`, `useGT`). You need to use the bootstrap setup described above.
+</Callout>
+
+---
+
+## Reference
+
+### Parameters
+
+| Name       | Type     | Description                                                                 |
+|------------|----------|-----------------------------------------------------------------------------|
+| `content`  | `string` | The string content to translate.                                            |
+| `options?` | `object` | Optional. An object containing variable values for interpolation.           |
+
+### Returns
+
+`string` — The translated string for the current locale, or the source string if no translation is available.
+
+---
+
+## Variables
+
+You can pass variables using curly brace syntax:
+
+```tsx
+import { t } from 'gt-react/browser';
+
+const message = t('Hello, {name}!', { name: 'Alice' });
+// → "Hola, Alice!" (in Spanish)
+```
+
+Variable values are not translated — only the surrounding string template is.
+
+---
+
+## Behavior
+
+### How it works
+
+`bootstrap()` asynchronously loads all translations for the current locale before the app's modules are imported. Once loaded, `t()` reads from the translation data synchronously with no overhead.
+
+Because translations are resolved at module load time:
+
+- **Switching locales requires a full page reload.** The browser must re-execute all modules to pick up the new translations.
+- **This only works in client-side apps.** Module-level code re-executes when loaded in the browser, which is what makes this pattern possible.
+
+### Server-side behavior
+
+If `t()` is called in a server environment (where `window` is undefined), it logs a warning and returns the original source string. For server-side translation, use React context-based hooks like `useGT`.
+
+---
+
+## Example
+
+### Constants file
+
+```tsx
+// constants.ts
+import { t } from 'gt-react/browser';
+
+export const ERROR_MESSAGES = {
+  notFound: t('Page not found'),
+  unauthorized: t('You do not have permission to view this page'),
+  serverError: t('Something went wrong. Please try again later.'),
+};
+```
+
+### Router definitions
+
+```tsx
+// routes.ts
+import { t } from 'gt-react/browser';
+
+export const routes = [
+  { path: '/', label: t('Home') },
+  { path: '/dashboard', label: t('Dashboard') },
+  { path: '/settings', label: t('Settings') },
+];
+```
+
+---
+
+## Notes
+
+- `t()` is imported from `gt-react/browser`, not from `gt-react` directly.
+- Requires `bootstrap()` to be called before any module that uses `t()` is loaded.
+- **Experimental.** Does not yet integrate with `<GTProvider>` or other `gt-react` context-based features.
+- Switching locales requires a full page reload.
+
+## Dev log
+
+Read the full dev log for this feature: [gt-react@10.12.0](/devlog/gt-react_v10_12_0)
+
+## Next steps
+
+- See [`useGT`](/docs/react/api/strings/use-gt) for translating strings inside React components.
+- See [`msg`](/docs/react/api/strings/msg) for encoding strings for later translation.
