@@ -1,0 +1,86 @@
+---
+title: "gt-react: Module-Level Translations with t()"
+summary: "gt-react now supports a t() function for synchronous string translation outside React components — no hooks, no context, just imports."
+date: 2025-03-17
+authors: [default]
+tags: ['dev-log', 'gt-react', 'translations', 'react']
+layout: PostLayout
+---
+
+String translation in React has always been tied to the component tree. Need a translated string? Call a hook. Working outside a component — in a utility function, a constant, a config file? Too bad.
+
+**`gt-react` now exports a `t()` function that works at the module level.** No hooks, no context providers, no component boundaries. Import it, call it, get a translated string.
+
+```javascript copy
+import { t } from 'gt-react/browser';
+
+const label = t('Hello, world!');
+```
+
+## Why This Matters
+
+React hooks are great inside components. But real applications have translation needs that live outside the render tree:
+
+- **Constants and config objects** — error messages, form validation strings, route labels
+- **Utility functions** — formatters, helpers, anything that isn't a component
+- **Event handlers and callbacks** — where calling a hook isn't an option
+
+Previously, translating these strings meant either threading a translation function down from a component or restructuring your code around the hook constraint. `t()` removes that friction entirely.
+
+## How It Works
+
+`t()` resolves translations synchronously from a pre-loaded cache. Before your app renders, you call `bootstrap()` to initialize GT and load translations for the current locale:
+
+```javascript copy
+// main.tsx (or your entry point)
+import { bootstrap } from 'gt-react/browser';
+import gtConfig from '../gt.config.json';
+
+function getTranslations(locale: string) {
+  return import(`./_gt/${locale}.json`);
+}
+
+await bootstrap({
+  ...gtConfig,
+  getTranslations,
+});
+
+await import('./App.tsx');
+```
+
+Once bootstrapped, `t()` calls are instant — no async, no loading states, no suspense boundaries.
+
+```javascript copy
+import { t } from 'gt-react/browser';
+
+// Works anywhere — components, utilities, constants
+export const ERROR_MESSAGES = {
+  required: t('This field is required'),
+  tooLong: t('Must be under {max} characters', { max: 100 }),
+};
+```
+
+## Variables
+
+`t()` supports inline variables, just like other GT translation functions:
+
+```javascript copy
+t('Hello, {name}!', { name: 'John' }); // → "Hello, John!" (or translated equivalent)
+```
+
+## Browser Only
+
+`t()` is exported from `gt-react/browser` — it's designed for client-side React apps. On the server, it falls back to the source string with a console warning. This is intentional: synchronous translation resolution depends on a pre-loaded cache that only exists in the browser.
+
+For server-side string translation, use `getGT()`. For component-level translation with hooks, use `useGT()`. `t()` fills the gap for everything else on the client.
+
+## Getting Started
+
+1. Update `gt-react` to the latest version
+2. Set up `bootstrap()` in your app's entry point
+3. Import `t` from `gt-react/browser` wherever you need module-level translations
+4. Run `npx gtx-cli` — the CLI now extracts `t()` calls alongside `msg()` for translation
+
+---
+
+This is part of a broader effort to make `gt-react` work naturally outside the Next.js/server-component paradigm — for Vite apps, Create React App, and any client-rendered React setup. More to come.
