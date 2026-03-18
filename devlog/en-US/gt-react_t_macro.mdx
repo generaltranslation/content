@@ -1,0 +1,97 @@
+---
+title: "gt-react: t macro"
+date: 2026-03-18
+authors: [ernest]
+tags: ['gt-react', 'compiler', 'macro', 'tagged-template', 'developer-experience', 'i18n']
+---
+
+## Overview
+
+`gt-react` now supports a `t` macro — a tagged template literal that lets you write translated strings as plain JavaScript template literals instead of ICU-formatted function calls.
+
+```jsx
+// Before
+const gt = useGT();
+gt("Hello, {name}!", { name })
+
+// After
+t`Hello, ${name}!`
+```
+
+The GT compiler transforms the tagged template into a standard `t()` call at build time. No runtime overhead, no new APIs to learn — just template literals.
+
+## What changed
+
+### Macro expansion (compiler)
+
+A new **macro expansion pass** (Pass 0) runs before the existing collection and injection passes. It handles three syntactic forms:
+
+| Syntax | Example |
+|--------|---------|
+| Tagged template | `` t`Hello, ${name}` `` |
+| Template literal argument | `` t(`Hello, ${name}`) `` |
+| String concatenation | `t("Hello, " + name)` |
+
+All three are normalized to:
+
+```js
+t("Hello, {0}", { "0": name })
+```
+
+The compiler also auto-injects `import { t } from 'gt-react/browser'` when `t` is used as a macro but not already imported from a GT source.
+
+### No React context required
+
+The `t` function exported from `gt-react/browser` doesn't depend on React context. Unlike `useGT()`, it works anywhere JavaScript runs on the client:
+
+- Event handlers
+- Utility functions
+- Constants and config objects
+- Outside React components entirely
+
+This is the architectural shift: translations become a string concern, not a React concern.
+
+### Global registration
+
+Instead of importing `t` in every file, you can register it globally:
+
+```js
+// In your app's entry point (e.g., layout.tsx)
+import "gt-react/macros";
+```
+
+This sets `globalThis.t`, making the tagged template available everywhere. The compiler detects whether `t` is already imported from a GT source and won't inject a duplicate import.
+
+## Example
+
+```jsx
+import { t } from "gt-react/browser";
+
+export function Greeting({ name }) {
+  return <p>{t`Hello, ${name}!`}</p>;
+}
+
+export function SaveButton() {
+  return (
+    <button onClick={() => alert(t`Changes saved!`)}>
+      {t`Save`}
+    </button>
+  );
+}
+```
+
+Or with global registration:
+
+```jsx
+// No import needed — t is on globalThis
+const LABELS = {
+  save: t`Save`,
+  cancel: t`Cancel`,
+  delete: t`Delete`,
+};
+```
+
+## Links
+
+- [PR #1118](https://github.com/generaltranslation/gt/pull/1118)
+- [`gt-react` documentation](/docs/react)
