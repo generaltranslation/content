@@ -2,63 +2,52 @@
 title: gt-react@10.15.0
 date: 2026-03-18
 authors: [ernest]
-tags: ['gt-react', 'compiler', 'derive', 'macro', 'tagged-template', 'i18n']
+tags: ['gt-react', 'derive', 'tagged-template', 'i18n']
 ---
 
 ## Overview
 
-`derive()` now works inside tagged template literals. Previously, `derive()` could only be used inside `t()` function calls. Now you can write:
+`derive()` now works inside the `t` tagged template literal. Previously, `derive()` could only be used inside `t()` function calls:
+
+```jsx
+t("The {subject} is playing.", { subject: derive(getSubject(gender)) })
+```
+
+Now you can write it directly in a template literal:
+
+```jsx
+t`The ${derive(getSubject(gender))} is playing.`
+```
+
+## How it works
+
+`derive()` tells the compiler to analyze all possible return values of a function and create a separate translation entry for each one. This preserves grammatical agreement across languages — for example, in Spanish, "The boy is playing" and "The girl is playing" require different articles (*El niño* vs *La niña*).
+
+Inside a tagged template, `derive()` calls are preserved as live expressions in the compiled output, while regular variables become `{n}` placeholders as usual:
+
+```jsx
+// derive is preserved, name becomes a placeholder
+t`${derive(getSubject(gender))}, meet ${name}!`
+```
+
+## Example
 
 ```jsx
 import { t } from "gt-react/browser";
 import { derive } from "gt-react";
 
-const label = t`Price: ${derive(price, { usd: "US Dollars", eur: "Euros" })}`;
+function getSubject(gender) {
+  return gender === "male" ? "boy" : "girl";
+}
+
+function Component({ gender }) {
+  return <p>{t`The ${derive(getSubject(gender))} is playing.`}</p>;
+}
 ```
 
-The compiler recognizes `derive()` calls inside template expressions and preserves them as live expressions in the output, rather than collapsing them into `{n}` placeholders.
-
-## What changed
-
-### Compiler pipeline
-
-The macro-expansion pass now uses a three-stage pipeline for processing template literals and string concatenation:
-
-1. **`flattenExpressionToParts`** — recursively decomposes each expression into static, dynamic, or derive parts
-2. **`mergeAdjacentStaticParts`** — collapses consecutive static parts into single strings
-3. **`buildTransformResult`** — converts the merged parts into the final AST node
-
-This replaces the previous approach of assigning one `{n}` placeholder per expression. The new pipeline can distinguish between a regular variable (which becomes `{n}`) and a `derive()` call (which stays as a template expression).
-
-### CLI scanner
-
-The CLI's `handleDerivation` function now accepts a `runtimeInterpolationState` parameter. When scanning tagged template literals, non-derive dynamic values are assigned `{n}` placeholders, while `derive()` calls are fully resolved with their variant maps and UUIDs.
-
-### Runtime
-
-The `t` function gained a `handleTaggedTemplateLiteralTranslation` path. In development mode, it first tries looking up the fully-interpolated string (with derive values resolved) before falling back to the placeholder-based path. This ensures derive-resolved catalog keys work correctly during development.
-
-## Before and after
-
-```jsx
-// Before — derive only worked in t() calls
-t("Price: {price}", { price: derive(amount, { usd: "US Dollars", eur: "Euros" }) })
-
-// After — derive works in tagged templates too
-t`Price: ${derive(amount, { usd: "US Dollars", eur: "Euros" })}`
-```
-
-Both forms produce the same translation behavior. The tagged template version is more natural to write — you don't need to name placeholders or pass an options object.
-
-## Concatenation flattening
-
-As part of this change, `+` binary expressions inside template literals are now recursively flattened. This means:
-
-```jsx
-t`Result: ${a + b}`
-```
-
-produces the catalog key `"Result: {0}{1}"` with two separate variables, rather than the previous `"Result: {0}"` with one combined variable. This is intentional — it allows the compiler to detect `derive()` calls nested inside concatenation — but it does change catalog keys for existing translations that use `+` inside template expressions.
+This creates two translation entries:
+- "The boy is playing."
+- "The girl is playing."
 
 ## Links
 
