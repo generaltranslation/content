@@ -1,0 +1,93 @@
+---
+title: gt@2.11.0
+date: 2026-03-18
+authors: [fernando]
+tags: ['gt-cli', 'cdn', 'publish', 'files', 'json', 'mdx', 'yaml', 'i18n']
+---
+
+## Overview
+
+The GT CLI can now publish **any translated file type** to the GT CDN — not just GT's internal JSON format (`.gt.json`). JSON, MDX, YAML, and all other [supported file types](/docs/cli/formats/json) can now be published directly from the `translate`, `upload`, and `save-local` commands.
+
+Previously, CDN publishing was limited to GT's internal translation format. If you were translating standard JSON, YAML, or MDX files for a third-party i18n library, those translations could only be saved locally. Now you can serve them from the GT CDN too.
+
+## Configuration
+
+### Global publish flag
+
+Add `--publish` to any supported command:
+
+```bash
+npx gt translate --publish
+```
+
+Or set it in `gt.config.json`:
+
+```json title="gt.config.json"
+{
+  "publish": true
+}
+```
+
+This publishes **all** translated files (including GT JSON) to the CDN.
+
+### Per-file publish control
+
+You can opt individual files in or out using the `include` pattern syntax. Instead of a plain glob string, use an object with a `publish` flag:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "es"],
+  "files": {
+    "json": {
+      "include": [
+        { "pattern": "locales/[locale]/*.json", "publish": true },
+        { "pattern": "locales/[locale]/internal/**/*.json", "publish": false }
+      ]
+    }
+  }
+}
+```
+
+In this example, all JSON files under `locales/[locale]/` are published to the CDN, except files under the `internal/` subdirectory.
+
+### GT JSON publish control
+
+GT's internal format (`.gt.json`) has its own publish flag under the `gt` key:
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "output": "public/i18n/[locale].json",
+      "publish": true
+    }
+  }
+}
+```
+
+### Resolution order
+
+For any given file, the CLI resolves publish intent in this order:
+
+1. **Explicit opt-out** — file matches an `include` entry with `"publish": false` → not published
+2. **Explicit opt-in** — file matches an `include` entry with `"publish": true` → published
+3. **Global fallback** — uses the top-level `publish` setting (defaults to `false` if unset)
+
+If no publish configuration is set at any level, the publish step is skipped entirely — no API calls are made.
+
+## Commands that support publishing
+
+| Command | Behavior |
+|---------|----------|
+| `gt translate` | Publishes after downloading translations |
+| `gt upload` | Publishes after uploading source files |
+| `gt save-local` | Publishes after saving local edits |
+
+## Links
+
+- [CLI config reference](/docs/cli/reference/config)
+- [PR #1122](https://github.com/generaltranslation/gt/pull/1122) — initial file publish support
+- [PR #1132](https://github.com/generaltranslation/gt/pull/1132) — opt-in fix
+- [PR #1133](https://github.com/generaltranslation/gt/pull/1133) — publish on save/upload

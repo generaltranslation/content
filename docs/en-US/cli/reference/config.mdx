@@ -20,6 +20,8 @@ The `gt.config.json` file accepts the following properties, but is not limited t
 
 - `files`: This is an object that contains information about the content you want to translate.
 
+- `publish`: An optional boolean flag. When `true`, translated files are published to the GT CDN after running `translate`, `upload`, or `save-local`. Defaults to `false` (no publishing). Can also be set per-command with `--publish`. See [CDN publishing](#cdn-publishing) for details.
+
 - `stageTranslations`: An optional boolean flag that indicates whether your project is configured to use human review.
 
 - `src`: An optional array of file glob patterns for your source files. By default, set to:
@@ -562,6 +564,74 @@ All files in the `content/docs/en/exclude` directory will be ignored.
 This configuration will tell the CLI tool to search for all Twilio Content JSON files under the `twilio/en` directory and save the translated files to the `twilio/es` and `twilio/fr` directories.
 
 Twilio Content JSON files are structured templates used by [Twilio's Content Template Builder](https://www.twilio.com/docs/content) for WhatsApp, SMS, and RCS messaging. The CLI translates the user-facing string values (body text, button labels, card titles) while preserving the template structure, variable placeholders, and non-translatable fields.
+
+---
+
+## CDN publishing [#cdn-publishing]
+
+By default, the CLI does not publish translated files to the GT CDN. You can enable publishing globally, per-file, or per-command.
+
+### Global publish flag
+
+Set `publish` at the top level to publish **all** translated files to the CDN:
+
+```json title="gt.config.json"
+{
+  "publish": true
+}
+```
+
+You can also pass `--publish` to the `translate`, `upload`, or `save-local` commands:
+
+```bash
+npx gt translate --publish
+```
+
+### GT JSON publish flag
+
+To publish only GT's internal translation format (`.gt.json`), use the `publish` key under `files.gt`:
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "output": "public/i18n/[locale].json",
+      "publish": true
+    }
+  }
+}
+```
+
+### Per-file publish control
+
+For other file types (`json`, `yaml`, `mdx`, `md`, `po`, `xliff`, `csv`, `properties`), you can control publishing per-file by using an object in the `include` array instead of a plain glob string:
+
+```json title="gt.config.json"
+{
+  "files": {
+    "json": {
+      "include": [
+        { "pattern": "locales/[locale]/*.json", "publish": true },
+        { "pattern": "locales/[locale]/internal/**/*.json", "publish": false }
+      ]
+    }
+  }
+}
+```
+
+Each entry in `include` can be either:
+- A **string** — a glob pattern (no publish preference; uses the global `publish` setting)
+- An **object** with `pattern` (glob) and `publish` (boolean) — explicitly opts the matched files in or out
+
+### Resolution order
+
+For any given file, the CLI resolves whether to publish in this order:
+
+1. **Explicit opt-out** — file matches an include entry with `"publish": false` → not published
+2. **Explicit opt-in** — file matches an include entry with `"publish": true` → published
+3. **Global fallback** — uses the top-level `publish` setting (defaults to `false` if unset)
+
+If no publish configuration exists at any level, the publish step is skipped entirely.
 
 ---
 
