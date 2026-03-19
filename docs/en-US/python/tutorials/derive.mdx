@@ -1,0 +1,115 @@
+---
+title: Using derive
+description: How to use derive for word agreement, reusable content, and static analysis
+---
+
+## What is `derive`?
+
+[`derive`](/docs/python/api/derive) is an identity function that marks content for the GT CLI's static analysis. When the CLI scans your code, it recognizes `derive(...)` calls and determines all possible return values, creating a separate translation entry for each.
+
+This is useful for:
+- Preserving **word agreement** across languages (gender, plurality, case)
+- **Reusable content** with function calls inside translated strings
+- **Fragmented sentences** where part of the string has a known set of outcomes
+
+---
+
+## Preserving word agreement
+
+Languages have grammatical rules (gender, plurality, case) that affect surrounding words. Without `derive`, a single translation entry can't handle agreement:
+
+```python
+# Without derive — one translation, no agreement possible
+message = t(f"The {get_subject(gender)} is playing.")
+# "The boy is playing." and "The girl is playing." share one translation
+```
+
+With `derive`, the CLI creates separate entries for each outcome:
+
+```python
+from gt_flask import derive, t
+
+def get_subject(gender: str) -> str:
+    return "boy" if gender == "male" else "girl"
+
+message = t(f"The {derive(get_subject(gender))} is playing.")
+```
+
+This produces two translation entries:
+- `"The boy is playing."` → `"El niño está jugando."`
+- `"The girl is playing."` → `"La niña está jugando."`
+
+Notice how Spanish uses "El" vs "La" depending on the subject — agreement is handled automatically.
+
+---
+
+## How it works
+
+1. **At build time**, the GT CLI analyzes expressions wrapped by `derive`
+2. It determines all possible return values (these must be statically analyzable)
+3. It creates separate translation entries for each unique outcome
+4. **At runtime**, `derive` is just an identity function — it returns its argument unchanged
+
+---
+
+## Examples
+
+### Inline expressions
+
+You can embed logic directly inside `derive`:
+
+```python
+from gt_flask import derive, t
+
+message = t(f"The {derive('boy' if gender == 'male' else 'girl')} is playing.")
+```
+
+### Function calls
+
+Wrap function calls that have a known set of return values:
+
+```python
+from gt_flask import derive, t
+
+def get_status_label(status: str) -> str:
+    if status == "complete":
+        return "completed"
+    elif status == "pending":
+        return "pending"
+    return "unknown"
+
+message = t(f"Task is {derive(get_status_label(status))}.")
+```
+
+### Reusable content
+
+```python
+from gt_flask import derive, t
+
+def get_subject() -> str:
+    return "boy"
+
+translation1 = t(f"The {derive(get_subject())} is playing.")
+translation2 = t(f"The {derive(get_subject())} is having fun.")
+```
+
+### With `declare_var`
+
+Combine `derive` with [`declare_var`](/docs/python/api/declare-var) when you need dynamic content inside a static expression:
+
+```python
+from gt_flask import derive, declare_var, t
+
+def get_greeting(name: str | None) -> str:
+    if name:
+        return f"Hello, {declare_var(name, name='user')}"
+    return "Hello, stranger"
+
+message = t(f"{derive(get_greeting(name))}! How are you?")
+```
+
+---
+
+## Performance considerations
+
+`derive` multiplies translation entries. Each call with N possible outcomes creates N entries, and multiple `derive` calls in the same string multiply exponentially. Use judiciously.
