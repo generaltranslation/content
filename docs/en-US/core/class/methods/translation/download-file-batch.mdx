@@ -39,6 +39,7 @@ type DownloadFileBatchRequest = {
   branchId?: string;
   locale?: string;
   versionId?: string;
+  useLatestAvailableVersion?: boolean;
 }[];
 ```
 
@@ -48,6 +49,7 @@ type DownloadFileBatchRequest = {
 | `branchId?` | `string` | Branch ID to download from. If not provided, the default branch will be used |
 | `locale?` | `string` | Target locale for the translation. If not provided, the source file will be downloaded |
 | `versionId?` | `string` | Version ID to download. If not provided, the latest version will be used |
+| `useLatestAvailableVersion?` | `boolean` | If `true` and the specified `versionId` is not found, falls back to the latest available version instead of failing. Defaults to `false` |
 
 #### DownloadFileBatchOptions
 
@@ -130,27 +132,10 @@ const enqueueResult = await gt.enqueueFiles(
 
 // (4) Wait for all translations to be completed
 const { fileId, versionId, branchId } = uploadedFiles[0];
-const translatedFileQueries = targetLocales.map((locale) => ({
-  fileId,
-  versionId,
-  branchId,
-  locale
-}));
+const result = await gt.awaitJobs(enqueueResult);
 
-while (true) {
-  const result = await gt.queryFileData({
-    translatedFiles: translatedFileQueries
-  });
-
-  const allCompleted = result.translatedFiles?.every(
-    (file) => file.status === 'completed'
-  );
-
-  if (allCompleted) {
-    break;
-  }
-
-  await new Promise(resolve => setTimeout(resolve, 1000));
+if (!result.complete) {
+  console.error('Some jobs did not finish in time');
 }
 
 // (5) Download all translations in a batch

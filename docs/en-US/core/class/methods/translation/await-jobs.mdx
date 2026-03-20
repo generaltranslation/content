@@ -1,0 +1,130 @@
+---
+title: awaitJobs
+description: API reference for the awaitJobs method to poll and wait for translation jobs to complete
+---
+
+## Overview
+
+The `awaitJobs` method polls the status of translation jobs and resolves when all jobs have reached a terminal state (`completed`, `failed`, or `unknown`) or a timeout is reached. This is a convenience wrapper around [`checkJobStatus`](/docs/core/class/methods/translation/check-job-status) that handles polling automatically.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: ['es', 'fr'],
+});
+
+const result = await gt.awaitJobs(enqueueResult);
+
+if (result.complete) {
+  console.log('All jobs finished');
+} else {
+  console.log('Timed out — some jobs still in progress');
+}
+```
+
+<Callout type="warning">
+  `complete: true` means all jobs reached a terminal state — it does **not** mean all jobs succeeded. Check individual `job.status` values to confirm success.
+</Callout>
+
+## Reference
+
+### Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| `enqueueResult` | [`EnqueueFilesResult`](/docs/core/types/enqueue-files-options) | The result object returned by [`enqueueFiles`](/docs/core/class/methods/translation/enqueue-files) |
+| `options?` | `AwaitJobsOptions` | Optional polling configuration |
+
+#### AwaitJobsOptions
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `pollingIntervalSeconds?` | `number` | `5` | How often to poll for status updates |
+| `timeoutSeconds?` | `number` | `600` (10 min) | Maximum time to wait before resolving with current statuses |
+
+### Returns
+
+`Promise<AwaitJobsResult>`
+
+```typescript
+type AwaitJobsResult = {
+  /** Whether all jobs reached a terminal state (not necessarily success). */
+  complete: boolean;
+  jobs: JobResult[];
+};
+
+type JobResult = {
+  jobId: string;
+  status: JobStatus;
+  error?: { message: string };
+};
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `complete` | `boolean` | `true` if no jobs are still in progress; `false` if the timeout was reached |
+| `jobs` | `JobResult[]` | Final status of each job |
+| `jobs[].jobId` | `string` | The job identifier |
+| `jobs[].status` | [`JobStatus`](/docs/core/class/methods/translation/check-job-status#jobstatus) | Terminal status: `'completed'`, `'failed'`, or `'unknown'` |
+| `jobs[].error?` | `{ message: string }` | Error details if the job failed |
+
+---
+
+## Example
+
+### Enqueue and wait for translations
+
+```typescript title="index.ts" copy
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// Upload and enqueue
+const { uploadedFiles } = await gt.uploadSourceFiles(files, {
+  sourceLocale: 'en',
+});
+
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: ['es', 'fr', 'de'],
+});
+
+// Wait for all jobs to finish (polls every 10s, times out after 5 min)
+const result = await gt.awaitJobs(enqueueResult, {
+  pollingIntervalSeconds: 10,
+  timeoutSeconds: 300,
+});
+
+if (!result.complete) {
+  console.warn('Some jobs did not finish in time');
+}
+
+// Check individual results
+for (const job of result.jobs) {
+  if (job.status === 'completed') {
+    console.log(`Job ${job.jobId} succeeded`);
+  } else if (job.status === 'failed') {
+    console.error(`Job ${job.jobId} failed: ${job.error?.message}`);
+  }
+}
+```
+
+---
+
+## Notes
+
+* Replaces manual polling loops — no need to call `checkJobStatus` in a `while` loop yourself
+* Jobs that are not found by the API are treated as `'unknown'` status
+* If `enqueueResult` contains no jobs, the method resolves immediately with `{ complete: true, jobs: [] }`
+* The timeout is a best-effort limit — the method will finish the current poll before resolving
+
+## Next steps
+
+* See [`enqueueFiles`](/docs/core/class/methods/translation/enqueue-files) to start translation jobs
+* See [`checkJobStatus`](/docs/core/class/methods/translation/check-job-status) for manual status polling
+* See [`downloadFile`](/docs/core/class/methods/translation/download-file) to download completed translations
