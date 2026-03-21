@@ -49,6 +49,7 @@ const sourceContent = await gt.downloadFile({
 | `branchId?` | `string` | Branch ID to download from. If not provided, the default branch will be used |
 | `locale?` | `string` | Target locale of the translation to download. If not provided, the source file will be downloaded |
 | `versionId?` | `string` | Optional version ID for the file. If not provided, the latest version will be used |
+| `useLatestAvailableVersion?` | `boolean` | If `true` and the specified `versionId` is not found, falls back to the latest available version instead of failing. Defaults to `false` |
 
 #### DownloadFileOptions
 
@@ -98,27 +99,10 @@ const enqueueResult = await gt.enqueueFiles(
 
 // (4) Wait for all translations to be completed
 const { fileId, versionId, branchId } = uploadedFiles[0];
-const translatedFileQueries = targetLocales.map((locale) => ({
-  fileId,
-  versionId,
-  branchId,
-  locale
-}));
+const result = await gt.awaitJobs(enqueueResult);
 
-while (true) {
-  const result = await gt.queryFileData({
-    translatedFiles: translatedFileQueries
-  });
-
-  const allCompleted = result.translatedFiles?.every(
-    (file) => file.status === 'completed'
-  );
-
-  if (allCompleted) {
-    break;
-  }
-
-  await new Promise(resolve => setTimeout(resolve, 1000));
+if (!result.complete) {
+  console.error('Some jobs did not finish in time');
 }
 
 // (5) Download a single file
@@ -147,3 +131,4 @@ console.log('Spanish translation:', spanishContent);
 * See [`downloadFileBatch`](/docs/core/class/methods/translation/download-file-batch) to download multiple files efficiently
 * See [`uploadSourceFiles`](/docs/core/class/methods/translation/upload-source-files) for the file upload process
 * See [`enqueueFiles`](/docs/core/class/methods/translation/enqueue-files) to start translation jobs
+* See [`awaitJobs`](/docs/core/class/methods/translation/await-jobs) to wait for jobs to complete before downloading
