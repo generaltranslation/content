@@ -15,6 +15,10 @@ The date or time is formatted according to the current locale and any optional p
 
 All formatting is handled locally using the [`Intl.DateTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) library.
 
+<Callout type="warn">
+  `<DateTime>` can cause **React hydration errors** in server-rendered apps. See [Avoiding hydration errors](#avoiding-hydration-errors) below.
+</Callout>
+
 ## Reference
 
 ### Props
@@ -127,6 +131,35 @@ export default function EventDate(event) {
 ```
 
 ---
+
+## Avoiding hydration errors
+
+Because `<DateTime>` formats dates locally using `Intl.DateTimeFormat`, it can produce **different output on the server and client**. When React compares the server-rendered HTML to the client render and they don't match, you get a hydration error.
+
+This typically happens when:
+
+- **No explicit `timeZone` is set.** The server may run in UTC (or another zone), while the user's browser uses their local time zone. A timestamp like `1738010355` could render as `"1/27/2025"` on the server but `"1/28/2025"` on the client if the time zones differ.
+- **The default locale differs between environments.** If the server's default locale doesn't match the client's, the formatted string may differ (e.g. `"27/01/2025"` vs `"1/27/2025"`).
+
+### How to fix it
+
+**Set an explicit `timeZone` in `options`** to ensure consistent output:
+
+```jsx
+<DateTime options={{ timeZone: 'America/New_York' }}>
+  {event.date}
+</DateTime>
+```
+
+**Specify explicit `locales`** to avoid locale mismatches:
+
+```jsx
+<DateTime locales={['en-US']} options={{ timeZone: 'UTC' }}>
+  {event.date}
+</DateTime>
+```
+
+By pinning both the locale and time zone, the server and client will always produce the same formatted string.
 
 ## Notes
  * The `<DateTime>` component is a variable component that can be used to format date and time values.
