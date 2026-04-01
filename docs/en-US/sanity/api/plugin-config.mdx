@@ -19,7 +19,13 @@ gtPlugin(config: GTPluginConfig)
   type={{
     sourceLocale: {
       type: 'string',
-      description: 'Source language code (e.g., "en")',
+      description: 'Source language code (e.g., "en"). Falls back to defaultLocale if not provided.',
+      optional: true,
+    },
+    defaultLocale: {
+      type: 'string',
+      description: 'Alias for sourceLocale. Accepted so you can spread gt.config.json directly. sourceLocale takes precedence if both are set.',
+      optional: true,
     },
     locales: { type: 'string[]', description: 'Array of target locale codes' },
     apiKey: {
@@ -50,7 +56,12 @@ gtPlugin(config: GTPluginConfig)
     },
     ignoreFields: {
       type: 'IgnoreFields[]',
-      description: 'Fields to exclude from translation',
+      description: 'Fields to exclude from translation. Matched fields are stripped before serialization and restored from the source document after translation.',
+      optional: true,
+    },
+    skipFields: {
+      type: 'SkipFields[]',
+      description: 'Fields to remove entirely from translated documents. Unlike ignoreFields, these fields will not appear on the translated document at all.',
       optional: true,
     },
     translateDocuments: {
@@ -94,7 +105,7 @@ gtPlugin(config: GTPluginConfig)
 
 ## IgnoreFields
 
-Configure fields to exclude from translation:
+Fields that are not translated or sent to the API, but are copied over from the source document to the translation. Use this for fields like categories, tags, or internal metadata that should have the same value across all languages.
 
 ```typescript
 type IgnoreFields = {
@@ -113,14 +124,48 @@ gtPlugin({
   sourceLocale: 'en',
   locales: ['es'],
   ignoreFields: [
-    // Ignore slug on all documents
+    // Copy category as-is to all translated documents
     {
-      fields: [{ property: 'slug' }],
+      fields: [{ property: '$.category' }],
     },
-    // Ignore specific fields on document with id 'article'
+    // Copy these fields as-is only for articles
     {
       documentId: 'article',
-      fields: [{ property: 'internalNotes' }, { property: 'canonical' }],
+      fields: [{ property: '$.tags' }, { property: '$.author' }],
+    },
+  ],
+});
+```
+
+## SkipFields
+
+Fields that are removed entirely from translated documents. Unlike `ignoreFields`, these fields will not appear on translations at all. Use this for fields like unique document slugs, SEO canonical URLs, or source-only metadata that should either be set independently per language or only exist on the source.
+
+```typescript
+type SkipFields = {
+  documentId?: string;
+  fields?: Array<{
+    property: string;
+    type?: string;
+  }>;
+};
+```
+
+### Example
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  skipFields: [
+    // Slugs should be unique per language, don't copy from source
+    {
+      fields: [{ property: '$.slug', type: 'slug' }],
+    },
+    // Remove source-only debug data from homepage translations
+    {
+      documentId: 'homepage',
+      fields: [{ property: '$.debugInfo' }],
     },
   ],
 });
@@ -227,6 +272,7 @@ export default defineConfig({
       // Filtering
       translateDocuments: [{ type: 'article' }, { type: 'page' }],
       ignoreFields: [{ fields: [{ property: 'slug' }] }],
+      skipFields: [{ fields: [{ property: '$.internalNotes' }] }],
 
       // Serialization - Do not use this unless you know what you are doing!
       additionalSerializers: {

@@ -1,0 +1,95 @@
+---
+title: gt-sanity@2.0.0
+date: 2026-04-01
+authors: [brian]
+tags: ['gt-sanity', 'v2.0.0', 'sanity', 'cms', 'translation', 'major']
+---
+
+## Overview
+
+`gt-sanity` v2 is a major release that upgrades the plugin to support Sanity v5 and React 19, simplifies setup with a zero-config translate dialog, and adds new options for controlling which fields appear on translated documents.
+
+---
+
+## What's new
+
+### Simpler setup: Translate dialog
+
+The biggest change in v2 is how developers interact with the translation UI. Previously, you had to configure `structureTool` with a custom `defaultDocumentNode` to add a Translations tab to your documents. Now, the plugin automatically adds a **Translate** action to every document — clicking it opens a dialog with the full translation UI.
+
+This means the minimal setup is just two steps: install the plugin and add it to your config.
+
+```typescript title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { gtPlugin } from 'gt-sanity';
+
+export default defineConfig({
+  plugins: [
+    gtPlugin({
+      sourceLocale: 'en',
+      locales: ['es', 'zh', 'ja'],
+    }),
+  ],
+});
+```
+
+The `TranslationsTab` component is still exported for users who prefer a dedicated tab view, but it's now optional.
+
+### `defaultLocale` config option
+
+If you already have a `gt.config.json` from using `gt-next` or `gt-react`, you can now spread it directly into the plugin config. The `defaultLocale` field is accepted as an alias for `sourceLocale`:
+
+```typescript
+import gtConfig from './gt.config.json';
+
+gtPlugin({
+  ...gtConfig, // { defaultLocale: 'en', locales: ['es', 'zh', 'ja'] }
+});
+```
+
+If both `sourceLocale` and `defaultLocale` are provided, `sourceLocale` takes precedence.
+
+### `skipFields` option
+
+A new `skipFields` config option removes matched fields entirely from translated documents. This is different from `ignoreFields`, which copies the source document's value onto the translation — `skipFields` ensures the field doesn't appear on the translated document at all.
+
+Use `skipFields` for fields like unique document slugs, SEO canonical URLs, or source-only metadata that shouldn't be carried over to translations:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  skipFields: [
+    { fields: [{ property: '$.slug', type: 'slug' }] },
+    { fields: [{ property: '$.canonicalUrl' }] },
+  ],
+});
+```
+
+In contrast, `ignoreFields` is for fields you don't want translated but still want copied from the source — like categories, tags, or internal metadata that should have the same value across all languages.
+
+Like `ignoreFields`, you can scope skip rules to specific documents using `documentId`, and use [JSONPath](https://goessner.net/articles/JsonPath/) expressions for `property`.
+
+### Improved `ignoreFields` behavior
+
+In v1, ignored fields were only restored from the source document *after* translation — the content was still sent to the translation API. In v2, ignored fields are now stripped from the document **before** serialization, so ignored content is never sent to the API.
+
+---
+
+## Breaking changes
+
+### Sanity v5 and React 19
+
+`gt-sanity` v2 requires Sanity v5+ and React 19+. If you're still on Sanity v3 or v4, continue using `gt-sanity` v1.
+
+### Translations tab no longer auto-registered
+
+The plugin no longer registers a Translations tab view automatically. The Translate dialog replaces this as the default interaction model. If you still want a dedicated tab, you can add it manually — see the [quickstart](/docs/sanity/guides/quickstart#configuration).
+
+---
+
+## Links
+
+- [Quickstart](/docs/sanity/guides/quickstart)
+- [Configuration Guide](/docs/sanity/guides/configuration)
+- [API Reference](/docs/sanity/api/plugin-config)
