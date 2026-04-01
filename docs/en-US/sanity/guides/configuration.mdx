@@ -35,6 +35,20 @@ gtPlugin({
 });
 ```
 
+### Using `defaultLocale` from `gt.config.json`
+
+If you already have a `gt.config.json` (e.g. from using `gt-next` or `gt-react`), you can spread it directly into the plugin config. The `defaultLocale` field is accepted as an alias for `sourceLocale`:
+
+```typescript
+import gtConfig from './gt.config.json';
+
+gtPlugin({
+  ...gtConfig, // { defaultLocale: 'en', locales: ['es', 'zh', 'ja'] }
+});
+```
+
+If both `sourceLocale` and `defaultLocale` are provided, `sourceLocale` takes precedence.
+
 ### Language field
 
 Specify which field stores the document's locale. Defaults to `'language'`:
@@ -93,16 +107,17 @@ By default, translations for singletons will have randomly generated ids unless 
 
 ## Ignoring fields
 
-Exclude specific fields from translation:
+Fields you don't want translated or sent to the GT API, but that should still be copied over from the source document to the translation. Ignored fields are stripped before serialization (so the content is never sent to the API), then restored from the source document after the translated document is created.
+
+Use `ignoreFields` for fields like categories, tags, or internal metadata that should have the same value on both the source and translated documents but don't need translation:
 
 ```typescript
 gtPlugin({
   sourceLocale: 'en',
   locales: ['es', 'zh', 'ja'],
   ignoreFields: [
-    { fields: [{ property: '$.slug', type: 'slug' }] },
-    { fields: [{ property: '$.category' }] },
-    { fields: [{ property: '$..linkType' }] },
+    { fields: [{ property: '$.category' }] },       // same category across all languages
+    { fields: [{ property: '$..linkType' }] },       // internal link metadata
     { fields: [{ property: '$..frequencies.default' }] },
   ],
 });
@@ -110,6 +125,27 @@ gtPlugin({
 
 `property` is a [JSONPath](https://goessner.net/articles/JsonPath/) expression that matches one or more fields in documents.
 `type` is an optional parameter to further filter the fields to ignore to specific types.
+
+## Skipping fields
+
+Fields that shouldn't be automatically copied over to translated documents at all. Unlike `ignoreFields` (which preserves the source value on the translation), `skipFields` removes the matched fields entirely from the translated document.
+
+Use `skipFields` for fields like unique document slugs, SEO canonical URLs, or source-only metadata that should not exist on translations — either because they need to be set independently per language or because they only apply to the source:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  skipFields: [
+    { fields: [{ property: '$.slug', type: 'slug' }] },  // slugs should be unique per language
+    { fields: [{ property: '$.canonicalUrl' }] },         // only relevant on source
+    {
+      documentId: 'homepage',
+      fields: [{ property: '$.debugInfo' }],              // source-only debug data
+    },
+  ],
+});
+```
 
 ## Serialization options
 
@@ -138,8 +174,7 @@ See the [Serialization Guide](/docs/sanity/guides/serialization) for details.
 
 ```typescript title="sanity.config.ts"
 import { defineConfig } from 'sanity';
-import { structureTool } from 'sanity/structure';
-import { gtPlugin, TranslationsTab } from 'gt-sanity';
+import { gtPlugin } from 'gt-sanity';
 
 export default defineConfig({
   name: 'default',
@@ -148,19 +183,6 @@ export default defineConfig({
   dataset: 'production',
 
   plugins: [
-    structureTool({
-      defaultDocumentNode: (S, { schemaType }) => {
-        // Add translations tab to articles and pages
-        if (['article', 'page'].includes(schemaType)) {
-          return S.document().views([
-            S.view.form(),
-            S.view.component(TranslationsTab).title('General Translation'),
-          ]);
-        }
-        return S.document();
-      },
-    }),
-
     gtPlugin({
       sourceLocale: 'en',
       locales: ['es', 'fr', 'de', 'ja', 'zh'],
@@ -170,6 +192,11 @@ export default defineConfig({
       ignoreFields: [
         {
           fields: [{ property: 'slug' }, { property: 'publishedAt' }],
+        },
+      ],
+      skipFields: [
+        {
+          fields: [{ property: '$.internalNotes' }],
         },
       ],
     }),
