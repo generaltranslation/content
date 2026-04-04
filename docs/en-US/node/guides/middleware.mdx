@@ -1,0 +1,191 @@
+---
+title: Locale Detection & Middleware
+description: How to detect the user's locale and set it per request with withGT
+---
+
+Every translation function in `gt-node` needs to know which locale the current request is targeting. [`withGT`](/docs/node/api/with-gt) sets this context using async local storage — wrap your request handler, and all downstream translation calls automatically use the right locale.
+
+## How `withGT` works
+
+`withGT` takes a locale string and a callback. Inside that callback, [`getGT()`](/docs/node/api/get-gt), [`getMessages()`](/docs/node/api/get-messages), and [`getLocale()`](/docs/node/api/get-locale) all read from the locale you set:
+
+```js
+import { withGT, getLocale } from 'gt-node';
+
+app.use((req, res, next) => {
+  const locale = detectLocale(req);
+  withGT(locale, () => next());
+});
+```
+
+<Callout type="warn">
+  Translation functions called outside a `withGT` context will use the `defaultLocale`. Always wrap your request handling in `withGT`.
+</Callout>
+
+## Locale detection strategies
+
+### Accept-Language header
+
+The simplest approach — read the browser's language preference:
+
+```js
+function detectLocale(req) {
+  return req.headers['accept-language']?.split(',')[0] || 'en';
+}
+```
+
+### Cookie-based
+
+Persist the user's language choice across sessions:
+
+```js
+import cookieParser from 'cookie-parser';
+app.use(cookieParser());
+
+function detectLocale(req) {
+  return req.cookies.locale || 'en';
+}
+
+// Endpoint to set language preference
+app.post('/api/set-language', (req, res) => {
+  res.cookie('locale', req.body.locale, { maxAge: 365 * 24 * 60 * 60 * 1000 });
+  res.json({ ok: true });
+});
+```
+
+### URL parameter
+
+Extract locale from the URL path (e.g. `/es/api/greeting`):
+
+```js
+function detectLocale(req) {
+  const segments = req.path.split('/').filter(Boolean);
+  const supported = new Set(['es', 'fr', 'ja', 'de']);
+  if (segments[0] && supported.has(segments[0])) {
+    return segments[0];
+  }
+  return 'en';
+}
+```
+
+### Query parameter
+
+Use a `?lang=` query parameter:
+
+```js
+function detectLocale(req) {
+  return req.query.lang || 'en';
+}
+```
+
+## Chaining strategies
+
+In practice, you'll want to try multiple strategies in priority order:
+
+```js
+function detectLocale(req) {
+  // 1. Explicit query parameter (highest priority)
+  if (req.query.lang) return req.query.lang;
+
+  // 2. Cookie (user's saved preference)
+  if (req.cookies?.locale) return req.cookies.locale;
+
+  // 3. Accept-Language header (browser default)
+  const acceptLang = req.headers['accept-language']?.split(',')[0];
+  if (acceptLang) return acceptLang;
+
+  // 4. Default
+  return 'en';
+}
+```
+
+## Express middleware
+
+A complete Express middleware setup:
+
+```js title="middleware/locale.js"
+import { withGT } from 'gt-node';
+
+export function localeMiddleware(req, res, next) {
+  const locale =
+    req.query.lang ||
+    req.cookies?.locale ||
+    req.headers['accept-language']?.split(',')[0] ||
+    'en';
+
+  withGT(locale, () => next());
+}
+```
+
+```js title="server.js"
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import { initializeGT } from 'gt-node';
+import { localeMiddleware } from './middleware/locale.js';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr', 'ja'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const app = express();
+app.use(cookieParser());
+app.use(localeMiddleware);
+```
+
+## Fastify middleware
+
+The same pattern works with Fastify using a `preHandler` hook:
+
+```js title="server.js"
+import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
+import { initializeGT, withGT, getGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr', 'ja'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const app = Fastify();
+await app.register(cookie);
+
+app.addHook('preHandler', (req, reply, done) => {
+  const locale =
+    req.query.lang ||
+    req.cookies?.locale ||
+    req.headers['accept-language']?.split(',')[0] ||
+    'en';
+
+  withGT(locale, () => done());
+});
+
+app.get('/api/greeting', async (req, reply) => {
+  const gt = await getGT();
+  return { message: gt('Hello, world!') };
+});
+
+app.listen({ port: 3000 });
+```
+
+## Reading the current locale
+
+Use [`getLocale()`](/docs/node/api/get-locale) anywhere inside a `withGT` context to read back the resolved locale:
+
+```js
+import { getLocale } from 'gt-node';
+
+app.get('/api/info', async (req, res) => {
+  const locale = getLocale();
+  res.json({ currentLocale: locale });
+});
+```
+
+## Next steps
+
+- [`withGT` API reference](/docs/node/api/with-gt)
+- [`getLocale` API reference](/docs/node/api/get-locale)
+- [String Translation Patterns](/docs/node/guides/strings) — how to translate content
+- [Local Translation Storage](/docs/node/guides/local-tx) — bundle translations with your app

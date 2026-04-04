@@ -1,0 +1,117 @@
+---
+title: Error Handling & Fallbacks
+description: What happens when translations aren't available and how to handle it
+---
+
+## Default fallback behavior
+
+When a translation isn't available — whether the locale is unsupported, the translation file is missing, or the CDN is unreachable — `gt-node` returns the original string in your `defaultLocale`. Your app never crashes due to a missing translation.
+
+```js
+import { getGT } from 'gt-node';
+
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  // If Spanish translation isn't available, returns the English original
+  res.json({ message: gt('Hello, world!') });
+});
+```
+
+<Callout>
+  This fallback is automatic. You don't need to wrap translation calls in try/catch for missing translations.
+</Callout>
+
+## Missing locales
+
+If a request comes in for a locale you haven't configured in `locales`, the translation functions fall back to `defaultLocale`:
+
+```js
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'], // Japanese not included
+});
+
+// Request with Accept-Language: ja
+// gt('Hello!') → returns 'Hello!' (English fallback)
+```
+
+To support a new locale, add it to your `locales` array and regenerate translations:
+
+```bash
+npx gt translate
+```
+
+## Checking available locales
+
+Use [`getLocales()`](/docs/node/api/get-locales) and [`getDefaultLocale()`](/docs/node/api/get-default-locale) to inspect what's available at runtime:
+
+```js
+import { getLocales, getDefaultLocale } from 'gt-node';
+
+app.get('/api/locales', (req, res) => {
+  res.json({
+    supported: getLocales(),
+    default: getDefaultLocale(),
+  });
+});
+```
+
+## Handling translation in API responses
+
+When building APIs, you may want to explicitly indicate when content is in a fallback language:
+
+```js
+import { getGT, getLocale, getDefaultLocale } from 'gt-node';
+
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  const locale = getLocale();
+  const defaultLocale = getDefaultLocale();
+
+  res.json({
+    message: gt('Hello, world!'),
+    locale,
+    isFallback: locale !== defaultLocale && locale === defaultLocale,
+  });
+});
+```
+
+## Debugging translations
+
+### Check which locale is active
+
+```js
+import { getLocale } from 'gt-node';
+
+app.use((req, res, next) => {
+  console.log(`[i18n] Request locale: ${getLocale()}`);
+  next();
+});
+```
+
+### Verify translations are loaded
+
+In development, `gt-node` translates on-demand via the API. If translations seem missing:
+
+1. Confirm your `GT_API_KEY` and `GT_PROJECT_ID` are set
+2. Check that the locale is in your `locales` array
+3. Look for errors in your server logs
+
+### Production checklist
+
+Before deploying, verify:
+
+- [ ] `npx gt translate` runs successfully in your build script
+- [ ] All target locales are listed in `gt.config.json`
+- [ ] `GT_PROJECT_ID` is set in production environment
+- [ ] `GT_API_KEY` is set in production environment (for `npx gt translate`)
+
+<Callout type="warn">
+  In development, translations happen on-demand and may be slow. In production, always pre-generate translations with `npx gt translate` — see the [CLI docs](/docs/cli/translate).
+</Callout>
+
+## Next steps
+
+- [String Translation Patterns](/docs/node/guides/strings) — the two translation approaches
+- [Local Translation Storage](/docs/node/guides/local-tx) — bundle translations for offline use
+- [`getLocale` API reference](/docs/node/api/get-locale)

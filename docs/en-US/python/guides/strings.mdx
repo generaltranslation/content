@@ -1,0 +1,124 @@
+---
+title: String Translation Patterns
+description: Translating strings in Python with t(), msg(), variables, and derive()
+---
+
+There are two ways to translate strings in GT's Python libraries:
+
+1. **Inline with `t()`** — translate strings directly in your route handlers
+2. **Pre-registered with `msg()`** — define strings at module scope, resolve at runtime
+
+## Inline translation with `t()`
+
+Use [`t()`](/docs/python/api/t) to translate a string in the current request's locale:
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+  ```python
+  from gt_flask import t
+
+  @app.route('/api/greeting')
+  def greeting():
+      return { 'message': t('Hello, world!') }
+  ```
+  </Tab>
+  <Tab value="FastAPI">
+  ```python
+  from gt_fastapi import t
+
+  @app.get('/api/greeting')
+  def greeting():
+      return { 'message': t('Hello, world!') }
+  ```
+  </Tab>
+</Tabs>
+
+## Pre-registered strings with `msg()`
+
+Use [`msg()`](/docs/python/api/t) to register strings at module scope, then call them in handlers:
+
+```python title="messages.py"
+from gt_flask import msg  # or gt_fastapi
+
+GREETING = msg('Hello, world!')
+WELCOME = msg('Welcome, {name}!')
+NOT_FOUND = msg('Resource not found.')
+```
+
+```python title="routes.py"
+from messages import GREETING, WELCOME, NOT_FOUND
+
+@app.route('/api/greeting')
+def greeting():
+    return {
+        'greeting': GREETING(),
+        'welcome': WELCOME(name='Alice'),
+    }
+
+@app.errorhandler(404)
+def not_found(e):
+    return { 'error': NOT_FOUND() }, 404
+```
+
+<Callout>
+  Both `t()` and `msg()` produce identical translations. Use `msg()` when the same string appears in multiple places or when you want all strings in one file.
+</Callout>
+
+## Variable interpolation
+
+### With `t()`
+
+Use `{name}` placeholders and pass values as keyword arguments:
+
+```python
+t('Welcome, {name}!', name=user.display_name)
+t('You have {count} new messages.', count=unread_count)
+```
+
+### With `declare_var()` and `decode_vars()`
+
+For more control over variable handling, use [`declare_var()`](/docs/python/api/declare-var) and [`decode_vars()`](/docs/python/api/decode-vars):
+
+```python
+from gt_flask import declare_var, decode_vars
+
+template = t('Hello, {name}! You have {count} items.')
+result = decode_vars(template, {
+    'name': declare_var('name', 'Guest'),
+    'count': declare_var('count', 0),
+})
+```
+
+## Using `derive()` for word agreement
+
+[`derive()`](/docs/python/api/derive) generates grammatically correct variants — useful for languages where words change form based on context (gender, number, case):
+
+```python
+from gt_flask import t, derive
+
+count = 3
+item_word = derive('item', {'one': 'item', 'other': 'items'})
+message = t('You have {count} {item}.', count=count, item=item_word)
+```
+
+See the [derive tutorial](/docs/python/tutorials/derive) for more patterns.
+
+## Using `$context` for disambiguation
+
+Ambiguous strings can produce inaccurate translations. Add `$context` to guide the translator:
+
+```python
+t('Apple', context='the technology company')
+t('Spring', context='the season, not a coil')
+t('Bank', context='a financial institution')
+
+# Also works with msg()
+APPLE = msg('Apple', context='the fruit')
+```
+
+## Next steps
+
+- [`t()` API reference](/docs/python/api/t)
+- [`declare_var()` API reference](/docs/python/api/declare-var)
+- [`derive()` API reference](/docs/python/api/derive)
+- [Locale Detection & Middleware](/docs/python/guides/middleware) — how locale context works

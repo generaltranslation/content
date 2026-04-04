@@ -1,0 +1,173 @@
+---
+title: Locale Detection & Middleware
+description: How locale detection works in Flask and FastAPI, and how to customize it
+---
+
+GT's Python middleware automatically detects the user's locale on every request and makes it available to [`t()`](/docs/python/api/t) and [`get_locale()`](/docs/python/api/get-locale). This guide covers how detection works and advanced patterns for customization.
+
+<Callout>
+  For a basic introduction to custom locale detection, see the [custom locale detection tutorial](/docs/python/tutorials/custom-locale-detection). This guide expands on those patterns.
+</Callout>
+
+## Default behavior
+
+When no `get_locale` callback is provided, GT parses the `Accept-Language` header, matches against your configured `locales`, and falls back to `default_locale`:
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+  ```python
+  from flask import Flask
+  from gt_flask import initialize_gt
+
+  app = Flask(__name__)
+  initialize_gt(app, default_locale='en', locales=['es', 'fr'])
+  ```
+  </Tab>
+  <Tab value="FastAPI">
+  ```python
+  from fastapi import FastAPI
+  from gt_fastapi import initialize_gt
+
+  app = FastAPI()
+  initialize_gt(app, default_locale='en', locales=['es', 'fr'])
+  ```
+  </Tab>
+</Tabs>
+
+## Chaining detection strategies
+
+In production, you'll typically want to try multiple sources in priority order. Pass a `get_locale` callback to `initialize_gt`:
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+  ```python
+  from flask import Flask
+  from gt_flask import initialize_gt
+
+  app = Flask(__name__)
+
+  def get_locale(request) -> str:
+      # 1. Explicit query parameter
+      lang = request.args.get('lang')
+      if lang:
+          return lang
+
+      # 2. Cookie (user's saved preference)
+      locale = request.cookies.get('locale')
+      if locale:
+          return locale
+
+      # 3. URL path prefix (/es/about)
+      parts = request.path.strip('/').split('/')
+      if parts and parts[0] in ('es', 'fr', 'de'):
+          return parts[0]
+
+      # 4. Accept-Language header
+      accept = request.headers.get('Accept-Language', '')
+      if accept:
+          return accept.split(',')[0].split(';')[0].strip()
+
+      return 'en'
+
+  initialize_gt(app, default_locale='en', locales=['es', 'fr', 'de'], get_locale=get_locale)
+  ```
+  </Tab>
+  <Tab value="FastAPI">
+  ```python
+  from fastapi import FastAPI, Request
+  from gt_fastapi import initialize_gt
+
+  app = FastAPI()
+
+  def get_locale(request: Request) -> str:
+      # 1. Explicit query parameter
+      lang = request.query_params.get('lang')
+      if lang:
+          return lang
+
+      # 2. Cookie (user's saved preference)
+      locale = request.cookies.get('locale')
+      if locale:
+          return locale
+
+      # 3. URL path prefix (/es/about)
+      parts = request.url.path.strip('/').split('/')
+      if parts and parts[0] in ('es', 'fr', 'de'):
+          return parts[0]
+
+      # 4. Accept-Language header
+      accept = request.headers.get('accept-language', '')
+      if accept:
+          return accept.split(',')[0].split(';')[0].strip()
+
+      return 'en'
+
+  initialize_gt(app, default_locale='en', locales=['es', 'fr', 'de'], get_locale=get_locale)
+  ```
+  </Tab>
+</Tabs>
+
+## Persisting locale with cookies
+
+Let users choose their language and remember it:
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+  ```python
+  from flask import request, make_response, jsonify
+
+  @app.route('/api/set-language', methods=['POST'])
+  def set_language():
+      locale = request.json.get('locale', 'en')
+      response = make_response(jsonify({'ok': True}))
+      response.set_cookie('locale', locale, max_age=365 * 24 * 60 * 60)
+      return response
+  ```
+  </Tab>
+  <Tab value="FastAPI">
+  ```python
+  from fastapi import Request
+  from fastapi.responses import JSONResponse
+
+  @app.post('/api/set-language')
+  async def set_language(request: Request):
+      body = await request.json()
+      locale = body.get('locale', 'en')
+      response = JSONResponse({'ok': True})
+      response.set_cookie('locale', locale, max_age=365 * 24 * 60 * 60)
+      return response
+  ```
+  </Tab>
+</Tabs>
+
+## User profile-based detection
+
+For authenticated apps, pull the locale from user preferences:
+
+```python
+def get_locale(request) -> str:
+    user = get_current_user(request)  # your auth logic
+    if user and user.preferred_locale:
+        return user.preferred_locale
+
+    # Fall back to cookie or header
+    return request.cookies.get('locale') or 'en'
+```
+
+## Reading the resolved locale
+
+Use [`get_locale()`](/docs/python/api/get-locale) anywhere in your request handling to read back the resolved locale:
+
+```python
+from gt_flask import get_locale  # or gt_fastapi
+
+@app.route('/api/info')
+def info():
+    return { 'locale': get_locale() }
+```
+
+## Next steps
+
+- [Custom locale detection tutorial](/docs/python/tutorials/custom-locale-detection) — basic introduction
+- [`get_locale()` API reference](/docs/python/api/get-locale)
+- [String Translation Patterns](/docs/python/guides/strings) — how to translate content

@@ -1,0 +1,132 @@
+---
+title: Local Translation Storage
+description: Store translations in your app bundle instead of fetching from a CDN
+---
+
+## What are local translations?
+
+By default, `gt-node` fetches translations from the General Translation CDN at runtime. With local translations, you bundle translation files directly into your app — no external requests needed.
+
+<Callout>
+  **Default behavior:** GT uses CDN storage by default. Only switch to local storage if you need the specific benefits it provides.
+</Callout>
+
+## Trade-offs
+
+### Benefits of local translations
+- **Faster responses**: No network requests to fetch translations at runtime
+- **No reliance on external services**: Your app works independently of CDN availability
+- **Works offline**: Translations are part of your deployment artifact
+
+### Drawbacks of local translations
+- **Increased bundle size**: Every supported locale adds to your deployment size
+- **Redeploy to update**: Changing a translation requires a new deployment
+
+## Setup
+
+### Step 1: Create a load function
+
+Write a function that loads a translation JSON file given a locale:
+
+```js title="loadTranslations.js"
+import { readFile } from 'fs/promises';
+import path from 'path';
+
+export default async function loadTranslations(locale) {
+  const filePath = path.join(process.cwd(), 'translations', `${locale}.json`);
+  const data = await readFile(filePath, 'utf-8');
+  return JSON.parse(data);
+}
+```
+
+### Step 2: Pass it to `initializeGT`
+
+```js title="server.js"
+import { initializeGT } from 'gt-node';
+import loadTranslations from './loadTranslations.js';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr', 'ja'],
+  projectId: process.env.GT_PROJECT_ID,
+  loadTranslations,
+});
+```
+
+### Step 3: Configure the CLI
+
+Run the configuration command and select local storage:
+
+```bash
+npx gt configure
+```
+
+When prompted:
+- **Save to CDN?** Select "No"
+- **Translation directory:** Enter `./translations`
+
+### Step 4: Generate translations
+
+```bash
+npx gt translate
+```
+
+This downloads translation files into your `translations/` directory.
+
+## Build integration
+
+Add translation generation to your build script so translations are always fresh:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
+  }
+}
+```
+
+### CI/CD pipeline
+
+```yaml title=".github/workflows/deploy.yml"
+- name: Generate Translations
+  run: npx gt translate
+
+- name: Build Application
+  run: npm run build
+```
+
+## Common issues
+
+### Missing translation files
+
+Always generate translations before building:
+
+```bash
+# ❌ Build without translations
+node server.js
+
+# ✅ Generate translations first
+npx gt translate && node server.js
+```
+
+### File path errors
+
+Make sure the path in your load function matches the CLI's output directory:
+
+```js
+// ❌ Wrong path
+const filePath = path.join(process.cwd(), 'public', `${locale}.json`);
+
+// ✅ Match your configured directory
+const filePath = path.join(process.cwd(), 'translations', `${locale}.json`);
+```
+
+<Callout>
+  Local storage works best for apps with stable translations that don't need frequent updates.
+</Callout>
+
+## Next steps
+
+- [CLI `translate` command](/docs/cli/translate) — translation generation reference
+- [CLI configuration](/docs/cli/reference/config) — configure output directory and storage mode
+- [String Translation Patterns](/docs/node/guides/strings) — how to translate content
