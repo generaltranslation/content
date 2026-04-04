@@ -1,0 +1,129 @@
+---
+title: Local Translation Storage
+description: Store translations locally instead of fetching from a CDN
+---
+
+## What are local translations?
+
+By default, GT's Python libraries fetch translations from the General Translation CDN at runtime. With local translations, you bundle translation files with your app — no external network requests needed.
+
+<Callout>
+  **Default behavior:** GT uses CDN storage by default. Only switch to local storage if you need the specific benefits it provides.
+</Callout>
+
+## Trade-offs
+
+### Benefits of local translations
+- **Faster responses**: No network round-trips to fetch translations
+- **No reliance on external services**: Your app works independently of CDN availability
+- **Works offline**: Translations are part of your deployment
+
+### Drawbacks of local translations
+- **Increased deployment size**: Every supported locale adds translation files
+- **Redeploy to update**: Changing a translation requires a new deployment
+
+## Setup
+
+### Step 1: Configure the CLI
+
+Install the GT CLI and configure it for local storage:
+
+```bash
+pip install gt-cli
+gt configure
+```
+
+When prompted:
+- **Save to CDN?** Select "No"
+- **Translation directory:** Enter `./translations`
+
+### Step 2: Generate translations
+
+```bash
+gt translate
+```
+
+This creates JSON files in your `translations/` directory — one per locale.
+
+### Step 3: Load translations in your app
+
+Point your app at the local translation files:
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+  ```python
+  import json
+  from pathlib import Path
+  from flask import Flask
+  from gt_flask import initialize_gt
+
+  app = Flask(__name__)
+
+  def load_translations(locale: str):
+      path = Path('translations') / f'{locale}.json'
+      if path.exists():
+          return json.loads(path.read_text())
+      return {}
+
+  initialize_gt(
+      app,
+      default_locale='en',
+      locales=['es', 'fr', 'ja'],
+      load_translations=load_translations,
+  )
+  ```
+  </Tab>
+  <Tab value="FastAPI">
+  ```python
+  import json
+  from pathlib import Path
+  from fastapi import FastAPI
+  from gt_fastapi import initialize_gt
+
+  app = FastAPI()
+
+  def load_translations(locale: str):
+      path = Path('translations') / f'{locale}.json'
+      if path.exists():
+          return json.loads(path.read_text())
+      return {}
+
+  initialize_gt(
+      app,
+      default_locale='en',
+      locales=['es', 'fr', 'ja'],
+      load_translations=load_translations,
+  )
+  ```
+  </Tab>
+</Tabs>
+
+## Build integration
+
+Generate translations as part of your deployment pipeline:
+
+```yaml title=".github/workflows/deploy.yml"
+- name: Generate Translations
+  run: gt translate
+
+- name: Deploy
+  run: <YOUR_DEPLOY_COMMAND>
+```
+
+Or in a `Makefile`:
+
+```makefile
+deploy:
+	gt translate
+	<YOUR_DEPLOY_COMMAND>
+```
+
+<Callout>
+  Always generate translations before deploying. If translation files are missing, `t()` falls back to the original string in your `default_locale`.
+</Callout>
+
+## Next steps
+
+- [CLI `translate` command](/docs/cli/translate) — translation generation reference
+- [String Translation Patterns](/docs/python/guides/strings) — how to translate content
+- [Locale Detection & Middleware](/docs/python/guides/middleware) — how locale context works

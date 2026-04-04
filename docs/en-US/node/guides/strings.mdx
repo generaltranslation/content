@@ -1,0 +1,148 @@
+---
+title: String Translation Patterns
+description: Two approaches to translating strings in Node.js — inline and pre-registered
+---
+
+There are two ways to translate strings in `gt-node`:
+
+1. **Inline with `getGT()`** — translate strings directly inside request handlers
+2. **Pre-registered with `msg()` / `getMessages()`** — define strings at module scope, resolve at runtime
+
+## Inline translation with `getGT()`
+
+Use [`getGT()`](/docs/node/api/get-gt) when the string is only used in one place, or when the content depends on request-specific data:
+
+```js title="routes/greeting.js"
+import { getGT } from 'gt-node';
+
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({
+    message: gt('Hello, world!'),
+  });
+});
+```
+
+### Variable interpolation
+
+Pass variables as the second argument using `{name}` placeholders:
+
+```js
+const gt = await getGT();
+
+gt('Welcome, {name}!', { name: user.displayName });
+gt('You have {count} new messages.', { count: unreadCount });
+gt('{city} weather: {temp}°F', { city: 'Tokyo', temp: 72 });
+```
+
+## Pre-registered strings with `msg()` / `getMessages()`
+
+Use [`msg()`](/docs/node/api/get-messages) to register strings at module scope — outside of any request handler. Then use [`getMessages()`](/docs/node/api/get-messages) inside handlers to resolve them for the current locale:
+
+```js title="messages.js"
+import { msg } from 'gt-node';
+
+export const GREETING = msg('Hello, world!');
+export const WELCOME = msg('Welcome, {name}!');
+export const NOT_FOUND = msg('Resource not found.');
+export const UNAUTHORIZED = msg('You must be logged in.');
+```
+
+```js title="routes/api.js"
+import { getMessages } from 'gt-node';
+import { GREETING, WELCOME, NOT_FOUND } from './messages.js';
+
+app.get('/api/greeting', async (req, res) => {
+  const m = await getMessages();
+  res.json({
+    greeting: m(GREETING),
+    welcome: m(WELCOME, { name: 'Alice' }),
+  });
+});
+
+app.use(async (req, res) => {
+  const m = await getMessages();
+  res.status(404).json({ error: m(NOT_FOUND) });
+});
+```
+
+This approach is best when:
+- The same string is used across multiple handlers
+- Strings are shared constants (error messages, labels, enums)
+- You want all translatable strings in one file for easy review
+
+## When to use which
+
+| Pattern | Best for |
+|---------|----------|
+| `getGT()` | One-off strings, request-specific content, strings that appear in one handler |
+| `msg()` / `getMessages()` | Shared constants, error messages, enum labels, centralized string management |
+
+<Callout>
+  Both approaches produce identical translations. The difference is only in code organization — pick whichever fits your project structure.
+</Callout>
+
+## Using `$context` for disambiguation
+
+Ambiguous strings can produce inaccurate translations. Add `$context` to guide the translator:
+
+```js
+// Inline
+const gt = await getGT();
+gt('Apple', { $context: 'the technology company' });
+gt('Spring', { $context: 'the season, not a coil' });
+
+// Pre-registered
+const APPLE = msg('Apple', { $context: 'the fruit' });
+const SPRING = msg('Spring', { $context: 'a metal coil' });
+```
+
+## Complete example
+
+```js title="server.js"
+import express from 'express';
+import { initializeGT, withGT, getGT, msg, getMessages } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr', 'ja'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+// Pre-register shared strings
+const ERRORS = {
+  notFound: msg('Resource not found.'),
+  unauthorized: msg('You must be logged in.'),
+  forbidden: msg('You do not have permission to access this resource.'),
+};
+
+const app = express();
+
+app.use((req, res, next) => {
+  const locale = req.headers['accept-language']?.split(',')[0] || 'en';
+  withGT(locale, () => next());
+});
+
+// Inline translation
+app.get('/api/dashboard', async (req, res) => {
+  const gt = await getGT();
+  res.json({
+    title: gt('Dashboard'),
+    subtitle: gt('Welcome back, {name}!', { name: req.user.name }),
+  });
+});
+
+// Pre-registered messages
+app.use(async (req, res) => {
+  const m = await getMessages();
+  res.status(404).json({ error: m(ERRORS.notFound) });
+});
+
+app.listen(3000);
+```
+
+## Next steps
+
+- [`getGT` API reference](/docs/node/api/get-gt)
+- [`msg` & `getMessages` API reference](/docs/node/api/get-messages)
+- [Locale Detection & Middleware](/docs/node/guides/middleware) — how locale context works
