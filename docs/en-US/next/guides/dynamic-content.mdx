@@ -125,6 +125,61 @@ async function ProductReview({ review }) {
 }
 ```
 
+## API route usage
+
+[`tx`](/docs/next/api/strings/tx) works in Next.js API route handlers, not just server components:
+
+```tsx
+// app/api/translate/route.ts
+import { tx } from 'gt-next/server';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(request: NextRequest) {
+  const { text, locale } = await request.json();
+  const translated = await tx(text, { locale });
+  return NextResponse.json({ translated });
+}
+```
+
+This is useful when you need to expose translation as an API endpoint — for example, to serve client components or external services.
+
+## Client-side translation pattern
+
+Since [`tx`](/docs/next/api/strings/tx) is server-only, client components can translate dynamic content by calling an API route as a proxy:
+
+```tsx
+'use client';
+
+async function translateText(text: string) {
+  const res = await fetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, locale: 'fr' }),
+  });
+  const { translated } = await res.json();
+  return translated;
+}
+```
+
+This pairs with the [API route above](#api-route-usage) to give client components access to dynamic translation.
+
+## Translating multiple items
+
+Use `Promise.all` to translate arrays of content in parallel:
+
+```tsx
+import { tx } from 'gt-next/server';
+
+const translatedPosts = await Promise.all(
+  posts.map(async (post) => ({
+    ...post,
+    title: await tx(post.title),
+  }))
+);
+```
+
+This is useful for translating lists of database records, API responses, or any collection of dynamic strings.
+
 ## Common issues
 
 ### Avoid overuse
