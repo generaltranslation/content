@@ -1,0 +1,87 @@
+---
+title: Compiler
+description: How the gt CLI processes your React source files
+---
+
+The `gt` CLI includes a compiler that analyzes your React source files at build time. It catches common translation errors and can optionally automate wrapping JSX in translation components.
+
+## Features
+
+### Dynamic content detection
+Detects unwrapped dynamic content in translation components:
+
+```jsx
+// ❌ Invalid - dynamic content not wrapped
+<T>Hello {userName}</T>
+
+// ✅ Valid - dynamic content wrapped in variable component  
+<T>Hello <Var>{userName}</Var></T>
+```
+
+### Function call validation
+Detects non-literal arguments passed to translation functions:
+
+```jsx
+const gt = useGT();
+
+// ❌ Invalid - template literals and concatenation
+gt(`Hello ${name}`)
+gt("Hello " + name)
+
+// ✅ Valid - string literals with variable substitution
+gt("Hello, {name}!", { name })
+```
+
+## Auto JSX injection
+
+With auto JSX injection enabled, the compiler automatically wraps translatable JSX text in translation components — so you don't need to manually add `<T>` components around every piece of text.
+
+### Enabling auto JSX injection
+
+Add `enableAutoJsxInjection` to your `gt.config.json`:
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json",
+      "parsingFlags": {
+        "enableAutoJsxInjection": true
+      }
+    }
+  }
+}
+```
+
+### Before and after
+
+Without auto JSX injection, you wrap text manually:
+
+```jsx
+import { T } from 'gt-react';
+
+function Welcome() {
+  return (
+    <T>
+      <h1>Welcome to our app</h1>
+    </T>
+  );
+}
+```
+
+With auto JSX injection enabled, you write plain JSX and the compiler handles the rest:
+
+```jsx
+function Welcome() {
+  return <h1>Welcome to our app</h1>;
+}
+```
+
+The compiler detects the translatable text and wraps it automatically when you run `npx gt translate`.
+
+### What the compiler respects
+
+- **User-written `<T>` components** are left untouched — the compiler won't double-wrap your code
+- **Other GT components** like `<Var>`, `<Branch>`, `<Plural>`, and `<Derive>` are also respected
+- **String attributes** (e.g., `placeholder`, `alt`) are not affected — only JSX children are wrapped
+- **Non-text content** like numbers and booleans is ignored
