@@ -7,74 +7,102 @@ tags: ['gt-react', 'derive', 'context', 'i18n']
 
 ## Overview
 
-This release adds support for derivable context values. Similar to our derive system for content, you can now add a derive invocation to a context property. This will generate a separate translation entry for every different context.
+This release adds support for derivable context values in `gt-react`. When translating content, there isn't always a one-to-one mapping between source text and its translations — a single English phrase might need multiple translations in another language. Context derivation solves this by letting you generate multiple translation entries from a single source string.
 
-## Motivation
+## Background: How GT translations work
 
-We made an early mistake in our context system. The derivation system uses a one-to-one mapping between the content from a source entry and a translation: one source creates one translation. This works well with our existing translation system. It expects to take a source as input and output a single translation. This means that if you were to create `n` source entries then you would have `n` translation entries. However, we did not account for a simple fact: given just the content from a source entry, there may be multiple necessary translations.
+In GT's translation system, you wrap translatable strings with `gt()`:
 
-## Understanding the problem
+```jsx
+import { useGT } from 'gt-react';
 
-Imagine that we have the *set of source entries*. This set represents all of the source entries that we have extracted from a translation invocation. Then we have an ideal *set of translation entries*. This set represents an ideal set of all the translations that would be necessary to translate all of the source entries.
+function Greeting({ name }) {
+  const gt = useGT();
+  return <p>{gt(`Hello, ${name}!`)}</p>;
+}
+```
 
-We can break this into three cases: `one-to-one`, `many-to-one`, and `one-to-many`. It is important to realize that there is not always a one-to-one mapping between the source and translation sets.
+Each call to `gt()` creates a **source entry** — a piece of text that gets translated. Normally, one source entry produces one translation per language.
+
+### What is `derive`?
+
+The `derive()` function tells the GT compiler to create **multiple translation entries** from a single `gt()` call based on different runtime values. Instead of writing separate `gt()` calls for each variant, you use `derive()` to express all the variants in one place, and GT generates the appropriate translations at build time.
+
+## The problem: one-to-many mappings
+
+Consider three cases for how source entries map to translation entries:
 
 ### Case 1: One-to-one mapping
 
-For every source entry, we can map to a unique translation entry.
+Each source entry maps to exactly one translation entry. This is the straightforward case.
 
-| Source Entries | Translation Entries |
-| ---------------- | --------------------- |
+| Source entries | Translation entries |
+| --- | --- |
 | The boy is beautiful. | El niño es hermoso. |
 | The girl is beautiful. | La niña es hermosa. |
 
 ### Case 2: Many-to-one mapping
 
-For every source entry, we can map to a translation entry, and the size of the source set is greater than the size of the translation set. For example, we can go from English to Mandarin as English follows pluralization rules, while Mandarin does not. This means in Mandarin, we can represent multiple source entries with a single translation entry.
+Multiple source entries collapse into a single translation. For example, English has plural forms but Mandarin does not:
 
-| Source Entries | Translation Entries |
-| ---------------- | --------------------- |
-| I have {n} cat. | 我有{n}只猫。 |
-| I have {n} cats. | |
+| Source entries | Translation entries |
+| --- | --- |
+| I have `{n}` cat. | 我有`{n}`只猫。 |
+| I have `{n}` cats. | |
 
 ### Case 3: One-to-many mapping
 
-For every source entry, we can map to one or multiple translation entries. For example, Spanish respects masculine and feminine agreement where English does not. We can therefore end up with two translation entries for the same source entry.
+A single source entry requires **multiple** translations. For example, Spanish has gendered adjective agreement where English does not:
 
-| Source Entries | Translation Entries |
-| ---------------- | --------------------- |
+| Source entries | Translation entries |
+| --- | --- |
 | I am tired | Estoy cansado |
 | | Estoy cansada |
 
-This is the case that we did not account for in the initial implementation. We had assumed that there would always be a one-to-one mapping between source entries and translations.
+This is the case that was not supported before this release. GT previously assumed a one-to-one mapping between source entries and translations.
 
-## Solution
+## Solution: `derive()` with `$context`
 
-This issue can be solved by leveraging our context system with our derive system. The user can choose a context value at runtime to disambiguate between two or more translation entries.
+GT's `$context` option lets you disambiguate between translation entries for the same source text. Combined with `derive()`, you can express this at the call site:
 
-```js
-condition
+```jsx
+import { useGT, derive } from 'gt-react';
+
+function StatusMessage({ isMasculine }) {
+  const gt = useGT();
+
+  return (
+    <p>
+      {gt("I am tired", {
+        $context: derive(
+          isMasculine ? "inflect as masculine" : "inflect as feminine"
+        )
+      })}
+    </p>
+  );
+}
+```
+
+At build time, the compiler sees the `derive()` call and generates two separate translation entries:
+
+```
+"I am tired" ($context: "inflect as masculine") → "Estoy cansado"
+"I am tired" ($context: "inflect as feminine")  → "Estoy cansada"
+```
+
+At runtime, the correct translation is selected based on the value of `isMasculine`.
+
+Without `derive()`, you would need to write this as two separate calls:
+
+```jsx
+// Without derive — more verbose, duplicated source text
+const message = isMasculine
   ? gt("I am tired", { $context: "inflect as masculine" })
-  : gt("I am tired", { $context: "inflect as feminine" })
+  : gt("I am tired", { $context: "inflect as feminine" });
 ```
 
-We can then combine this with a derive invocation to embed runtime logic for resolving the correct translation entry.
-
-```js
-gt("I am tired", { $context: derive(
-  condition ? "inflect as masculine" : "inflect as feminine"
-)})
-```
-
-This will now generate two translation entries:
-
-```txt
-"I am tired" -> "Estoy cansado"
-"I am tired" -> "Estoy cansada"
-```
-
-This (1) satisfies all necessary translation cases and (2) allows the user to disambiguate between the two translation entries at runtime.
+`derive()` achieves the same result with less duplication and makes the intent clearer.
 
 ## In summary
 
-Derivation for context addresses a fundamental gap in our translation model: the inability to represent `one-to-many` mappings between source and translation entries.
+Context derivation addresses a fundamental gap in the translation model: the inability to represent one-to-many mappings between source and translation entries. By combining `derive()` with `$context`, a single `gt()` call can produce multiple translations that are disambiguated at runtime.
