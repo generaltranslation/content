@@ -5,15 +5,11 @@ description: Automatically derive interpolated values in translation functions
 
 ## Overview
 
-When autoderive is enabled, the CLI compiler automatically treats interpolated values in `t()`, `gt()`, and `msg()` calls as [`derive()`](/docs/next/api/strings/derive) calls. Instead of requiring you to manually wrap every interpolated value, the compiler does it for you at build time.
-
-This generates separate translation entries for each possible value, preserving word agreement, conjugation, and word order across languages.
+When autoderive is enabled, interpolated values in `t()`, `gt()`, and `msg()` calls are parsed as if they were wrapped in [`derive()`](/docs/next/api/strings/derive). This generates separate translation entries for each possible value, preserving word agreement and conjugation across languages.
 
 Autoderive is **disabled by default**.
 
-## Enabling autoderive
-
-Set `autoderive` to `true` in `files.gt.parsingFlags` in your `gt.config.json`:
+## Configuration
 
 ```json title="gt.config.json"
 {
@@ -27,61 +23,26 @@ Set `autoderive` to `true` in `files.gt.parsingFlags` in your `gt.config.json`:
 }
 ```
 
-See the [configuration reference](/docs/cli/reference/config) for more on `parsingFlags`.
-
-## How it works
-
-Without autoderive, passing interpolated values to translation functions is an error — you must explicitly wrap them with [`derive()`](/docs/next/api/strings/derive):
+## Example
 
 ```jsx
 const gt = useGT();
 const role = isAdmin ? "Admin" : "User";
 
-// ❌ Error without autoderive — interpolated value not derived
+// With autoderive enabled, this is parsed as derived:
 gt(`Welcome back, ${role}!`);
-
-// ✅ Explicit derive call
-gt(`Welcome back, ${derive(role)}!`);
+// Generates:
+//   "Welcome back, Admin!" → "¡Bienvenido de nuevo, Admin!"
+//   "Welcome back, User!"  → "¡Bienvenido de nuevo, User!"
 ```
 
-With autoderive enabled, the compiler inserts the `derive()` calls automatically:
-
-```jsx
-// ✅ With autoderive enabled, this just works
-gt(`Welcome back, ${role}!`);
-
-// The compiler treats it as:
-gt(`Welcome back, ${derive(role)}!`);
-```
-
-In both cases, separate translations are generated for each possible value:
-
-| Source | Spanish |
-|--------|---------|
-| `Welcome back, Admin!` | `¡Bienvenido de nuevo, Admin!` |
-| `Welcome back, User!` | `¡Bienvenido de nuevo, User!` |
-
-This matters because in many languages, surrounding words change based on the interpolated value (e.g., gendered adjectives, verb conjugation, case endings).
-
-## What's affected
-
-Autoderive applies to:
-- `t()` — the translation function from `useGT()`
-- `gt()` — the standalone translation function
-- `msg()` — the message function
-
-It does **not** affect the `t` tagged template macro, which handles derivation through its template literal syntax.
-
-## When to use it
-
-Enable autoderive when your app frequently interpolates values into translation strings and you want the compiler to handle derivation automatically. Disable it (or leave it off) if you prefer explicit control over which values get derived.
+Without autoderive, you must explicitly use [`derive()`](/docs/next/api/strings/derive) to get the same behavior.
 
 <Callout>
-**Translation multiplication:** Each `derive()` call creates separate translation entries for every possible outcome. If you have many interpolated values or values with many possible outcomes, this can significantly increase your translation count. Use judiciously.
+The `t` tagged template macro is unaffected — it handles derivation through its template literal syntax.
 </Callout>
 
 ## Related
 
 - [`derive()` function reference](/docs/next/api/strings/derive)
-- [Compiler overview](/docs/next/concepts/compiler#autoderive)
-- [Auto JSX injection](/docs/cli/features/auto-jsx-injection) — another compiler feature that automates boilerplate
+- [Auto JSX injection](/docs/cli/features/auto-jsx-injection)
