@@ -1,15 +1,22 @@
 ---
 title: Autoderive
-description: Automatically derive interpolated values in translation functions
+description: Automatically derive interpolated values in translation functions and JSX components
 ---
 
 ## Overview
 
-When autoderive is enabled, interpolated values in `t()`, `gt()`, and `msg()` calls are parsed as if they were wrapped in [`derive()`](/docs/next/api/strings/derive). This generates separate translation entries for each possible value, preserving word agreement and conjugation across languages.
+When autoderive is enabled, interpolated values are parsed as if they were wrapped in [`derive()`](/docs/next/api/strings/derive). This generates separate translation entries for each possible value, preserving word agreement and conjugation across languages.
+
+Autoderive works in two contexts:
+
+- **Strings** — interpolated values in `t()`, `gt()`, and `msg()` calls
+- **JSX** — expressions inside `<T>` components that reference const variable declarations
 
 Autoderive is **disabled by default**.
 
 ## Configuration
+
+Enable autoderive for both strings and JSX:
 
 ```json title="gt.config.json"
 {
@@ -23,7 +30,21 @@ Autoderive is **disabled by default**.
 }
 ```
 
-## Example
+You can also enable autoderive selectively for just strings or just JSX:
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "parsingFlags": {
+        "autoderive": { "jsx": true, "strings": false }
+      }
+    }
+  }
+}
+```
+
+## String example
 
 ```jsx
 const gt = useGT();
@@ -37,6 +58,31 @@ gt(`Welcome back, ${role}!`);
 ```
 
 Without autoderive, you must explicitly use [`derive()`](/docs/next/api/strings/derive) to get the same behavior.
+
+## JSX example
+
+```jsx
+const label = condition ? "boy" : "girl";
+
+<T>
+  Hello {label}
+</T>
+// Generates two translation entries:
+//   "Hello boy"  → "Hola chico"
+//   "Hello girl" → "Hola chica"
+```
+
+JSX autoderive resolves `const` variable declarations referenced inside `<T>` components. It supports:
+
+- Ternary expressions (`const x = cond ? "a" : "b"`)
+- Nested ternaries (`const x = a ? "small" : b ? "medium" : "large"`)
+- String, number, and boolean literals
+- String concatenation and template literals
+- Chained const references (`const alias = base`)
+
+<Callout type="warn">
+Only `const` declarations are supported. `let` and `var` variables produce a warning because they can be reassigned. Destructured variables (`const { x } = obj`) are not supported.
+</Callout>
 
 <Callout>
 The `t` tagged template macro is unaffected — it handles derivation through its template literal syntax.
