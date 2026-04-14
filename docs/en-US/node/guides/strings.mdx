@@ -3,10 +3,11 @@ title: String Translation Patterns
 description: Two approaches to translating strings in Node.js — inline and pre-registered
 ---
 
-There are two ways to translate strings in `gt-node`:
+There are three ways to translate strings in `gt-node`:
 
-1. **Inline with `getGT()`** — translate strings directly inside request handlers
-2. **Pre-registered with `msg()` / `getMessages()`** — define strings at module scope, resolve at runtime
+1. **Inline with `getGT()`** — translate strings directly inside request handlers (build-time)
+2. **Pre-registered with `msg()` / `getMessages()`** — define strings at module scope, resolve at runtime (build-time)
+3. **On-demand with `tx()`** — translate strings at runtime, including content not known at build time
 
 ## Inline translation with `getGT()`
 
@@ -71,12 +72,28 @@ This approach is best when:
 - Strings are shared constants (error messages, labels, enums)
 - You want all translatable strings in one file for easy review
 
+## On-demand translation with `tx()`
+
+Use [`tx()`](/docs/node/api/strings/tx) when the content is not known at build time — for example, user-generated content or dynamic data that can't be pre-translated:
+
+```js title="routes/translate.js"
+import { tx } from 'gt-node';
+
+app.post('/api/translate', async (req, res) => {
+  const translated = await tx(req.body.text);
+  res.json({ translated });
+});
+```
+
+`tx` is async and performs translation on demand via a network request, so it's slower than build-time approaches. Use it only when `getGT()` or `msg()` can't cover the use case.
+
 ## When to use which
 
 | Pattern | Best for |
 |---------|----------|
 | `getGT()` | One-off strings, request-specific content, strings that appear in one handler |
 | `msg()` / `getMessages()` | Shared constants, error messages, enum labels, centralized string management |
+| `tx()` | Dynamic or user-generated content not known at build time |
 
 <Callout>
   Both approaches produce identical translations. The difference is only in code organization — pick whichever fits your project structure.
@@ -145,4 +162,5 @@ app.listen(3000);
 
 - [`getGT` API reference](/docs/node/api/get-gt)
 - [`msg` & `getMessages` API reference](/docs/node/api/get-messages)
+- [`tx` API reference](/docs/node/api/strings/tx) — runtime translation
 - [Locale Detection & Middleware](/docs/node/guides/middleware) — how locale context works
