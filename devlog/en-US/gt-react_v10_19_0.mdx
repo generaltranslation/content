@@ -1,0 +1,54 @@
+---
+title: gt-react@10.19.0
+date: 2026-04-16
+authors: [ernest]
+tags: ['gt-react', 'dev-hot-reload', 'localStorage', 'browser']
+---
+
+## Overview
+
+This release adds **dev hot reload** for browser-side translations in `gt-react`. During development, translations are fetched at runtime and cached in localStorage, so you see translated content immediately without running the CLI or restarting the dev server.
+
+## The problem
+
+Previously, seeing translations in the browser during development required running `npx gtx translate` to fetch and bundle translations ahead of time. Every time you changed a translatable string, you had to re-run the CLI to see the updated translation — a slow feedback loop that broke flow.
+
+## How dev hot reload works
+
+When `devHotReload` is enabled, two things happen:
+
+1. **The compiler injects runtime translate calls.** At build time, the GT compiler adds `GtInternalRuntimeTranslateString` and `GtInternalRuntimeTranslateJsx` calls that warm the translation cache when your module loads.
+
+2. **Cache misses resolve asynchronously.** If the `<T>` component encounters an untranslated string, it suspends (via React Suspense) and fetches the translation at runtime. Once resolved, the component renders with the translated content.
+
+Translations fetched at runtime are persisted to localStorage with a TTL, so they survive page refreshes without re-fetching.
+
+## Usage
+
+Enable dev hot reload in your `gt.config.json`:
+
+```json
+{
+  "devHotReload": true
+}
+```
+
+That's it. The compiler handles the rest — no changes to your components are needed.
+
+### What gets cached
+
+- Translations are stored in localStorage under a project-scoped key
+- Stale entries are passively purged on load based on TTL
+- Cache writes are batched with a leading throttle to avoid excessive localStorage writes
+
+## Packages
+
+| Package | Version |
+| --- | --- |
+| `gt-react` | 10.19.0 |
+| `@generaltranslation/compiler` | (updated) |
+| `gt-i18n` | (updated) |
+
+## Related links
+
+- [PR #1217](https://github.com/generaltranslation/gt/pull/1217)
