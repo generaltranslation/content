@@ -7,19 +7,17 @@ tags: ['gt-react', 'browser', 'hot-reload', 'dev-experience', 'i18n']
 
 ## Overview
 
-`gt-react/browser` now supports dev hot reload for translations. Previously, browser-side translations via `t()` and `<T>` required a full page reload to see changes — translations were resolved once at module load time and stayed fixed. With this release, new or updated translations are fetched at runtime during development and cached in localStorage across page refreshes.
+`gt-react/browser` now supports dev hot reload for translations. Previously, every time you changed code in a browser-side GT app, you had to re-run the translation command to see updated translations. With this release, translations are fetched automatically at runtime during development — no manual re-translation step needed.
 
-This brings `gt-react/browser` to parity with the standard `gt-react` translation workflow, where translations update without a full reload.
+This brings `gt-react/browser` to parity with the standard `gt-react` translation workflow. Note that this feature is **development-only** — production builds continue to use pre-compiled translations as before.
 
 ## How it works
 
-The compiler does the heavy lifting. When `devHotReload` is enabled, the build step injects runtime translate calls into your modules so that translations are fetched ahead of time during development. For JSX content, `<T>` components use Suspense to resolve translations asynchronously on cache misses.
-
-Translations fetched at runtime are persisted to localStorage with a TTL, so they survive page refreshes without re-fetching.
+The compiler handles this automatically. When `devHotReload` is enabled, the build step updates your modules to translate content ahead of time during development. Translations fetched at runtime are cached in localStorage so they persist across page refreshes.
 
 ## Configuration
 
-Enable dev hot reload in your `gt.config.json`:
+### 1. Enable in `gt.config.json`
 
 ```json
 {
@@ -33,7 +31,7 @@ Enable dev hot reload in your `gt.config.json`:
 }
 ```
 
-You can also enable it selectively for strings or JSX:
+By default, `devHotReload: true` enables hot reload for both strings and JSX. You can also configure them separately — though in practice, we recommend leaving `jsx` off since the `<T>` component already handles JSX translation at runtime via Suspense, so there's no need to block rendering waiting for those to load:
 
 ```json
 {
@@ -42,7 +40,7 @@ You can also enable it selectively for strings or JSX:
       "parsingFlags": {
         "devHotReload": {
           "strings": true,
-          "jsx": true
+          "jsx": false
         }
       }
     }
@@ -50,11 +48,18 @@ You can also enable it selectively for strings or JSX:
 }
 ```
 
-Dev hot reload requires:
-- A `loadTranslations` function in your bootstrap config
-- A `projectId`
-- A `devApiKey`
-- Development mode (`import.meta.env.DEV`)
+### 2. Pass credentials to `bootstrap()`
+
+You also need to pass your project id and dev API key directly to the `bootstrap()` call, along with a `loadTranslations` function. This is a quirk of the current implementation that we plan to streamline in a future release.
+
+```tsx
+await bootstrap({
+  ...gtConfig,
+  loadTranslations,
+  projectId: import.meta.env.VITE_GT_PROJECT_ID,
+  devApiKey: import.meta.env.VITE_GT_DEV_API_KEY,
+});
+```
 
 ## Links
 
