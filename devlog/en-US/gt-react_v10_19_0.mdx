@@ -1,0 +1,91 @@
+---
+title: gt-react@10.19.0
+date: 2026-04-16
+authors: [ernest]
+tags: ['gt-react', 'browser', 'hot-reload', 'dev-experience', 'i18n']
+---
+
+## Overview
+
+`gt-react/browser` now supports dev hot reload for translations. Previously, every time you changed code in a browser-side GT app, you had to re-run the translation command to see updated translations. With this release, translations are pre-computed at runtime during development — no manual re-translation step needed.
+
+This brings `gt-react/browser` to parity with the standard `gt-react` translation workflow. Note that `gt-react/browser` is for **single-page applications (SPAs) only** — if you're using a server-rendered framework, use `gt-react` (not `gt-react/browser`). This feature is also **development-only** — production builds continue to use pre-computed translations as before.
+
+## How it works
+
+The compiler plugin injects runtime translation invocations at the module level. Rendering is suspended until they resolve.
+
+When `devHotReload` is enabled, the compiler adds `GtInternalRuntimeTranslateString` and `GtInternalRuntimeTranslateJsx` calls that warm the translation cache when your module loads. For JSX, translations can also be resolved via a Suspense call within the `<T>` component itself, rather than being loaded at the module level.
+
+Because translations happen at runtime, only the language the user actually navigates to gets translated — unlike build-time approaches, which must generate translations for every configured language on each dev build even if you never look at them.
+
+Translations fetched at runtime are cached in localStorage, so they persist across page refreshes.
+
+## Configuration
+
+### 1. Add the compiler plugin
+
+Dev hot reload requires the GT compiler plugin. If you haven't already, add it to your bundler config — for example, the Vite plugin:
+
+```ts
+// vite.config.ts
+import { vite as gtCompiler } from "@generaltranslation/compiler";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import gtConfig from './gt.config.json';
+
+export default defineConfig({
+  plugins: [react(), gtCompiler({ gtConfig })],
+});
+```
+
+See the [gt-react setup docs](https://generaltranslation.com/docs/react/tutorials/quickstart) for other bundlers.
+
+### 2. Enable dev hot reload in `gt.config.json`
+
+```json
+{
+  "files": {
+    "gt": {
+      "parsingFlags": {
+        "devHotReload": true
+      }
+    }
+  }
+}
+```
+
+By default, `devHotReload: true` enables hot reload for strings but not JSX. JSX is left off because the `<T>` component already handles JSX translation at runtime via Suspense, so there's no need to block module loading waiting for those to resolve. You can configure them separately if needed:
+
+```json
+{
+  "files": {
+    "gt": {
+      "parsingFlags": {
+        "devHotReload": {
+          "strings": true,
+          "jsx": false
+        }
+      }
+    }
+  }
+}
+```
+
+### 3. Pass credentials to `bootstrap()`
+
+You also need to pass your project id and dev API key directly to the `bootstrap()` call, along with a `loadTranslations` function. This is a quirk of the current implementation that we plan to streamline in a future release.
+
+```tsx
+await bootstrap({
+  ...gtConfig,
+  loadTranslations,
+  projectId: import.meta.env.VITE_GT_PROJECT_ID,
+  devApiKey: import.meta.env.VITE_GT_DEV_API_KEY,
+});
+```
+
+## Links
+
+- [Previous dev log: moving away from React context (gt-react@10.12.0)](/devlog/gt-react_v10_12_0)
+- [PR #1217](https://github.com/generaltranslation/gt/pull/1217)
