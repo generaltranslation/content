@@ -1,12 +1,12 @@
 ---
-title: Node.js Quickstart
-description: Add multiple languages to your Node.js server in under 10 minutes
+title: Express Quickstart
+description: Add multiple languages to your Express server in under 10 minutes
 ---
 
-By the end of this guide, your Node.js server will respond with translated content based on the request's language, using either inline or pre-registered strings.
+By the end of this guide, your Express server will respond with translated content based on the request's language.
 
 **Prerequisites:**
-- A Node.js server (Express, Fastify, or similar)
+- An Express app (or start a new one)
 - Node.js 18+
 
 <Callout type='info'>
@@ -66,9 +66,10 @@ Create a **`gt.config.json`** file in your project root. This tells the library 
 
 ## Step 3: Initialize General Translation
 
-Call **`initializeGT`** once at the top of your server's entry file, before any translation functions are used:
+Call **`initializeGT`** once at the top of your server's entry file, before any route handlers:
 
 ```js title="server.js"
+import express from 'express';
 import { initializeGT } from 'gt-node';
 
 initializeGT({
@@ -76,15 +77,15 @@ initializeGT({
   locales: ['en', 'es', 'fr', 'ja'],
   projectId: process.env.GT_PROJECT_ID,
 });
-```
 
-This configures the library with your supported languages and project credentials.
+const app = express();
+```
 
 ---
 
-## Step 4: Set locale context per request
+## Step 4: Add locale middleware
 
-Each request needs to know which language to use. Use **`withGT`** to wrap your request handlers — it uses async local storage so translation functions automatically pick up the right locale:
+Each request needs to know which language to use. Use **`withGT`** middleware to set the locale per request — it uses async local storage so all downstream translation calls automatically pick up the right locale:
 
 ```js title="server.js"
 import { withGT } from 'gt-node';
@@ -97,9 +98,9 @@ app.use((req, res, next) => {
 
 ---
 
-## Step 5: Translate inline strings
+## Step 5: Translate strings
 
-For translating strings directly inside request handlers, use **`getGT`**:
+Use **`getGT`** to translate strings inline inside route handlers:
 
 ```js title="server.js"
 import { getGT } from 'gt-node';
@@ -113,33 +114,18 @@ app.get('/api/greeting', async (req, res) => {
 });
 ```
 
-`getGT` returns a translation function scoped to the current request's locale.
-
----
-
-## Step 6: Pre-register constant strings (optional)
-
-For strings defined outside request handlers — like error messages, enum labels, or constants — use **`msg`** to register them at module scope, then **`getMessages`** to resolve translations at runtime:
+For strings defined outside route handlers — like error messages or constants — use **`msg`** to register them at module scope, then **`getMessages`** to resolve translations at runtime:
 
 ```js title="messages.js"
 import { msg } from 'gt-node';
 
-export const GREETING = msg('Hello, world!');
-export const WELCOME = msg('Welcome, {name}!');
 export const NOT_FOUND = msg('Resource not found.');
+export const GREETING = msg('Hello, world!');
 ```
 
-```js title="handler.js"
+```js title="server.js"
 import { getMessages } from 'gt-node';
-import { GREETING, WELCOME, NOT_FOUND } from './messages.js';
-
-app.get('/api/status', async (req, res) => {
-  const m = await getMessages();
-  res.json({
-    greeting: m(GREETING),
-    welcome: m(WELCOME, { name: 'Alice' }),
-  });
-});
+import { NOT_FOUND } from './messages.js';
 
 app.use(async (req, res) => {
   const m = await getMessages();
@@ -147,11 +133,9 @@ app.use(async (req, res) => {
 });
 ```
 
-This pattern is useful when the same strings are used across multiple handlers.
-
 ---
 
-## Step 7: Set up environment variables (optional)
+## Step 6: Set up environment variables (optional)
 
 To see translations in development, you need API keys from General Translation. These enable **on-demand translation** — your server translates content in real time as you develop.
 
@@ -183,7 +167,7 @@ npx gt auth
 
 ---
 
-## Step 8: See it working
+## Step 7: Test it
 
 Start your server and test with different `Accept-Language` headers:
 
@@ -198,15 +182,13 @@ curl -H "Accept-Language: es" http://localhost:3000/api/greeting
 curl -H "Accept-Language: fr" http://localhost:3000/api/greeting
 ```
 
-You should see translated responses for each language.
-
 <Callout type="info">
   In development, translations happen on-demand — you may see a brief delay the first time a new language is requested. In production, translations are pre-generated and load instantly.
 </Callout>
 
 ---
 
-## Step 9: Full example
+## Step 8: Full example
 
 Here's a complete Express server with all the pieces together:
 
@@ -249,7 +231,7 @@ app.listen(3000, () => console.log('Server running on port 3000'));
 
 ---
 
-## Step 10: Deploy to production
+## Step 9: Deploy to production
 
 In production, translations are pre-generated at build time (no real-time API calls). Add the translate command to your build script:
 
@@ -271,8 +253,6 @@ GT_API_KEY=gtx-api-your-production-key
 <Callout type="warn">
   Never publicly expose your `GT_API_KEY`.
 </Callout>
-
-That's it — your server is now multilingual. 🎉
 
 ---
 
@@ -299,6 +279,7 @@ That's it — your server is now multilingual. 🎉
 
 - [**`initializeGT`**](/docs/node/api/initialize-gt) — Full configuration options
 - [**`withGT`**](/docs/node/api/with-gt) — Locale context for requests
+- [**Locale Detection & Middleware**](/docs/node/guides/middleware) — Advanced locale detection strategies
 - [**`getGT`**](/docs/node/api/get-gt) — Inline string translation
 - [**`msg` & `getMessages`**](/docs/node/api/get-messages) — Pre-registered message translation
-- [**CLI**](/docs/cli/translate) — Translation workflow reference
+- [**Firebase Functions Quickstart**](/docs/node/tutorials/quickstart-firebase) — Using gt-node with Firebase Cloud Functions
