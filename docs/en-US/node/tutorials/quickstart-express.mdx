@@ -5,7 +5,7 @@ description: Add multiple languages to your Express server in under 10 minutes
 
 By the end of this guide, your Express server will respond with translated content based on the request's language.
 
-**Prerequisites:**
+***Prerequisites:***
 - An Express app (or start a new one)
 - Node.js 18+
 
@@ -58,41 +58,44 @@ Create a **`gt.config.json`** file in your project root. This tells the library 
   "locales": ["es", "fr", "ja"],
   "files": {
     "gt": {
-      "output": "translations/[locale].json"
+      "output": "./translations/[locale].json"
     }
   }
 }
 ```
-
-- **`defaultLocale`** — the language your server's strings are written in.
-- **`locales`** — the languages you want to translate into. Pick any from the [supported locales list](/docs/platform/supported-locales).
-- **`files.gt.output`** — tells the CLI where to save generated translation files for gt-node.
 
 ---
 
 ## Step 3: Initialize General Translation
 
 Call **`initializeGT`** once at the top of your server's entry file, before any route handlers.
-
-Use **`loadTranslations`** to load translation files from disk — this keeps everything local with no external requests at runtime:
-
-```js title="loadTranslations.js"
-export default async function loadTranslations(locale) {
-  const module = await import(`./translations/${locale}.json`);
-  return module.default;
-}
-```
+You can customize the translation loading behavior by passing a `loadTranslations` function.
 
 ```js title="server.js"
 import express from 'express';
 import { initializeGT } from 'gt-node';
 import gtConfig from './gt.config.json' with { type: 'json' };
-import loadTranslations from './loadTranslations.js';
+
+async function loadTranslations(locale) {
+  // Need to enumerate because dynamic imports are not supported in Node.js
+  switch (locale) {
+    case 'ja':
+      return await import('./translations/ja.json');
+    case 'es':
+      return await import('./translations/es.json');
+    case 'fr':
+      return await import('./translations/fr.json');
+    default:
+      return {};
+  }
+}
 
 initializeGT({
   ...gtConfig,
-  projectId: process.env.GT_PROJECT_ID,
   loadTranslations,
+  // To enable runtime translations:
+  // projectId: process.env.GT_PROJECT_ID,
+  // devApiKey: process.env.GT_API_KEY,
 });
 
 const app = express();
@@ -131,24 +134,7 @@ app.get('/api/greeting', async (req, res) => {
 });
 ```
 
-For strings defined outside route handlers — like error messages or constants — use **`msg`** to register them at module scope, then **`getMessages`** to resolve translations at runtime:
-
-```js title="messages.js"
-import { msg } from 'gt-node';
-
-export const NOT_FOUND = msg('Resource not found.');
-export const GREETING = msg('Hello, world!');
-```
-
-```js title="server.js"
-import { getMessages } from 'gt-node';
-import { NOT_FOUND } from './messages.js';
-
-app.use(async (req, res) => {
-  const m = await getMessages();
-  res.status(404).json({ error: m(NOT_FOUND) });
-});
-```
+For strings defined outside of request scope, use [`msg`](/docs/node/api/strings/msg) and [`getMessages`](/docs/node/api/get-messages) to resolve translations.
 
 ---
 
@@ -219,8 +205,6 @@ curl -H "Accept-Language: es" http://localhost:3000/api/greeting
 curl -H "Accept-Language: fr" http://localhost:3000/api/greeting
 ```
 
-
-
 ---
 
 ## Troubleshooting
@@ -243,7 +227,7 @@ curl -H "Accept-Language: fr" http://localhost:3000/api/greeting
 
 - [**`initializeGT`**](/docs/node/api/initialize-gt) — Full configuration options
 - [**`withGT`**](/docs/node/api/with-gt) — Locale context for requests
-- [**Locale Detection & Middleware**](/docs/node/guides/middleware) — Locale detection strategies
+- [***Locale Detection & Middleware***](/docs/node/guides/middleware) — Locale detection strategies
 - [**`getGT`**](/docs/node/api/get-gt) — Inline string translation
-- [**`msg` & `getMessages`**](/docs/node/api/get-messages) — Pre-registered message translation
-- [**Firebase Functions Quickstart**](/docs/node/tutorials/quickstart-firebase) — Using gt-node with Firebase Cloud Functions
+- [**`msg` *&* `getMessages`**](/docs/node/api/get-messages) — Pre-registered message translation
+- [***Firebase Functions Quickstart***](/docs/node/tutorials/quickstart-firebase) — Using gt-node with Firebase Cloud Functions
