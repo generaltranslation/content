@@ -208,7 +208,38 @@ npx gt auth
 
 ---
 
-## Step 8: Test locally
+## Step 8: Translate for production
+
+Before deploying, run the translate command to pre-generate all translations at build time:
+
+```bash
+npx gt translate
+```
+
+Add it to your predeploy build script so it runs automatically:
+
+```json title="functions/package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
+  }
+}
+```
+
+```json title="firebase.json"
+{
+  "functions": {
+    "source": "functions",
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+  }
+}
+```
+
+In production, translations are loaded from these pre-generated files — no real-time API calls needed.
+
+---
+
+## Step 9: Test locally
 
 Use the Firebase emulator to test translations locally:
 
@@ -227,100 +258,6 @@ curl -H "Accept-Language: es" http://localhost:5001/YOUR_PROJECT/us-central1/gre
 ```
 
 
-
----
-
-## Step 9: Full example
-
-Here's a complete Firebase Functions file with all the pieces together:
-
-```js title="functions/index.js"
-import { onRequest } from 'firebase-functions/v2/https';
-import { onCall } from 'firebase-functions/v2/https';
-import { initializeGT, withGT, getGT, msg, getMessages } from 'gt-node';
-
-// Initialize GT at the top level (runs once per cold start)
-initializeGT({
-  defaultLocale: 'en',
-  locales: ['en', 'es', 'fr', 'ja'],
-  projectId: process.env.GT_PROJECT_ID,
-});
-
-// Pre-register constant strings
-const NOT_FOUND = msg('Resource not found.');
-
-// HTTP function
-export const greeting = onRequest(
-  { secrets: ['GT_API_KEY', 'GT_PROJECT_ID'] },
-  async (req, res) => {
-    const locale = req.headers['accept-language']?.split(',')[0] || 'en';
-
-    await withGT(locale, async () => {
-      const gt = await getGT();
-      res.json({ message: gt('Hello, world!') });
-    });
-  }
-);
-
-// Callable function
-export const getGreeting = onCall(
-  { secrets: ['GT_API_KEY', 'GT_PROJECT_ID'] },
-  async (request) => {
-    const locale = request.data.locale || 'en';
-
-    return withGT(locale, async () => {
-      const gt = await getGT();
-      return { message: gt('Hello, world!') };
-    });
-  }
-);
-
-// HTTP function with pre-registered messages
-export const getItem = onRequest(
-  { secrets: ['GT_API_KEY', 'GT_PROJECT_ID'] },
-  async (req, res) => {
-    const locale = req.headers['accept-language']?.split(',')[0] || 'en';
-
-    await withGT(locale, async () => {
-      const m = await getMessages();
-      res.status(404).json({ error: m(NOT_FOUND) });
-    });
-  }
-);
-```
-
----
-
-## Step 10: Deploy to production
-
-Pre-generate translations before deploying. Add the translate command to your predeploy script:
-
-```json title="firebase.json"
-{
-  "functions": {
-    "source": "functions",
-    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
-  }
-}
-```
-
-```json title="functions/package.json"
-{
-  "scripts": {
-    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
-  }
-}
-```
-
-Then deploy:
-
-```bash
-firebase deploy --only functions
-```
-
-<Callout type="warn">
-  Never publicly expose your `GT_API_KEY`.
-</Callout>
 
 ---
 

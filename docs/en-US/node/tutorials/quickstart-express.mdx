@@ -167,7 +167,29 @@ npx gt auth
 
 ---
 
-## Step 7: Test it
+## Step 7: Translate for production
+
+Before deploying, run the translate command to pre-generate all translations at build time:
+
+```bash
+npx gt translate
+```
+
+Add it to your build script so it runs automatically:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
+  }
+}
+```
+
+In production, translations are loaded from these pre-generated files — no real-time API calls needed.
+
+---
+
+## Step 8: Test it
 
 Start your server and test with different `Accept-Language` headers:
 
@@ -183,74 +205,6 @@ curl -H "Accept-Language: fr" http://localhost:3000/api/greeting
 ```
 
 
-
----
-
-## Step 8: Full example
-
-Here's a complete Express server with all the pieces together:
-
-```js title="server.js"
-import express from 'express';
-import { initializeGT, withGT, getGT, msg, getMessages } from 'gt-node';
-
-// Initialize GT before anything else
-initializeGT({
-  defaultLocale: 'en',
-  locales: ['en', 'es', 'fr', 'ja'],
-  projectId: process.env.GT_PROJECT_ID,
-});
-
-// Pre-register constant strings
-const NOT_FOUND = msg('Resource not found.');
-
-const app = express();
-
-// Set locale context for each request
-app.use((req, res, next) => {
-  const locale = req.headers['accept-language']?.split(',')[0] || 'en';
-  withGT(locale, () => next());
-});
-
-// Inline translation
-app.get('/api/greeting', async (req, res) => {
-  const gt = await getGT();
-  res.json({ message: gt('Hello, world!') });
-});
-
-// Pre-registered message translation
-app.use(async (req, res) => {
-  const m = await getMessages();
-  res.status(404).json({ error: m(NOT_FOUND) });
-});
-
-app.listen(3000, () => console.log('Server running on port 3000'));
-```
-
----
-
-## Step 9: Deploy to production
-
-In production, translations are pre-generated at build time (no real-time API calls). Add the translate command to your build script:
-
-```json title="package.json"
-{
-  "scripts": {
-    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
-  }
-}
-```
-
-Set your **production** environment variables in your hosting provider:
-
-```bash
-GT_PROJECT_ID=your-project-id
-GT_API_KEY=gtx-api-your-production-key
-```
-
-<Callout type="warn">
-  Never publicly expose your `GT_API_KEY`.
-</Callout>
 
 ---
 
