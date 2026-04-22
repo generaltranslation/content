@@ -101,9 +101,9 @@ initializeGT({
 
 ---
 
-## Step 4: Translate in HTTP functions
+## Step 4: Add locale handling
 
-For **`onRequest`** (HTTP-triggered) functions, use **`withGT`** to set the locale, then **`getGT`** to translate:
+Each request needs to know which language to use. Use **`withGT`** to set the locale per request — it uses async local storage so all downstream translation calls automatically pick up the right locale:
 
 ```js title="functions/index.js"
 import { onRequest } from 'firebase-functions/v2/https';
@@ -122,15 +122,10 @@ export const greeting = onRequest(async (req, res) => {
 });
 ```
 
----
-
-## Step 5: Translate in callable functions
-
-For **`onCall`** (client SDK-invoked) functions, read the locale from the request data or auth context:
+For **`onCall`** (client SDK-invoked) functions, read the locale from the request data:
 
 ```js title="functions/index.js"
 import { onCall } from 'firebase-functions/v2/https';
-import { withGT, getGT } from 'gt-node';
 
 export const getGreeting = onCall(async (request) => {
   const locale = request.data.locale || 'en';
@@ -139,7 +134,6 @@ export const getGreeting = onCall(async (request) => {
     const gt = await getGT();
     return {
       message: gt('Hello, world!'),
-      welcome: gt('Welcome, {name}!', { name: request.data.name || 'User' }),
     };
   });
 });
@@ -147,43 +141,40 @@ export const getGreeting = onCall(async (request) => {
 
 ---
 
-## Step 6: Pre-register constant strings (optional)
+## Step 5: Translate strings
 
-For strings shared across multiple functions, use **`msg`** at module scope and **`getMessages`** inside handlers:
+Use **`getGT`** to translate strings inline inside function handlers (shown above).
+
+For strings defined outside handlers — like error messages or constants — use **`msg`** to register them at module scope, then **`getMessages`** to resolve translations at runtime:
 
 ```js title="functions/messages.js"
 import { msg } from 'gt-node';
 
-export const UNAUTHORIZED = msg('You must be signed in.');
 export const NOT_FOUND = msg('Resource not found.');
-export const RATE_LIMITED = msg('Too many requests. Please try again later.');
+export const GREETING = msg('Hello, world!');
 ```
 
 ```js title="functions/index.js"
-import { onRequest } from 'firebase-functions/v2/https';
-import { withGT, getMessages } from 'gt-node';
+import { getMessages } from 'gt-node';
 import { NOT_FOUND } from './messages.js';
 
 export const getItem = onRequest(async (req, res) => {
   const locale = req.headers['accept-language']?.split(',')[0] || 'en';
 
   await withGT(locale, async () => {
-    const item = await findItem(req.query.id);
-    if (!item) {
-      const m = await getMessages();
-      res.status(404).json({ error: m(NOT_FOUND) });
-      return;
-    }
-    res.json(item);
+    const m = await getMessages();
+    res.status(404).json({ error: m(NOT_FOUND) });
   });
 });
 ```
 
 ---
 
-## Step 7: Set up environment variables
+## Step 6: Set up environment variables
 
-Set your API keys using Firebase environment configuration:
+You need API keys from General Translation. These are used by `npx gt translate` to generate translation files and by the runtime for any on-the-fly translation.
+
+Set your API keys using Firebase secrets:
 
 ```bash
 firebase functions:secrets:set GT_API_KEY
@@ -193,8 +184,6 @@ firebase functions:secrets:set GT_PROJECT_ID
 Then reference them in your function definitions:
 
 ```js title="functions/index.js"
-import { onRequest } from 'firebase-functions/v2/https';
-
 export const greeting = onRequest(
   { secrets: ['GT_API_KEY', 'GT_PROJECT_ID'] },
   async (req, res) => {
@@ -225,7 +214,7 @@ npx gt auth
 
 ---
 
-## Step 8: Translate
+## Step 7: Translate
 
 Run the translate command to generate translation files:
 
@@ -252,10 +241,9 @@ Add it to your build script so it runs automatically:
 }
 ```
 
-
 ---
 
-## Step 9: Test locally
+## Step 8: Test it
 
 Use the Firebase emulator to test translations locally:
 
@@ -271,9 +259,10 @@ curl http://localhost:5001/YOUR_PROJECT/us-central1/greeting
 
 # Spanish
 curl -H "Accept-Language: es" http://localhost:5001/YOUR_PROJECT/us-central1/greeting
+
+# French
+curl -H "Accept-Language: fr" http://localhost:5001/YOUR_PROJECT/us-central1/greeting
 ```
-
-
 
 ---
 
