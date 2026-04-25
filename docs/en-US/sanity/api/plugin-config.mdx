@@ -59,6 +59,11 @@ gtPlugin(config: GTPluginConfig)
       description: 'Fields to exclude from translation. Matched fields are stripped before serialization and restored from the source document after translation.',
       optional: true,
     },
+    dedupeFields: {
+      type: 'DedupeFields[]',
+      description: 'Fields to exclude from translation, then restore from the source document with the target locale appended so the translated value is unique.',
+      optional: true,
+    },
     skipFields: {
       type: 'SkipFields[]',
       description: 'Fields to remove entirely from translated documents. Unlike ignoreFields, these fields will not appear on the translated document at all.',
@@ -137,9 +142,40 @@ gtPlugin({
 });
 ```
 
+## DedupeFields
+
+Fields that are not translated or sent to the API, but are copied from the source document with the target locale appended. Use this for fields that should remain source-derived but unique per translated document, such as Sanity slugs.
+
+```typescript
+type DedupeFields = {
+  documentId?: string;
+  fields?: Array<{
+    property: string;
+    type?: string;
+  }>;
+};
+```
+
+### Example
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr'],
+  dedupeFields: [
+    // "about" becomes "about-es" and "about-fr"
+    {
+      fields: [{ property: '$.slug', type: 'slug' }],
+    },
+  ],
+});
+```
+
+For Sanity slug fields, the plugin updates the slug object's `current` value. For example, `{ _type: 'slug', current: 'about' }` becomes `{ _type: 'slug', current: 'about-es' }` on the Spanish document.
+
 ## SkipFields
 
-Fields that are removed entirely from translated documents. Unlike `ignoreFields`, these fields will not appear on translations at all. Use this for fields like unique document slugs, SEO canonical URLs, or source-only metadata that should either be set independently per language or only exist on the source.
+Fields that are removed entirely from translated documents. Unlike `ignoreFields`, these fields will not appear on translations at all. Use this for fields like SEO canonical URLs, source-only metadata, or slugs that editors should set manually per language.
 
 ```typescript
 type SkipFields = {
@@ -158,7 +194,7 @@ gtPlugin({
   sourceLocale: 'en',
   locales: ['es'],
   skipFields: [
-    // Slugs should be unique per language, don't copy from source
+    // Editors will set slugs manually per language
     {
       fields: [{ property: '$.slug', type: 'slug' }],
     },
@@ -271,7 +307,8 @@ export default defineConfig({
 
       // Filtering
       translateDocuments: [{ type: 'article' }, { type: 'page' }],
-      ignoreFields: [{ fields: [{ property: 'slug' }] }],
+      ignoreFields: [{ fields: [{ property: '$.publishedAt' }] }],
+      dedupeFields: [{ fields: [{ property: '$.slug', type: 'slug' }] }],
       skipFields: [{ fields: [{ property: '$.internalNotes' }] }],
 
       // Serialization - Do not use this unless you know what you are doing!
