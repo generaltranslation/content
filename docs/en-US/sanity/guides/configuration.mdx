@@ -126,18 +126,36 @@ gtPlugin({
 `property` is a [JSONPath](https://goessner.net/articles/JsonPath/) expression that matches one or more fields in documents.
 `type` is an optional parameter to further filter the fields to ignore to specific types.
 
+## Deduplicating fields
+
+Fields you don't want translated or sent to the GT API, but that should still be copied from the source document and made unique on each translated document. Dedupe fields are stripped before serialization, then restored from the source document with the target locale appended.
+
+Use `dedupeFields` for Sanity slugs or other string-like identifiers that should stay based on the source value but must be unique per language:
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  dedupeFields: [
+    { fields: [{ property: '$.slug', type: 'slug' }] }, // "about" becomes "about-es"
+  ],
+});
+```
+
+For Sanity slug fields, the plugin updates the slug object's `current` value. For example, `{ _type: 'slug', current: 'about' }` becomes `{ _type: 'slug', current: 'about-es' }` on the Spanish document.
+
 ## Skipping fields
 
 Fields that shouldn't be automatically copied over to translated documents at all. Unlike `ignoreFields` (which preserves the source value on the translation), `skipFields` removes the matched fields entirely from the translated document.
 
-Use `skipFields` for fields like unique document slugs, SEO canonical URLs, or source-only metadata that should not exist on translations — either because they need to be set independently per language or because they only apply to the source:
+Use `skipFields` for fields like SEO canonical URLs, source-only metadata, or slugs that editors should set manually per language:
 
 ```typescript
 gtPlugin({
   sourceLocale: 'en',
   locales: ['es', 'zh', 'ja'],
   skipFields: [
-    { fields: [{ property: '$.slug', type: 'slug' }] },  // slugs should be unique per language
+    { fields: [{ property: '$.slug', type: 'slug' }] },  // editors set slugs manually per language
     { fields: [{ property: '$.canonicalUrl' }] },         // only relevant on source
     {
       documentId: 'homepage',
@@ -191,7 +209,12 @@ export default defineConfig({
       translateDocuments: [{ type: 'article' }, { type: 'page' }],
       ignoreFields: [
         {
-          fields: [{ property: 'slug' }, { property: 'publishedAt' }],
+          fields: [{ property: '$.publishedAt' }],
+        },
+      ],
+      dedupeFields: [
+        {
+          fields: [{ property: '$.slug', type: 'slug' }],
         },
       ],
       skipFields: [
