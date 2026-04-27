@@ -16,6 +16,7 @@ When combined with internationalization, SSG generates pre-rendered versions for
 - [Pages not generating statically](#pages-not-generating-statically)
 - [Production runtime error: "DYNAMIC_SERVER_USAGE"](#production-runtime-error-dynamic_server_usage)
 - ["Export locale doesn't exist in target module"](#export-locale-doesnt-exist-in-target-module)
+- [Metadata image routes (OG images) fail with `getLocale()`](#metadata-image-routes-og-images-fail-with-getlocale)
   
 </Callout>
 
@@ -195,6 +196,47 @@ To fix this issue, make sure that all of your route segment files (so typically 
   </Accordion>
 </Accordions>
 
+
+### Metadata image routes (OG images) fail with `getLocale()`
+
+```
+Error: Route /[locale]/.../opengraph-image used
+import('next/root-params').locale() inside a Route Handler.
+```
+
+Next.js metadata image routes (`opengraph-image.tsx`, `twitter-image.tsx`) are Route Handlers internally, and `next/root-params` is not supported in Route Handlers.
+This means `getLocale()`, `getMessages()`, and `getGT()` will fail in these contexts.
+
+**Fix:** Use `registerLocale()` to explicitly set the locale at the top of the handler:
+
+```tsx title="app/[locale]/opengraph-image.tsx"
+import { ImageResponse } from 'next/og';
+import { registerLocale, getMessages, msg } from 'gt-next/server';
+
+const HEADING = msg('Welcome to our site');
+
+export default async function OGImage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  registerLocale(locale);
+
+  const m = await getMessages();
+
+  return new ImageResponse(
+    (
+      <div style={{ display: 'flex', fontSize: '48px' }}>
+        {m(HEADING)}
+      </div>
+    ),
+    { width: 1200, height: 630 }
+  );
+}
+```
+
+This also applies to `twitter-image.tsx` and any other metadata image routes.
 
 ---
 
