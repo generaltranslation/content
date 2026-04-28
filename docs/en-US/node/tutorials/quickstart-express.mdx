@@ -103,33 +103,24 @@ const app = express();
 
 ---
 
-## Step 4: Add locale middleware
+## Step 4: Add translated routes
 
-Each request needs to know which language to use. Use **`withGT`** middleware to set the locale per request — it uses async local storage so all downstream translation calls automatically pick up the right locale:
+Each request needs to know which language to use. Use **`withGT`** to set the locale per request — it uses async local storage so all downstream translation calls automatically pick up the right locale.
 
-```js title="server.js"
-import { withGT, getRequestLocale } from 'gt-node';
-
-app.use((req, res, next) => {
-  const locale = getRequestLocale(req);
-  withGT(locale, () => next());
-});
-```
-
----
-
-## Step 5: Internationalize strings
-
-Use **`getGT`** to translate strings inline inside route handlers:
+Wrap your handler logic inside **`withGT`** so that `getGT` and other translation functions share the same async context:
 
 ```js title="server.js"
-import { getGT } from 'gt-node';
+import { withGT, getGT, getRequestLocale } from 'gt-node';
 
 app.get('/api/greeting', async (req, res) => {
-  const gt = await getGT();
-  res.json({
-    message: gt('Hello, world!'),
-    welcome: gt('Welcome, {name}!', { name: 'Alice' }),
+  const locale = getRequestLocale(req);
+
+  await withGT(locale, async () => {
+    const gt = await getGT();
+    res.json({
+      message: gt('Hello, world!'),
+      welcome: gt('Welcome, {name}!', { name: 'Alice' }),
+    });
   });
 });
 ```
@@ -138,7 +129,7 @@ For strings defined outside of request scope, use [`msg`](/docs/node/api/strings
 
 ---
 
-## Step 6: Set up environment variables
+## Step 5: Set up environment variables
 
 You need API keys from General Translation. These are used by `npx gt translate` to generate translation files and by the runtime for any on-the-fly translation.
 
@@ -170,7 +161,7 @@ npx gt auth
 
 ---
 
-## Step 7: Translate
+## Step 6: Translate
 
 Run the translate command to generate translation files:
 
@@ -190,7 +181,7 @@ Add it to your build script so it runs automatically:
 
 ---
 
-## Step 8: Test it
+## Step 7: Test it
 
 Start your server and test with different `Accept-Language` headers:
 
