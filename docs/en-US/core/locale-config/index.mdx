@@ -1,13 +1,13 @@
 ---
 title: LocaleConfig
-description: Client-safe locale metadata, alias resolution, and Intl formatting helper
+description: Lightweight locale utilities for formatting and locale resolution
 ---
 
 ## Overview
 
-`LocaleConfig` is a client-safe helper class that provides locale metadata, alias resolution, and `Intl` formatting — without requiring API keys or project credentials.
+`LocaleConfig` is a lightweight class that provides locale formatting utilities and locale resolution helpers. It's designed as a standalone import for projects that only need formatting and locale methods — without pulling in the full [`GT`](/docs/core) class and its translation dependencies.
 
-It wraps all of the locale and formatting methods available on the [`GT`](/docs/core/class) class, but can be used independently on the client side.
+This gives you better tree-shaking and a smaller bundle when you don't need translation functionality.
 
 ```typescript
 import { LocaleConfig } from 'generaltranslation';
@@ -18,17 +18,7 @@ const localeConfig = new LocaleConfig({
 });
 ```
 
----
-
-## When to use LocaleConfig
-
-Use `LocaleConfig` when you need locale or formatting utilities on the client side **without** instantiating the full `GT` class (which requires API credentials).
-
-Common use cases:
-- Formatting numbers, dates, currencies, and lists for a target locale
-- Resolving locale aliases from a custom mapping
-- Checking locale validity, direction (LTR/RTL), or relationships
-- Determining which locale to use from a set of candidates
+If you already have a `GT` instance, you can access its `LocaleConfig` via `gt.localeConfig`.
 
 ---
 
@@ -38,188 +28,50 @@ Common use cases:
 new LocaleConfig(params?: LocaleConfigConstructorParams)
 ```
 
-### Parameters
-
-| Property | Type | Optional | Default | Description |
-|----------|------|----------|---------|-------------|
-| `defaultLocale` | `string` | ✓ | `'en'` | Default locale used as a formatting fallback |
-| `locales` | `string[]` | ✓ | `[]` | Supported locales for your project |
-| `customMapping` | [`CustomMapping`](/docs/core/types/custom-mapping) | ✓ | — | Custom locale alias mapping |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `defaultLocale` | `string` | `'en'` | Fallback locale for formatting |
+| `locales` | `string[]` | `[]` | Supported locales |
+| `customMapping` | [`CustomMapping`](/docs/core/types/custom-mapping) | — | Custom locale alias mapping |
 
 ---
 
 ## Formatting methods
 
-All formatting methods accept an optional `targetLocale` parameter. The formatting locale fallback order is: explicit `locales` option → `targetLocale` → `defaultLocale` → `'en'`.
-
-### `formatNum(value, targetLocale?, options?)`
-
-Formats a number using [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat).
-
-```typescript
-localeConfig.formatNum(1234.5, 'de');
-// "1.234,5"
-```
-
-### `formatDateTime(value, targetLocale?, options?)`
-
-Formats a date using [`Intl.DateTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat).
-
-```typescript
-localeConfig.formatDateTime(new Date(), 'ja');
-// "2026/4/27"
-```
-
-### `formatCurrency(value, currency, targetLocale?, options?)`
-
-Formats a currency value using [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) with `style: 'currency'`.
-
-```typescript
-localeConfig.formatCurrency(9.99, 'EUR', 'fr');
-// "9,99 €"
-```
-
-### `formatRelativeTime(value, unit, targetLocale?, options?)`
-
-Formats a relative time using [`Intl.RelativeTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/RelativeTimeFormat).
-
-```typescript
-localeConfig.formatRelativeTime(-1, 'day', 'es');
-// "hace 1 día"
-```
-
-### `formatRelativeTimeFromDate(date, targetLocale?, options?)`
-
-Computes the relative time from a date (compared to `options.baseDate` or now) and formats it.
-
-```typescript
-const yesterday = new Date(Date.now() - 86400000);
-localeConfig.formatRelativeTimeFromDate(yesterday, 'en');
-// "1 day ago"
-```
-
-### `formatList(array, targetLocale?, options?)`
-
-Formats an array as a human-readable list using [`Intl.ListFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/ListFormat).
-
-```typescript
-localeConfig.formatList(['apples', 'oranges', 'bananas'], 'en');
-// "apples, oranges, and bananas"
-```
-
-### `formatListToParts(array, targetLocale?, options?)`
-
-Like `formatList`, but returns an array of parts instead of a string.
-
-### `formatMessage(message, targetLocale?, options?)`
-
-Formats an ICU message string with variables.
-
-```typescript
-localeConfig.formatMessage('Hello {name}!', 'en', {
-  variables: { name: 'World' },
-});
-// "Hello World!"
-```
-
-### `formatCutoff(value, targetLocale?, options?)`
-
-Truncates a string according to the specified cutoff format options.
+| Method | Description |
+|--------|-------------|
+| [`formatNum`](/docs/core/format/numbers) | Format numbers via `Intl.NumberFormat` |
+| [`formatDateTime`](/docs/core/format/dates) | Format dates via `Intl.DateTimeFormat` |
+| [`formatCurrency`](/docs/core/format/currency) | Format currency values |
+| [`formatRelativeTime`](/docs/core/format/relative-time) | Format relative time (e.g. "3 days ago") |
+| [`formatRelativeTimeFromDate`](/docs/core/format/relative-time) | Compute and format relative time from a `Date` |
+| [`formatList`](/docs/core/format/lists) | Format arrays as human-readable lists |
+| [`formatListToParts`](/docs/core/format/lists) | Like `formatList`, but returns parts |
+| [`formatMessage`](/docs/core/format/messages) | Format ICU message strings with variables |
+| `formatCutoff` | Truncate a string with cutoff options |
 
 ---
 
 ## Locale methods
 
-### `getLocaleName(locale)`
-
-Returns the display name of a locale in the default locale's language.
-
-```typescript
-localeConfig.getLocaleName('ja');
-// "Japanese"
-```
-
-### `getLocaleEmoji(locale)`
-
-Returns the flag emoji for a locale.
-
-```typescript
-localeConfig.getLocaleEmoji('fr');
-// "🇫🇷"
-```
-
-### `getLocaleProperties(locale)`
-
-Returns a [`LocaleProperties`](/docs/core/types/locale-properties) object with metadata about a locale.
-
-### `getLocaleDirection(locale)`
-
-Returns `'ltr'` or `'rtl'` for the given locale.
-
-```typescript
-localeConfig.getLocaleDirection('ar');
-// "rtl"
-```
-
-### `isValidLocale(locale)`
-
-Returns whether a locale string is valid (including custom aliases).
-
-### `standardizeLocale(locale)`
-
-Standardizes a locale string to its canonical BCP 47 form.
-
-```typescript
-localeConfig.standardizeLocale('en_US');
-// "en-US"
-```
-
-### `resolveCanonicalLocale(locale)`
-
-Resolves a locale (including custom aliases) to its canonical BCP 47 code.
-
-### `resolveAliasLocale(locale)`
-
-Resolves a canonical locale back to its custom alias, if one exists.
-
-### `isSameDialect(...locales)`
-
-Returns whether all provided locales are the same dialect (e.g., `en-US` and `en-US`).
-
-### `isSameLanguage(...locales)`
-
-Returns whether all provided locales share the same language (e.g., `en-US` and `en-GB`).
-
-### `isSupersetLocale(superLocale, subLocale)`
-
-Returns whether `superLocale` is a superset of `subLocale` (e.g., `en` is a superset of `en-US`).
-
-### `requiresTranslation(targetLocale, sourceLocale?, approvedLocales?)`
-
-Returns whether translation is needed between the source and target locales.
-
-### `determineLocale(locales, approvedLocales?)`
-
-Determines the best matching locale from a list of candidates against the approved locales.
-
----
-
-## Accessing from GT
-
-If you already have a `GT` instance, you can access its `LocaleConfig` via the `localeConfig` property:
-
-```typescript
-const gt = new GT({ sourceLocale: 'en', locales: ['es', 'fr'] });
-const config = gt.localeConfig;
-
-config.getLocaleName('es');
-// "Spanish"
-```
+| Method | Description |
+|--------|-------------|
+| `getLocaleName(locale)` | Display name of a locale (e.g. `"Japanese"`) |
+| `getLocaleEmoji(locale)` | Flag emoji for a locale (e.g. `"🇫🇷"`) |
+| [`getLocaleProperties(locale)`](/docs/core/types/locale-properties) | Locale metadata object |
+| `getLocaleDirection(locale)` | `'ltr'` or `'rtl'` |
+| `isValidLocale(locale)` | Check if a locale string is valid |
+| `standardizeLocale(locale)` | Canonicalize to BCP 47 (e.g. `en_US` → `en-US`) |
+| `resolveCanonicalLocale(locale)` | Resolve aliases to canonical BCP 47 |
+| `resolveAliasLocale(locale)` | Resolve canonical locale back to alias |
+| `isSameDialect(...locales)` | Check if locales are the same dialect |
+| `isSameLanguage(...locales)` | Check if locales share a language |
+| `isSupersetLocale(super, sub)` | Check if one locale is a superset of another |
 
 ---
 
 ## Related
 
-- [`GT` class](/docs/core/class) — Full translation and formatting class (requires API credentials)
+- [`GT` class](/docs/core) — Full translation + formatting (requires API credentials)
 - [`CustomMapping`](/docs/core/types/custom-mapping) — Custom locale alias configuration
 - [`LocaleProperties`](/docs/core/types/locale-properties) — Locale metadata type
