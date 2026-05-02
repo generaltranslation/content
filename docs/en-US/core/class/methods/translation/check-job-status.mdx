@@ -11,8 +11,8 @@ This method is used to monitor the progress of asynchronous operations initiated
 ```typescript
 const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
 
-const status = await gt.checkJobStatus(['job-123', 'job-456']);
-console.log(`Job status: ${status.status}`);
+const statuses = await gt.checkJobStatus(['job-123', 'job-456']);
+statuses.forEach(job => console.log(`${job.jobId}: ${job.status}`));
 ```
 
 <Callout>
@@ -30,35 +30,35 @@ console.log(`Job status: ${status.status}`);
 
 ### Returns
 
-`Promise<CheckJobStatusResult>` - Contains the current job status and related information.
+`Promise<CheckJobStatusResult>` - A flat array of job status objects.
 
 ```typescript
 type CheckJobStatusResult = {
-  jobs: {
-    jobId: string;
-    status: JobStatus;
-    error?: { message: string };
-  }[];
-}
+  jobId: string;
+  status: JobStatus;
+  error?: { message: string };
+}[];
 ```
+
+Each element in the array contains:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `jobs` | `object[]` | Array of job status objects |
-| `jobs[].jobId` | `string` | The job identifier that was checked |
-| `jobs[].status` | `JobStatus` | Current status of the job |
-| `jobs[].error?` | `{ message: string }` | Error information if status is `'failed'` |
+| `jobId` | `string` | The job identifier that was checked |
+| `status` | `JobStatus` | Current status of the job |
+| `error?` | `{ message: string }` | Error information if status is `'failed'` |
 
 #### JobStatus
 
 ```typescript
-type JobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'unknown';
 ```
 
 - `'queued'` - Job is waiting to be processed
 - `'processing'` - Job is currently being executed
 - `'completed'` - Job finished successfully
 - `'failed'` - Job encountered an error and failed
+- `'unknown'` - Job status could not be determined
 
 ---
 
@@ -97,7 +97,7 @@ const setupResult = await gt.setupProject(fileRefs);
 async function pollJobStatus(jobIds: string[]) {
   const status = await gt.checkJobStatus(jobIds);
 
-  status.jobs.forEach(job => {
+  status.forEach(job => {
     console.log(`Job ${job.jobId}:`);
     console.log(`  Status: ${job.status}`);
 

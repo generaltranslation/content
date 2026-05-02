@@ -11,7 +11,6 @@ It is required for any client-side translations on your application.
 ### When to use
 
 - Wrap your entire application in `<GTProvider>` to enable translations on the client.
-- When working with dictionaries, optionally specify an `id` to limit the dictionary data sent to the client, optimizing performance for large dictionaries.
 - The `<GTProvider>` component is used for both [inline `<T>`](/docs/react-native/guides/t) and [dictionaries](/docs/react-native/guides/dictionaries).
 
 ## Reference
@@ -27,11 +26,6 @@ It is required for any client-side translations on your application.
     projectId: {
       type: 'string',
       optional: true,
-    },
-    'id?': {
-      type: 'string',
-      optional: true,
-      default: 'undefined',
     },
     'dictionary?': {
       type: 'Dictionary',
@@ -74,8 +68,28 @@ It is required for any client-side translations on your application.
       type: 'string',
       optional: true,
     },
-    'metadata?': {
+    'config?': {
       type: 'object',
+      optional: true,
+    },
+    'loadTranslations?': {
+      type: '(locale: string) => Promise<Record<string, any>>',
+      optional: true,
+    },
+    'loadDictionary?': {
+      type: '(locale: string) => Promise<Record<string, any>>',
+      optional: true,
+    },
+    'region?': {
+      type: 'string',
+      optional: true,
+    },
+    'fallback?': {
+      type: 'ReactNode',
+      optional: true,
+    },
+    'customMapping?': {
+      type: 'CustomMapping',
       optional: true,
     },
   }}
@@ -87,7 +101,6 @@ It is required for any client-side translations on your application.
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `children`        | Any component or the parents of any component that needs to translate or access translation information on the client side. These should include any components using `<T>`, `useGT`, or other translation utilities. |
 | `projectId?`      | The project ID required for General Translation cloud services.                                                                                                                                                       |
-| `id?`             | The ID of a nested dictionary to limit the data sent to the client. This is useful for large projects with extensive dictionaries.                                                                                    |
 | `dictionary?`     | The translation dictionary for the project.                                                                                                                                                                           |
 | `locales?`        | The list of approved locales for the project.                                                                                                                                                                         |
 | `defaultLocale?`  | The default locale to use if no other locale is found.                                                                                                                                                                |
@@ -97,7 +110,12 @@ It is required for any client-side translations on your application.
 | `renderSettings?` | The settings for rendering translations.                                                                                                                                                                              |
 | `_versionId?`     | The version ID for fetching translations.                                                                                                                                                                             |
 | `devApiKey?`      | The API key for development environments.                                                                                                                                                                             |
-| `metadata?`       | Additional metadata to pass to the context.                                                                                                                                                                           |
+| `config?`         | A configuration object (typically imported from `gt.config.json`) containing `projectId`, `locales`, `defaultLocale`, and other settings. An alternative to passing these as individual props.                         |
+| `loadTranslations?` | An async function that takes a locale string and returns the translations object for that locale. Used to load pre-generated translation files at runtime.                                                           |
+| `loadDictionary?` | An async function that takes a locale string and returns the dictionary translations for that locale.                                                                                                                  |
+| `region?`         | The user's region code (e.g., `US`, `GB`). Used for region-specific formatting.                                                                                                                                       |
+| `fallback?`       | Custom fallback content to display while translations are loading.                                                                                                                                                     |
+| `customMapping?`  | A mapping of custom component names to their React components, used when rendering translated JSX.                                                                                                                     |
 
 ### Returns
 
@@ -110,36 +128,37 @@ It is required for any client-side translations on your application.
 Wrap your application in `<GTProvider>` to add translation to your app.
 Don't forget to add a [list of supported locales](/docs/platform/supported-locales) to enable translation.
 
-```jsx title="index.js" copy
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import "./index.css";
-import App from "./App.tsx";
-import { GTProvider } from "gt-react-native";
+```jsx title="App.tsx" copy
+import { GTProvider } from 'gt-react-native';
+import gtConfig from './gt.config.json';
+import { loadTranslations } from './loadTranslations';
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <GTProvider locales={['es', 'fr']}> // Enable Spanish and French // [!code highlight]
-      <App />
-    </GTProvider> // [!code highlight]
-  </StrictMode>
-);
+export default function App() {
+  return (
+    <GTProvider config={gtConfig} loadTranslations={loadTranslations}> {/* // [!code highlight] */}
+      {/* Your app content */}
+    </GTProvider>
+  );
+}
 ```
 
 ### Dictionaries
 
 You can also pass a dictionary to the `<GTProvider>` component and then access it with the [`useTranslations`](/docs/react-native/api/dictionary/use-translations) hook.
 
-```jsx title="index.js" copy
-import dictionary from "./dictionary.js";
+```jsx title="App.tsx" copy
+import { GTProvider } from 'gt-react-native';
+import gtConfig from './gt.config.json';
+import { loadTranslations } from './loadTranslations';
+import dictionary from './dictionary';
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <GTProvider locales={['es', 'fr']} dictionary={dictionary}> // [!code highlight]
-      <App />
+export default function App() {
+  return (
+    <GTProvider config={gtConfig} loadTranslations={loadTranslations} dictionary={dictionary}> {/* // [!code highlight] */}
+      {/* Your app content */}
     </GTProvider>
-  </StrictMode>
-);
+  );
+}
 ```
 
 For more information on using dictionaries, check out this [guide](/docs/react-native/guides/dictionaries).
@@ -160,16 +179,17 @@ It also directly integrates with the [`gt translate` command](/docs/cli/translat
 
 All you have to do is just pass this to the `<GTProvider>` component.
 
-```jsx title="index.js" copy
-import config from "../gt.config.json";
+```jsx title="App.tsx" copy
+import { GTProvider } from 'gt-react-native';
+import config from './gt.config.json';
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <GTProvider {...config}> // [!code highlight]
-      <App />
+export default function App() {
+  return (
+    <GTProvider {...config}> {/* // [!code highlight] */}
+      {/* Your app content */}
     </GTProvider>
-  </StrictMode>
-);
+  );
+}
 ```
 
 ### Custom translation loader
@@ -177,16 +197,17 @@ createRoot(document.getElementById("root")!).render(
 You can use the `loadTranslations` prop to load translations from a custom source.
 This is useful when you need to load translations from a different source, such as a custom API.
 
-```jsx title="index.js" copy
-import loadTranslations from "./loadTranslations";
+```jsx title="App.tsx" copy
+import { GTProvider } from 'gt-react-native';
+import { loadTranslations } from './loadTranslations';
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <GTProvider locales={['es', 'fr']} loadTranslations={loadTranslations}> // [!code highlight]
-      <App />
+export default function App() {
+  return (
+    <GTProvider locales={['es', 'fr']} loadTranslations={loadTranslations}> {/* // [!code highlight] */}
+      {/* Your app content */}
     </GTProvider>
-  </StrictMode>
-);
+  );
+}
 ```
 
 ### Render settings
@@ -197,9 +218,9 @@ There are two fields: `timeout` and `method`.
 - `timeout` is the number of milliseconds to wait for a translation to load before showing a fallback (default: `8000ms`).
 - `method` is the method to use to load translations (`"skeleton"`, `"replace"`, or `"default"`).
 
-```jsx title="index.js" copy
+```jsx title="App.tsx" copy
 <GTProvider renderSettings={{ method: 'skeleton', timeout: 1000 }}>
-  <App />
+  {/* Your app content */}
 </GTProvider>
 ```
 
