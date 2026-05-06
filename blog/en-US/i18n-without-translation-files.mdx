@@ -1,0 +1,118 @@
+---
+title: "i18n without translation files"
+summary: Most i18n libraries force you to maintain JSON files for every language. There's a different way to handle it.
+date: 2026-05-07
+authors: [jackie]
+tags: ['guide', 'internationalization', 'nextjs', 'i18n', 'gt-next', 'translation-files', 'developer-experience']
+---
+
+Everyone who's internationalized a JavaScript app knows the workflow. You install an i18n library, create an `en.json` file, pull every user-facing string out of your components, assign each one a key, and reference the key where the string used to be. Then you duplicate that JSON file for every language you support. `es.json`, `fr.json`, `ja.json`. Repeat until done.
+
+At first, it's fine. You have 30 strings and 3 languages. That's 90 entries. Manageable.
+
+Then your app grows. Six months later you have 400 strings and 12 languages. 4,800 entries across a dozen files. A developer adds a new feature, writes five new strings, forgets to update three of the translation files. Nobody notices until a user in Tokyo sees English fallbacks in a Japanese interface.
+
+This is the part where someone suggests buying a translation management system.
+
+## The file management tax
+
+Translation files create a maintenance burden that scales linearly with the number of languages you support. Every string change requires updating every file. Every file can drift out of sync. Every sync requires tooling, automation, or discipline to maintain.
+
+The tooling ecosystem around this problem is revealing. There are VS Code extensions that auto-generate translation keys, type generators that validate your JSON files against TypeScript interfaces, linters that detect unused keys, CI checks that verify all locales have the same keys. These tools exist because the workflow is fundamentally fragile, and the people using it know it.
+
+The core issue: your UI says one thing, your translation files say another, and you need to keep both in sync forever. A key-based mapping holds it together, until it doesn't.
+
+## Translating code directly
+
+What if you didn't extract strings at all?
+
+```tsx
+import { T } from 'gt-next';
+
+function PricingCard({ plan }) {
+  return (
+    <T>
+      <h2>Start building today</h2>
+      <p>
+        The {plan.name} plan includes unlimited projects
+        and priority support.
+      </p>
+    </T>
+  );
+}
+```
+
+The `<T>` component in [`gt-next`](https://generaltranslation.com/docs/next) marks a block of JSX for translation. The English stays in your component. When a user visits in Spanish, the content inside `<T>` is swapped for its Spanish equivalent — preserving the HTML structure, the formatting, everything.
+
+There's no `t('pricing.card.heading')`. No `en.json`. No JSON file per locale that you have to keep in sync with your components. The code is the source of truth.
+
+## Where do translations live then?
+
+They're build artifacts. When you deploy, the [GT CLI](https://generaltranslation.com/docs/cli/translate) scans your codebase for everything inside `<T>` components and generates translations for every target language. The output goes into a directory that's gitignored, like compiled CSS or bundled JavaScript. You don't write it, you don't edit it, you don't check it in.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja", "de", "ko", "zh"],
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json"
+    }
+  }
+}
+```
+
+```txt title=".gitignore"
+public/_gt/
+```
+
+In development, translations happen on-demand — change a string, refresh the page, see it in Japanese immediately. In production, everything is pre-generated and served from a CDN.
+
+The translation files exist, technically. They're just not your problem.
+
+## What changes in practice
+
+The difference shows up in daily work more than in architecture diagrams.
+
+A PR that adds a new section to a page reads like a PR that adds a new section to a page. The reviewer sees the actual words, not `checkout.summary.discount_applied_notice`. No hunting through JSON to figure out what changed.
+
+Refactoring gets easier too. Rename a component, move it, split it into pieces — translations follow the content because there are no keys to remap. Adding a language is a config change: one new locale code in `gt.config.json`, then rebuild. No empty JSON file to populate.
+
+And when you delete a component, its translations simply stop being generated. No orphaned keys accumulating across 15 files that nobody wants to audit.
+
+## For strings that aren't JSX
+
+Not everything is a heading or a paragraph. Placeholder attributes, `aria-label` values, `alt` text, toast messages — these are plain strings. The [`useGT`](https://generaltranslation.com/docs/next/api/strings/use-gt) hook handles those:
+
+```tsx
+import { useGT } from 'gt-next';
+
+function SearchBar() {
+  const gt = useGT();
+  
+  return (
+    <input 
+      placeholder={gt('Search your documents')}
+      aria-label={gt('Document search input')}
+    />
+  );
+}
+```
+
+Write the English string where it's used, and translation happens at build time.
+
+## The tradeoff
+
+You're trading file-based control for automation. If your workflow requires manually editing translations per-locale before they go live — because legal needs to sign off on every string, or because your brand voice in German is carefully maintained by a specific person — then managing files directly gives you that control.
+
+For teams where "get this into 20 languages with good quality and don't make me manage files" is the goal, the tradeoff is straightforward.
+
+## Getting started
+
+```bash
+npx gt@latest init
+```
+
+The setup wizard configures your Next.js project, installs dependencies, and sets up translation hot reloading for development. Full walkthrough in the [quickstart guide](https://generaltranslation.com/docs/next).
+
+`gt-next` is open source and works with Next.js App Router. For React SPAs, there's [`gt-react`](https://generaltranslation.com/docs/react). For React Native, there's [`gt-react-native`](https://generaltranslation.com/docs/react-native).
