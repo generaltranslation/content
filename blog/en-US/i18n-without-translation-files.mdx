@@ -1,0 +1,127 @@
+---
+title: "i18n without translation files"
+summary: Most i18n libraries force you to maintain JSON files for each language you support. There's a different way to handle it.
+date: 2026-05-07
+authors: [jackie]
+tags: ['guide', 'internationalization', 'nextjs', 'i18n', 'gt-next', 'translation-files', 'developer-experience']
+---
+
+Everyone who's internationalized a JavaScript app knows the workflow. You install an i18n library, create an `en.json` file, pull every user-facing string out of your components, assign each one a key, and reference the key where the string used to be. Then you duplicate that JSON file for every language you support. `es.json`, `fr.json`, `ja.json`.
+
+At first, it's fine. Thirty strings, three languages, 90 entries.
+
+Then your app grows. Six months later you have 400 strings and 12 languages. 4,800 entries across a dozen files. A developer adds a new feature, writes five new strings, forgets to update three of the translation files. Nobody notices until a user in Tokyo sees English fallbacks in a Japanese interface. Someone suggests buying a translation management system.
+
+<video
+  autoPlay
+  loop
+  muted
+  playsInline
+  src="/blog/i18n-no-files-demo.mp4"
+/>
+
+## The file management tax
+
+Translation files create a maintenance burden that scales with the number of languages you support. Change a string and you need to update a dozen files. Those files drift out of sync. Keeping them aligned requires tooling, automation, or discipline.
+
+The ecosystem of workarounds tells the story: VS Code extensions that auto-generate translation keys, type generators that validate your JSON against TypeScript interfaces, linters for unused keys, CI checks that verify all locales are in sync. You don't build this kind of tooling for a workflow that works well.
+
+Your UI says one thing, your translation files say another, and a key-based mapping holds the two together:
+
+```tsx
+function CheckoutSummary({ itemCount, discount }) {
+  const { t } = useTranslation('checkout');
+
+  return (
+    <div>
+      <h2>{t('summary.title')}</h2>
+      <p>{t('summary.item_count', { count: itemCount })}</p>
+      {discount && <p>{t('summary.discount_applied', { percent: discount })}</p>}
+      <p>{t('summary.total_label')}</p>
+      <small>{t('summary.tax_notice')}</small>
+    </div>
+  );
+}
+```
+
+To understand what this component renders, you'd have to open `checkout.json`, find the `summary` namespace, and cross-reference five keys. Across hundreds of components, code review becomes an exercise in file-hopping.
+
+ICU message syntax makes this worse. The format libraries like `i18next`, `react-intl`, and `next-intl` use for plurals, gender, and interpolation is its own mini-language embedded in JSON strings. A misplaced brace in `{count, plural, one {# item} other {# items}}` won't surface until runtime. Linters exist for this, but most teams skip them. Inline code, by contrast, gets checked by your TypeScript compiler and your IDE the moment you type it.
+
+## Translating code directly
+
+What if you didn't extract strings at all?
+
+```tsx
+import { T } from 'gt-react';
+
+function CheckoutSummary({ itemCount, discount }) {
+  return (
+    <T>
+      <div>
+        <h2>Order Summary</h2>
+        <p>You have {itemCount} items in your cart.</p>
+        {discount && <p>{discount}% discount applied!</p>}
+        <p>Total (before tax):</p>
+        <small>Tax calculated at checkout.</small>
+      </div>
+    </T>
+  );
+}
+```
+
+The `<T>` component in [`gt-react`](https://generaltranslation.com/docs/react) marks a block of JSX for translation. The English stays in your component. When a user visits in Spanish, the content inside `<T>` is replaced with its Spanish equivalent. Structure and formatting carry over.
+
+There's no `t('checkout.summary.title')`, no `en.json`, no per-locale JSON files to keep in sync.
+
+## Translations as build output
+
+They're generated at deploy time. The [GT CLI](https://generaltranslation.com/docs/cli/translate) scans your codebase for everything inside `<T>` components and produces translations for every target language. The output goes into a gitignored directory, like compiled CSS or bundled JavaScript.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja", "de", "ko", "zh"],
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json"
+    }
+  }
+}
+```
+
+```txt title=".gitignore"
+public/_gt/
+```
+
+In development, translations happen on-demand. Change a string, refresh, see it in Japanese immediately. In production, everything is pre-generated and served from a CDN. Translation files still exist on disk, but they're output artifacts, not something you author or maintain.
+
+## What changes in practice
+
+The difference shows up in daily work more than in architecture diagrams.
+
+A PR that adds a new section to a page reads like a PR that adds a new section to a page. The reviewer sees the actual words, not `checkout.summary.discount_applied_notice`. Code review stops requiring a side-by-side with a JSON file.
+
+Refactoring is less painful. Rename a component, move it, split it into pieces. Translations follow the content because there are no keys to remap. Adding a language is a one-line config change. Deleting a component means its translations quietly stop being generated, instead of leaving orphaned keys across 15 files that nobody wants to clean up.
+
+## Where i18n libraries are heading
+
+The trend across the ecosystem is toward inline strings. Early i18n libraries like `i18next` and `react-intl` were built when machine translation wasn't viable and every string needed to be handed off to a human translator. Dictionaries made sense as an interchange format. That constraint is gone, and the developer experience cost of maintaining parallel string files is increasingly hard to justify.
+
+`next-intl` added [non-dictionary `t()` calls](https://next-intl.dev/docs/workflows/how-to-achieve-perfect-type-safety-with-next-intl#1-inline-messages) alongside its dictionary mode. [Lingui's Compiler](https://lingui.dev/ref/swc-plugin) extracts messages at build time from inline tagged templates. [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) takes a different route, compiling from message files into per-locale tree-shakeable functions. The approaches differ, but content is moving closer to the component across all of them. GT takes this to its conclusion: your JSX is the source of truth, and translation is a compile step.
+
+## The tradeoff
+
+When you write content inline, you're writing in your native language. Your component structure, your sentence patterns, your UI flow all reflect how you think in English (or whatever your source language is). A dictionary-based approach like `next-intl` is more language-agnostic by design, because the component never contains a real sentence in any language, just a key that points elsewhere.
+
+But most developers are already thinking in one language when they build UI. The layout, the copy, the button labels are all conceived in English first. That bias is in the design whether the strings are inline or in a JSON file. We think the i18n framework should adapt to how you actually work. Build the app naturally, and let the framework handle translation, rather than abstracting content into keys for the sake of language neutrality.
+
+## Getting started
+
+```bash
+npx gt@latest init
+```
+
+The setup wizard configures your project, installs dependencies, and sets up translation hot reloading for development. Full walkthrough in the [quickstart guide](https://generaltranslation.com/docs/react).
+
+`gt-react` is open source. For Next.js App Router, there's [`gt-next`](https://generaltranslation.com/docs/next). For React Native, there's [`gt-react-native`](https://generaltranslation.com/docs/react-native).
