@@ -1,0 +1,100 @@
+---
+title: gt-i18n@0.9.0
+date: 2026-05-07
+authors: [ernest]
+tags: ['gt-i18n', 'gt-node', 'dictionaries', 'getTranslations', 'i18n']
+---
+
+## Overview
+
+`gt-i18n` now supports dictionary-backed translations via `getTranslations()`. This brings `gt-i18n` in line with `gt-next`, `gt-react`, and other i18n libraries that use dictionaries as their primary translation pattern.
+
+| Package | Version |
+| --- | --- |
+| `gt-i18n` | `0.9.0` |
+| `gt-node` | `0.7.0` |
+
+## Setup
+
+Create a `dictionary.json` file in the root of your project with your source (English) strings:
+
+```json title="dictionary.json"
+{
+  "greeting": {
+    "hello": "Hello!"
+  },
+  "user": {
+    "welcome": "Welcome, {name}!"
+  },
+  "errors": {
+    "notFound": "Page not found",
+    "unauthorized": "Access denied"
+  }
+}
+```
+
+When you run the GT CLI (`npx gtx translate`), it will automatically detect `dictionary.json` in the project root and translate it for your configured locales.
+
+<Accordions>
+  <Accordion title="Bringing your own dictionaries">
+    If you want to load your own pre-translated dictionaries, you can also pass a `loadDictionary()` async function. You still need to provide the default dictionary explicitly — `loadDictionary` is only for translated locales:
+
+    ```ts
+    import { initializeGT } from 'gt-node';
+    import dictionary from './dictionary.json';
+
+    initializeGT({
+      dictionary,
+      loadDictionary: async (locale) => {
+        const dict = await import(`./locales/${locale}.json`);
+        return dict.default;
+      },
+    });
+    ```
+
+    Translations loaded via `loadDictionary` take precedence over GT-generated translations.
+  </Accordion>
+</Accordions>
+
+## Usage
+
+Given the source dictionary above, call `getTranslations()` to get a `t` function that resolves entries from your dictionary:
+
+```ts
+import { getTranslations } from 'gt-i18n';
+
+const t = await getTranslations();
+
+t('greeting.hello'); // "Hello!"
+t('user.welcome', { name: 'Alice' }); // "Welcome, Alice!"
+```
+
+### Sub-dictionaries with `t.obj()`
+
+`t()` returns a single string. `t.obj()` returns an entire subtree of the dictionary as an object:
+
+```ts
+const t = await getTranslations();
+
+t('errors.notFound'); // "Page not found"
+
+const errors = t.obj('errors');
+// { notFound: "Page not found", unauthorized: "Access denied" }
+```
+
+When a translated dictionary is missing keys, the missing entries are filled in from the source dictionary. This means partial translations won't cause runtime errors — untranslated keys fall back to the source text.
+
+## Lookup behavior
+
+Two rules govern how lookups resolve:
+
+1. **Missing translation → default locale fallback.** If a key exists in the source dictionary but has no translation for the current locale, `t()` returns the source text.
+2. **Missing source entry → error.** If a key doesn't exist in the source dictionary at all, `t()` throws. This is intentional — if a key isn't defined in your source, it's a bug, not a missing translation. This behavior will be applied across all GT libraries in an upcoming refactor.
+
+The second rule assumes that translated dictionaries match the structure of your source dictionary, which is how GT generates translations automatically.
+
+## Links
+
+- [PR #1359](https://github.com/generaltranslation/gt/pull/1359)
+- [`getTranslations` API reference](/docs/next/api/dictionary/get-translations)
+- [Dictionaries guide](/docs/next/guides/dictionaries)
