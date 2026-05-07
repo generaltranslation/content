@@ -1,6 +1,6 @@
-# General Translation Docs Style Guide
+# General Translation Docs Agent Instructions
 
-This guide documents the conventions and patterns used across the General Translation documentation. Follow these rules when writing or reviewing docs content.
+Follow these rules when writing, editing, or reviewing General Translation documentation content.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: docs-skill
-description: General Translation documentation style and MDX conventions. Use when writing, editing, reviewing, or generating docs content in this repository, especially files under docs/**, docs-templates/**, blog/**, devlog/**, or any task that references STYLE_GUIDE.md.
+description: General Translation documentation style and MDX conventions. Use when writing, editing, reviewing, or generating docs content in this repository, especially files under docs/**, docs-templates/**, blog/**, devlog/**, or any task that references AGENTS.md.
 ---
 
 # General Translation Docs
