@@ -2,6 +2,29 @@
 
 This guide documents the conventions and patterns used across the General Translation documentation. Follow these rules when writing or reviewing docs content.
 
+## Table of contents
+
+- [File Format](#file-format)
+- [Frontmatter](#frontmatter)
+- [Heading Hierarchy](#heading-hierarchy)
+- [Product and Technology Names](#product-and-technology-names)
+- [Grammar and Usage](#grammar-and-usage)
+- [Headings](#headings)
+- [Lists](#lists)
+- [Punctuation](#punctuation)
+- [Code Examples](#code-examples)
+- [Links](#links)
+- [Callouts](#callouts)
+- [Tables](#tables)
+- [Templates (`docs-templates/`)](#templates-docs-templates)
+- [Tone and Voice](#tone-and-voice)
+- [Commit Messages](#commit-messages)
+- [Page Structure](#page-structure)
+- [Next steps](#next-steps)
+- [Common Components](#common-components)
+- [Template Placeholders](#template-placeholders)
+- [CI Restrictions](#ci-restrictions)
+
 ---
 
 ## File Format

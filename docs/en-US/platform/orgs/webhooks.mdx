@@ -1,0 +1,160 @@
+---
+title: Webhooks
+description: Receive real-time notifications when events happen in your organization
+---
+
+Webhooks let your application receive HTTP POST requests when events happen in your organization, such as a translated file completing or a translation job finishing.
+
+Webhooks are available on the **Team plan** and above.
+
+## Setting up a webhook
+
+1. Go to **Organization Settings → Webhooks**
+2. Click **Create Webhook**
+3. Enter the endpoint URL where you want to receive events (must be HTTPS)
+4. Select the event types you want to subscribe to
+5. Click **Create**
+
+After creating the endpoint, navigate to the webhook detail page and copy the signing secret. You'll use this secret to verify that incoming requests are from General Translation.
+
+You can create up to **5 webhook endpoints** per organization.
+
+## Event types
+
+| Event                       | Description                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `translated_file.completed` | Fires when a translated file is completed and ready to download                    |
+| `translated_file.edited`    | Fires when a translated file is manually edited by a user in the translation editor |
+| `translation_job.completed` | Fires when a translation job completes                                             |
+
+Each endpoint can subscribe to one or more event types. You can update your subscriptions at any time from the webhook detail page.
+
+## Payload format
+
+Every webhook delivery is an HTTP POST with a JSON body:
+
+```json
+{
+  "id": "evt_xxx",
+  "type": "translated_file.completed",
+  "created_at": "2026-04-30T12:00:00.000Z",
+  "api_version": "2026-03-06.v1",
+  "data": {
+    "object": {
+      "id": "file_xxx",
+      "org_id": "org_xxx",
+      "project_id": "project_xxx",
+      "branch_id": "branch_xxx",
+      "source_file_id": "src_xxx",
+      "file_id": "file_xxx",
+      "version_id": "ver_xxx",
+      "locale": "fr",
+      "file_format": "json",
+      "data_format": null,
+      "completed_at": "2026-04-30T12:00:00.000Z"
+    }
+  }
+}
+```
+
+The top-level `id` is a stable event identifier you can use to deduplicate deliveries on your end.
+
+## Verifying signatures
+
+Every webhook request includes three headers for signature verification:
+
+| Header              | Description                                        |
+| ------------------- | -------------------------------------------------- |
+| `webhook-id`        | The event ID (`evt_xxx`)                           |
+| `webhook-timestamp` | Unix timestamp (seconds) when the request was sent |
+| `webhook-signature` | `v1,<base64-hmac>` signature                       |
+
+The signature follows the [Standard Webhooks](https://www.standardwebhooks.com/) convention. To verify:
+
+1. Concatenate: `{webhook-id}.{webhook-timestamp}.{raw request body}`
+2. Compute HMAC-SHA256 using your signing secret (base64-decode the secret after removing the `whsec_` prefix)
+3. Base64-encode the result and compare against the signature value (after the `v1,` prefix)
+4. Check that the timestamp is within 5 minutes of the current time to prevent replay attacks
+
+### Example (Node.js)
+
+```js
+import crypto from "crypto";
+
+function verifyWebhook(payload, headers, secret) {
+  const msgId = headers["webhook-id"];
+  const timestamp = headers["webhook-timestamp"];
+  const signature = headers["webhook-signature"];
+
+  // Check timestamp freshness (5 minute tolerance)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp)) > 300) {
+    throw new Error("Timestamp too old");
+  }
+
+  // Compute expected signature
+  const signingKey = Buffer.from(secret.replace("whsec_", ""), "base64");
+  const signedContent = `${msgId}.${timestamp}.${payload}`;
+  const expected = crypto
+    .createHmac("sha256", signingKey)
+    .update(signedContent)
+    .digest("base64");
+
+  // Compare (constant-time)
+  const received = signature.split(",")[1];
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) {
+    throw new Error("Invalid signature");
+  }
+
+  return JSON.parse(payload);
+}
+```
+
+You can also use the [Standard Webhooks](https://www.standardwebhooks.com/) library for your language, which handles verification automatically.
+
+## Retries and delivery
+
+Webhooks use **at-least-once delivery**. If your endpoint doesn't return a `2xx` response within 10 seconds, the delivery is retried with exponential backoff for up to **10 attempts**.
+
+You can also manually retry a failed delivery from the webhook detail page in the dashboard.
+
+### Handling duplicates
+
+Because delivery is at-least-once, your endpoint may receive the same event more than once. Use the `id` field in the payload to deduplicate:
+
+```js
+app.post("/webhooks/gt", (req, res) => {
+  const eventId = req.body.id;
+
+  if (alreadyProcessed(eventId)) {
+    return res.status(200).send("OK");
+  }
+
+  // Process the event...
+  markProcessed(eventId);
+  res.status(200).send("OK");
+});
+```
+
+## Managing endpoints
+
+From the webhook detail page, you can:
+
+- **Enable/disable** an endpoint without deleting it
+- **Update** the subscribed event types
+- **View delivery history** and inspect individual delivery attempts
+- **Retry** a failed delivery
+- **Reveal** the signing secret (for re-copying)
+- **Delete** the endpoint
+
+## Best practices
+
+- **Respond quickly** — return a `2xx` response as fast as possible, then process the event asynchronously. Long-running handlers risk timeouts.
+- **Verify signatures** — always validate the `webhook-signature` header before trusting the payload.
+- **Handle duplicates** — store processed event IDs and skip duplicates.
+- **Use HTTPS** — webhook endpoints must use HTTPS in production.
+- **Monitor failures** — check your delivery history periodically for persistent failures that may indicate an issue with your endpoint.
+
+## Permissions
+
+Managing webhook endpoints requires the `org:webhooks:write` permission. Viewing delivery history requires `org:webhooks:read`. By default, the **Owner** and **Admin** roles have both permissions. See [Roles & Permissions](/docs/platform/orgs/roles) for details.
