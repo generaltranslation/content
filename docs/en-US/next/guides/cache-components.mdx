@@ -13,7 +13,9 @@ If you have not already, follow the [Next.js Cache Components guide](https://nex
 
 <Steps>
   <Step>
-  ### Enable cache components support in your gt-next configuration:
+  ### Enable cache components and configure request functions
+
+Enable cache components in your Next.js config, and define custom `getLocale` and `getRegion` request functions so that gt-next can resolve the locale inside cached components.
 
 ```js title="next.config.js"
 const nextConfig = {
@@ -21,9 +23,35 @@ const nextConfig = {
 };
 
 export default withGTConfig(nextConfig, {
-  experimentalLocaleResolution: true,
+  // Point to your custom request functions
+  getLocalePath: './getLocale.ts',
+  getRegionPath: './getRegion.ts',
 });
 ```
+
+Create these files in your project root:
+
+```ts title="getLocale.ts"
+import { headers } from 'next/headers';
+
+export default async function getLocale(): Promise<string> {
+  const h = await headers();
+  return h.get('x-gt-locale') || 'en';
+}
+```
+
+```ts title="getRegion.ts"
+import { headers } from 'next/headers';
+
+export default async function getRegion(): Promise<string> {
+  const h = await headers();
+  return h.get('x-gt-region') || '';
+}
+```
+
+<Callout type='warn'>
+`experimentalLocaleResolution` is deprecated as of gt-next@6.16.29. It relies on unsupported Next.js internals and may break in future Next.js releases. Use explicit `getLocalePath` and `getRegionPath` configuration instead.
+</Callout>
 
   </Step>
   <Step>
@@ -63,16 +91,8 @@ export default async function Page() {
 
 ## Configuration notes
 
-- Custom `getLocale` functions are overridden
-- `getRegion` and `getDomain` functions are disabled
-- You can customize the locale parameter name used for resolution with `experimentalLocaleResolutionParam` (defaults to `'locale'`)
-
-```js title="next.config.js"
-export default withGTConfig(nextConfig, {
-  experimentalLocaleResolution: true,
-  experimentalLocaleResolutionParam: 'lang', // Optional customization
-});
-```
+- When using custom `getLocalePath` and `getRegionPath`, those functions handle locale and region resolution for cached components.
+- You can customize the implementation of these functions to match your routing strategy (e.g., reading from headers, cookies, or URL parameters).
 
 ---
 
