@@ -1,0 +1,288 @@
+---
+title: Firebase Functions Quickstart
+description: Add multiple languages to your Firebase Cloud Functions in under 10 minutes
+---
+
+By the end of this guide, your Firebase Cloud Functions will respond with translated content based on the request's language.
+
+***Prerequisites:***
+- A Firebase project with Cloud Functions set up
+- Node.js 18+
+
+<Callout type='info'>
+  **New to Firebase Functions?** See the [Firebase docs](https://firebase.google.com/docs/functions/get-started) to set up your project first.
+</Callout>
+
+---
+
+## Step 1: Install the packages
+
+Inside your `functions/` directory, install `gt-node` and the `gt` CLI:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm i gt-node
+  npm i -D gt
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn add gt-node
+  yarn add --dev gt
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun add gt-node
+  bun add --dev gt
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm add gt-node
+  pnpm add --save-dev gt
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## Step 2: Create a translation config file
+
+Create a **`gt.config.json`** file in your `functions/` directory:
+
+```json title="functions/gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "./src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+---
+
+## Step 3: Initialize General Translation
+
+Call **`initializeGT`** at the top level of your functions file, outside any function handler.
+You can customize the translation loading behavior by passing a `loadTranslations` function.
+
+```js title="functions/index.js"
+import { initializeGT } from 'gt-node';
+import gtConfig from './gt.config.json' with { type: 'json' };
+
+async function loadTranslations(locale) {
+  // Need to enumerate because dynamic imports are not supported in Node.js
+  switch (locale) {
+    case 'ja':
+      return await import('./src/_gt/ja.json');
+    case 'es':
+      return await import('./src/_gt/es.json');
+    case 'fr':
+      return await import('./src/_gt/fr.json');
+    default:
+      return {};
+  }
+}
+
+initializeGT({
+  ...gtConfig,
+  loadTranslations,
+  // To enable runtime translations:
+  // projectId: process.env.GT_PROJECT_ID,
+  // devApiKey: process.env.GT_API_KEY,
+});
+```
+
+---
+
+## Step 4: Add locale handling
+
+Each request needs to know which language to use. Use **`withGT`** to set the locale per request — it uses async local storage so all downstream translation calls automatically pick up the right locale:
+
+```js title="functions/index.js"
+import { onRequest } from 'firebase-functions/v2/https';
+import { withGT, getGT, getRequestLocale } from 'gt-node';
+
+export const greeting = onRequest(async (req, res) => {
+  const locale = getRequestLocale(req);
+
+  await withGT(locale, async () => {
+    const gt = await getGT();
+    res.json({
+      message: gt('Hello, world!'),
+      welcome: gt('Welcome, {name}!', { name: 'Alice' }),
+    });
+  });
+});
+```
+
+For **`onCall`** (client SDK-invoked) functions, the client should pass the locale in the request data since `onCall` requests don't have HTTP headers:
+
+```js title="functions/index.js"
+import { onCall } from 'firebase-functions/v2/https';
+import { withGT, getGT, getDefaultLocale } from 'gt-node';
+
+export const getGreeting = onCall(async (req) => {
+  const locale = req.data.locale || getDefaultLocale();
+
+  return withGT(locale, async () => {
+    const gt = await getGT();
+    return {
+      message: gt('Hello, world!'),
+    };
+  });
+});
+```
+
+---
+
+## Step 5: Internationalize strings
+
+Use **`getGT`** to translate strings inline inside function handlers. Always call it inside a `withGT` block so it picks up the correct locale (as shown in Step 4).
+
+```js title="functions/index.js"
+import { getGT, withGT, getRequestLocale } from 'gt-node';
+
+export const getGreeting = onRequest(async (req, res) => {
+  const locale = getRequestLocale(req);
+
+  await withGT(locale, async () => {
+    const gt = await getGT();
+    res.json({
+      message: gt('Hello, world!'),
+    });
+  });
+});
+```
+
+For strings defined outside of request scope, use [`msg`](/docs/node/api/strings/msg) and [`getMessages`](/docs/node/api/get-messages) to resolve translations.
+
+---
+
+## Step 6: Set up environment variables
+
+You need API keys from General Translation. These are used by `npx gt translate` to generate translation files and by the runtime for any on-the-fly translation.
+
+Set your API keys using Firebase secrets:
+
+```bash
+firebase functions:secrets:set GT_API_KEY
+firebase functions:secrets:set GT_PROJECT_ID
+```
+
+Then reference them in your function definitions:
+
+```js title="functions/index.js"
+export const greeting = onRequest(
+  { secrets: ['GT_API_KEY', 'GT_PROJECT_ID'] },
+  async (req, res) => {
+    // GT_API_KEY and GT_PROJECT_ID are now available as process.env
+    // ...
+  }
+);
+```
+
+Get your free keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or by running:
+
+```bash
+npx gt auth
+```
+
+<Callout type="warn">
+  Never expose `GT_API_KEY` publicly or commit it to source control.
+</Callout>
+
+<Accordions>
+  <Accordion title="Can I use gt-node without API keys?">
+    Yes. Without API keys, `gt-node` works as a standard i18n library. You can still:
+    - Provide your own translation files manually
+    - Use all translation functions (`getGT`, `msg`, `getMessages`, etc.)
+    - Run `npx gt generate` to create translation file templates, then translate them yourself
+  </Accordion>
+</Accordions>
+
+---
+
+## Step 7: Translate
+
+Run the translate command to generate translation files:
+
+```bash
+npx gt translate
+```
+
+Add it to your build script so it runs automatically:
+
+```json title="functions/package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
+  }
+}
+```
+
+```json title="firebase.json"
+{
+  "functions": {
+    "source": "functions",
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+  }
+}
+```
+
+---
+
+## Step 8: Test it
+
+Use the Firebase emulator to test translations locally:
+
+```bash
+firebase emulators:start --only functions
+```
+
+Then test with different `Accept-Language` headers:
+
+```bash
+# Default (English)
+curl http://localhost:5001/YOUR_PROJECT/us-central1/greeting
+
+# Spanish
+curl -H "Accept-Language: es" http://localhost:5001/YOUR_PROJECT/us-central1/greeting
+
+# French
+curl -H "Accept-Language: fr" http://localhost:5001/YOUR_PROJECT/us-central1/greeting
+```
+
+---
+
+## Troubleshooting
+
+<Accordions>
+  <Accordion title="Environment variables aren't available">
+    Make sure you've set secrets with `firebase functions:secrets:set` and referenced them in your function's `secrets` option. Secrets set via the old `functions.config()` API won't appear as `process.env` variables.
+  </Accordion>
+  <Accordion title="Some translations are inaccurate">
+    Ambiguous text can lead to inaccurate translations. Add a `$context` option to help:
+
+    ```js
+    gt('Apple', { $context: 'the technology company' });
+    ```
+
+    Both `getGT()` and `msg()` support the `$context` option.
+  </Accordion>
+</Accordions>
+
+---
+
+## Next steps
+
+- [**`initializeGT`**](/docs/node/api/initialize-gt) — Full configuration options
+- [**`withGT`**](/docs/node/api/with-gt) — Locale context for requests
+- [**`getGT`**](/docs/node/api/get-gt) — Inline string translation
+- [**`msg` *&* `getMessages`**](/docs/node/api/get-messages) — Pre-registered message translation
+- [***Express Quickstart***](/docs/node/tutorials/quickstart-express) — Using gt-node with Express

@@ -1,0 +1,224 @@
+---
+title: Express Quickstart
+description: Add multiple languages to your Express server in under 10 minutes
+---
+
+By the end of this guide, your Express server will respond with translated content based on the request's language.
+
+***Prerequisites:***
+- An Express app (or start a new one)
+- Node.js 18+
+
+<Callout type='info'>
+  **Want automatic setup?** Run `npx gt@latest` to configure everything with the [Setup Wizard](/docs/cli/init). This guide covers manual setup.
+</Callout>
+
+---
+
+## Step 1: Install the packages
+
+`gt-node` is the library that powers translations in your server. `gt` is the CLI tool that prepares translations for production.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm i gt-node
+  npm i -D gt
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn add gt-node
+  yarn add --dev gt
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun add gt-node
+  bun add --dev gt
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm add gt-node
+  pnpm add --save-dev gt
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## Step 2: Create a translation config file
+
+Create a **`gt.config.json`** file in your project root. This tells the library which languages you support:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "./translations/[locale].json"
+    }
+  }
+}
+```
+
+---
+
+## Step 3: Initialize General Translation
+
+Call **`initializeGT`** once at the top of your server's entry file, before any route handlers.
+You can customize the translation loading behavior by passing a `loadTranslations` function.
+
+```js title="server.js"
+import express from 'express';
+import { initializeGT } from 'gt-node';
+import gtConfig from './gt.config.json' with { type: 'json' };
+
+async function loadTranslations(locale) {
+  // Need to enumerate because dynamic imports are not supported in Node.js
+  switch (locale) {
+    case 'ja':
+      return await import('./translations/ja.json');
+    case 'es':
+      return await import('./translations/es.json');
+    case 'fr':
+      return await import('./translations/fr.json');
+    default:
+      return {};
+  }
+}
+
+initializeGT({
+  ...gtConfig,
+  loadTranslations,
+  // To enable runtime translations:
+  // projectId: process.env.GT_PROJECT_ID,
+  // devApiKey: process.env.GT_API_KEY,
+});
+
+const app = express();
+```
+
+---
+
+## Step 4: Add translated routes
+
+Each request needs to know which language to use. Use **`withGT`** to set the locale per request — it uses async local storage so all downstream translation calls automatically pick up the right locale.
+
+Wrap your handler logic inside **`withGT`** so that `getGT` and other translation functions share the same async context:
+
+```js title="server.js"
+import { withGT, getGT, getRequestLocale } from 'gt-node';
+
+app.get('/api/greeting', async (req, res) => {
+  const locale = getRequestLocale(req);
+
+  await withGT(locale, async () => {
+    const gt = await getGT();
+    res.json({
+      message: gt('Hello, world!'),
+      welcome: gt('Welcome, {name}!', { name: 'Alice' }),
+    });
+  });
+});
+```
+
+For strings defined outside of request scope, use [`msg`](/docs/node/api/strings/msg) and [`getMessages`](/docs/node/api/get-messages) to resolve translations.
+
+---
+
+## Step 5: Set up environment variables
+
+You need API keys from General Translation. These are used by `npx gt translate` to generate translation files and by the runtime for any on-the-fly translation.
+
+Create a **`.env`** file:
+
+```bash title=".env"
+GT_API_KEY="your-api-key"
+GT_PROJECT_ID="your-project-id"
+```
+
+Get your free keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or by running:
+
+```bash
+npx gt auth
+```
+
+<Callout type="warn">
+  Never expose `GT_API_KEY` publicly or commit it to source control.
+</Callout>
+
+<Accordions>
+  <Accordion title="Can I use gt-node without API keys?">
+    Yes. Without API keys, `gt-node` works as a standard i18n library. You can still:
+    - Provide your own translation files manually
+    - Use all translation functions (`getGT`, `msg`, `getMessages`, etc.)
+    - Run `npx gt generate` to create translation file templates, then translate them yourself
+  </Accordion>
+</Accordions>
+
+---
+
+## Step 6: Translate
+
+Run the translate command to generate translation files:
+
+```bash
+npx gt translate
+```
+
+Add it to your build script so it runs automatically:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
+  }
+}
+```
+
+---
+
+## Step 7: Test it
+
+Start your server and test with different `Accept-Language` headers:
+
+```bash
+# Default (English)
+curl http://localhost:3000/api/greeting
+
+# Spanish
+curl -H "Accept-Language: es" http://localhost:3000/api/greeting
+
+# French
+curl -H "Accept-Language: fr" http://localhost:3000/api/greeting
+```
+
+---
+
+## Troubleshooting
+
+<Accordions>
+  <Accordion title="Some translations are inaccurate">
+    Ambiguous text can lead to inaccurate translations. For example, "apple" could mean the fruit or the company. Add a `$context` option to help:
+
+    ```js
+    gt('Apple', { $context: 'the technology company' });
+    ```
+
+    Both `getGT()` and `msg()` support the `$context` option.
+  </Accordion>
+</Accordions>
+
+---
+
+## Next steps
+
+- [**`initializeGT`**](/docs/node/api/initialize-gt) — Full configuration options
+- [**`withGT`**](/docs/node/api/with-gt) — Locale context for requests
+- [***Locale Detection & Middleware***](/docs/node/guides/middleware) — Locale detection strategies
+- [**`getGT`**](/docs/node/api/get-gt) — Inline string translation
+- [**`msg` *&* `getMessages`**](/docs/node/api/get-messages) — Pre-registered message translation
+- [***Firebase Functions Quickstart***](/docs/node/tutorials/quickstart-firebase) — Using gt-node with Firebase Cloud Functions
