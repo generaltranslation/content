@@ -1,0 +1,1238 @@
+openapi: 3.1.0
+info:
+  title: General Translation API
+  version: '2026-03-06.v1'
+  description: >
+    The public General Translation API. Use it to upload source content and
+    translated files, download translations, queue and translate content, manage
+    branches and tags, and read project and job status.
+
+
+    Most endpoints operate on a single project and live under
+    `https://api2.gtx.dev`. The runtime translation endpoint (`POST /v2/translate`)
+    is served from `https://runtime2.gtx.dev`.
+
+
+    Authenticate every request with an API key in the `x-gt-api-key` header.
+    Project keys (`gtx-api-`, `gtx-dev-`) are bound to one project. Organization
+    keys (`gtx-org-`) work across projects but must include the target project in
+    the `x-gt-project-id` header for project-scoped routes.
+  contact:
+    name: General Translation Support
+    email: support@generaltranslation.com
+    url: https://generaltranslation.com
+servers:
+  - url: https://api2.gtx.dev
+    description: Project and file API
+  - url: https://runtime2.gtx.dev
+    description: Runtime translation API (POST /v2/translate)
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Files
+    description: Upload, download, publish, move, and inspect project files.
+  - name: Translation
+    description: Translate content at runtime and queue files for translation.
+  - name: Context
+    description: Generate translation context such as glossaries and instructions.
+  - name: Branches
+    description: Read and create project branches.
+  - name: Tags
+    description: Tag file versions.
+  - name: Project
+    description: Read and update project information.
+  - name: Jobs
+    description: Read background job status.
+
+paths:
+  /v2/project/files/upload-files:
+    post:
+      tags: [Files]
+      summary: Upload source files
+      description: Upload one or more source files to the project. Max 100 files per request.
+      operationId: uploadSourceFiles
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [source]
+                    properties:
+                      source:
+                        $ref: '#/components/schemas/SourceFileInput'
+                sourceLocale:
+                  type: string
+                  description: Overrides the project default source locale.
+                  example: en
+      responses:
+        '201':
+          description: Files uploaded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadedFiles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        branchId: { type: string }
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        fileName: { type: string }
+                        fileFormat: { type: string }
+                        dataFormat: { type: string }
+                  count: { type: integer }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v2/project/files/upload-translations:
+    post:
+      tags: [Files]
+      summary: Upload translated files
+      description: Upload translated files linked to their source files. Max 100 files per request.
+      operationId: uploadTranslations
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [source, translations]
+                    properties:
+                      source:
+                        $ref: '#/components/schemas/SourceFileInput'
+                      translations:
+                        type: array
+                        minItems: 1
+                        items:
+                          type: object
+                          required: [content, fileName, fileFormat, locale]
+                          properties:
+                            content:
+                              type: string
+                              description: Base64-encoded translated file content.
+                            fileName: { type: string }
+                            fileFormat: { type: string }
+                            locale: { type: string }
+                            dataFormat: { type: string }
+                            transformFormat:
+                              type: string
+                              description: Output file format transformation.
+                sourceLocale:
+                  type: string
+                  description: Overrides the project default source locale.
+      responses:
+        '201':
+          description: Translations uploaded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadedFiles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        branchId: { type: string }
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        fileName: { type: string }
+                        locale: { type: string }
+                        fileFormat: { type: string }
+                        dataFormat: { type: string }
+                  count: { type: integer }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v2/project/files/diffs:
+    post:
+      tags: [Files]
+      summary: Submit translation diffs
+      description: Overwrite translations with user-provided localized content.
+      operationId: submitDiffs
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [diffs]
+              properties:
+                diffs:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [locale, diff, versionId, fileId, localContent]
+                    properties:
+                      locale: { type: string }
+                      diff: { type: string, description: Diff content. }
+                      branchId: { type: string }
+                      versionId: { type: string }
+                      fileId: { type: string }
+                      localContent:
+                        type: string
+                        description: Localized file content that overwrites the stored translation.
+      responses:
+        '200':
+          description: Diffs processed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filesProcessed: { type: integer }
+                  entriesReceived: { type: integer }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v2/project/setup/should-generate:
+    get:
+      tags: [Context]
+      summary: Check if context generation is needed
+      deprecated: true
+      operationId: shouldGenerateContext
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      responses:
+        '200':
+          description: Whether context generation is recommended.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shouldSetupProject: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/setup/generate:
+    post:
+      tags: [Context]
+      summary: Generate translation context
+      description: Generate glossaries and translation instructions for the project.
+      operationId: generateContext
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [fileId, versionId]
+                    properties:
+                      branchId: { type: string }
+                      fileId: { type: string }
+                      versionId: { type: string }
+                locales:
+                  type: array
+                  items: { type: string }
+                  description: Target locales for glossary generation.
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Context generation queued or completed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  setupJobId: { type: string }
+                  status:
+                    type: string
+                    enum: [queued, completed]
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/setup/status/{jobId}:
+    get:
+      tags: [Context]
+      summary: Get context generation job status
+      deprecated: true
+      operationId: getContextStatus
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Context job status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId: { type: string }
+                  status:
+                    type: string
+                    enum: [queued, processing, completed, failed]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/translations/enqueue:
+    post:
+      tags: [Translation]
+      summary: Queue files for translation
+      description: >
+        Enqueue uploaded source files for background translation. Max 100 files
+        per request. The response shape depends on the requested `gt-api-version`.
+      operationId: enqueueTranslations
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [fileId, versionId]
+                    properties:
+                      branchId: { type: string }
+                      fileId: { type: string }
+                      versionId: { type: string }
+                      fileName: { type: string }
+                      transformFormat: { type: string }
+                targetLocales:
+                  type: array
+                  items: { type: string }
+                sourceLocale: { type: string }
+                force:
+                  type: boolean
+                  default: false
+                modelProvider:
+                  type: string
+                  description: AI model provider override.
+                publish:
+                  type: boolean
+                  description: Publish translations once complete.
+      responses:
+        '200':
+          description: Files queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: >
+                  On `gt-api-version` >= 2025-11-03.v1 returns `jobData`; earlier
+                  versions return inline `translations` and `data`.
+                properties:
+                  jobData:
+                    type: object
+                    additionalProperties: true
+                    description: Map of jobId to job details.
+                  locales:
+                    type: array
+                    items: { type: string }
+                  message: { type: string }
+        '400':
+          description: Bad request, including missing source files.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  missing:
+                    type: array
+                    items: { type: string }
+                  count: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v2/project/files/publish:
+    post:
+      tags: [Files]
+      summary: Publish or unpublish files
+      description: Publish or unpublish translated files to the CDN. Requires CDN to be enabled.
+      operationId: publishFiles
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [fileId, versionId, publish]
+                    properties:
+                      fileId: { type: string }
+                      versionId: { type: string }
+                      branchId: { type: string }
+                      publish:
+                        type: boolean
+                        description: True to publish, false to unpublish.
+      responses:
+        '200':
+          description: Publish results per file.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        locale: { type: string }
+                        branchId: { type: string }
+                        success: { type: boolean }
+                        error: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/files/download/{fileId}:
+    get:
+      tags: [Files]
+      summary: Download a single file
+      deprecated: true
+      description: Download a single source or translated file. Prefer the batch POST endpoint.
+      operationId: downloadFile
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+        - name: fileId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: query
+          schema: { type: string }
+          description: Defaults to the branch head version.
+        - name: branchId
+          in: query
+          schema: { type: string }
+          description: Defaults to the default branch.
+        - name: locale
+          in: query
+          schema: { type: string }
+          description: Translation locale. Omit to download the source file.
+      responses:
+        '200':
+          description: File content.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: string
+                    description: Base64-encoded file content.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v2/project/files/download:
+    post:
+      tags: [Files]
+      summary: Download multiple files
+      description: Download up to 100 source or translated files in one request.
+      operationId: downloadFiles
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items:
+                type: object
+                required: [fileId]
+                properties:
+                  fileId: { type: string }
+                  branchId: { type: string }
+                  versionId: { type: string }
+                  locale:
+                    type: string
+                    description: Translation locale. Omit for the source file.
+                  useLatestAvailableVersion: { type: boolean }
+      responses:
+        '200':
+          description: Downloaded files.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        branchId: { type: string }
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        fileName: { type: string }
+                        data:
+                          type: string
+                          description: Base64-encoded content.
+                        metadata:
+                          type: object
+                          additionalProperties: true
+                        fileFormat: { type: string }
+                        locale: { type: string }
+                  count: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/branches/info:
+    post:
+      tags: [Branches]
+      summary: Get branch information
+      operationId: getBranchInfo
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                branchNames:
+                  type: array
+                  default: []
+                  items: { type: string }
+      responses:
+        '200':
+          description: Branch information.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  branches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Branch'
+                  defaultBranch:
+                    allOf:
+                      - $ref: '#/components/schemas/Branch'
+                    description: The default branch, or null if none is set.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/branches/create:
+    post:
+      tags: [Branches]
+      summary: Create a branch
+      description: Create a new branch, or rename and confirm the default branch.
+      operationId: createBranch
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchName]
+              properties:
+                branchName:
+                  type: string
+                  minLength: 1
+                defaultBranch:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Created branch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  branch:
+                    $ref: '#/components/schemas/Branch'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Forbidden. Free plans cannot create non-default branches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v2/project/tags/create:
+    post:
+      tags: [Tags]
+      summary: Create or update a tag
+      description: Create or upsert a tag that points at a set of file versions.
+      operationId: createTag
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tagId, files]
+              properties:
+                tagId:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                files:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [fileId, versionId, branchId]
+                    properties:
+                      fileId: { type: string, minLength: 1 }
+                      versionId: { type: string, minLength: 1 }
+                      branchId: { type: string, minLength: 1 }
+                message:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Created or updated tag.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tag:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      tagId: { type: string }
+                      message: { type: string }
+                      createdAt: { type: string, format: date-time }
+                      updatedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/info/{projectId}:
+    get:
+      tags: [Project]
+      summary: Get project information
+      operationId: getProjectInfo
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+          description: Must match the authenticated project.
+      responses:
+        '200':
+          description: Project information.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  orgId: { type: string }
+                  defaultLocale: { type: string }
+                  currentLocales:
+                    type: array
+                    items: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Project]
+      summary: Update project information
+      description: Update project settings such as the default locale.
+      operationId: updateProjectInfo
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+          description: Must match the authenticated project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                defaultLocale: { type: string }
+      responses:
+        '200':
+          description: Project updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/jobs/info:
+    post:
+      tags: [Jobs]
+      summary: Get translation job status
+      operationId: getJobsInfo
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jobIds]
+              properties:
+                jobIds:
+                  type: array
+                  minItems: 1
+                  items: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Job status for each requested job.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    status:
+                      type: string
+                      enum: [queued, processing, completed, failed]
+                    jobId: { type: string }
+                    error:
+                      type: object
+                      properties:
+                        message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/files/info:
+    post:
+      tags: [Files]
+      summary: Get file metadata
+      description: Get detailed metadata for specific source and translated files.
+      operationId: getFileInfo
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sourceFiles:
+                  type: array
+                  items:
+                    type: object
+                    required: [fileId, versionId, branchId]
+                    properties:
+                      fileId: { type: string }
+                      versionId: { type: string }
+                      branchId: { type: string }
+                translatedFiles:
+                  type: array
+                  items:
+                    type: object
+                    required: [fileId, versionId, branchId, locale]
+                    properties:
+                      fileId: { type: string }
+                      versionId: { type: string }
+                      branchId: { type: string }
+                      locale: { type: string }
+      responses:
+        '200':
+          description: File metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sourceFiles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        branchId: { type: string }
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        fileName: { type: string }
+                        fileFormat: { type: string }
+                        dataFormat: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        updatedAt: { type: string, format: date-time }
+                        approvalRequiredAt: { type: string, format: date-time }
+                        publishedAt: { type: string, format: date-time }
+                        locales:
+                          type: array
+                          items: { type: string }
+                        sourceLocale: { type: string }
+                  translatedFiles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        branchId: { type: string }
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        fileFormat: { type: string }
+                        dataFormat: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        updatedAt: { type: string, format: date-time }
+                        approvedAt: { type: string, format: date-time }
+                        publishedAt: { type: string, format: date-time }
+                        completedAt: { type: string, format: date-time }
+                        locale: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/translations/files/status/{fileId}:
+    get:
+      tags: [Files]
+      summary: Get translation status for a file
+      operationId: getTranslationStatus
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+        - name: fileId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: query
+          schema: { type: string }
+          description: Defaults to the branch head version.
+        - name: branchId
+          in: query
+          schema: { type: string }
+          description: Defaults to the default branch.
+      responses:
+        '200':
+          description: Translation status for the file.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  translations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        locale: { type: string }
+                        completedAt:
+                          type: [string, 'null']
+                          format: date-time
+                        approvedAt:
+                          type: [string, 'null']
+                          format: date-time
+                        publishedAt:
+                          type: [string, 'null']
+                          format: date-time
+                        createdAt: { type: string, format: date-time }
+                        updatedAt: { type: string, format: date-time }
+                  sourceFile:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      branchId: { type: string }
+                      fileId: { type: string }
+                      versionId: { type: string }
+                      fileName: { type: string }
+                      sourceLocale: { type: string }
+                      fileFormat: { type: string }
+                      dataFormat: { type: string }
+                      createdAt: { type: string, format: date-time }
+                      updatedAt: { type: string, format: date-time }
+                      approvalRequiredAt: { type: string, format: date-time }
+                      locales:
+                        type: array
+                        items: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v2/project/files/moves:
+    post:
+      tags: [Files]
+      summary: Move or rename files
+      description: Clone source files and their translations under new file IDs.
+      operationId: moveFiles
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [moves]
+              properties:
+                branchId:
+                  type: string
+                  description: Defaults to the default branch.
+                moves:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [oldFileId, newFileId, newFileName]
+                    properties:
+                      oldFileId: { type: string, minLength: 1 }
+                      newFileId: { type: string, minLength: 1 }
+                      newFileName: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Move results.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        oldFileId: { type: string }
+                        newFileId: { type: string }
+                        success: { type: boolean }
+                        error: { type: string }
+                  summary:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      succeeded: { type: integer }
+                      failed: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/project/files/orphaned:
+    post:
+      tags: [Files]
+      summary: Find orphaned files
+      description: Return files on a branch that are not present in the provided file ID list.
+      operationId: getOrphanedFiles
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId]
+              properties:
+                branchId: { type: string }
+                fileIds:
+                  type: array
+                  default: []
+                  items: { type: string }
+      responses:
+        '200':
+          description: Orphaned files.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orphanedFiles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        fileName: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v2/translate:
+    servers:
+      - url: https://runtime2.gtx.dev
+        description: Runtime translation API
+    post:
+      tags: [Translation]
+      summary: Translate content at runtime
+      description: >
+        Translate one or more strings or structured content entries with caching
+        and memoization. Authentication is optional; unauthenticated requests may
+        receive partial results.
+      operationId: translate
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requests, targetLocale, sourceLocale]
+              properties:
+                requests:
+                  type: object
+                  minProperties: 1
+                  description: Map of request key to a translation request entry.
+                  additionalProperties:
+                    type: object
+                    required: [source]
+                    properties:
+                      source:
+                        description: String, JSX, ICU, or i18next content to translate.
+                      metadata:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          hash: { type: string }
+                          context: { type: string }
+                          maxChars: { type: integer }
+                          dataFormat:
+                            type: string
+                            enum: [STRING, JSX, ICU, I18NEXT]
+                            default: STRING
+                          actionType:
+                            type: string
+                            default: fast
+                          sourceCode:
+                            type: object
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  before: { type: string, maxLength: 2000 }
+                                  target: { type: string, maxLength: 500 }
+                                  after: { type: string, maxLength: 2000 }
+                targetLocale:
+                  type: string
+                  minLength: 1
+                sourceLocale:
+                  type: string
+                  minLength: 1
+                metadata:
+                  type: object
+                  properties:
+                    modelProvider: { type: string }
+      responses:
+        '201':
+          description: Translation results, keyed by request key.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    success: { type: boolean }
+                    translation: { type: string }
+                    error: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-gt-api-key
+      description: >
+        API key. Use a project key (`gtx-api-`, `gtx-dev-`) or an organization
+        key (`gtx-org-`). Organization keys must also send `x-gt-project-id` on
+        project-scoped routes.
+
+  parameters:
+    GtApiVersion:
+      name: gt-api-version
+      in: header
+      required: false
+      description: >
+        API version. Defaults to the earliest supported version. Latest is
+        `2026-03-06.v1`.
+      schema:
+        type: string
+        enum:
+          - '2025-01-01.v0'
+          - '2025-11-03.v1'
+          - '2026-02-18.v1'
+          - '2026-03-06.v1'
+    GtProjectId:
+      name: x-gt-project-id
+      in: header
+      required: false
+      description: Target project ID. Required when authenticating with an organization API key.
+      schema:
+        type: string
+
+  schemas:
+    SourceFileInput:
+      type: object
+      required: [content, fileName, fileFormat, locale]
+      properties:
+        content:
+          type: string
+          description: Base64-encoded file content.
+        fileName: { type: string }
+        fileFormat:
+          type: string
+          description: File format, e.g. json, yaml, xml.
+        dataFormat:
+          type: string
+          description: Data format, e.g. STRING, JSX, ICU.
+        locale:
+          type: string
+          description: Source locale code.
+        fileId:
+          type: string
+          description: Derived from the file name when omitted.
+        versionId:
+          type: string
+          description: Derived from the content hash when omitted.
+        branchId:
+          type: string
+          description: Defaults to the default branch.
+        checkedOutBranchId: { type: string }
+        incomingBranchId: { type: string }
+        formatMetadata:
+          type: object
+          additionalProperties: true
+    Branch:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+
+  responses:
+    BadRequest:
+      description: The request was invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid API key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The API key lacks the required permission, or the action is not allowed on the current plan.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Rate limit or quota exceeded.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

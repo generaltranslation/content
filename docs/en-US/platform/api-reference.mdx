@@ -1,0 +1,143 @@
+---
+title: API reference
+description: Public General Translation API endpoints, authentication, and the OpenAPI spec
+---
+
+The General Translation API lets you upload source content and translated files, download translations, translate and queue content, manage branches and tags, and read project and job status. Most SDK and CLI workflows call these endpoints for you, but you can call them directly for custom automation.
+
+A machine-readable OpenAPI 3.1 spec ships alongside this page as `openapi.yaml`. Import it into Postman, Insomnia, or an OpenAPI client to generate requests and types. For an interactive, per-endpoint view with a request playground, see the [API explorer](/docs/platform/api-explorer).
+
+## Base URLs
+
+| API | Base URL |
+|-----|----------|
+| Project and file endpoints | `https://api2.gtx.dev` |
+| Runtime translation (`POST /v2/translate`) | `https://runtime2.gtx.dev` |
+
+## Authentication
+
+Authenticate every request with an API key in the `x-gt-api-key` header.
+
+```bash
+curl https://api2.gtx.dev/v2/project/info/PROJECT_ID \
+  -H "x-gt-api-key: gtx-api-..."
+```
+
+| Key type | Prefix | Notes |
+|----------|--------|-------|
+| Project (production) | `gtx-api-` | Bound to one project |
+| Project (development) | `gtx-dev-` | Local and preview use; rejected by production-only endpoints |
+| Organization | `gtx-org-` | Works across projects; must send `x-gt-project-id` on project-scoped routes |
+
+<Callout type="info">
+  **Organization keys:** When you authenticate with an organization key, include the target project in the `x-gt-project-id` header for any project-scoped endpoint.
+</Callout>
+
+See [API keys](/docs/platform/api-keys) for how to create and scope keys.
+
+## Permissions
+
+Each endpoint requires a permission on the API key. Organization keys configure these explicitly; project keys carry the project defaults.
+
+| Permission | Used by |
+|------------|---------|
+| `project:files:read` | Download files, file info, translation status, branch info, orphaned files, project info, job info |
+| `project:files:write` | Upload files and translations, diffs, publish, branch create, tag create, moves |
+| `project:translations:enqueue` | Queue files for translation |
+| `project:translations:generate` | Runtime translation |
+| `project:context:read` | Read context generation status |
+| `project:context:write` | Generate context |
+| `project:write` | Update project settings |
+
+## Versioning
+
+Send the optional `gt-api-version` header to pin a response format. When omitted, the earliest supported version is used. The latest version is `2026-03-06.v1`.
+
+```bash
+-H "gt-api-version: 2026-03-06.v1"
+```
+
+## Rate limits
+
+Requests are rate limited per API key (or client IP) over a 60-second window. Limits vary by endpoint:
+
+| Tier | Limit | Endpoints |
+|------|-------|-----------|
+| Heavy | 20 / min | Queue translations |
+| Medium | 60 / min | Upload, diffs, context, moves, orphaned |
+| Light | 120 / min | Download files |
+| Default | 200 / min | Publish, branches, tags, project info, job info, file info, translation status, runtime translate |
+
+Exceeding a limit returns `429`. Organization token quotas can also return `429` from `POST /v2/translate`.
+
+## Endpoints
+
+### Files
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v2/project/files/upload-files` | Upload source files |
+| `POST` | `/v2/project/files/upload-translations` | Upload translated files |
+| `POST` | `/v2/project/files/diffs` | Overwrite translations with localized content |
+| `POST` | `/v2/project/files/download` | Download multiple files |
+| `GET` | `/v2/project/files/download/{fileId}` | Download a single file (deprecated) |
+| `POST` | `/v2/project/files/publish` | Publish or unpublish files to the CDN |
+| `POST` | `/v2/project/files/info` | Get source and translated file metadata |
+| `GET` | `/v2/project/translations/files/status/{fileId}` | Get translation status for a file |
+| `POST` | `/v2/project/files/moves` | Move or rename files |
+| `POST` | `/v2/project/files/orphaned` | Find orphaned files on a branch |
+
+### Translation
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v2/translate` | Translate content at runtime |
+| `POST` | `/v2/project/translations/enqueue` | Queue files for translation |
+
+### Context
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v2/project/setup/generate` | Generate glossaries and instructions |
+| `GET` | `/v2/project/setup/should-generate` | Check if context generation is needed (deprecated) |
+| `GET` | `/v2/project/setup/status/{jobId}` | Get context job status (deprecated) |
+
+### Branches and tags
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v2/project/branches/info` | Get branch information |
+| `POST` | `/v2/project/branches/create` | Create a branch |
+| `POST` | `/v2/project/tags/create` | Create or update a tag |
+
+### Project and jobs
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v2/project/info/{projectId}` | Get project information |
+| `POST` | `/v2/project/info/{projectId}` | Update project settings |
+| `POST` | `/v2/project/jobs/info` | Get translation job status |
+
+## Errors
+
+Errors return a JSON body with an `error` message:
+
+```json
+{
+  "error": "API key is missing required permission: project:files:write"
+}
+```
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Invalid request body, query, or version |
+| `401` | Missing or invalid API key |
+| `403` | API key lacks the required permission, or the action is not allowed on the current plan |
+| `404` | Resource not found |
+| `429` | Rate limit or token quota exceeded |
+
+## Next steps
+
+- [API keys](/docs/platform/api-keys) - Create and scope keys
+- [Webhooks](/docs/platform/webhooks) - Receive translation events
+- [Supported locales](/docs/platform/supported-locales) - Locale codes used in requests
