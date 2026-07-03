@@ -37,10 +37,11 @@ The `initializeGT()` function configures the i18n manager. Call it at the top of
 ```tsx title="src/routes/__root.tsx"
 import { initializeGT } from 'gt-tanstack-start'
 import gtConfig from '../../gt.config.json'
-import loadTranslations from '../../loadTranslations'
+import loadTranslations from '../loadTranslations'
 
 initializeGT({
-  ...gtConfig,
+  defaultLocale: gtConfig.defaultLocale,
+  locales: gtConfig.locales,
   loadTranslations,
 })
 ```
@@ -73,7 +74,7 @@ The `<GTProvider>` provides translation context to all child components. Pass th
 ```tsx title="src/routes/__root.tsx"
 import { GTProvider } from 'gt-tanstack-start'
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootComponent() {
   const { translations, locale } = Route.useLoaderData()
   return (
     <html lang={locale}>
@@ -82,7 +83,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <GTProvider locale={locale} translations={translations}>
-          {children}
+          <Outlet />
         </GTProvider>
         <Scripts />
       </body>
@@ -98,7 +99,7 @@ The provider has no loading state of its own. Because translations are loaded in
 The [`<T>`](/docs/react/api/components/t) component translates JSX content. Wrap any elements and they render in the user's language:
 
 ```tsx
-import { T } from 'gt-react'
+import { T } from 'gt-tanstack-start'
 
 function Welcome() {
   return (
@@ -111,7 +112,7 @@ function Welcome() {
 ```
 
 <Callout type="info">
-  Import `<T>` from `gt-react`, not from `gt-tanstack-start`. This ensures the `gt` CLI can detect your translatable content when generating translation files.
+  **Note:** Because `gt-tanstack-start` re-exports the full `gt-react` API, all components and hooks — `<T>`, `<Var>`, `useGT`, `useLocale`, and the rest — are imported from `gt-tanstack-start`. The `gt` CLI detects translatable content from both `gt-tanstack-start` and `gt-react` imports.
 </Callout>
 
 ## Locale selector
@@ -129,6 +130,19 @@ function Nav() {
   )
 }
 ```
+
+## Selective SSR
+
+`gt-tanstack-start` works with all of TanStack Start's rendering modes. Routes can opt out of server rendering with the `ssr` route option — `true` (full SSR), `false` (loader and component run on the client), or `'data-only'` (loader runs on the server, component renders on the client) — with no extra i18n setup:
+
+```tsx title="src/routes/spa.tsx"
+export const Route = createFileRoute('/spa')({
+  ssr: false,
+  component: SpaRoute,
+})
+```
+
+Because `parseLocale()` is isomorphic — on the server it resolves the locale from the locale cookie and the `Accept-Language` header, in the browser it reads the locale cookie — the root loader returns the same locale and translations wherever it runs, and the single root `<GTProvider>` serves every route.
 
 ---
 
