@@ -6,12 +6,20 @@ description: API reference for the GTProvider component
 ## Overview
 
 The `<GTProvider>` component provides General Translation (GT) context to its children, enabling them to access translated content.
-It is required for any client-side translations on your application.
+It is required for any translations in your app.
+
+`<GTProvider>` takes no configuration props.
+Instead, configure the library by calling [`initializeGT()`](#initializing-the-library) in your app's entry file — the provider reads its configuration from there.
+
+Unlike the `gt-react` and `gt-next` providers, `<GTProvider>` loads translations asynchronously and keeps a loading state.
+While translations load, it renders the `fallback` prop (a spinner by default).
 
 ### When to use
 
-- Wrap your entire application in `<GTProvider>` to enable translations on the client.
+- Wrap your entire application in `<GTProvider>` to enable translations.
 - The `<GTProvider>` component is used for both [inline `<T>`](/docs/react-native/guides/t) and [dictionaries](/docs/react-native/guides/dictionaries).
+
+---
 
 ## Reference
 
@@ -19,77 +27,41 @@ It is required for any client-side translations on your application.
 
 <TypeTable
   type={{
-    children: {
+    'children?': {
       type: 'ReactNode',
-      optional: false,
-    },
-    projectId: {
-      type: 'string',
       optional: true,
-    },
-    'dictionary?': {
-      type: 'Dictionary',
-      optional: true,
-      default: 'defaultDictionary',
-    },
-    'locales?': {
-      type: 'string[]',
-      optional: true,
-    },
-    'defaultLocale?': {
-      type: 'string',
-      optional: true,
-      default: 'libraryDefaultLocale',
     },
     'locale?': {
-      type: 'string',
-      optional: true,
-    },
-    'cacheUrl?': {
-      type: 'string',
-      optional: true,
-      default: "'https://cdn.gtx.dev'",
-    },
-    'runtimeUrl?': {
-      type: 'string',
-      optional: true,
-      default: "'https://runtime.gtx.dev'",
-    },
-    'renderSettings?': {
-      type: 'RenderSettings',
-      optional: true,
-      default: 'defaultRenderSettings',
-    },
-    '_versionId?': {
-      type: 'string',
-      optional: true,
-    },
-    'devApiKey?': {
-      type: 'string',
-      optional: true,
-    },
-    'config?': {
-      type: 'object',
-      optional: true,
-    },
-    'loadTranslations?': {
-      type: '(locale: string) => Promise<Record<string, any>>',
-      optional: true,
-    },
-    'loadDictionary?': {
-      type: '(locale: string) => Promise<Record<string, any>>',
+      type: 'string | string[]',
       optional: true,
     },
     'region?': {
       type: 'string',
       optional: true,
     },
+    'enableI18n?': {
+      type: 'boolean',
+      optional: true,
+      default: 'true',
+    },
     'fallback?': {
       type: 'ReactNode',
       optional: true,
     },
-    'customMapping?': {
-      type: 'CustomMapping',
+    'dictionaries?': {
+      type: 'Record<string, Dictionary>',
+      optional: true,
+    },
+    'onMissingTranslation?': {
+      type: '(lookup: TranslateLookup) => void',
+      optional: true,
+    },
+    'onMissingDictionaryEntry?': {
+      type: '(lookup: DictionaryLookup) => void',
+      optional: true,
+    },
+    'onMissingDictionaryObj?': {
+      type: '(lookup: DictionaryLookup) => void',
       optional: true,
     },
   }}
@@ -97,145 +69,131 @@ It is required for any client-side translations on your application.
 
 ### Description
 
-| Prop              | Description                                                                                                                                                                                                           |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `children`        | Any component or the parents of any component that needs to translate or access translation information on the client side. These should include any components using `<T>`, `useGT`, or other translation utilities. |
-| `projectId?`      | The project ID required for General Translation cloud services.                                                                                                                                                       |
-| `dictionary?`     | The translation dictionary for the project.                                                                                                                                                                           |
-| `locales?`        | The list of approved locales for the project.                                                                                                                                                                         |
-| `defaultLocale?`  | The default locale to use if no other locale is found.                                                                                                                                                                |
-| `locale?`         | The current locale, if already set.                                                                                                                                                                                   |
-| `cacheUrl?`       | The URL of the cache service for fetching translations.                                                                                                                                                               |
-| `runtimeUrl?`     | The URL of the runtime service for fetching translations.                                                                                                                                                             |
-| `renderSettings?` | The settings for rendering translations.                                                                                                                                                                              |
-| `_versionId?`     | The version ID for fetching translations.                                                                                                                                                                             |
-| `devApiKey?`      | The API key for development environments.                                                                                                                                                                             |
-| `config?`         | A configuration object (typically imported from `gt.config.json`) containing `projectId`, `locales`, `defaultLocale`, and other settings. An alternative to passing these as individual props.                         |
-| `loadTranslations?` | An async function that takes a locale string and returns the translations object for that locale. Used to load pre-generated translation files at runtime.                                                           |
-| `loadDictionary?` | An async function that takes a locale string and returns the dictionary translations for that locale.                                                                                                                  |
-| `region?`         | The user's region code (e.g., `US`, `GB`). Used for region-specific formatting.                                                                                                                                       |
-| `fallback?`       | Custom fallback content to display while translations are loading.                                                                                                                                                     |
-| `customMapping?`  | A mapping of custom component names to their React components, used when rendering translated JSX.                                                                                                                     |
+| Prop                        | Description                                                                                                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `children?`                 | Your app. Any component that renders translations or reads translation state must be a descendant of `<GTProvider>`.                                                                                             |
+| `locale?`                   | Pin the app to a specific locale, or provide an ordered list of locale candidates. When omitted, the provider uses the locale persisted in native storage, falling back to the device locales. Candidates are matched against the `locales` you configure in `initializeGT()`. |
+| `region?`                   | Override the user's region (e.g. `US`). When omitted, the provider uses the region persisted in native storage.                                                                                                   |
+| `enableI18n?`               | Override whether translation is enabled. When omitted, the provider uses the value persisted in native storage, defaulting to `true`.                                                                             |
+| `fallback?`                 | Content rendered while translations load. Defaults to a centered spinner (`ActivityIndicator`). The fallback renders inside the GT context, so it can safely contain translation components and hooks.            |
+| `dictionaries?`             | Preloaded dictionary translations, keyed by locale, for use with [`useTranslations`](/docs/react-native/api/dictionary/use-translations).                                                                         |
+| `onMissingTranslation?`     | Advanced: overrides the default behavior when a translation is missing for the active locale.                                                                                                                     |
+| `onMissingDictionaryEntry?` | Advanced: overrides the default behavior when a dictionary entry is missing.                                                                                                                                      |
+| `onMissingDictionaryObj?`   | Advanced: overrides the default behavior when a dictionary object lookup fails.                                                                                                                                   |
 
 ### Returns
 
-`React.JSX.Element|undefined` containing the children that were passed to this component.
+`React.JSX.Element` containing the children passed to the component, or the `fallback` while translations load.
+
+---
 
 ## Examples
 
-### Basic usage
+### Initializing the library [#initializing-the-library]
 
-Wrap your application in `<GTProvider>` to add translation to your app.
-Don't forget to add a [list of supported locales](/docs/platform/supported-locales) to enable translation.
+Call `initializeGT()` in your entry file, before your app is registered.
+Pass your configuration and translation loader there — `<GTProvider>` picks them up automatically:
 
-```jsx title="App.tsx" copy
-import { GTProvider } from 'gt-react-native';
+```ts title="index.ts" copy
+import { registerRootComponent } from 'expo';
+import { initializeGT } from 'gt-react-native';
+import App from './App';
 import gtConfig from './gt.config.json';
-import { loadTranslations } from './loadTranslations';
+import esTranslations from './content/es.json';
+import frTranslations from './content/fr.json';
+
+const localTranslations = {
+  es: esTranslations,
+  fr: frTranslations,
+};
+
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: gtConfig.locales,
+  loadTranslations: async (locale) => localTranslations[locale] ?? {},
+});
+
+registerRootComponent(App);
+```
+
+Then wrap your app in `<GTProvider>` — no props required:
+
+```tsx title="App.tsx" copy
+import { Text } from 'react-native';
+import { GTProvider, T } from 'gt-react-native';
 
 export default function App() {
   return (
-    <GTProvider config={gtConfig} loadTranslations={loadTranslations}> {/* // [!code highlight] */}
-      {/* Your app content */}
+    <GTProvider>
+      <T>
+        <Text>This gets translated automatically.</Text>
+      </T>
     </GTProvider>
   );
 }
 ```
 
-### Dictionaries
+### Custom loading fallback
 
-You can also pass a dictionary to the `<GTProvider>` component and then access it with the [`useTranslations`](/docs/react-native/api/dictionary/use-translations) hook.
+While translations load, `<GTProvider>` renders the `fallback` prop instead of your app.
+Pass any component, such as a splash screen:
 
-```jsx title="App.tsx" copy
+```tsx title="App.tsx" copy
 import { GTProvider } from 'gt-react-native';
-import gtConfig from './gt.config.json';
-import { loadTranslations } from './loadTranslations';
-import dictionary from './dictionary';
+import SplashScreen from './SplashScreen';
 
 export default function App() {
   return (
-    <GTProvider config={gtConfig} loadTranslations={loadTranslations} dictionary={dictionary}> {/* // [!code highlight] */}
+    <GTProvider fallback={<SplashScreen />}> {/* // [!code highlight] */}
       {/* Your app content */}
     </GTProvider>
   );
 }
 ```
 
-For more information on using dictionaries, check out this [guide](/docs/react-native/guides/dictionaries).
+Because the fallback renders inside the GT context, you can use your app itself as the fallback.
+The app appears immediately in the source language, and translations swap in once they finish loading:
 
-### Adding configuration
-
-If you're not a fan of passing props directly to the `<GTProvider>` component, you can create a configuration file and pass it to the component.
-It also directly integrates with the [`gt translate` command](/docs/cli/translate), so you don't have to specify things like locales manually as a parameter.
-
-```json title="gt.config.json" copy
-{
-  "projectId": "your-project-id",
-  "locales": ["es", "fr"],
-  "defaultLocale": "en-US",
-  "_versionId": "translation-version-id" // allows for rolling back to previous translations (autogenerated by the CLI)
-}
-```
-
-All you have to do is just pass this to the `<GTProvider>` component.
-
-```jsx title="App.tsx" copy
+```tsx title="App.tsx" copy
 import { GTProvider } from 'gt-react-native';
-import config from './gt.config.json';
+import AppContent from './AppContent';
 
 export default function App() {
   return (
-    <GTProvider {...config}> {/* // [!code highlight] */}
-      {/* Your app content */}
+    <GTProvider fallback={<AppContent />}> {/* // [!code highlight] */}
+      <AppContent />
     </GTProvider>
   );
 }
 ```
 
-### Custom translation loader
+### Pinning a locale
 
-You can use the `loadTranslations` prop to load translations from a custom source.
-This is useful when you need to load translations from a different source, such as a custom API.
+Pass the `locale` prop to render the app in a specific locale, ignoring the user's stored selection and device settings:
 
-```jsx title="App.tsx" copy
+```tsx title="App.tsx" copy
 import { GTProvider } from 'gt-react-native';
-import { loadTranslations } from './loadTranslations';
 
 export default function App() {
   return (
-    <GTProvider locales={['es', 'fr']} loadTranslations={loadTranslations}> {/* // [!code highlight] */}
-      {/* Your app content */}
+    <GTProvider locale="fr"> {/* // [!code highlight] */}
+      {/* Always renders in French */}
     </GTProvider>
   );
 }
 ```
-
-### Render settings
-
-Render settings controls the loading behavior for translations.
-There are two fields: `timeout` and `method`.
-
-- `timeout` is the number of milliseconds to wait for a translation to load before showing a fallback (default: `8000ms`).
-- `method` is the method to use to load translations (`"skeleton"`, `"replace"`, or `"default"`).
-
-```jsx title="App.tsx" copy
-<GTProvider renderSettings={{ method: 'skeleton', timeout: 1000 }}>
-  {/* Your app content */}
-</GTProvider>
-```
-
-Each render setting dictates different loading behavior:
-`"skeleton"` will return `null` until the translations are loaded.
-`"replace"` will return the fallback content until the translations are loaded.
-`"default"` will return `null` until the translations are loaded, unless the fallback locale has the same language as the current locale (i.e., `en-US` and `en-GB`).
-In this case, it will return the fallback content immediately until the translations are loaded.
 
 ---
 
 ## Notes
 
-- The `<GTProvider>` must wrap all [`<T>` components](/docs/react-native/api/components/t) and other translation-related functions. Learn more [here](/docs/react-native/api/components/gtprovider).
+* Call `initializeGT()` in your entry file before registering your app. `<GTProvider>` reads all configuration — locales, API keys, and translation loaders — from there and takes no configuration props.
+* The `<GTProvider>` must wrap all [`<T>` components](/docs/react-native/api/components/t) and translation hooks.
+* Unlike the `gt-react` and `gt-next` providers, `<GTProvider>` loads translations asynchronously and renders `fallback` until they are ready.
+* The `fallback` renders inside the GT context with an empty translation set, so translation components inside it render source-language content.
 
 ## Next steps
 
-- Learn more about the [`<T>` component](/docs/react-native/guides/t) for translating text and components.
+- [React Native Quickstart](/docs/react-native/tutorials/quickstart) - Set up `initializeGT()` and `<GTProvider>` from scratch
+- [`<T>` component](/docs/react-native/guides/t) - Translate text and components
+- [Dictionaries guide](/docs/react-native/guides/dictionaries) - Use `useTranslations` with dictionaries

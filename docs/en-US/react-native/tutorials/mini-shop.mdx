@@ -19,7 +19,8 @@ What you'll build
 
 Links used in this tutorial
 - Provider: [`<GTProvider>`](/docs/react-native/api/components/gtprovider)
-- Components: [`<T>`](/docs/react-native/api/components/t), [`<Var>`](/docs/react-native/api/components/var), [`<Num>`](/docs/react-native/api/components/num), [`<Currency>`](/docs/react-native/api/components/currency), [`<DateTime>`](/docs/react-native/api/components/datetime), [`<Branch>`](/docs/react-native/api/components/branch), [`<Plural>`](/docs/react-native/api/components/plural), [`<LocaleSelector>`](/docs/react-native/api/components/locale-selector)
+- Components: [`<T>`](/docs/react-native/api/components/t), [`<Var>`](/docs/react-native/api/components/var), [`<Num>`](/docs/react-native/api/components/num), [`<Currency>`](/docs/react-native/api/components/currency), [`<DateTime>`](/docs/react-native/api/components/datetime), [`<Branch>`](/docs/react-native/api/components/branch), [`<Plural>`](/docs/react-native/api/components/plural)
+- Hooks: [`useLocaleSelector`](/docs/react-native/api/helpers/use-locale-selector)
 - Strings and Shared Strings: [`useGT`](/docs/react-native/api/strings/use-gt), [`msg`](/docs/react-native/api/strings/msg), [`useMessages`](/docs/react-native/api/strings/use-messages)
 - Guides: [Variables](/docs/react-native/guides/variables), [Branching](/docs/react-native/guides/branches), [Strings](/docs/react-native/guides/strings), [Local Translation Storage](/docs/react-native/guides/local-tx), [Changing Languages](/docs/react-native/guides/languages)
 
@@ -71,7 +72,22 @@ Install packages and wrap your app with the provider.
   Then add the files in the sections below (e.g., `App.tsx`, `components/*`, `data.ts`, `nav.ts`).
 </Callout>
 
-Create a minimal provider setup.
+Initialize the library in your entry file with `initializeGT`, then wrap your app with the provider.
+
+```ts title="index.ts" copy
+import { registerRootComponent } from 'expo';
+import { initializeGT } from 'gt-react-native';
+import App from './App';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['es', 'fr'],
+  projectId: process.env.EXPO_PUBLIC_GT_PROJECT_ID,
+  devApiKey: process.env.EXPO_PUBLIC_GT_API_KEY,
+});
+
+registerRootComponent(App);
+```
 
 ```tsx title="App.tsx" copy
 import { GTProvider } from 'gt-react-native';
@@ -79,7 +95,7 @@ import Shop from './Shop';
 
 export default function App() {
   return (
-    <GTProvider locales={["es", "fr"]}>
+    <GTProvider>
       <Shop />
     </GTProvider>
   );
@@ -160,7 +176,7 @@ export const products: Product[] = [
 
 ## Shared navigation labels with msg and useMessages
 
-Use [`msg`](/docs/react-native/api/strings/msg) to mark shared strings in config, then decode them via [`useMessages`](/docs/react-native/api/strings/use-messages) at render time.
+Use [`msg`](/docs/react-native/api/strings/msg) to mark shared strings in config, then decode them via [`useMessages`](/docs/react-native/api/strings/use-messages) at render time. Build the language switcher with the [`useLocaleSelector`](/docs/react-native/api/helpers/use-locale-selector) hook, which returns the available locales, the current locale, and a setter.
 
 ```tsx title="nav.ts" copy
 import { msg } from 'gt-react-native';
@@ -173,13 +189,13 @@ export const navItems = [
 ```
 
 ```tsx title="components/Header.tsx" copy
-import { View, Text, StyleSheet } from 'react-native';
-import { LocaleSelector, T } from 'gt-react-native';
-import { useMessages } from 'gt-react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { T, useLocaleSelector, useMessages } from 'gt-react-native';
 import { navItems } from '../nav';
 
 export default function Header() {
   const m = useMessages();
+  const { locales, locale, setLocale } = useLocaleSelector();
   return (
     <View style={styles.header}>
       <T><Text style={styles.title}>Mini Shop</Text></T>
@@ -190,7 +206,15 @@ export default function Header() {
           </Text>
         ))}
       </View>
-      <LocaleSelector />
+      <View style={styles.nav}>
+        {locales.map((l) => (
+          <Pressable key={l} onPress={() => setLocale(l)}>
+            <Text style={[styles.navItem, l === locale && styles.activeLocale]}>
+              {l}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -215,6 +239,10 @@ const styles = StyleSheet.create({
   navItem: {
     fontSize: 14,
     color: '#555',
+  },
+  activeLocale: {
+    fontWeight: 'bold',
+    color: '#111',
   },
 });
 ```
@@ -503,13 +531,17 @@ const styles = StyleSheet.create({
 
 ## Run locally
 
-Start the Expo dev server:
+Build and run a development build:
 
 ```bash
-npx expo start
+npx expo run:ios
+# or
+npx expo run:android
 ```
 
-Then open in the Expo Go app on your phone, or press `i` for iOS simulator / `a` for Android emulator.
+<Callout type='warn'>
+  **Note:** Expo Go does not work with `gt-react-native` because it includes a native module. Use a [development build](https://docs.expo.dev/develop/development-builds/introduction/) instead.
+</Callout>
 
 ---
 
@@ -518,7 +550,7 @@ Then open in the Expo Go app on your phone, or press `i` for iOS simulator / `a`
 - Expressing conditional content with [`<Branch>`](/docs/react-native/api/components/branch) and quantities with [`<Plural>`](/docs/react-native/api/components/plural)
 - Translating attributes with [`useGT`](/docs/react-native/api/strings/use-gt)
 - Sharing navigation/config strings using [`msg`](/docs/react-native/api/strings/msg) and decoding them with [`useMessages`](/docs/react-native/api/strings/use-messages)
-- Switching languages with [`<LocaleSelector>`](/docs/react-native/api/components/locale-selector)
+- Switching languages with [`useLocaleSelector`](/docs/react-native/api/helpers/use-locale-selector)
 
 ## Next steps
 - Explore: [Variables Guide](/docs/react-native/guides/variables), [Branching Guide](/docs/react-native/guides/branches), [Strings Guide](/docs/react-native/guides/strings), [Changing Languages](/docs/react-native/guides/languages)

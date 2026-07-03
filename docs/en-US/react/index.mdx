@@ -128,47 +128,55 @@ This function loads JSON translation files from your `public/_gt/` directory. Th
 
 ---
 
-## Step 4: Add the GTProvider to your app
+## Step 4: Initialize the library
 
-The **`GTProvider`** component gives your entire app access to translations. Wrap your app at the root level:
+Call **`initializeGTSPA`** in your entry point, before rendering your app. It takes your config and translation loader, determines the user's locale, and loads the translations for it:
 
-```tsx title="src/App.tsx"
-import { GTProvider } from 'gt-react';
+```tsx title="src/main.tsx"
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { initializeGTSPA } from 'gt-react';
 import gtConfig from '../gt.config.json';
 import loadTranslations from './loadTranslations';
+import App from './App';
 
-export default function App() {
-  return (
-    <GTProvider config={gtConfig} loadTranslations={loadTranslations}>
-      {/* Your app content */}
-    </GTProvider>
-  );
-}
+// Resolves once the initial translations are loaded
+await initializeGTSPA({
+  ...gtConfig,
+  loadTranslations,
+});
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
 ```
 
-`GTProvider` takes your config and translation loader as props. It manages locale state and makes translations available to all child components.
+`initializeGTSPA` runs once at startup — the configuration is immutable for the lifetime of the app. After it resolves, every component and hook in your app can access translations. You don't need to wrap your app in a provider.
 
 <Accordions>
   <Accordion title="Using Create React App?">
-    CRA restricts imports to files inside `src/`, so `import gtConfig from '../gt.config.json'` will fail. Either copy `gt.config.json` into `src/`, or inline the config directly:
+    CRA restricts imports to files inside `src/` and may not support top-level `await`, so inline the config and render inside `.then()`:
 
-    ```tsx title="src/App.tsx"
-    import { GTProvider } from 'gt-react';
+    ```tsx title="src/index.tsx"
+    import { StrictMode } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { initializeGTSPA } from 'gt-react';
     import loadTranslations from './loadTranslations';
+    import App from './App';
 
-    export default function App() {
-      return (
-        <GTProvider
-          config={{
-            defaultLocale: 'en',
-            locales: ['es', 'fr', 'ja'],
-          }}
-          loadTranslations={loadTranslations}
-        >
-          {/* Your app content */}
-        </GTProvider>
+    initializeGTSPA({
+      defaultLocale: 'en',
+      locales: ['es', 'fr', 'ja'],
+      loadTranslations,
+    }).then(() => {
+      createRoot(document.getElementById('root')!).render(
+        <StrictMode>
+          <App />
+        </StrictMode>
       );
-    }
+    });
     ```
   </Accordion>
 </Accordions>
@@ -231,14 +239,31 @@ Create a **`.env.local`** file with the correct prefix for your bundler:
 <Tabs items={["Vite", "Create React App"]}>
   <Tab value="Vite">
   ```bash title=".env.local"
-  VITE_GT_API_KEY="your-dev-api-key"
   VITE_GT_PROJECT_ID="your-project-id"
+  VITE_GT_DEV_API_KEY="your-dev-api-key"
   ```
+
+  `gt-react` reads these automatically during initialization — no extra code needed. The dev API key is only read in development, so it stays out of production bundles.
   </Tab>
   <Tab value="Create React App">
   ```bash title=".env.local"
-  REACT_APP_GT_API_KEY="your-dev-api-key"
   REACT_APP_GT_PROJECT_ID="your-project-id"
+  REACT_APP_GT_DEV_API_KEY="your-dev-api-key"
+  ```
+
+  CRA environment variables are not read automatically — pass them to `initializeGTSPA`:
+
+  ```tsx title="src/index.tsx"
+  initializeGTSPA({
+    defaultLocale: 'en',
+    locales: ['es', 'fr', 'ja'],
+    loadTranslations,
+    projectId: process.env.REACT_APP_GT_PROJECT_ID,
+    devApiKey:
+      process.env.NODE_ENV === 'development'
+        ? process.env.REACT_APP_GT_DEV_API_KEY
+        : undefined,
+  });
   ```
   </Tab>
 </Tabs>
@@ -296,7 +321,7 @@ Start your dev server:
 Open your app and use the language dropdown to switch languages. You should see your content translated.
 
 <Callout type="info">
-  In development, translations happen on-demand — you may see a brief loading state the first time you switch to a new language. In production, translations are pre-generated and load instantly.
+  **Note:** In development, translations happen on-demand — content may briefly appear in your source language the first time you switch to a new language, then update once the translation is ready. In production, translations are pre-generated and load instantly.
 </Callout>
 
 ---
@@ -366,13 +391,13 @@ That's it — your app is now multilingual. 🎉
     This is expected. In development, translations happen on-demand (your content is translated in real time via the API). This delay **does not exist in production** — all translations are pre-generated by `npx gt translate`.
   </Accordion>
   <Accordion title="Some translations are inaccurate">
-    Ambiguous text can lead to inaccurate translations. For example, "apple" could mean the fruit or the company. Add a `context` prop to help:
+    Ambiguous text can lead to inaccurate translations. For example, "apple" could mean the fruit or the company. Add a `$context` prop to help:
 
     ```jsx
-    <T context="the technology company">Apple</T>
+    <T $context="the technology company">Apple</T>
     ```
 
-    Both `<T>` and `useGT()` support the `context` option.
+    Both `<T>` and `useGT()` support the `$context` option.
   </Accordion>
 </Accordions>
 

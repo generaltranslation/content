@@ -44,16 +44,27 @@ t('greeting.hello'); // pass the id to get a translation
 
 ### Returns
 
-A translation function `d` that, given an id, will return the translated version of the corresponding entry
+A translation function `t` that, given an id, returns the translated version of the corresponding entry
 
 ```jsx
-(id: string, options?: DictionaryTranslationOptions) => React.ReactNode
+(id: string, options?: TranslationVariables) => string
 ```
 
 | Name                  | Type | Description                                                                 |
 |-----------------------|--|-----------------------------------------------------------------------------|
 | `id`             | `string` | The id of the entry to be translated                                     |
-| `options?`            | [`DictionaryTranslationOptions`](__DOCS_PATH__/api/types/dictionary-translation-options) | Translation options to customize the behavior of `d`. |
+| `options?`            | [`TranslationVariables`](__DOCS_PATH__/api/types/dictionary-translation-options) | Variables to interpolate into the translated entry. |
+
+Metadata such as context does not go in the `t()` call.
+Instead, it lives in the dictionary entry itself, e.g. `greeting: ['Hello!', { $context: 'a friendly greeting' }]`.
+
+### Throws
+
+`t(id)` and `t.obj(id)` throw an `Error` (`Dictionary entry ${id} cannot be found`) when the entry does not exist in the default locale's dictionary.
+This applies in both development and production.
+
+If the source entry exists but the current locale's translation is missing, `t` does not throw.
+It falls back to the source entry, translating it at runtime in development when possible.
 
 ---
 
@@ -72,26 +83,33 @@ export default dictionary;
 When we want to access these entries, we call `useTranslations`.
 This returns a function that accepts the key of a translation from the dictionary.
 
-You must pass the dictionary to the `GTProvider` component.
+You must pass the dictionary to `initializeGT()` via the `dictionary` option.
+
+```jsx title="src/index.js" copy
+import { initializeGT } from '__PACKAGE_NAME__';
+import dictionary from './dictionary';
+
+initializeGT({
+  // ...your config
+  dictionary, // [!code highlight]
+});
+```
 
 ```jsx title="TranslateGreeting.jsx" copy
 import { useTranslations } from '__PACKAGE_NAME__';
-import dictionary from "./dictionary.json"
 
 export default function TranslateGreeting() {
   const t = useTranslations(); // [!code highlight]
   return (
-    <GTProvider dictionary={dictionary}>
-      <p>
-        {t('greeting')} // [!code highlight]
-      </p>
-    </GTProvider>
+    <p>
+      {t('greeting')} // [!code highlight]
+    </p>
   );
 }
 ```
 
 ### Using variables [#variables]
-In order to pass values, you must (1) assign an identifier and (2) reference the identifier when calling the `d` function.
+In order to pass values, you must (1) assign an identifier and (2) reference the identifier when calling the `t` function.
 
 In this example, we use `{}` to pass variables to the translations.
 In the dictionary, we assign identifier `{userName}`.
@@ -152,5 +170,8 @@ export default function UserDetails() {
 ## Notes
  * The `useTranslations` function allows you to access dictionary translations.
  * The `useTranslations` hook can only be used within a component wrapped by a [`<GTProvider>` component](__DOCS_PATH__/api/components/gtprovider).
+ * The `t()` function throws when the requested entry is missing from the default locale's dictionary. Make sure every id you reference exists in the source dictionary.
+ * When only the current locale's translation is missing, `t()` falls back to the source entry instead of throwing.
+ * Entry metadata (`$context`, `$format`, `$maxChars`) belongs in the dictionary entry, not in the `t()` call.
 
 ## Next steps

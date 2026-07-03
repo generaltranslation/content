@@ -7,7 +7,7 @@ description: Overview of General Translation's TanStack Start SDK
 
 `gt-tanstack-start` is an open-source internationalization (i18n) integration for [TanStack Start](https://tanstack.com/start) applications.
 
-It brings the same developer experience as [`gt-next`](/docs/next) — wrap content in `<T>`, and it gets translated — to the TanStack Start framework. Built on top of [`gt-react`](/docs/react), it adds TanStack Start–specific features like isomorphic locale detection and root loader integration.
+It brings the same developer experience as [`gt-next`](/docs/next) — wrap content in `<T>`, and it gets translated — to the TanStack Start framework. Built on top of [`gt-react`](/docs/react), it re-exports the `gt-react` API (components, hooks, and string functions like `msg`) and adds the TanStack Start–specific `parseLocale()` function for isomorphic locale detection.
 
 <Callout type="warn">
   **Experimental:** `gt-tanstack-start` is under active development. APIs may change between minor versions. It is not yet recommended for production use.
@@ -47,25 +47,28 @@ initializeGT({
 
 ## Root loader
 
-Use `getTranslations()` and `getLocale()` in your root route's loader to fetch the right translations for the current request:
+Use `parseLocale()` and `getTranslationsSnapshot()` in your root route's loader to resolve the locale and fetch the right translations for the current request:
 
 ```tsx title="src/routes/__root.tsx"
-import { getTranslations, getLocale } from 'gt-tanstack-start'
+import { getTranslationsSnapshot, parseLocale } from 'gt-tanstack-start'
 
 export const Route = createRootRoute({
   loader: async () => {
+    const locale = parseLocale()
     return {
-      translations: await getTranslations(),
-      locale: getLocale(),
+      locale,
+      translations: await getTranslationsSnapshot(locale),
     }
   },
   // ...
 })
 ```
 
+`parseLocale()` resolves the request locale isomorphically: on the server, it checks the locale cookie and the `Accept-Language` header, then writes the resolved locale back to the cookie; in the browser, it reads the locale cookie. `getTranslationsSnapshot(locale)` returns a promise of the translations snapshot for that locale, ready to pass to `<GTProvider>`.
+
 ## The `<GTProvider>` component
 
-The `<GTProvider>` provides translation context to all child components. Pass the translations and locale from the loader:
+The `<GTProvider>` provides translation context to all child components. Pass the locale and translations from the loader — both props are required:
 
 ```tsx title="src/routes/__root.tsx"
 import { GTProvider } from 'gt-tanstack-start'
@@ -78,7 +81,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <GTProvider translations={translations}>
+        <GTProvider locale={locale} translations={translations}>
           {children}
         </GTProvider>
         <Scripts />
@@ -87,6 +90,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   )
 }
 ```
+
+The provider has no loading state of its own. Because translations are loaded in the route loader, TanStack Start's loader and pending mechanics control what renders while translations load.
 
 ## The `<T>` component
 
@@ -130,5 +135,4 @@ function Nav() {
 ## Next steps
 
 - Set up your project with the [quickstart guide](/docs/tanstack-start)
-- Browse the [example app](https://github.com/generaltranslation/gt/tree/main/examples/tanstack-start-basic)
 - Learn about [variable components](/docs/react/guides/variables) like `<Var>`, `<Num>`, and `<Currency>`

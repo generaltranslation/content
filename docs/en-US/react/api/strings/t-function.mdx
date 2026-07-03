@@ -5,85 +5,76 @@ description: API reference for the t() synchronous string translation function
 
 ## Overview
 
-The `t` function is a synchronous, module-level string translation function for client-side React applications.
+The `t()` function synchronously translates a string for the current locale.
 
-```jsx
-import { t } from 'gt-react/browser';
+```tsx
+import { t } from 'gt-react';
 
 const greeting = t('Hello, world!');
 ```
 
 `t` can also be used as a tagged template literal:
 
-```jsx
-import { t } from 'gt-react/browser';
+```tsx
+import { t } from 'gt-react';
 
 const greeting = t`Hello, ${name}!`;
 ```
 
-Unlike `useGT` (which requires React context) or `msg` (which encodes strings for later resolution), `t()` returns the translated string directly. It can be called anywhere in browser code — including at module scope, outside of React components.
-
-<Callout type="warn">
-**Experimental:** `t()` is an experimental feature. It is designed for client-side only React applications and does not yet integrate with React context (e.g., `<GTProvider>`, `useGT`). If called on the server, it logs a warning and returns the source string.
-</Callout>
+Unlike `useGT` (a React hook) or `msg` (which encodes strings for later resolution), `t()` returns the translated string directly and does not require React context.
+In single-page apps it can be called anywhere — including at module scope, outside of React components.
 
 ---
 
-## Setup
+## Reference
 
-`t()` depends on `bootstrap()` to load translations before your app renders. You need to change the entry point of your app to run `bootstrap()` first.
+### Parameters
 
-Typically the entry point is `main.tsx`. You'll create a new file (e.g., `bootstrap.tsx`) and point your `index.html` to it instead.
+| Name       | Type                   | Description                                                                                       |
+|------------|------------------------|---------------------------------------------------------------------------------------------------|
+| `message`  | `string`               | The string to translate.                                                                          |
+| `options?` | `GTTranslationOptions` | Optional. Interpolation variables, plus metadata options such as `$context`, `$id`, and `$locale`. |
 
-### 1. Create the bootstrap entry point
+### Returns
 
-```tsx
-// bootstrap.tsx
+`string` — The translated string for the current locale, or the source string (with variables interpolated) if no translation is available.
+
+### Throws
+
+In server-rendered apps, calling `t()` at module level throws an error in development.
+In production, it logs the error and falls back to the default locale value.
+Call `t()` in request-time scope instead, or register module-level strings with [`msg`](/docs/react/api/strings/msg).
+
+---
+
+## Examples
+
+### Single-page apps
+
+`t()` resolves from the translations loaded during initialization.
+`initializeGTSPA()` resolves once the initial translations are loaded, so await it in your entry point before rendering:
+
+```tsx title="src/main.tsx" copy
+import { createRoot } from 'react-dom/client';
+import { initializeGTSPA } from 'gt-react';
 import gtConfig from '../gt.config.json';
-import { bootstrap } from 'gt-react/browser';
 
-async function loadTranslations(locale: string) {
-  return (await import(`./_gt/${locale}.json`)).default;
-}
-
-await bootstrap({
+await initializeGTSPA({
   ...gtConfig,
-  loadTranslations,
+  loadTranslations: async (locale: string) =>
+    (await import(`./_gt/${locale}.json`)).default,
 });
 
-await import('./main.tsx');
+const { default: App } = await import('./App');
+createRoot(document.getElementById('root')!).render(<App />);
 ```
 
-By default, `bootstrap()` automatically updates the `<html>` element's `lang` and `dir` attributes to match the current locale.
-You can configure this behavior with `htmlTagOptions`:
+Then call `t()` anywhere — even at module scope:
 
-```tsx
-await bootstrap({
-  ...gtConfig,
-  loadTranslations,
-  htmlTagOptions: {
-    updateHtmlLangTag: true, // default: true
-    updateHtmlDirTag: false, // default: true
-  },
-});
-```
+```tsx title="src/nav.tsx" copy
+import { t } from 'gt-react';
 
-You can also manually update these attributes at any time using the `updateHtmlTagLang` and `updateHtmlTagDir` helper functions from `gt-react/browser`.
-
-### 2. Update your `index.html`
-
-In your `index.html`, update the module entry point to point to your new bootstrap file instead of `main.tsx`:
-
-```text
-src="/src/bootstrap.tsx"
-```
-
-### 3. Use `t()` anywhere
-
-```tsx
-import { t } from 'gt-react/browser';
-
-// Module-level — runs at import time
+// Module level — runs at import time
 const navItems = [
   { label: t('Home'), path: '/' },
   { label: t('About'), path: '/about' },
@@ -101,33 +92,58 @@ export default function Nav() {
 }
 ```
 
-<Callout>
-**Standalone setup:** `t()` does not currently integrate with the rest of the `gt-react` system (e.g., `<GTProvider>`, `useGT`). You need to use the bootstrap setup described above.
-</Callout>
-
----
-
-## Tagged template literal
-
-`t` can be used as a tagged template literal for a more natural syntax:
+By default, initialization also updates the `<html>` element's `lang` and `dir` attributes to match the current locale.
+Configure this with the `htmlTagOptions` field of `initializeGTSPA()`:
 
 ```tsx
-import { t } from 'gt-react/browser';
-
-// These are equivalent:
-t('Hello, {name}!', { name: 'Alice' });
-t`Hello, ${name}!`;
+await initializeGTSPA({
+  ...gtConfig,
+  loadTranslations,
+  htmlTagOptions: {
+    updateHtmlLangTag: true, // default: true
+    updateHtmlDirTag: false, // default: true
+  },
+});
 ```
 
-The tagged template form eliminates the need for ICU-style placeholders and options objects — variables are interpolated directly from the template expression.
+### Variables
+
+Pass variables using ICU-style curly brace placeholders:
+
+```tsx
+import { t } from 'gt-react';
+
+const message = t('Hello, {name}!', { name: 'Alice' });
+// → "Hola, Alice!" (in Spanish)
+```
+
+Or use the tagged template form, which interpolates variables directly from the template expressions:
+
+```tsx
+import { t } from 'gt-react';
+
+const message = t`Hello, ${name}!`;
+// → "Hola, Alice!" (in Spanish, when name = 'Alice')
+```
+
+Variable values are not translated — only the surrounding string template is.
+
+### Translation context
+
+Use `$context` to disambiguate content for the translation model:
+
+```tsx
+import { t } from 'gt-react';
+
+const label = t('Apple', { $context: 'the technology company' });
+```
 
 ### Global registration
 
-Instead of importing `t` in every file, you can register it globally:
+Instead of importing `t` in every file, you can register the tagged template form globally:
 
-```tsx
-// In your app's entry point
-import "gt-react/macros";
+```tsx title="src/main.tsx"
+import 'gt-react/macros';
 ```
 
 This sets `globalThis.t`, making the tagged template available everywhere without an explicit import:
@@ -140,105 +156,33 @@ const labels = {
 };
 ```
 
----
+### Server-rendered apps
 
-## Reference
-
-### Parameters
-
-| Name       | Type     | Description                                                                 |
-|------------|----------|-----------------------------------------------------------------------------|
-| `message`  | `string` | The string to translate.                                                    |
-| `options?` | `object` | Optional. An object containing variable values for interpolation.           |
-
-### Returns
-
-`string` — The translated string for the current locale, or the source string if no translation is available.
-
----
-
-## Variables
-
-You can pass variables using curly brace syntax:
+In server-rendered apps, `t()` must not run at module level — the locale is not known until request time:
 
 ```tsx
-import { t } from 'gt-react/browser';
+import { t } from 'gt-react';
 
-const message = t('Hello, {name}!', { name: 'Alice' });
-// → "Hola, Alice!" (in Spanish)
+// ❌ Wrong — module level in a server-rendered app
+const title = t('Dashboard');
+
+export default function Dashboard() {
+  // ✅ Correct — request-time scope
+  return <h1>{t('Dashboard')}</h1>;
+}
 ```
 
-Or use the tagged template form, which handles interpolation automatically:
-
-```tsx
-import { t } from 'gt-react/browser';
-
-const message = t`Hello, ${name}!`;
-// → "Hola, Alice!" (in Spanish, when name = 'Alice')
-```
-
-Variable values are not translated — only the surrounding string template is.
-
----
-
-## Behavior
-
-### How it works
-
-`bootstrap()` asynchronously loads all translations for the current locale before the app's modules are imported. Once loaded, `t()` reads from the translation data synchronously with no overhead.
-
-Because translations are resolved at module load time:
-
-- **Switching locales requires a full page reload.** The browser must re-execute all modules to pick up the new translations.
-- **This only works in client-side apps.** Module-level code re-executes when loaded in the browser, which is what makes this pattern possible.
-
-### Server-side behavior
-
-If `t()` is called in a server environment (where `window` is undefined), it logs a warning and returns the original source string. For server-side translation, use React context-based hooks like `useGT`.
-
----
-
-## Example
-
-### Constants file
-
-```tsx
-// constants.ts
-import { t } from 'gt-react/browser';
-
-export const ERROR_MESSAGES = {
-  notFound: t('Page not found'),
-  unauthorized: t('You do not have permission to view this page'),
-  serverError: t('Something went wrong. Please try again later.'),
-};
-```
-
-### Router definitions
-
-```tsx
-// routes.ts
-import { t } from 'gt-react/browser';
-
-export const routes = [
-  { path: '/', label: t('Home') },
-  { path: '/dashboard', label: t('Dashboard') },
-  { path: '/settings', label: t('Settings') },
-];
-```
+For module-level strings in server-rendered apps, register them with [`msg`](/docs/react/api/strings/msg) and resolve them with [`useMessages`](/docs/react/api/strings/use-messages).
 
 ---
 
 ## Notes
 
-- `t()` is imported from `gt-react/browser`, not from `gt-react` directly.
-- Requires `bootstrap()` to be called before any module that uses `t()` is loaded.
-- **Experimental.** Does not yet integrate with `<GTProvider>` or other `gt-react` context-based features.
-- Switching locales requires a full page reload.
-
-## Dev logs
-
-- [gt-react@10.12.0](/devlog/gt-react_v10_12_0) — introduction of the `t()` function
-- [gt-react@10.13.0](/devlog/gt-react_v10_13_0) — tagged template literal support
+* `t()` is imported from `gt-react`.
+* In an SPA, await `initializeGTSPA()` before any module that calls `t()` at module scope.
+* When a translation is missing, `t()` falls back to the source string with variables interpolated.
+* Switching locales reloads the page by default, which re-executes module-level `t()` calls with the new locale.
+* The compiler transforms tagged templates (`` t`...` ``) at build time; without the transform, they still resolve at runtime.
 
 ## Next steps
 

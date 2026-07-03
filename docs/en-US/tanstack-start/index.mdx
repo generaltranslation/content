@@ -79,7 +79,7 @@ export default async function loadTranslations(locale: string) {
 
 ### Root route setup
 
-Update `src/routes/__root.tsx` to initialize GT and provide translations:
+Update `src/routes/__root.tsx` to initialize GT and provide translations. In the loader, resolve the request locale with `parseLocale()`, then load the matching translations snapshot with `getTranslationsSnapshot(locale)`:
 
 ```tsx title="src/routes/__root.tsx"
 import {
@@ -90,8 +90,8 @@ import {
 import {
   initializeGT,
   GTProvider,
-  getTranslations,
-  getLocale,
+  getTranslationsSnapshot,
+  parseLocale,
   LocaleSelector,
 } from 'gt-tanstack-start'
 import gtConfig from '../../gt.config.json'
@@ -111,9 +111,10 @@ export const Route = createRootRoute({
     ],
   }),
   loader: async () => {
+    const locale = parseLocale()
     return {
-      translations: await getTranslations(),
-      locale: getLocale(),
+      locale,
+      translations: await getTranslationsSnapshot(locale),
     }
   },
   shellComponent: RootDocument,
@@ -127,7 +128,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <GTProvider translations={translations}>
+        <GTProvider locale={locale} translations={translations}>
           <LocaleSelector />
           {children}
         </GTProvider>
@@ -137,6 +138,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   )
 }
 ```
+
+<Callout type="info">
+  **Required props:** `<GTProvider>` requires both `locale` and `translations`. The provider has no loading state — translation loading is delegated to the route loader, so TanStack Start's loader and pending mechanics control what renders while translations load.
+</Callout>
 
 ## Usage
 
@@ -241,12 +246,6 @@ Add the translation step to your build script:
   }
 }
 ```
-
-## Example app
-
-See the complete working example: [tanstack-start-basic](https://github.com/generaltranslation/gt/tree/main/examples/tanstack-start-basic)
-
----
 
 ## Next steps
 

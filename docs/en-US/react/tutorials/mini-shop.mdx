@@ -14,16 +14,15 @@ What you’ll build
 - Optional: local translation storage for production builds
 
 Links used in this tutorial
-- Provider: [`<GTProvider>`](/docs/react/api/components/gtprovider)
 - Components: [`<T>`](/docs/react/api/components/t), [`<Var>`](/docs/react/api/components/var), [`<Num>`](/docs/react/api/components/num), [`<Currency>`](/docs/react/api/components/currency), [`<DateTime>`](/docs/react/api/components/datetime), [`<Branch>`](/docs/react/api/components/branch), [`<Plural>`](/docs/react/api/components/plural), [`<LocaleSelector>`](/docs/react/api/components/locale-selector)
 - Strings and Shared Strings: [`useGT`](/docs/react/api/strings/use-gt), [`msg`](/docs/react/api/strings/msg), [`useMessages`](/docs/react/api/strings/use-messages)
 - Guides: [Variables](/docs/react/guides/variables), [Branching](/docs/react/guides/branches), [Strings](/docs/react/guides/strings), [Local Translation Storage](/docs/react/guides/local-tx), [Changing Languages](/docs/react/guides/languages)
 
 ---
 
-## Install and wrap your app
+## Install and initialize your app
 
-Install packages and wrap your app with the provider.
+Install packages and initialize the library in your entry point.
 
 <Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
   <Tab value="npm">
@@ -67,19 +66,23 @@ Install packages and wrap your app with the provider.
   Then add the files in the sections below (e.g., `src/main.tsx`, `src/App.tsx`, `src/components/*`, `src/data.ts`, `src/nav.ts`).
 </Callout>
 
-Create a minimal provider setup.
+Create a minimal setup. `initializeGTSPA` runs once at startup and resolves when the initial translations are loaded, so await it before rendering.
 
 ```tsx title="src/main.tsx" copy
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { GTProvider } from 'gt-react'; // See: /docs/react/api/components/gtprovider
+import { initializeGTSPA } from 'gt-react';
 import App from './App';
+
+// Enable Spanish and French
+await initializeGTSPA({
+  defaultLocale: 'en',
+  locales: ['es', 'fr'],
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <GTProvider locales={["es", "fr"]}> {/* Enable Spanish and French */}
-      <App />
-    </GTProvider>
+    <App />
   </StrictMode>
 );
 ```
@@ -102,14 +105,30 @@ Learn more in [Production vs Development](/docs/react/concepts/environments).
 <Tabs items={["Vite (dev)", "Create React App (dev)", "Get keys"]}>
   <Tab value="Vite (dev)">
   ```bash title=".env.local" copy
-  VITE_GT_API_KEY="your-dev-api-key"
   VITE_GT_PROJECT_ID="your-project-id"
+  VITE_GT_DEV_API_KEY="your-dev-api-key"
   ```
+
+  `gt-react` reads these automatically during initialization. The dev API key is only read in development.
   </Tab>
   <Tab value="Create React App (dev)">
   ```bash title=".env.local" copy
-  REACT_APP_GT_API_KEY="your-dev-api-key"
   REACT_APP_GT_PROJECT_ID="your-project-id"
+  REACT_APP_GT_DEV_API_KEY="your-dev-api-key"
+  ```
+
+  CRA environment variables are not read automatically — pass them to `initializeGTSPA`:
+
+  ```tsx copy
+  await initializeGTSPA({
+    defaultLocale: 'en',
+    locales: ['es', 'fr'],
+    projectId: process.env.REACT_APP_GT_PROJECT_ID,
+    devApiKey:
+      process.env.NODE_ENV === 'development'
+        ? process.env.REACT_APP_GT_DEV_API_KEY
+        : undefined,
+  });
   ```
   </Tab>
   <Tab value="Get keys">
