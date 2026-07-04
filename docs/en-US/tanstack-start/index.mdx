@@ -11,38 +11,34 @@ description: Internationalize your TanStack Start app with gt-tanstack-start
 
 ## Installation
 
-Install `gt-tanstack-start`, `gt-react`, and the `gt` CLI:
+Install `gt-tanstack-start` and the `gt` CLI:
 
 <Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
   <Tab value="npm">
   ```bash
-  npm i gt-tanstack-start gt-react
+  npm i gt-tanstack-start
   npm i -D gt
   ```
   </Tab>
   <Tab value="yarn">
   ```bash
-  yarn add gt-tanstack-start gt-react
+  yarn add gt-tanstack-start
   yarn add --dev gt
   ```
   </Tab>
   <Tab value="bun">
   ```bash
-  bun add gt-tanstack-start gt-react
+  bun add gt-tanstack-start
   bun add --dev gt
   ```
   </Tab>
   <Tab value="pnpm">
   ```bash
-  pnpm add gt-tanstack-start gt-react
+  pnpm add gt-tanstack-start
   pnpm add --save-dev gt
   ```
   </Tab>
 </Tabs>
-
-<Callout type="info">
-  `gt-react` is required as a direct dependency so the `gt` CLI can detect `<T>` components in your source code.
-</Callout>
 
 ## Configuration
 
@@ -62,44 +58,46 @@ Create a `gt.config.json` in your project root:
 }
 ```
 
-<Callout>
-  Translation files **must** be inside `src/` for Vite's dynamic imports to work. Using `public/` will not work.
+<Callout type="warn">
+  **File location:** Translation files must be inside `src/` for Vite's dynamic imports to work. Using `public/` will not work.
 </Callout>
 
 ### Translation loader
 
-Create a `loadTranslations.ts` file in your project root:
+Create a `loadTranslations.ts` file in `src/`:
 
-```ts title="loadTranslations.ts"
+```ts title="src/loadTranslations.ts"
 export default async function loadTranslations(locale: string) {
-  const translations = await import(`./src/_gt/${locale}.json`);
+  const translations = await import(`./_gt/${locale}.json`);
   return translations.default;
 }
 ```
 
 ### Root route setup
 
-Update `src/routes/__root.tsx` to initialize GT and provide translations:
+Update `src/routes/__root.tsx` to initialize GT and provide translations. In the loader, resolve the request locale with `parseLocale()`, then load the matching translations snapshot with `getTranslationsSnapshot(locale)`:
 
 ```tsx title="src/routes/__root.tsx"
 import {
   HeadContent,
+  Outlet,
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router'
 import {
   initializeGT,
   GTProvider,
-  getTranslations,
-  getLocale,
+  getTranslationsSnapshot,
+  parseLocale,
   LocaleSelector,
 } from 'gt-tanstack-start'
 import gtConfig from '../../gt.config.json'
-import loadTranslations from '../../loadTranslations'
+import loadTranslations from '../loadTranslations'
 
 // Initialize GT at the module level
 initializeGT({
-  ...gtConfig,
+  defaultLocale: gtConfig.defaultLocale,
+  locales: gtConfig.locales,
   loadTranslations,
 })
 
@@ -111,15 +109,16 @@ export const Route = createRootRoute({
     ],
   }),
   loader: async () => {
+    const locale = parseLocale()
     return {
-      translations: await getTranslations(),
-      locale: getLocale(),
+      locale,
+      translations: await getTranslationsSnapshot(locale),
     }
   },
-  shellComponent: RootDocument,
+  component: RootComponent,
 })
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootComponent() {
   const { translations, locale } = Route.useLoaderData()
   return (
     <html lang={locale}>
@@ -127,9 +126,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <GTProvider translations={translations}>
+        <GTProvider locale={locale} translations={translations}>
           <LocaleSelector />
-          {children}
+          <Outlet />
         </GTProvider>
         <Scripts />
       </body>
@@ -138,13 +137,17 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 }
 ```
 
+<Callout type="info">
+  **Required props:** `<GTProvider>` requires both `locale` and `translations`. The provider has no loading state — translation loading is delegated to the route loader, so TanStack Start's loader and pending mechanics control what renders while translations load.
+</Callout>
+
 ## Usage
 
-Wrap content in `<T>` to translate it. Import `<T>` from `gt-react`:
+Wrap content in `<T>` to translate it:
 
 ```tsx title="src/routes/index.tsx"
 import { createFileRoute } from '@tanstack/react-router'
-import { T } from 'gt-react'
+import { T } from 'gt-tanstack-start'
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -159,7 +162,7 @@ function Home() {
 ```
 
 <Callout type="info">
-  Import `<T>` from `gt-react` (not `gt-tanstack-start`). The `gt` CLI scans for `gt-react` imports to find translatable content.
+  **Note:** `gt-tanstack-start` re-exports the full `gt-react` API, so components like `<T>` and hooks like `useGT` are all imported from `gt-tanstack-start`. The `gt` CLI detects translatable content from both `gt-tanstack-start` and `gt-react` imports.
 </Callout>
 
 ## Generate translations
@@ -228,7 +231,7 @@ Start the dev server:
   </Tab>
 </Tabs>
 
-Visit [localhost:3000](http://localhost:3000) and use the locale selector to switch languages. Translations are loaded from local JSON files, so language switching is instant.
+Visit [localhost:5173](http://localhost:5173) (or the port your dev server prints) and use the locale selector to switch languages. Translations are loaded from local JSON files, so language switching is instant.
 
 ## Deployment
 
@@ -241,12 +244,6 @@ Add the translation step to your build script:
   }
 }
 ```
-
-## Example app
-
-See the complete working example: [tanstack-start-basic](https://github.com/generaltranslation/gt/tree/main/examples/tanstack-start-basic)
-
----
 
 ## Next steps
 

@@ -44,16 +44,27 @@ For async components, see [`getTranslations`](/docs/next/api/dictionary/get-tran
 
 ### Returns
 
-A translation function `d` that, given an id, will return the translated version of the corresponding entry
+A translation function `t` that, given an id, returns the translated version of the corresponding entry
 
 ```jsx
-(id: string, options?: DictionaryTranslationOptions) => string
+(id: string, options?: TranslationVariables) => string
 ```
 
 | Name                  | Type | Description                                                                 |
 |-----------------------|--|-----------------------------------------------------------------------------|
 | `id`             | `string` | The id of the entry to be translated                                     |
-| `options?`            | [`DictionaryTranslationOptions`](/docs/next/api/types/dictionary-translation-options) | Translation options to customize the behavior of `d`. |
+| `options?`            | [`TranslationVariables`](/docs/next/api/types/dictionary-translation-options) | Variables to interpolate into the translated entry. |
+
+Metadata such as context does not go in the `t()` call.
+Instead, it lives in the dictionary entry itself, e.g. `greeting: ['Hello!', { $context: 'a friendly greeting' }]`.
+
+### Throws
+
+`t(id)` and `t.obj(id)` throw an `Error` (`Dictionary entry ${id} cannot be found`) when the entry does not exist in the default locale's dictionary.
+This applies in both development and production.
+
+If the source entry exists but the current locale's translation is missing, `t` does not throw.
+It falls back to the source entry, translating it at runtime in development when possible.
 
 ---
 
@@ -72,21 +83,24 @@ export default dictionary;
 When we want to access these entries (on the client side), we call `useTranslations`.
 This returns a function that accepts the key of a translation from the dictionary.
 
+Place your dictionary in a `dictionary.js`, `dictionary.ts`, or `dictionary.json` file at the root of your project or in the `src/` directory.
+See the [dictionaries guide](/docs/next/guides/dictionaries) for more information.
+
 ```jsx title="TranslateGreeting.jsx" copy
 import { useTranslations } from 'gt-next';
 
-export default async function TranslateGreeting() {
+export default function TranslateGreeting() {
   const t = useTranslations(); // [!code highlight]
   return (
     <p>
-      {t('greeting')} // Hello, Alice // [!code highlight]
+      {t('greeting')} // [!code highlight]
     </p>
   );
 }
 ```
 
 ### Using variables [#variables]
-In order to pass values, you must (1) assign an identifier and (2) reference the identifier when calling the `d` function.
+In order to pass values, you must (1) assign an identifier and (2) reference the identifier when calling the `t` function.
 
 In this example, we use `{}` to pass variables to the translations.
 In the dictionary, we assign identifier `{userName}`.
@@ -99,11 +113,11 @@ const dictionary = {
 export default dictionary;
 ```
 
-```jsx title="src/server/TranslateGreeting.jsx" copy
+```jsx title="TranslateGreeting.jsx" copy
 // [!code word:userName]
 import { useTranslations } from 'gt-next';
 
-export default async function TranslateGreeting() {
+export default function TranslateGreeting() {
   const t = useTranslations();
   
   // Hello Alice!
@@ -147,6 +161,9 @@ export default function UserDetails() {
 ## Notes
  * The `useTranslations` function allows you to access dictionary translations on the client side.
  * The `useTranslations` hook can only be used within a component wrapped by a [`<GTProvider>` component](/docs/next/api/components/gtprovider).
+ * The `t()` function throws when the requested entry is missing from the default locale's dictionary. Make sure every id you reference exists in the source dictionary.
+ * When only the current locale's translation is missing, `t()` falls back to the source entry instead of throwing.
+ * Entry metadata (`$context`, `$format`, `$maxChars`) belongs in the dictionary entry, not in the `t()` call.
 
 ## Next steps
  * For server-side translations, see [`getTranslations`](/docs/next/api/dictionary/get-translations).

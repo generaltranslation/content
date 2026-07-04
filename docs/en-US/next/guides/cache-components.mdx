@@ -21,19 +21,17 @@ Enable cache components in your Next.js config, and define custom `getLocale` an
 Your `[locale]` segment must be a **root parameter** — the first dynamic segment in your app directory, with no `app/layout.tsx` above it. Your root layout must live inside `app/[locale]/`.
 </Callout>
 
-```js title="next.config.js"
+```ts title="next.config.ts"
+import { withGTConfig } from 'gt-next/config';
+
 const nextConfig = {
   cacheComponents: true,
 };
 
-export default withGTConfig(nextConfig, {
-  // Point to your custom request functions
-  getLocalePath: './getLocale.ts',
-  getRegionPath: './getRegion.ts',
-});
+export default withGTConfig(nextConfig);
 ```
 
-Create these files in your project root. They use `next/root-params` instead of `headers()`, which means they work inside `"use cache"` boundaries:
+Create `getLocale.ts` and `getRegion.ts` in your project root (or `src/` directory) — `withGTConfig` detects them automatically. They use `next/root-params` instead of `headers()`, which means they work inside `"use cache"` boundaries:
 
 ```ts title="getLocale.ts"
 import { locale } from 'next/root-params';
@@ -49,34 +47,59 @@ export default async function getRegion(): Promise<string | undefined> {
 }
 ```
 
+If you keep these files elsewhere, point `withGTConfig` at them with `getLocalePath` and `getRegionPath`:
+
+```ts title="next.config.ts"
+export default withGTConfig(nextConfig, {
+  getLocalePath: './src/i18n/getLocale.ts',
+  getRegionPath: './src/i18n/getRegion.ts',
+});
+```
+
 <Callout type='warn'>
 **Do not use `headers()` in your `getLocale` or `getRegion` functions.** Calling `headers()` inside a `"use cache"` boundary causes a build error. Use `next/root-params` as shown above.
 </Callout>
 
-<Callout type='warn'>
-`experimentalLocaleResolution` is deprecated as of gt-next@6.16.29. It relies on unsupported Next.js internals and may break in future Next.js releases. Use explicit `getLocalePath` and `getRegionPath` configuration instead.
-</Callout>
+  </Step>
+  <Step>
+  ### Configure a custom `loadTranslations`
+
+With `cacheComponents` enabled, `gt-next` requires a custom [`loadTranslations`](/docs/next/api/config/load-translations) function — the build fails without one, because the default remote translation loader cannot be used safely with Cache Components.
+
+Add a `loadTranslations.ts` file to your project root (or configure `loadTranslationsPath` in `withGTConfig`), and store your translations locally. See the [local translations guide](/docs/next/guides/local-tx) for the full setup.
+
+```ts title="loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  const translations = await import(`./public/locales/${locale}.json`);
+  return translations.default;
+}
+```
+
+If your loader performs dynamic loading, mark it with `"use cache"`.
 
   </Step>
   <Step>
   ### Enable middleware
-  See the full middleware guide [here](/docs/next/guides/middleware).
-  ```ts
-  import { createNextMiddleware } from 'gt-next/middleware';
+
+Create `proxy.ts` (Next.js 16+) or `middleware.ts` (Next.js 15 and below) in your project root. See the full [middleware guide](/docs/next/guides/middleware).
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
 
 export default createNextMiddleware();
 
 export const config = {
-// Match all paths except API routes, static files, and Next.js internals
-matcher: ['/((?!api|static|.*\\..*|_next).*)']
+  // Match all paths except API routes, static files, and Next.js internals
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
 };
+```
 
-````
-</Step>
+  </Step>
 <Step>
 ### Add the `locale` parameter to cached components with translatable content
 When using cached components with translatable content, you must pass the `locale` as a parameter. This ensures each locale gets its own cache entry.
 ```tsx
+import { T } from "gt-next"
 import { getLocale } from "gt-next/server"
 
 async function CachedContent({locale}: {locale: string}) {
@@ -88,16 +111,18 @@ export default async function Page() {
   const locale = await getLocale()
   return <CachedContent locale={locale} />
 }
-````
+```
 
   </Step>
 </Steps>
 
 ## Configuration notes
 
-- When using custom `getLocalePath` and `getRegionPath`, those functions handle locale and region resolution for cached components.
+- When custom `getLocale` and `getRegion` functions are configured (auto-detected or via `getLocalePath` and `getRegionPath`), those functions handle locale and region resolution for cached components.
 - The `next/root-params` API allows reading route parameters like `[locale]` from anywhere in the component tree, including inside `"use cache"` boundaries. The root param value automatically becomes part of the cache key.
 - The `[locale]` segment must be a root parameter (no `app/layout.tsx` above it).
+- With `cacheComponents` enabled, `gt-next` delegates caching to Next.js: it forces its own translation cache expiry off (`cacheExpiryTime: 0`).
+- Development runtime translation hot reload is disabled when `cacheComponents` is enabled, because it performs dynamic requests that are not allowed with Cache Components. Use local translations during development instead.
 
 ---
 
