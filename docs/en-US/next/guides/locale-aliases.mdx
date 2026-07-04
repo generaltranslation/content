@@ -50,21 +50,20 @@ While aliases work seamlessly for routing, there are three places where you **mu
 2. Alternate link tags in your page metadata
 3. Alternate entries in your sitemap
 
-GT provides the `resolveCanonicalLocale()` method to convert aliases back to their BCP 47 codes. You can access it via `getGTClass` from `gt-next`, which returns a `GTRuntime` instance with translation, formatting, and locale utilities. (The full `GT` class, which adds the project and file-management API client, remains available from `generaltranslation`.)
+GT provides the `resolveCanonicalLocale()` function to convert aliases back to their BCP 47 codes. It is exported from `gt-next` and reads the custom mapping from your configuration:
 
 ```ts
-import { getGTClass } from 'gt-next';
+import { resolveCanonicalLocale } from 'gt-next';
 
-const gtInstance = getGTClass();
-const canonicalLocale = gtInstance.resolveCanonicalLocale('cn');
+const canonicalLocale = resolveCanonicalLocale('cn');
 // Returns: "zh"
 ```
 
 For non-aliased locales, `resolveCanonicalLocale()` returns the input unchanged:
 
 ```ts
-gtInstance.resolveCanonicalLocale('ja');     // "ja"
-gtInstance.resolveCanonicalLocale('en-US');  // "en-US"
+resolveCanonicalLocale('ja');     // "ja"
+resolveCanonicalLocale('en-US');  // "en-US"
 ```
 
 ### 1. HTML `lang` attribute
@@ -74,7 +73,7 @@ The `<html lang>` attribute tells browsers and search engines what language the 
 In your root layout, resolve the locale before passing it to the `<html>` tag:
 
 ```tsx title="app/[locale]/layout.tsx"
-import { getGTClass } from 'gt-next';
+import { resolveCanonicalLocale } from 'gt-next';
 
 export default function RootLayout({
   children,
@@ -83,8 +82,7 @@ export default function RootLayout({
   children: React.ReactNode;
   params: { locale: string };
 }) {
-  const gtInstance = getGTClass();
-  const canonicalLocale = gtInstance.resolveCanonicalLocale(params.locale);
+  const canonicalLocale = resolveCanonicalLocale(params.locale);
 
   return (
     <html lang={canonicalLocale}>
@@ -102,20 +100,19 @@ Alternate links tell search engines which versions of a page exist in other lang
 
 ```tsx title="app/[locale]/layout.tsx"
 import type { Metadata } from 'next';
-import { getGTClass } from 'gt-next';
+import { resolveCanonicalLocale } from 'gt-next';
 
 export async function generateMetadata({
   params,
 }: {
   params: { locale: string };
 }): Promise<Metadata> {
-  const gtInstance = getGTClass();
   const locales = ['en-US', 'cn', 'ja', 'zh-Hant'];
 
   // Build alternates with canonical BCP 47 codes as keys
   const languages: Record<string, string> = {};
   for (const locale of locales) {
-    const canonical = gtInstance.resolveCanonicalLocale(locale);
+    const canonical = resolveCanonicalLocale(locale);
     languages[canonical] = `https://example.com/${locale}`;
   }
 
@@ -149,10 +146,9 @@ If you use a [dynamic sitemap](https://nextjs.org/docs/app/api-reference/file-co
 
 ```ts title="app/sitemap.ts"
 import type { MetadataRoute } from 'next';
-import { getGTClass } from 'gt-next';
+import { resolveCanonicalLocale } from 'gt-next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const gtInstance = getGTClass();
   const locales = ['en-US', 'cn', 'ja', 'zh-Hant'];
   const baseUrl = 'https://example.com';
 
@@ -162,7 +158,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Build language alternates with canonical codes
     const languages: Record<string, string> = {};
     for (const locale of locales) {
-      const canonical = gtInstance.resolveCanonicalLocale(locale);
+      const canonical = resolveCanonicalLocale(locale);
       languages[canonical] = `${baseUrl}/${locale}${page}`;
     }
 
