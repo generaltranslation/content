@@ -1,0 +1,444 @@
+---
+title: SPA Quickstart
+description: Add multiple languages to your single-page React app in under 10 minutes
+---
+
+By the end of this guide, your single-page React app will display content in multiple languages, with a language switcher your users can interact with.
+
+In a single-page app, `gt-react` runs entirely in the browser — you initialize it once at startup with `initializeGTSPA()`, and you don't need a provider component.
+
+**Prerequisites:**
+- A client-side rendered React app (Vite, Create React App, webpack, or similar)
+- Node.js 18+
+
+<Callout type='info'>
+  **Want automatic setup?** Run `npx gt@latest` to configure everything with the [Setup Wizard](/docs/cli/init). This guide covers manual setup.
+</Callout>
+
+<Callout type='info'>
+  **Server-rendered app?** If your framework renders on the server (TanStack Start, React Router, or a custom SSR setup), follow the [server-rendered quickstart](/docs/react/tutorials/quickstart-ssr) instead.
+</Callout>
+
+---
+
+## Step 1: Install the packages
+
+`gt-react` is the library that powers translations in your app. `gt` is the CLI tool that prepares translations for production, and `@generaltranslation/compiler` is a build plugin for your bundler.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm i gt-react
+  npm i -D gt @generaltranslation/compiler
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn add gt-react
+  yarn add --dev gt @generaltranslation/compiler
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun add gt-react
+  bun add --dev gt @generaltranslation/compiler
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm add gt-react
+  pnpm add --save-dev gt @generaltranslation/compiler
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## Step 2: Create a translation config file
+
+Create a **`gt.config.json`** file in your project root. This tells the library which languages you support:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+- **`defaultLocale`** — the language your app is written in (your source language).
+- **`locales`** — the languages you want to translate into. Pick any from the [supported locales list](/docs/platform/supported-locales).
+- **`files`** — tells the CLI where to save translation files. The `output` path should match the import path in your `loadTranslations` function (Step 4).
+
+<Callout type='info'>
+  **File location:** Bundlers like Vite import translation files as modules, so they should live inside `src/`. If you load translations over HTTP instead (see the Create React App note in Step 4), use `"public/_gt/[locale].json"`.
+</Callout>
+
+---
+
+## Step 3: Add the compiler plugin
+
+Add the GT compiler plugin to your bundler config. It analyzes your source files at build time — validating translation calls and precomputing translation metadata so that work doesn't happen in the browser:
+
+```ts title="vite.config.ts"
+import react from '@vitejs/plugin-react';
+import { vite as gtCompiler } from '@generaltranslation/compiler'; // [!code highlight]
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [gtCompiler(), react()], // [!code highlight]
+});
+```
+
+<Accordions>
+  <Accordion title="Not using Vite?">
+    `@generaltranslation/compiler` also exports plugins for other bundlers — import the one that matches yours:
+
+    ```ts
+    import { webpack as gtCompiler } from '@generaltranslation/compiler';
+    // also available: rollup, esbuild
+    ```
+  </Accordion>
+</Accordions>
+
+See the [compiler concepts page](/docs/react/concepts/compiler) for everything the compiler can do, including automatic JSX wrapping.
+
+---
+
+## Step 4: Create a translation loader
+
+In an SPA, `gt-react` needs a function to load translation files in the browser at runtime. Create a `loadTranslations` file:
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  try {
+    const translations = await import(`./_gt/${locale}.json`);
+    return translations.default;
+  } catch (error) {
+    console.warn(`No translations found for ${locale}`);
+    return {};
+  }
+}
+```
+
+This function loads JSON translation files from your `src/_gt/` directory. The CLI generates these files when you run `npx gt translate`.
+
+<Accordions>
+  <Accordion title="Using Create React App?">
+    CRA's webpack config blocks dynamic `import()` from outside `src/`. Store translations in `public/_gt/` and use `fetch()` instead:
+
+    ```ts title="src/loadTranslations.ts"
+    export default async function loadTranslations(locale: string) {
+      try {
+        const response = await fetch(`${process.env.PUBLIC_URL}/_gt/${locale}.json`);
+        if (!response.ok) throw new Error('Not found');
+        return await response.json();
+      } catch (error) {
+        console.warn(`No translations found for ${locale}`);
+        return {};
+      }
+    }
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Step 5: Initialize the library
+
+Call **`initializeGTSPA`** once at startup, before your app renders. It takes your config and translation loader, determines the user's locale, and loads the translations for it.
+
+The most robust pattern is a small entry module that initializes GT first, then loads the rest of the app:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+await initializeGTSPA({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: gtConfig.locales,
+  loadTranslations,
+});
+
+await import('./main'); // render the app only after GT is ready
+```
+
+```tsx title="src/main.tsx"
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+```
+
+Then update the module script tag in your `index.html` to point at the new entry: change its `src` from `/src/main.tsx` to `/src/index.ts`.
+
+`initializeGTSPA` runs once at startup — the configuration is immutable for the lifetime of the app. After it resolves, every component and hook in your app can access translations. **You don't need to wrap your app in a provider.**
+
+<Accordions>
+  <Accordion title="Using Create React App?">
+    CRA may not support top-level `await`, so render inside `.then()`:
+
+    ```tsx title="src/index.tsx"
+    import { StrictMode } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { initializeGTSPA } from 'gt-react';
+    import loadTranslations from './loadTranslations';
+    import App from './App';
+
+    initializeGTSPA({
+      defaultLocale: 'en',
+      locales: ['es', 'fr', 'ja'],
+      loadTranslations,
+    }).then(() => {
+      createRoot(document.getElementById('root')!).render(
+        <StrictMode>
+          <App />
+        </StrictMode>
+      );
+    });
+    ```
+  </Accordion>
+</Accordions>
+
+---
+
+## Step 6: Mark content for translation
+
+Now, wrap any text you want translated with the **`<T>`** component. `<T>` stands for "translate":
+
+```tsx title="src/components/Welcome.tsx"
+import { T } from 'gt-react';
+
+export default function Welcome() {
+  return (
+    <main>
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content will be translated automatically.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+You can wrap as much or as little JSX as you want inside `<T>`. Everything inside it — text, nested elements, even formatting — gets translated as a unit.
+
+---
+
+## Step 7: Add a language switcher
+
+Drop in a **`<LocaleSelector>`** so users can change languages:
+
+```tsx title="src/components/Welcome.tsx"
+import { T, LocaleSelector } from 'gt-react';
+
+export default function Welcome() {
+  return (
+    <main>
+      <LocaleSelector />
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content will be translated automatically.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+`LocaleSelector` renders a dropdown populated with the languages from your `gt.config.json`.
+
+When the user picks a language, `gt-react` saves the choice to the `generaltranslation.locale` cookie and reloads the page — `initializeGTSPA` then re-runs and loads the new locale's translations before the app renders.
+
+---
+
+## Step 8: Set up environment variables (optional)
+
+To see translations in development, you need API keys from General Translation. These enable **on-demand translation** — your app translates content in real time as you develop.
+
+Create a **`.env.local`** file with the correct prefix for your bundler:
+
+<Tabs items={["Vite", "Create React App"]}>
+  <Tab value="Vite">
+  ```bash title=".env.local"
+  VITE_GT_PROJECT_ID="your-project-id"
+  VITE_GT_DEV_API_KEY="your-dev-api-key"
+  ```
+
+  `gt-react` reads these automatically during initialization — no extra code needed. The dev API key is only read in development, so it stays out of production bundles.
+  </Tab>
+  <Tab value="Create React App">
+  ```bash title=".env.local"
+  REACT_APP_GT_PROJECT_ID="your-project-id"
+  REACT_APP_GT_DEV_API_KEY="your-dev-api-key"
+  ```
+
+  CRA environment variables are not read automatically — pass them to `initializeGTSPA`:
+
+  ```tsx title="src/index.tsx"
+  initializeGTSPA({
+    defaultLocale: 'en',
+    locales: ['es', 'fr', 'ja'],
+    loadTranslations,
+    projectId: process.env.REACT_APP_GT_PROJECT_ID,
+    devApiKey:
+      process.env.NODE_ENV === 'development'
+        ? process.env.REACT_APP_GT_DEV_API_KEY
+        : undefined,
+  });
+  ```
+  </Tab>
+</Tabs>
+
+Get your free keys at [dash.generaltranslation.com](https://dash.generaltranslation.com/signup) or by running:
+
+```bash
+npx gt auth
+```
+
+<Callout type="warn">
+  For development, use a key starting with `gtx-dev-`. Production keys (`gtx-api-`) are for CI/CD only.
+
+  Client-side bundlers like Vite and CRA require environment variables to use specific prefixes (`VITE_` or `REACT_APP_`) to be exposed to the browser. Bare `GT_API_KEY` will not be available at runtime.
+</Callout>
+
+<Accordions>
+  <Accordion title="Can I use gt-react without API keys?">
+    Yes. Without API keys, `gt-react` works as a standard i18n library. You won't get on-demand translation in development, but you can still:
+    - Provide your own translation files manually
+    - Use all components (`<T>`, `<Var>`, `LocaleSelector`, etc.)
+    - Run `npx gt generate` to create translation file templates, then translate them yourself
+  </Accordion>
+</Accordions>
+
+---
+
+## Step 9: See it working
+
+Start your dev server:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+  ```bash
+  npm run dev
+  ```
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn dev
+  ```
+  </Tab>
+  <Tab value="bun">
+  ```bash
+  bun dev
+  ```
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm dev
+  ```
+  </Tab>
+</Tabs>
+
+Open your app and use the language dropdown to switch languages. You should see your content translated.
+
+<Callout type="info">
+  **Note:** In development, translations happen on-demand — content may briefly appear in your source language the first time you switch to a new language, then update once the translation is ready. In production, translations are pre-generated and load instantly.
+</Callout>
+
+---
+
+## Step 10: Translate strings (not just JSX)
+
+For plain strings — like `placeholder` attributes, `aria-label` values, or `alt` text — use the **`useGT`** hook:
+
+```tsx title="src/components/ContactForm.tsx"
+import { useGT } from 'gt-react';
+
+export default function ContactForm() {
+  const gt = useGT();
+
+  return (
+    <form>
+      <input
+        placeholder={gt('Enter your email')}
+        aria-label={gt('Email input field')}
+      />
+      <button type="submit">{gt('Send')}</button>
+    </form>
+  );
+}
+```
+
+---
+
+## Step 11: Deploy to production
+
+In production, translations are pre-generated at build time (no real-time API calls). Add the translate command to your build script:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && <YOUR_BUILD_COMMAND>"
+  }
+}
+```
+
+Set your **production** environment variables in your hosting provider (Vercel, Netlify, etc.):
+
+```bash
+GT_PROJECT_ID=your-project-id
+GT_API_KEY=gtx-api-your-production-key
+```
+
+<Callout type="warn">
+  Production keys start with `gtx-api-` (not `gtx-dev-`). Get one from [dash.generaltranslation.com](https://dash.generaltranslation.com). Never publicly expose your `GT_API_KEY`.
+</Callout>
+
+That's it — your app is now multilingual. 🎉
+
+---
+
+## Troubleshooting
+
+<Accordions>
+  <Accordion title="The language isn't changing when I use the dropdown">
+    `gt-react` stores the user's language preference in a cookie called `generaltranslation.locale`. If you previously tested with a different language, this cookie may override your selection. Clear your cookies and try again.
+
+    - [Chrome](https://support.google.com/chrome/answer/95647)
+    - [Firefox](https://support.mozilla.org/en-US/kb/delete-cookies-remove-info-websites-stored)
+    - [Safari](https://support.apple.com/en-mn/guide/safari/sfri11471/16.0/mac/11.0)
+  </Accordion>
+  <Accordion title="Translations are slow in development">
+    This is expected. In development, translations happen on-demand (your content is translated in real time via the API). This delay **does not exist in production** — all translations are pre-generated by `npx gt translate`.
+  </Accordion>
+  <Accordion title="Some translations are inaccurate">
+    Ambiguous text can lead to inaccurate translations. For example, "apple" could mean the fruit or the company. Add a `$context` prop to help:
+
+    ```jsx
+    <T $context="the technology company">Apple</T>
+    ```
+
+    Both `<T>` and `useGT()` support the `$context` option.
+  </Accordion>
+</Accordions>
+
+---
+
+## Next steps
+
+- [**`<T>` Component Guide**](/docs/react/guides/t) — Learn about variables, plurals, and advanced translation patterns
+- [**String Translation Guide**](/docs/react/guides/strings) — Deep dive into `useGT`
+- [**Variable Components**](/docs/react/guides/variables) — Handle dynamic content with `<Var>`, `<Num>`, `<Currency>`, and `<DateTime>`
+- [**Pluralization**](/docs/react/api/components/plural) — Handle plural forms with the `<Plural>` component
+- [**Deploying to Production**](/docs/react/tutorials/quickdeploy) — CI/CD setup, caching, and performance optimization
+- [**Shared Strings**](/docs/react/guides/shared-strings) — Translate text in arrays, config objects, and shared data with `msg()`
