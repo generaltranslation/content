@@ -50,6 +50,42 @@ export const config = {
 
 This enables automatic language detection and URL routing with locale prefixes like `/en/about`, `/es/about`.
 
+## Filter paths
+
+Pass a regular expression string to `regexFilter` to apply `gt-next` i18n middleware only to matching pathnames. This filter runs in addition to the Next.js `matcher` in `proxy.ts`. Requests that do not match `regexFilter` continue without locale detection, cookies, rewrites, or redirects. When `regexFilter` is omitted, the middleware behavior is unchanged.
+
+For example, this configuration leaves `/uk` and its subpaths unchanged while applying i18n middleware to every other matched path:
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware({
+  regexFilter: '^/(?!uk(?:/|$)).*',
+});
+```
+
+<Callout type="warn">
+  **Handle locale aliases manually:** Filtered paths bypass locale normalization. If your configured locales are `en`, `en-GB`, and `fr`, the path segment `uk` is not recognized as `en-GB`. A custom `getLocale()` function must return `en-GB` for `uk`:
+
+  ```ts title="getLocale.ts"
+  import { locale } from 'next/root-params';
+
+  export default async function getLocale() {
+    const pathnameLocale = await locale();
+    if (pathnameLocale === 'uk') return 'en-GB';
+    return pathnameLocale;
+  }
+  ```
+
+  Apply the same mapping before calling `registerLocale()`:
+
+  ```ts
+  registerLocale(locale === 'uk' ? 'en-GB' : locale);
+  ```
+
+  If `getLocale()` or `registerLocale()` receives an unknown locale, `gt-next` warns and falls back to `defaultLocale`.
+</Callout>
+
 ## Language detection
 
 The middleware detects user language preferences in this order:
