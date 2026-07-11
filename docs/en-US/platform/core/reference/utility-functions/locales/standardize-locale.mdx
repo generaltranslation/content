@@ -1,0 +1,101 @@
+---
+
+title: standardizeLocale
+description: Normalize a locale code into a standard format without a GT instance. API reference for standardizeLocale.
+
+---
+
+`standardizeLocale` is a standalone utility function from General Translation's Core library that normalizes a BCP-47 locale code into its canonical form, correcting casing.
+
+## Overview [#overview]
+
+Import `standardizeLocale` directly from `generaltranslation` and call it with a locale code. It does not require an API key or a [GT](/docs/platform/core/reference/gt-class/constructor) instance. For the instance-based equivalent, use the [`standardizeLocale`](/docs/platform/core/reference/gt-class-methods/locales/standardize-locale) method on a `GT` instance instead.
+
+```typescript
+import { standardizeLocale } from 'generaltranslation';
+
+// Normalize casing
+console.log(standardizeLocale('EN-gb')); // 'en-GB'
+console.log(standardizeLocale('fr-ca')); // 'fr-CA'
+
+// Already standardized locales pass through
+console.log(standardizeLocale('es-ES')); // 'es-ES'
+```
+
+Signature:
+
+```typescript
+standardizeLocale(locale: string): string
+```
+
+## How it works [#how-it-works]
+
+- **Canonicalization.** Passes the input to `Intl.getCanonicalLocales` and returns the first canonical result, which normalizes casing (language lowercase, region uppercase, script title case).
+- **Fallback.** If the input cannot be canonicalized, the original input string is returned unchanged.
+
+*Note: the existing docs state that this function converts underscores to hyphens and returns an empty string for invalid input. In the current code neither is true — `standardizeLocale('en_us')` returns `'en_us'` (underscores are not converted, since `en_us` is not a valid BCP-47 tag), and `standardizeLocale('not a locale')` returns `'not a locale'` (the input, not an empty string). Convert underscores to hyphens yourself before calling if your input uses them.*
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | The BCP-47 locale code to standardize. | `string` | No | — |
+
+### `locale` [#locale]
+
+**Type** `string` · **Required**
+
+The BCP-47 locale code to standardize.
+
+## Returns [#returns]
+
+**Type** `string`
+
+The standardized BCP-47 locale code, or the input string unchanged if it cannot be standardized.
+
+## Examples [#examples]
+
+```typescript
+import { standardizeLocale } from 'generaltranslation';
+
+// Normalizes casing on hyphenated tags
+console.log(standardizeLocale('EN-gb')); // 'en-GB'
+console.log(standardizeLocale('fr-ca')); // 'fr-CA'
+console.log(standardizeLocale('en-us')); // 'en-US'
+
+// Already standardized locales pass through
+console.log(standardizeLocale('es-ES')); // 'es-ES'
+
+// Non-canonicalizable input is returned unchanged
+console.log(standardizeLocale('en_us')); // 'en_us' (underscore is not valid BCP-47)
+console.log(standardizeLocale('not a locale')); // 'not a locale'
+```
+
+```typescript
+import { standardizeLocale, isValidLocale } from 'generaltranslation';
+
+// Normalizing user input
+function processUserInput(input: string) {
+  const standardized = standardizeLocale(input.trim());
+  const isValid = isValidLocale(standardized);
+
+  return {
+    original: input,
+    standardized,
+    isValid,
+  };
+}
+
+// Test various inputs
+const inputs = ['EN-gb', 'FR-ca', 'invalid', 'zh-CN'];
+inputs.forEach((input) => {
+  console.log(processUserInput(input));
+});
+```
+
+## Notes [#notes]
+
+- Normalizes casing (language lowercase, region uppercase) via `Intl.getCanonicalLocales`.
+- Returns the input string unchanged for inputs that cannot be canonicalized.
+- Essential for normalizing locale input from various sources.
+- No external dependencies beyond the `Intl` API.

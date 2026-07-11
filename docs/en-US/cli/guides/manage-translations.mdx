@@ -1,0 +1,51 @@
+---
+
+title: Manage translations
+description: Split the General Translation workflow into upload, enqueue, and download stages, stage translations for review, and sync local edits.
+
+---
+
+The [`gt translate`](/docs/cli/reference/commands/translate) command runs the whole translation flow in one step. When you need more control — such as separate CI stages or a human review step — the CLI exposes each part of that flow as its own command.
+
+*Note: These commands require a production API key. Set `GT_API_KEY` and `GT_PROJECT_ID` as environment variables.*
+
+## Split translation across CI stages [#split]
+
+In a CI pipeline you often want to upload content, translate it, and download results in separate jobs. Three commands map to those stages.
+
+1. [`gt upload`](/docs/cli/reference/commands/upload) uploads source files (and any existing translations) to the platform.
+2. [`gt enqueue`](/docs/cli/reference/commands/enqueue) queues the uploaded files for translation and returns immediately, without waiting for results.
+3. [`gt download`](/docs/cli/reference/commands/download) downloads completed translations and saves them to the paths in your config.
+
+```bash
+# Stage 1: upload source files
+npx gt upload
+
+# Stage 2: enqueue translations
+npx gt enqueue
+
+# Stage 3: download when ready
+npx gt download
+```
+
+Because `enqueue` does not wait, you can run `download` in a later job once translations are ready. This avoids holding a build job open while translation runs.
+
+## Stage translations for review [#review]
+
+If your Project uses human review, use [`gt stage`](/docs/cli/reference/commands/stage) instead of translating directly. It works like `translate` but holds the results for approval rather than downloading or publishing them.
+
+```bash
+npx gt stage
+```
+
+Running `stage` sets `stageTranslations: true` in your `gt.config.json`. After translations are approved, run `gt translate` to download them. Once `stageTranslations` is enabled, running `translate` without first staging a given version causes the CLI to exit with an error.
+
+## Save local edits [#save-local]
+
+When you or a translator edit downloaded translation files by hand, use [`gt save-local`](/docs/cli/reference/commands/save-local) to send those edits back to the platform.
+
+```bash
+npx gt save-local
+```
+
+The command compares your local files against the last downloaded versions, computes a diff for anything that changed, and submits it. It does not enqueue any new translations. To capture local edits as part of a translation run instead, pass `--save-local` to `translate`.

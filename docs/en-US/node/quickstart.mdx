@@ -1,0 +1,103 @@
+---
+
+title: Quickstart
+description: Install the General Translation gt-node library and translate your first Node.js service.
+
+---
+
+`gt-node` translates strings in Node.js servers and services. You initialize it once, bind the locale for each incoming request, and translate strings in your handlers.
+
+Use `gt-node` for backend services such as Express or Fastify APIs. For React apps use [`gt-react`](/docs/react/get-started/react-quickstart); for Next.js use [`gt-next`](/docs/react/get-started/nextjs-quickstart).
+
+*Note: `gt-node` requires Node.js 18 or later. Per-request locale binding uses `AsyncLocalStorage` from `node:async_hooks`.*
+
+## What gt-node does [#what-it-does]
+
+`gt-node` gives you:
+
+- **String translation** with `getGT`, for handler-local strings.
+- **Registered messages** with `msg` and `getMessages`, for shared constants and errors.
+- **Runtime translation** with `tx`, for dynamic content.
+- **Per-request locale** binding with `withGT`, plus helpers to detect the request locale.
+
+## Quickstart [#quickstart]
+Install the library, initialize it, bind a locale per request, and translate a string.
+
+### 1. Install `gt-node`
+
+Install `gt-node` as a dependency and the [`gt` CLI](/docs/cli/quickstart) as a dev dependency.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-node && npm install gt --save-dev
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-node && yarn add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-node && bun add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-node && pnpm add --save-dev gt
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Initialize the library
+
+Call `initializeGT` once at startup, before handling requests. Pass your locales and credentials — `gt-node` does not read `gt.config.json` or environment variables automatically.
+
+```ts title="server.js"
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+```
+
+### 3. Bind the request locale
+
+Wrap each request in `withGT` so translation functions know the target locale. Use `getRequestLocale` to detect it from the `Accept-Language` header.
+
+```ts title="server.js"
+import express from 'express';
+import { withGT, getRequestLocale } from 'gt-node';
+
+const app = express();
+app.use((req, res, next) => withGT(getRequestLocale(req), () => next()));
+```
+
+### 4. Translate a string
+
+Inside a handler, await `getGT` to get a translation function for the request's locale, then translate strings. Interpolate values with ICU placeholders.
+
+```ts title="server.js"
+import { getGT } from 'gt-node';
+
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({ message: gt('Hello, {name}!', { name: 'Alice' }) });
+});
+```
+
+### 5. Generate translations
+
+Run the CLI before you deploy to production so translations are available at runtime.
+
+```bash
+npx gt translate
+```
+
+See [Translate strings](/docs/node/guides/translate-strings) for when to use `getGT`, `msg`, and `tx`, and [Configure gt-node](/docs/node/guides/configure) for credentials and delivery.

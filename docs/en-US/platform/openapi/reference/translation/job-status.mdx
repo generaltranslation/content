@@ -1,0 +1,80 @@
+---
+
+title: Get translation job status
+description: Retrieve status for a queued translation job in General Translation. API reference for Get translation job status.
+
+---
+
+Returns the status of one or more queued jobs by ID. Use it to poll jobs created by [Queue translations](/docs/platform/openapi/reference/translation/queue) or [Generate translation context](/docs/platform/openapi/reference/context/generate-context).
+
+## Overview [#overview]
+
+```http
+POST https://api.gtx.dev/v2/project/jobs/info
+```
+
+**Permission** `project:files:read` · **Rate limit** Default (200/min)
+
+Check the progress of background jobs in one request.
+
+## How it works [#how-it-works]
+
+- Send one or more job IDs. Jobs are looked up within the authenticated Project.
+- Each job's raw status is normalized: pending and queued jobs report `queued`; processing and retrying jobs report `processing`; failed jobs report `failed` with an `error.message`; completed jobs report `completed`.
+- If no jobs are found for the provided IDs, the request returns `404`.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `jobIds` | Job IDs to look up; at least one required, each cannot be blank. | `string[]` | No | — |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+The response is a JSON array with one entry per resolved job:
+
+```json title="Response"
+[
+  { "status": "completed", "jobId": "job_a..." },
+  { "status": "processing", "jobId": "job_b..." },
+  {
+    "status": "failed",
+    "jobId": "job_c...",
+    "error": { "message": "Translation failed" }
+  }
+]
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, or an empty `jobIds` array. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:read`. |
+| `404` | Jobs not found. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api.gtx.dev/v2/project/jobs/info \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobIds": ["job_a...", "job_b..."]
+  }'
+```

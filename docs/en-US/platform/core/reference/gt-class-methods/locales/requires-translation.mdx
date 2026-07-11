@@ -1,0 +1,121 @@
+---
+
+title: requiresTranslation
+description: Check whether translation is needed between two locales. API reference for requiresTranslation.
+
+---
+
+Determines whether translation is needed between a source and target locale on a [GT](/docs/platform/core/reference/gt-class/constructor) instance. General Translation compares locale codes and considers the approved locale list to decide whether content needs to be translated.
+
+## Overview [#overview]
+
+Call `requiresTranslation` on a `GT` instance with optional source and target locales. When omitted, it uses the instance's `sourceLocale` and `targetLocale`.
+
+```typescript
+const gt = new GT({
+  sourceLocale: 'en-US',
+  targetLocale: 'es-ES',
+  locales: ['en-US', 'es-ES', 'fr-FR', 'de-DE'],
+});
+
+console.log(gt.requiresTranslation('en-US', 'es-ES')); // true
+console.log(gt.requiresTranslation('en', 'en-US')); // false (same dialect)
+```
+
+Signature:
+
+```typescript
+requiresTranslation(
+  sourceLocale?: string,
+  targetLocale?: string,
+  approvedLocales?: string[],
+  customMapping?: CustomMapping
+): boolean
+```
+
+*Note: `requiresTranslation` runs locally and does not require an API key. When arguments are omitted, it uses the instance's `sourceLocale`, `targetLocale`, `locales`, and `customMapping`. For checks without a `GT` instance, see the standalone [`requiresTranslation`](/docs/platform/core/reference/utility-functions/locales/requires-translation).*
+
+*Note: the source docs stated that different dialects of the same language (for example, `en-US` → `en-GB`) do not require translation. In the current library code they do — only the exact same dialect short-circuits to `false`. The behavior below reflects the code; flag for human review against the targeted release.*
+
+## How it works [#how-it-works]
+
+The method resolves in this order:
+
+1. **Validity.** If the source, target, or any approved locale is not a valid locale, returns `false`.
+2. **Same dialect.** If the source and target are the same dialect (for example, `en` and `en-US`), returns `false` — no translation is needed.
+3. **No approved list.** If no `approvedLocales` apply, returns `true` when the source and target differ.
+4. **Approved scope.** Otherwise, returns `true` only if the target's language matches the language of at least one approved locale; different dialects of the same language are treated as requiring translation (so a closer dialect can serve as a fallback). If the target's language is not represented in the approved locales, returns `false`.
+
+When `sourceLocale` or `targetLocale` is omitted, the instance's values are used. Throws an `Error` if no source locale is provided and the instance has no `sourceLocale`, or if no target locale is provided and the instance has no `targetLocale`.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`sourceLocale`](#source-locale) | The source locale code. | `string` | Yes | `this.sourceLocale` |
+| [`targetLocale`](#target-locale) | The target locale code. | `string` | Yes | `this.targetLocale` |
+| [`approvedLocales`](#approved-locales) | Array of approved target locales. | `string[]` | Yes | `this.locales` |
+| [`customMapping`](#custom-mapping) | Custom mapping for locale resolution. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | `this.customMapping` |
+
+### `sourceLocale` [#source-locale]
+
+**Type** `string` · **Optional** · **Default** `this.sourceLocale`
+
+The source locale code. If not provided, uses the instance's `sourceLocale`.
+
+### `targetLocale` [#target-locale]
+
+**Type** `string` · **Optional** · **Default** `this.targetLocale`
+
+The target locale code. If not provided, uses the instance's `targetLocale`.
+
+### `approvedLocales` [#approved-locales]
+
+**Type** `string[]` · **Optional** · **Default** `this.locales`
+
+Array of approved target locales. If not provided, uses the instance's `locales` array. When the target locale is not in this list, the method returns `false`.
+
+### `customMapping` [#custom-mapping]
+
+**Type** [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) · **Optional** · **Default** `this.customMapping`
+
+Custom mapping for locale resolution.
+
+## Returns [#returns]
+
+**Type** `boolean`
+
+`true` if translation is required, `false` otherwise. Throws an `Error` if no source or target locale can be resolved.
+
+## Examples [#examples]
+
+```typescript
+const gt = new GT({
+  sourceLocale: 'en-US',
+  targetLocale: 'es-ES',
+  locales: ['en-US', 'es-ES', 'fr-FR', 'de-DE'],
+});
+
+// Different languages require translation
+console.log(gt.requiresTranslation('en-US', 'es-ES')); // true
+console.log(gt.requiresTranslation('en-US', 'fr-FR')); // true
+
+// Exact same dialect does not require translation
+console.log(gt.requiresTranslation('en-US', 'en-US')); // false
+console.log(gt.requiresTranslation('es-ES', 'es-ES')); // false
+console.log(gt.requiresTranslation('en', 'en-US')); // false (same dialect)
+
+// Different dialects of the same language DO require translation
+// (a closer dialect can serve as a fallback)
+console.log(gt.requiresTranslation('en-US', 'en-GB')); // true
+console.log(gt.requiresTranslation('es-ES', 'es-MX')); // true
+
+// Target language not represented in approved locales
+console.log(gt.requiresTranslation('en-US', 'it-IT')); // false (it-IT not in approved locales)
+```
+
+## Notes [#notes]
+
+- Returns `false` only for the exact same dialect, invalid locales, or a target whose language is not represented in the approved locales.
+- Different dialects of the same language (for example, `en-US` and `en-GB`) require translation, so a closer dialect can serve as a fallback.
+- Respects the approved locale list: matching is by language, not exact dialect.

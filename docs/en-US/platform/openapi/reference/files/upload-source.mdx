@@ -1,0 +1,113 @@
+---
+
+title: Upload source files
+description: Upload one or more source files to a General Translation Project before queuing translation. API reference for Upload source files.
+
+---
+
+Uploads source files to a Project so they can be queued for translation. Send file content as base64, one to 100 files per request.
+
+## Overview [#overview]
+
+```http
+POST https://api.gtx.dev/v2/project/files/upload-files
+```
+
+**Permission** `project:files:write` · **Rate limit** Medium (120/min)
+
+Upload the source (untranslated) files for a Project. To upload already-translated files, use [Upload translations](/docs/platform/openapi/reference/files/upload-translations). To then translate the uploaded files, see [Queue translations](/docs/platform/openapi/reference/translation/queue).
+
+## How it works [#how-it-works]
+
+- Each file's `content` is base64-encoded and decoded server-side; invalid base64 is rejected.
+- A missing `fileId` is derived by hashing the `fileName`; a missing `versionId` is derived by hashing the file content, so re-uploading identical content is idempotent per version.
+- Files are attached to the default branch unless a valid `branchId` is provided. An unknown `branchId` returns `400`.
+- If `sourceLocale` is sent and differs from the Project's current default locale, the Project default locale is updated.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`data`](#data) | Array of files to upload (1–100). | `object[]` | No | — |
+| `sourceLocale` | Source locale for the uploaded files. | `string` | Yes | Project default locale |
+
+#### `data` [#data]
+
+**Type** `object[]` · **Required**
+
+Each element is `{ "source": { ... } }`, where `source` has these fields:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `content` | Base64-encoded file content. Max file size applies. | `string` | No | — |
+| `fileName` | File name; cannot be empty. | `string` | No | — |
+| `fileFormat` | File format identifier (for example, `JSON`, `MDX`). | `string` | No | — |
+| `locale` | Locale of the source content; cannot be empty. | `string` | No | — |
+| `dataFormat` | Data format for structured content. | `string` | Yes | — |
+| `fileId` | Stable file identifier. | `string` | Yes | Hash of `fileName` |
+| `versionId` | Version identifier for this content. | `string` | Yes | Hash of content |
+| `branchId` | Branch to attach the file to. | `string` | Yes | Default branch |
+| `formatMetadata` | Extra format-specific metadata. | `object` | Yes | — |
+
+## Response [#response]
+
+**Status** `201 Created`
+
+```json title="Response"
+{
+  "uploadedFiles": [
+    {
+      "branchId": "br_...",
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "fileName": "en/common.json",
+      "fileFormat": "JSON",
+      "dataFormat": "JSON"
+    }
+  ],
+  "count": 1,
+  "message": "Successfully uploaded 1 source file(s)"
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, invalid locale/format, decode failure, file too large, or unknown `branchId`. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:write`. |
+| `429` | Rate limit exceeded. |
+| `503` | Server busy; retry with backoff. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api.gtx.dev/v2/project/files/upload-files \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sourceLocale": "en",
+    "data": [
+      {
+        "source": {
+          "content": "eyJoZWxsbyI6ICJIZWxsbyJ9",
+          "fileName": "en/common.json",
+          "fileFormat": "JSON",
+          "locale": "en"
+        }
+      }
+    ]
+  }'
+```

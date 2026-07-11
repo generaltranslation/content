@@ -1,0 +1,113 @@
+---
+
+title: Set up TanStack Start
+description: Initialize General Translation in a TanStack Start app, resolve the locale, and hydrate the provider from the root route.
+
+---
+
+`gt-tanstack-start` is set up entirely in the root route. You call `initializeGT` at the module level, resolve the request locale with `parseLocale`, load a translations snapshot in the route loader, and pass both to `<GTProvider>`. Because TanStack Start renders on the server, the provider needs the locale and translations up front, so this pattern hydrates them from the loader.
+
+This page covers the TanStack Start-specific setup. For the full path including installation and the CLI, follow the [TanStack Start Quickstart](/docs/react/get-started/tanstack-start-quickstart).
+
+*Warning: `gt-tanstack-start` is experimental and may have breaking changes.*
+
+## Load translations [#load-translations]
+
+Create a `loadTranslations` function that imports a locale's translation file. Keep the files under `src/` so Vite can import them.
+
+```ts title="loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  const translations = await import(`./src/_gt/${locale}.json`);
+  return translations.default;
+}
+```
+
+The CLI generates these files when you run `npx gt translate`.
+
+## Initialize and resolve the locale [#initialize]
+
+`initializeGT`, `parseLocale`, and `getTranslationsSnapshot` are all imported from `gt-tanstack-start`:
+
+- **`initializeGT`** — call once at the module level of the root route. Spread in your `gt.config.json` and pass `loadTranslations`.
+- **`parseLocale`** — reads the locale from the request cookie and `Accept-Language` header on the server, and from the cookie in the browser. It persists the resolved locale back to the cookie.
+- **`getTranslationsSnapshot`** — loads a locale's translations in the shape `<GTProvider>` expects, so content renders without a loading flash. See the [reference](/docs/react/reference/functions/get-translations-snapshot).
+
+## Wire up the root route [#root-route]
+
+In `src/routes/__root.tsx`, initialize at the module level, resolve the locale and load the snapshot in the loader, then pass `locale` and `translations` to `<GTProvider>` in the shell component.
+
+```tsx title="src/routes/__root.tsx"
+import {
+  HeadContent,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router';
+import {
+  initializeGT,
+  GTProvider,
+  parseLocale,
+  getTranslationsSnapshot,
+  LocaleSelector,
+} from 'gt-tanstack-start';
+import gtConfig from '../../gt.config.json';
+import loadTranslations from '../../loadTranslations';
+
+// Initialize General Translation once, at the module level
+initializeGT({ ...gtConfig, loadTranslations });
+
+export const Route = createRootRoute({
+  loader: async () => {
+    const locale = parseLocale();
+    return {
+      locale,
+      translations: await getTranslationsSnapshot(locale),
+    };
+  },
+  shellComponent: RootDocument,
+});
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  const { locale, translations } = Route.useLoaderData();
+  return (
+    <html lang={locale}>
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <GTProvider locale={locale} translations={translations}>
+          <LocaleSelector />
+          {children}
+        </GTProvider>
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+```
+
+`<GTProvider>` requires both `locale` and `translations` here — unlike Next.js, where the server resolves them, or React Native, where the provider loads them itself.
+
+## Mark content for translation [#content]
+
+In your route components, wrap JSX in [`<T>`](/docs/react/reference/components/t) and translate strings with [`useGT`](/docs/react/reference/hooks/use-gt). Import them from `gt-react` so the CLI detects them when scanning your source.
+
+```tsx title="src/routes/index.tsx"
+import { createFileRoute } from '@tanstack/react-router';
+import { T, useGT } from 'gt-react';
+
+export const Route = createFileRoute('/')({ component: Home });
+
+function Home() {
+  const gt = useGT();
+
+  return (
+    <main>
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content is translated automatically.</p>
+      </T>
+      <input aria-label={gt('Email input field')} />
+    </main>
+  );
+}
+```

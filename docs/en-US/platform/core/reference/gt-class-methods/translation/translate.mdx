@@ -1,0 +1,108 @@
+---
+
+title: translate
+description: Translate one string or structured content entry into a target locale with General Translation. API reference for translate.
+
+---
+
+Translates a single string or structured content entry from a source locale into a target locale. This is the primary translation method on a [GT](/docs/platform/core/reference/gt-class/constructor) instance.
+
+## Overview [#overview]
+
+Call `translate` on a configured `GT` instance to translate one entry. Pass the content to translate and either a target locale string (shorthand) or an options object. It returns a promise that resolves to a [`TranslationResult`](/docs/platform/core/reference/types/translation-result).
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const result = await gt.translate('Hello, world!', 'es');
+```
+
+Signature:
+
+```typescript
+translate(
+  source: TranslateManyEntry,
+  options: string | TranslateOptions,
+  timeout?: number
+): Promise<TranslationResult>
+```
+
+*Note: `translate` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. Under the hood it calls [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) with a single entry.*
+
+## How it works [#how-it-works]
+
+- **Content detection.** The `source` is detected as plain text, an ICU message, an i18next-style message, or structured JSX content, based on its shape and the `dataFormat` metadata you provide.
+- **Locale resolution.** The target locale is validated against BCP 47. Any [`customMapping`](/docs/platform/core/reference/types/custom-mapping) on the instance is applied, and the canonical locale code is sent to the API.
+- **Options shorthand.** Passing a string for `options` is shorthand for `{ targetLocale: string }`, so `gt.translate('Hello', 'es')` and `gt.translate('Hello', { targetLocale: 'es' })` are equivalent.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`source`](#source) | Content to translate: a string, or an object with `source` and optional `metadata`. | [`TranslateManyEntry`](/docs/platform/core/reference/types/translate-many-entry) | No | — |
+| [`options`](#options) | Target locale string, or an options object. | `string \| TranslateOptions` | No | — |
+| [`timeout`](#timeout) | Request timeout in milliseconds. | `number` | Yes | — |
+
+### `source` [#source]
+
+**Type** [`TranslateManyEntry`](/docs/platform/core/reference/types/translate-many-entry) · **Required**
+
+The content to translate. Pass a plain string, or an object with `source` (the [`Content`](/docs/platform/core/reference/types/content)) and optional `metadata` (an [`EntryMetadata`](/docs/platform/core/reference/types/entry-metadata) that adds context, `dataFormat`, and other translation hints).
+
+### `options` [#options]
+
+**Type** `string | TranslateOptions` · **Required**
+
+A target locale string such as `'es'`, or an options object:
+
+```typescript
+type TranslateOptions = {
+  targetLocale: string; // locale to translate into
+  sourceLocale?: string; // overrides the instance sourceLocale
+  modelProvider?: string; // optional model provider hint
+};
+```
+
+### `timeout` [#timeout]
+
+**Type** `number` · **Optional**
+
+Request timeout in milliseconds. When omitted, the instance default is used.
+
+## Returns [#returns]
+
+**Type** `Promise<TranslationResult>`
+
+Resolves to a [`TranslationResult`](/docs/platform/core/reference/types/translation-result) — a discriminated union of a success result (with `translation` and `locale`) and an error result (with `error` and `code`). Always narrow on `success` before reading the translation.
+
+## Examples [#examples]
+
+```typescript
+// Simple string translation (locale shorthand)
+const result = await gt.translate('Welcome to our application', 'fr');
+
+if (result.success) {
+  console.log(result.translation); // "Bienvenue dans notre application"
+} else {
+  console.error(`Translation failed: ${result.error}`);
+}
+```
+
+```typescript
+// With an options object and explicit source locale
+const result = await gt.translate('Welcome to our application', {
+  targetLocale: 'fr',
+  sourceLocale: 'en',
+});
+```
+
+```typescript
+// With source metadata (ICU plural + context)
+const result = await gt.translate(
+  {
+    source: '{count, plural, other {{count} items}}',
+    metadata: { dataFormat: 'ICU', context: 'Item count display' },
+  },
+  { targetLocale: 'es' }
+);
+```

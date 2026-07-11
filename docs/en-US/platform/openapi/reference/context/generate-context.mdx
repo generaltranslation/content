@@ -1,0 +1,100 @@
+---
+
+title: Generate translation context
+description: Generate General Translation Project glossary terms and translation instructions from source files. API reference for Generate translation context.
+
+---
+
+Queues a background job that generates Project-level translation context — glossary terms and translation instructions — from the source files you reference. Optionally generate per-locale glossaries for target locales.
+
+## Overview [#overview]
+
+```http
+POST https://api.gtx.dev/v2/project/setup/generate
+```
+
+**Permission** `project:context:write` · **Rate limit** Medium (120/min)
+
+Build the context that guides future translations. To track the resulting job, use [Get context generation status](/docs/platform/openapi/reference/context/context-status) or [Get translation job status](/docs/platform/openapi/reference/translation/job-status).
+
+## How it works [#how-it-works]
+
+- Target locales that are the same dialect as the Project's default locale are ignored.
+- Unless `force` is `true`, generation is skipped when the Project already has context and no requested target locale needs a glossary. In that case the response is `{ "status": "completed" }` and no job is queued.
+- Otherwise a context generation job is enqueued and its ID is returned with `status: "queued"`. When target locales are supplied, the Project's current locales are also updated.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Source files to generate context from; cannot be empty. | `object[]` | No | — |
+| `locales` | Target locales to generate per-locale glossaries for. | `string[]` | Yes | — |
+| `force` | Regenerate context even when it already exists. | `boolean` | Yes | `false` |
+
+#### `files` [#files]
+
+**Type** `object[]` · **Required**
+
+Each element references one source file:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Stable file identifier; cannot be empty. | `string` | No | — |
+| `versionId` | Version identifier; cannot be empty. | `string` | No | — |
+| `branchId` | Branch the file is attached to. | `string` | Yes | — |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "setupJobId": "job_...",
+  "status": "queued"
+}
+```
+
+When generation is not needed, the response is instead:
+
+```json title="Response"
+{
+  "status": "completed"
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, empty `files` array, or invalid locale. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:context:write`. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api.gtx.dev/v2/project/setup/generate \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "fileId": "file_...",
+        "versionId": "ver_..."
+      }
+    ],
+    "locales": ["es", "fr"]
+  }'
+```

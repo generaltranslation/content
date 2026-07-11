@@ -1,0 +1,111 @@
+---
+
+title: Derive
+description: Mark finite content variants for extraction inside a translation with General Translation gt-react. API reference for Derive.
+
+---
+
+The `<Derive>` component handles sentence fragmentation and reusable content without sacrificing word agreement, conjugation, or word order. It tells the CLI to catalog every possible value of its children and create a separate translation entry for each.
+
+*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
+
+## Overview [#overview]
+
+Wrap a value or function call whose result varies. The CLI treats each possible outcome as if it were wrapped in its own `<T>`.
+
+```tsx
+<T>
+  The beautiful <Derive>{getSubject(gender)}</Derive> plays with the ball.
+</T>
+```
+
+This produces two entries: "The beautiful boy plays with the ball" and "The beautiful girl plays with the ball".
+
+*Note: `<Derive>` is an advanced feature. It can generate a deceptively large number of translation entries, and every possible content permutation must be statically analyzable. For the string form, see [`derive`](/docs/react/reference/functions/derive).*
+
+## How it works [#how-it-works]
+
+- **Build-time analysis.** During the build, the CLI analyzes the children of each `<Derive>` and creates a separate translation entry for every possible outcome, so grammatical agreement and word order are handled correctly per language.
+- **Renders unchanged at runtime.** At runtime, `<Derive>` renders its resolved children as-is; the derivation only affects extraction.
+- **Static requirement.** The children must be determinable at build time. Supported syntax includes string, number, and boolean literals; JSX expressions with nested `<Derive>` and [`<Var>`](/docs/react/reference/components/var); ternary operators; and function invocations with statically analyzable outcomes. Dynamic values must be wrapped in `<Var>`.
+
+## Props [#props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`children`](#children) | Static content whose possible values the CLI analyzes. | `ReactNode` | No | — |
+
+### `children` [#children]
+
+**Type** `ReactNode` · **Required**
+
+Static content — a literal, ternary, or function invocation with statically analyzable outcomes. The CLI generates one translation entry per possible value.
+
+## Examples [#examples]
+
+```tsx title="BasicExample.tsx"
+import { T, Derive } from 'gt-react';
+
+export default function Example({ gender }) {
+  return (
+    <T>
+      The <Derive>{gender === 'male' ? 'boy' : 'girl'}</Derive> is beautiful.
+    </T>
+  );
+}
+// Creates: "The boy is beautiful" and "The girl is beautiful"
+```
+
+```tsx title="FunctionInvocation.tsx"
+import { T, Derive } from 'gt-react';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+export default function Example({ gender }) {
+  return (
+    <T>
+      The <Derive>{getSubject(gender)}</Derive> is beautiful.
+    </T>
+  );
+}
+```
+
+```tsx title="MultipleDerive.tsx"
+import { T, Derive } from 'gt-react';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+function getObject(toy) {
+  return toy === 'ball' ? 'ball' : 'crayon';
+}
+
+export default function PlayExample({ gender, toy }) {
+  return (
+    <T>
+      <Derive>{getSubject(gender)}</Derive> plays with the{' '}
+      <Derive>{getObject(toy)}</Derive>.
+    </T>
+  );
+}
+// Creates four entries (2 × 2): boy/girl × ball/crayon
+```
+
+## Limitations [#limitations]
+
+- **Exponential growth.** Each additional `<Derive>` multiplies the total number of translation entries. Use it judiciously and prefer simpler structures when possible.
+- **Variable content must be wrapped.** Any dynamic or variable content within static function returns must be wrapped in [`<Var>`](/docs/react/reference/components/var), or the build errors.
+
+```tsx
+// ✅ Correct
+function getContent() {
+  return <>Hello, <Var>{userName}</Var>!</>;
+}
+
+// ❌ Incorrect — causes build errors
+function getContent() {
+  return <>Hello, {userName}!</>;
+}
+```

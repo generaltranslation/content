@@ -1,0 +1,218 @@
+---
+
+title: Configuration
+description: Configure General Translation across the React ecosystem with the shared gt.config.json file and runtime initialization. API reference for gt.config.json.
+
+---
+
+General Translation is configured in two places: a `gt.config.json` file that holds the locale and file settings you share with the [CLI](/docs/cli/reference/config), and a runtime setup step that loads that config before your first render. The `gt.config.json` file is the same across the whole React ecosystem; the runtime setup differs by framework.
+
+*The `gt.config.json` reference on this page is shared by `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. The initialization functions ([`initializeGTSPA`](#initialize-spa), [`initializeGT`](#initialize)) are for `gt-react`; `gt-tanstack-start` and `gt-react-native` also use `initializeGT`.*
+
+*Note: `gt-next` does not use these initialization functions — it reads the config through the `withGTConfig` plugin, documented in the Next.js section.*
+
+## Overview [#overview]
+
+A `gt-react` app is set up in three steps: initialize the library, load the active locale's translations, and wrap the tree in [`<GTProvider>`](/docs/react/reference/components/gt-provider).
+
+- **Initialize** with [`initializeGTSPA`](#initialize-spa) (single-page apps) or [`initializeGT`](#initialize) (server-rendered setups). Initialization creates the translation cache and, for SPAs, resolves the active locale from cookies and the browser.
+- **Load translations** for the active locale with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot).
+- **Provide** the locale and translations to your components with [`<GTProvider>`](/docs/react/reference/components/gt-provider).
+
+```tsx title="src/main.tsx"
+import { GTProvider, initializeGTSPA, getTranslationsSnapshot } from 'gt-react';
+import gtConfig from '../gt.config.json';
+
+const loadTranslations = (locale: string) =>
+  import(`./_gt/${locale}.json`).then((m) => m.default);
+
+// Initialize before the first render
+await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+
+const locale = gtConfig.defaultLocale;
+const translations = await getTranslationsSnapshot(locale);
+```
+
+The `gt.config.json` file holds the shared locale and file settings. Both the initialization call and the CLI read the same values, so keep them in one place.
+
+## Initialization [#initialization]
+
+| Function | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`initializeGTSPA`](#initialize-spa) | Initialize a single-page app, including browser locale detection. | `function` | No | — |
+| [`initializeGT`](#initialize) | Initialize without browser locale detection, for server-rendered apps. | `function` | No | — |
+
+Both functions accept the fields below. They share the same options, except that only `initializeGTSPA` performs browser locale detection.
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `defaultLocale` | Source locale to translate from. | `string` | Yes | `en` |
+| `locales` | Supported target locales. | `string[]` | Yes | `[defaultLocale]` |
+| `locale` | Explicit initial locale. Skips detection when set. | `string` | Yes | Detected |
+| `loadTranslations` | Loader returning translations for a locale. Document: [`loadTranslations`](/docs/react/reference/functions/load-translations). | `(locale: string) => Promise<unknown>` | Yes | GT CDN |
+| `loadDictionary` | Loader returning a dictionary for a locale. Document: [`loadDictionary`](/docs/react/reference/functions/load-dictionary). | `(locale: string) => Promise<unknown>` | Yes | — |
+| `dictionary` | Inline dictionary, as an alternative to `loadDictionary`. | `object` | Yes | — |
+| `projectId` | General Translation Project ID for CDN and development translation. | `string` | Yes | — |
+| `devApiKey` | Development API key for on-demand translation and hot reload. | `string` | Yes | — |
+| `apiKey` | Production API key. Prefer a `devApiKey` in the browser. | `string` | Yes | — |
+| `cacheUrl` | Custom translations host. `null` disables remote loading. | `string \| null` | Yes | GT CDN |
+| `runtimeUrl` | Runtime translation host, used for development translation. | `string \| null` | Yes | GT runtime |
+| `customMapping` | Locale aliases and property overrides. | `object` | Yes | — |
+| `region` | Initial region code for region-aware formatting. | `string` | Yes | — |
+| `enableI18n` | Translate content. When `false`, renders the source locale. | `boolean` | Yes | `true` |
+| `htmlTagOptions` | Whether to sync the `<html>` `lang` and `dir` attributes on locale change. | `object` | Yes | — |
+
+### `initializeGTSPA` [#initialize-spa]
+
+**Type** `(config) => Promise<void>` · **Required**
+
+Initializes `gt-react` in a single-page app. Call it once, before your first render. It creates the translation cache, resolves the active locale from cookies and the browser, and preloads translations. Available in the browser entry only.
+
+```tsx
+await initializeGTSPA({
+  ...gtConfig,
+  loadTranslations,
+  locale: gtConfig.defaultLocale,
+});
+```
+
+Because it resolves the locale from the environment, `initializeGTSPA` returns a promise — await it before rendering. Use `htmlTagOptions` to control whether the `<html>` element's `lang` and `dir` attributes update when the locale changes:
+
+```tsx
+await initializeGTSPA({
+  ...gtConfig,
+  loadTranslations,
+  htmlTagOptions: {
+    updateHtmlLangTag: true, // default: true
+    updateHtmlDirTag: true, // default: true
+  },
+});
+```
+
+### `initializeGT` [#initialize]
+
+**Type** `(config) => void` · **Required**
+
+Initializes the configuration and translation cache without browser locale detection, for server-rendered setups where a framework layer supplies the locale and translations. It accepts the same configuration and loader options as [`initializeGTSPA`](#initialize-spa), minus the browser locale-detection options.
+
+## `gt.config.json` [#config-file]
+
+`gt.config.json` lives at your project root and holds the locale and file settings shared with the CLI. Import it and pass its fields into initialization.
+
+| Key | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`projectId`](#project-id) | General Translation Project ID. | `string` | Yes | — |
+| [`defaultLocale`](#default-locale) | Source locale. | `string` | Yes | `en` |
+| [`locales`](#locales) | Target locales. | `string[]` | Yes | — |
+| [`customMapping`](#custom-mapping) | Locale aliases and property overrides. | `object` | Yes | — |
+| [`cacheUrl`](#cache-url) | Base URL for cached translations. | `string` | Yes | GT CDN |
+| [`runtimeUrl`](#runtime-url) | Base URL for runtime (development) translations. | `string` | Yes | GT runtime |
+| [`stageTranslations`](#stage-translations) | Require review before translations go to production. | `boolean` | Yes | `false` |
+| [`files`](#files) | Local translation file paths and parsing flags. | `object` | Yes | — |
+| [`_versionId`](#version-id) | Internal translation version identifier. Do not edit. | `string` | Yes | — |
+
+### `projectId` [#project-id]
+
+**Type** `string` · **Optional**
+
+Unique identifier for your Project in General Translation. Required for CDN delivery and on-demand development translation.
+
+### `defaultLocale` [#default-locale]
+
+**Type** `string` · **Optional** · **Default** `en`
+
+The source locale your UI is written in. Used as the fallback when a translation is missing.
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Optional**
+
+The target locales your Project supports, as BCP 47 codes such as `['es', 'fr']`.
+
+### `customMapping` [#custom-mapping]
+
+**Type** `object` · **Optional**
+
+Locale aliases and property overrides, for renaming or customizing how locales are resolved and displayed.
+
+### `cacheUrl` [#cache-url]
+
+**Type** `string` · **Optional** · **Default** GT CDN
+
+Base URL for fetching cached translations. Set it to point at your own host, or pass `null` in the initialization call to disable remote loading.
+
+### `runtimeUrl` [#runtime-url]
+
+**Type** `string` · **Optional** · **Default** GT runtime
+
+Base URL for the runtime translation service. This applies only to development translations.
+
+### `stageTranslations` [#stage-translations]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+When `true`, the `gt` tool marks translations as requiring review. They must be approved before they can be deployed to production through [`gt translate`](/docs/cli/reference/commands/translate).
+
+### `files` [#files]
+
+**Type** `object` · **Optional**
+
+Where locally stored translations are written, as an alternative to storing them in the cloud. `files.gt.output` is a path template containing `[locale]`, and `files.gt.parsingFlags` controls how the compiler parses your source.
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json",
+      "parsingFlags": {
+        "enableAutoJsxInjection": true,
+        "autoderive": true
+      }
+    }
+  }
+}
+```
+
+- `enableAutoJsxInjection` (`boolean`, default `false`) — automatically wraps translatable JSX text in translation components at build time. See [auto JSX injection](/docs/cli/guides/auto-jsx).
+- `autoderive` (`boolean`, default `false`) — automatically treats interpolated values in `t()`, `gt()`, and `msg()` calls as [`derive()`](/docs/react/reference/functions/derive) calls. See [autoderive](/docs/cli/guides/autoderive).
+
+See the [CLI configuration reference](/docs/cli/reference/config) for the complete `files` schema.
+
+### `_versionId` [#version-id]
+
+**Type** `string` · **Optional**
+
+Internal identifier the CLI uses to track the translation version, which allows rolling back to previous translations. It is autogenerated — do not edit it. Keys prefixed with an underscore are internal.
+
+## Examples [#examples]
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": { "gt": { "output": "src/_gt/[locale].json" } }
+}
+```
+
+```tsx title="src/main.tsx"
+import { createRoot } from 'react-dom/client';
+import { GTProvider, initializeGTSPA, getTranslationsSnapshot } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import App from './App';
+
+// Load a locale's translations from the local bundle
+const loadTranslations = (locale: string) =>
+  import(`./_gt/${locale}.json`).then((m) => m.default);
+
+// Initialize before the first render
+await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+
+const locale = gtConfig.defaultLocale;
+const translations = await getTranslationsSnapshot(locale);
+
+createRoot(document.getElementById('root')!).render(
+  <GTProvider locale={locale} translations={translations}>
+    <App />
+  </GTProvider>
+);
+```

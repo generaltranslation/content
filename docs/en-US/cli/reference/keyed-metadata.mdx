@@ -1,30 +1,32 @@
 ---
-title: Keyed Metadata
-description: Per-key translation metadata for JSON and YAML files
----
 
-## Overview
-
-Keyed metadata lets you attach translation instructions to individual keys in your JSON and YAML files. You provide a companion `.metadata.json` or `.metadata.yaml` file that mirrors the source file's key structure, with metadata objects at the leaf level.
-
-The CLI automatically detects companion metadata files, validates them against the source structure, and sends them to the translation engine.
+title: Keyed metadata
+description: Attach per-key translation instructions to General Translation JSON and YAML files. API reference for keyed metadata.
 
 ---
 
-## File structure
+Keyed metadata attaches translation instructions to individual keys in your JSON and YAML files. You provide a companion metadata file that mirrors the source file's key structure, with a metadata object at each leaf.
 
-A companion metadata file must:
+The CLI detects companion metadata files automatically, validates them against the source structure, and sends them to the translation engine.
 
-- Live in the same directory as the source file
-- Follow the naming convention `{name}.metadata.{ext}` (e.g., `translations.metadata.json` for `translations.json`)
-- Mirror the key structure of the source file
+## Fields [#fields]
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`context`](#context) | Translation instructions for a specific string. | `string` | Yes | — |
+| [`maxChars`](#max-chars) | Maximum character count for the translated output. | `number` | Yes | — |
+| [`sourceCode`](#source-code) | Surrounding source code context, keyed by file path. | `object` | Yes | — |
+
+## File structure [#structure]
+
+A companion metadata file must live in the same directory as the source file, follow the naming convention `{name}.metadata.{ext}`, and mirror the source file's key structure with a metadata object at each leaf.
 
 ```text
 translations.json           # source strings
 translations.metadata.json  # per-key metadata
 ```
 
-The metadata file mirrors the source key structure, with metadata objects at the leaves instead of strings:
+Only provide entries for keys that need instructions. Keys with no entry translate normally.
 
 ```json title="translations.json"
 {
@@ -32,9 +34,6 @@ The metadata file mirrors the source key structure, with metadata objects at the
     "home": "Home",
     "bank": "Bank",
     "save": "Save"
-  },
-  "alerts": {
-    "new_lead": "You have a new lead!"
   }
 }
 ```
@@ -49,37 +48,15 @@ The metadata file mirrors the source key structure, with metadata objects at the
       "context": "Sports term — a goalkeeper preventing a goal. NOT saving data.",
       "maxChars": 12
     }
-  },
-  "alerts": {
-    "new_lead": {
-      "context": "Sales/CRM context. A 'lead' is a potential customer.",
-      "maxChars": 30
-    }
   }
 }
 ```
 
-Not every key needs metadata — `home` has no entry above and translates normally. Only provide entries for keys that need specific translation instructions.
+## `context` [#context]
 
----
+**Type** `string` · **Optional** · **Default** —
 
-## Field reference
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `context` | `string` | No | Translation instructions for this specific string |
-| `maxChars` | `number` | No | Maximum character count for the translated output |
-| `sourceCode` | `Record<string, { before: string; target: string; after: string }[]>` | No | Surrounding source code context, keyed by file path |
-
----
-
-## Fields
-
-### `context`
-
-Type: `string`
-
-Translation instructions applied to a specific string. Use this to disambiguate words with multiple meanings, specify domain terminology, or clarify the intended interpretation.
+Translation instructions applied to a specific string. Use it to disambiguate words with multiple meanings, specify domain terminology, or clarify the intended interpretation.
 
 ```json
 {
@@ -89,11 +66,11 @@ Translation instructions applied to a specific string. Use this to disambiguate 
 }
 ```
 
-### `maxChars`
+## `maxChars` [#max-chars]
 
-Type: `number`
+**Type** `number` · **Optional** · **Default** —
 
-A maximum character limit on the translated output. The engine will use shorter synonyms, abbreviations, or concise phrasing to fit within the limit. This is best-effort. If the limit is unfeasible for the source content, the full translation is returned.
+A maximum character limit on the translated output. The engine uses shorter synonyms, abbreviations, or concise phrasing to fit the limit. This is best-effort: if the limit is unfeasible for the source content, the full translation is returned.
 
 ```json
 {
@@ -103,17 +80,11 @@ A maximum character limit on the translated output. The engine will use shorter 
 }
 ```
 
-### `sourceCode`
+## `sourceCode` [#source-code]
 
-Type: `Record<string, { before: string; target: string; after: string }[]>`
+**Type** `object` · **Optional** · **Default** —
 
-Surrounding source code context for a string. Keyed by file path, with each entry containing:
-
-- `before` — lines of source code above the target line
-- `target` — the line containing the string being translated
-- `after` — lines of source code below the target line
-
-Multiple entries per file are supported if the same string appears in different locations.
+Surrounding source code context for a string, keyed by file path. Each entry contains `before` (lines above the target line), `target` (the line with the string), and `after` (lines below). Multiple entries per file are supported when the same string appears in different locations.
 
 ```json
 {
@@ -153,11 +124,9 @@ All three fields on a single key:
 }
 ```
 
----
+## YAML [#yaml]
 
-## YAML
-
-Works the same way with `.metadata.yaml` or `.metadata.yml` companions:
+Metadata works the same way with `.metadata.yaml` or `.metadata.yml` companions.
 
 ```yaml title="translations.metadata.yaml"
 ui:
@@ -165,39 +134,15 @@ ui:
     save:
       context: "Sports term. A goalkeeper's save, NOT saving data."
       maxChars: 12
-    draft:
-      context: "Beer on tap, as in 'draft beer'. NOT a document version."
   labels:
     date:
       context: "The edible fruit of the date palm. NOT a calendar date."
 ```
 
----
+## Validation [#validation]
 
-## Validation
+The CLI validates the metadata file against the source structure and exits with an error if a metadata key does not exist in the source, a value type does not match the source (primitive vs. object, array vs. object), the root type does not match, or the file is not parsable.
 
-The CLI validates the metadata file against the source file's structure. The process exits with an error if:
+## Schema and matching [#schema]
 
-- A metadata key does not exist in the source file
-- A metadata value is a primitive where the source has a nested object
-- A metadata value is an array where the source has an object (or vice versa)
-- The root type (array vs object) does not match the source
-- The metadata file is not parsable
-
----
-
-## Schema support
-
-Keyed metadata works with JSON schemas (`include` and `composite`) and YAML schemas (`include`). The metadata is automatically transformed through the same schema pipeline as the source content, so key paths align at translation time regardless of file structure.
-
----
-
-## Companion file filtering
-
-Companion metadata files are automatically matched to the corresponding source file. They are not translated as standalone files. This only applies when the corresponding source file exists in the file list. A `.metadata.json` file without a matching source file is treated as a regular file.
-
----
-
-## Re-translation behavior
-
-Changes to the metadata file alone do not trigger re-translation if the source content has not changed. To apply updated metadata, the source content must also change.
+Keyed metadata works with JSON schemas (`include` and `composite`) and YAML schemas (`include`); metadata is transformed through the same schema pipeline so key paths align at translation time. Companion files are matched to their source file and are not translated on their own — a `.metadata.json` file with no matching source is treated as a regular file. Changing metadata alone does not trigger re-translation; the source content must also change.

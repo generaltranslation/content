@@ -1,0 +1,192 @@
+---
+
+title: queryFileData
+description: Check translation status and metadata for uploaded or translated files. API reference for queryFileData.
+
+---
+
+Queries data about one or more source or translation files with General Translation. Use it to monitor translation progress, check completion status, and see which translations are available.
+
+## Overview [#overview]
+
+Call `queryFileData` with an object listing the source and/or translated files to query. It returns metadata for each requested file.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const result = await gt.queryFileData({
+  sourceFiles: [{ fileId: 'file-123', versionId: 'version-456', branchId: 'branch-789' }],
+  translatedFiles: [
+    { fileId: 'file-123', versionId: 'version-456', branchId: 'branch-789', locale: 'es' },
+  ],
+});
+```
+
+Signature:
+
+```typescript
+queryFileData(
+  data: FileDataQuery,
+  options?: CheckFileTranslationsOptions
+): Promise<FileDataResult>
+```
+
+*Note: `queryFileData` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+
+## How it works [#how-it-works]
+
+- **Completion.** A translation is complete when its `completedAt` is not `null`.
+- **Lifecycle.** A completed translation may still require approval (`approvedAt`) before it is published (`publishedAt`).
+- **Batch monitoring.** Query many files at once for efficient status checking across multiple translation jobs.
+- **Versioning.** All file queries require `branchId` for versioning with branch support.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`data`](#data) | Object containing source and translation file queries. | `FileDataQuery` | No | — |
+| [`options`](#options) | Configuration for the request. | `CheckFileTranslationsOptions` | Yes | — |
+
+### `data` [#data]
+
+**Type** `FileDataQuery` · **Required**
+
+The files to query, split into source and translated files:
+
+```typescript
+type FileDataQuery = {
+  sourceFiles?: {
+    fileId: string;
+    versionId: string;
+    branchId: string;
+  }[];
+  translatedFiles?: {
+    fileId: string;
+    versionId: string;
+    branchId: string;
+    locale: string;
+  }[];
+};
+```
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `sourceFiles` | Array of source file queries. | `object[]` | Yes |
+| `translatedFiles` | Array of translated file queries. | `object[]` | Yes |
+
+### `options` [#options]
+
+**Type** `CheckFileTranslationsOptions` · **Optional**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<FileDataResult>`
+
+Resolves to a `FileDataResult` containing metadata for the requested source and translated files:
+
+```typescript
+type FileDataResult = {
+  sourceFiles?: {
+    branchId: string;
+    fileId: string;
+    versionId: string;
+    fileName: string;
+    fileFormat: string;
+    dataFormat: string | null;
+    createdAt: string;
+    updatedAt: string;
+    approvalRequiredAt: string | null;
+    publishedAt: string | null;
+    locales: string[];
+    sourceLocale: string;
+  }[];
+  translatedFiles?: {
+    fileId: string;
+    versionId: string;
+    branchId: string;
+    locale: string;
+    fileFormat: string;
+    dataFormat: string | null;
+    completedAt: string | null;
+    approvedAt: string | null;
+    publishedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }[];
+};
+```
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `sourceFiles` | Array of source file data. | `object[]` |
+| `translatedFiles` | Array of translation status data. | `object[]` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+// (1) Create a GT instance
+const targetLocales = ['es', 'fr', 'de'];
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// (2) Upload the file
+const fileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [{ source: fileUpload }];
+const { uploadedFiles } = await gt.uploadSourceFiles(files, { sourceLocale: 'en' });
+
+// (3) Enqueue the file translation job
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: targetLocales,
+});
+
+// (4) Wait for all translations to be completed
+const { fileId, versionId, branchId } = uploadedFiles[0];
+const translatedFileQueries = targetLocales.map((locale) => ({
+  fileId,
+  versionId,
+  branchId,
+  locale,
+}));
+
+while (true) {
+  const result = await gt.queryFileData({
+    translatedFiles: translatedFileQueries,
+  });
+
+  const allCompleted = result.translatedFiles?.every((file) => file.completedAt !== null);
+
+  if (allCompleted) {
+    break;
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+}
+
+// (5) Download the files
+const downloadResult = await gt.downloadFileBatch(
+  translatedFileQueries.map(({ fileId, branchId, locale }) => ({
+    fileId,
+    branchId,
+    locale,
+  }))
+);
+```
+
+## Notes [#notes]
+
+- A translation is complete when `completedAt` is not `null`.
+- Completed translations may still require approval (`approvedAt`) before being published (`publishedAt`).
+- Use this method for efficient status checking when monitoring multiple translation jobs.
+- All file queries require `branchId` for versioning with branch support.

@@ -1,0 +1,81 @@
+---
+
+title: interpolate_message
+description: Interpolate variables into an ICU MessageFormat string in General Translation Python. API reference for interpolate_message.
+
+---
+
+Interpolates variables into an ICU MessageFormat string. This is the low-level formatter that [`t`](/docs/python/reference/functions/t) and [`t_fallback`](/docs/python/reference/functions/t-fallback) build on; it does not perform a translation lookup.
+
+## Overview [#overview]
+
+Call `interpolate_message` with a message, an options dict, and an optional locale. Unlike `t` and `t_fallback`, variables are passed as a positional `dict`, not as keyword arguments.
+
+```python
+from gt_i18n import interpolate_message
+
+interpolate_message("Hello, {name}!", {"name": "Alice"})
+```
+
+Signature:
+
+```python
+interpolate_message(
+    message: str,
+    options: dict[str, object],
+    locale: str | None = None,
+) -> str
+```
+
+Import `interpolate_message` from `gt_i18n`. It is not re-exported by the framework packages.
+
+## How it works [#how-it-works]
+
+- **Filter variables.** Reserved GT keys are removed from `options`, leaving user variables.
+- **Declared variables.** It extracts declared `_gt_` variables from the `__fallback` (source) message and, when any exist, condenses indexed selects in the message to simple references so a translation can reorder them.
+- **Format.** It formats the message with ICU MessageFormat using the combined variables, then applies a `_max_chars` cutoff when set.
+- **Error handling.** On a formatting error it retries with the `__fallback` source (clearing `__fallback` to avoid a loop); with no fallback it returns the raw message, with the cutoff applied when `_max_chars` is set.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | The ICU MessageFormat string to interpolate. | `str` | No | — |
+| [`options`](#options) | Variables and GT options as a dict. | `dict[str, object]` | No | — |
+| [`locale`](#locale) | Locale used for ICU formatting. | `str \| None` | Yes | `None` |
+
+### `message` [#message]
+
+**Type** `str` · **Required**
+
+The ICU MessageFormat string to interpolate.
+
+### `options` [#options]
+
+**Type** `dict[str, object]` · **Required**
+
+User variables plus optional GT keys: `_max_chars` for a cutoff, and `__fallback` (the source message) used to resolve declared `_gt_` variables and to retry on error.
+
+### `locale` [#locale]
+
+**Type** `str | None` · **Optional** · **Default** `None`
+
+The locale passed to ICU formatting (for number, date, and plural rules).
+
+## Returns [#returns]
+
+**Type** `str`
+
+The interpolated string, or the raw/fallback message if formatting fails.
+
+## Example [#example]
+
+```python
+from gt_i18n import interpolate_message
+
+interpolate_message("{greeting}, {name}!", {"greeting": "Hi", "name": "Bob"})
+# → "Hi, Bob!"
+
+# Translated message that references declared variables from the source by index
+interpolate_message("Bienvenido de nuevo, {_gt_1}!", {"__fallback": source})
+```

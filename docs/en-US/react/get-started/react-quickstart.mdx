@@ -1,0 +1,152 @@
+---
+
+title: React Quickstart
+description: Add General Translation to a React single-page app with gt-react, and translate your first content.
+
+---
+
+`gt-react` adds automatic internationalization to React single-page apps (SPAs) such as Vite or Create React App. You initialize it in the browser, wrap your app in `GTProvider`, and translate content with `<T>` and `useGT()`.
+
+Use this quickstart for client-rendered React apps. For Next.js use the [Next.js Quickstart](/docs/react/get-started/nextjs-quickstart); for TanStack Start use the [TanStack Start Quickstart](/docs/react/get-started/tanstack-start-quickstart).
+
+*Note: `gt-react` requires React 18 or later.*
+
+## Quickstart [#quickstart]
+
+Install the packages, create a config file, initialize General Translation, wrap your app, mark content for translation, and generate translations.
+
+### 1. Install `gt-react`
+
+Install `gt-react` as a dependency and the [`gt` CLI](/docs/cli/quickstart) as a dev dependency.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-react && npm install gt --save-dev
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-react && yarn add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-react && bun add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-react && pnpm add --save-dev gt
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Create `gt.config.json`
+
+Create a `gt.config.json` file in your project root. It declares your source language, your target locales, and where the CLI writes translation files.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+- `defaultLocale` — the language your app is written in.
+- `locales` — the languages to translate into. Pick from the [supported locales](/docs/platform/dashboard/reference/supported-locales).
+- `files.gt.output` — where translation files are written. `[locale]` is replaced with each locale code. Keep them under `src/` so Vite can import them.
+
+### 3. Initialize General Translation and add the provider
+
+`gt-react` runs entirely in the browser, so you load translations at runtime with a `loadTranslations` function, call `initializeGTSPA` before your first render, then read a translations snapshot and pass it — with the active `locale` — to `GTProvider`.
+
+```tsx title="src/main.tsx"
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import {
+  GTProvider,
+  initializeGTSPA,
+  getTranslationsSnapshot,
+} from 'gt-react';
+import gtConfig from '../gt.config.json';
+import App from './App';
+
+// Load translation files at runtime
+const loadTranslations = (locale: string) =>
+  import(`./_gt/${locale}.json`).then((module) => module.default);
+
+const locale = gtConfig.defaultLocale;
+
+// Set up config, locale detection, and the translation cache
+await initializeGTSPA({ ...gtConfig, loadTranslations, locale });
+
+// Read a synchronous snapshot to hydrate the provider
+const translations = await getTranslationsSnapshot(locale);
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <GTProvider locale={locale} translations={translations}>
+      <App />
+    </GTProvider>
+  </StrictMode>
+);
+```
+
+`GTProvider` requires both `locale` and `translations`. See the [Configure gt-react](/docs/react/guides/configure) guide for credentials and other options.
+
+### 4. Mark content for translation
+
+Wrap JSX in the `<T>` component to translate it in place. Everything inside `<T>` — text, nested elements, and formatting — is translated as a unit. For standalone strings such as placeholders and `aria-label` values, use the `useGT` hook.
+
+```tsx title="src/App.tsx"
+import { T, useGT, LocaleSelector } from 'gt-react';
+
+export default function App() {
+  const gt = useGT();
+
+  return (
+    <main>
+      <LocaleSelector />
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content is translated automatically.</p>
+      </T>
+      <input
+        placeholder={gt('Enter your email')}
+        aria-label={gt('Email input field')}
+      />
+    </main>
+  );
+}
+```
+
+`useGT()` returns the translation function directly, so call it as `const gt = useGT();`. The `<LocaleSelector>` component renders a dropdown of your configured locales so users can switch languages.
+
+### 5. Generate translations
+
+Run the CLI to translate your project through the General Translation API. It writes translated files to the `output` path from `gt.config.json`.
+
+```bash
+npx gt translate
+```
+
+Add the command to your build script so production builds always have up-to-date translations:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && vite build"
+  }
+}
+```
+
+*Note: `npx gt translate` needs a Project ID and a production API key, set as `GT_PROJECT_ID` and `GT_API_KEY` in your environment. Run `npx gt auth` or visit the [Dashboard](/docs/platform/dashboard/get-started) to get them.*

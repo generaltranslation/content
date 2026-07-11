@@ -1,0 +1,125 @@
+---
+
+title: DateTime
+description: Format a date and time for the active locale with General Translation gt-react. API reference for DateTime.
+
+---
+
+The `<DateTime>` component renders a date or time formatted for the active locale. It supports custom formatting options and locale overrides.
+
+*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
+
+## Overview [#overview]
+
+Pass a `Date` as children and `<DateTime>` formats it for the active locale.
+
+```tsx
+<DateTime>{new Date(1738010355000)}</DateTime>
+// Output: 1/27/2025
+```
+
+All formatting is handled locally with [`Intl.DateTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat).
+
+*Note: `<DateTime>` can cause React hydration errors in server-rendered apps. See [Avoiding hydration errors](#hydration).*
+
+## How it works [#how-it-works]
+
+- **Local formatting.** The date is formatted in the browser using `Intl.DateTimeFormat`. Its value is never sent to the General Translation API.
+- **Locale resolution.** The active locale determines formatting unless overridden with `locales`.
+- **Time zone matters.** Without an explicit `timeZone`, output depends on the runtime's zone, which can differ between server and client.
+
+## Props [#props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`children`](#children) | The date to format. | `Date` | No | — |
+| [`options`](#options) | `Intl.DateTimeFormat` options. | `Intl.DateTimeFormatOptions` | Yes | `{}` |
+| [`locales`](#locales) | Locale override for formatting. | `string[]` | Yes | Active locale |
+| [`name`](#name) | Variable name for the entry. | `string` | Yes | — |
+
+### `children` [#children]
+
+**Type** `Date` · **Required**
+
+The date or time to format, as a `Date` object.
+
+### `options` [#options]
+
+**Type** `Intl.DateTimeFormatOptions` · **Optional** · **Default** `{}`
+
+Formatting options following the [`Intl.DateTimeFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) specification, such as `dateStyle`, `timeStyle`, and `timeZone`.
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Optional** · **Default** Active locale
+
+Locales to format for. When omitted, the active locale is used. See the [locales argument](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl#locales_argument).
+
+### `name` [#name]
+
+**Type** `string` · **Optional**
+
+An optional name for the date field, used for metadata.
+
+## Examples [#examples]
+
+```tsx title="EventDate.tsx"
+import { DateTime } from 'gt-react';
+
+export default function EventDate({ event }) {
+  return <DateTime>{event.date}</DateTime>; // [!code highlight]
+}
+```
+
+```tsx title="EventDate.tsx"
+import { DateTime } from 'gt-react';
+
+export default function EventDate({ event }) {
+  return <DateTime locales={['fr-FR']}>{event.date}</DateTime>; // [!code highlight]
+}
+```
+
+```tsx title="EventDate.tsx"
+import { T, DateTime } from 'gt-react';
+
+export default function EventDate({ event }) {
+  return (
+    <T>
+      The time of the event is <DateTime>{event.date}</DateTime>. // [!code highlight]
+    </T>
+  );
+}
+```
+
+```tsx title="EventDate.tsx"
+import { DateTime } from 'gt-react';
+
+export default function EventDate({ event }) {
+  return (
+    <DateTime
+      options={{
+        dateStyle: 'full', // [!code highlight]
+        timeStyle: 'long', // [!code highlight]
+        timeZone: 'Australia/Sydney', // [!code highlight]
+      }}
+    >
+      {event.date}
+    </DateTime>
+  );
+}
+```
+
+## Avoiding hydration errors [#hydration]
+
+Because `<DateTime>` formats dates locally, it can produce different output on the server and the client. When React compares the server-rendered HTML to the client render and they differ, you get a hydration error. This typically happens when:
+
+- **No explicit `timeZone` is set.** The server may run in UTC while the browser uses local time, so a timestamp can render as `"1/27/2025"` on the server and `"1/28/2025"` on the client.
+- **The default locale differs between environments.** A mismatched default locale produces different strings (for example, `"27/01/2025"` vs. `"1/27/2025"`).
+
+Pin both the locale and the time zone so the server and client always produce the same string:
+
+```tsx
+<DateTime locales={['en-US']} options={{ timeZone: 'UTC' }}>
+  {event.date}
+</DateTime>
+```

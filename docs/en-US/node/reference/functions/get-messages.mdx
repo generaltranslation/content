@@ -1,0 +1,115 @@
+---
+
+title: getMessages
+description: Get a General Translation resolver for messages registered with msg for the current request locale. API reference for getMessages.
+
+---
+
+An async function that returns a resolver for pre-registered messages. Use it together with [`msg`](/docs/node/reference/functions/msg) to register strings at build time and resolve their translations at runtime.
+
+## Overview [#overview]
+
+Register strings with `msg` at module scope, then await `getMessages` inside a [`withGT`](/docs/node/reference/functions/with-gt) scope to get a synchronous `m(encodedMsg, options?)` resolver.
+
+```ts
+import { msg, getMessages } from 'gt-node';
+
+// Register at build time (or module scope)
+const greeting = msg('Hello, world!');
+
+// Resolve at runtime
+const m = await getMessages();
+const translated = m(greeting);
+```
+
+Signature:
+
+```ts
+getMessages(): Promise<MFunctionType>
+
+type MFunctionType = <T extends string | null | undefined>(
+  encodedMsg: T,
+  options?: GTTranslationOptions
+) => T extends string ? string : T;
+```
+
+*Note: `getMessages` must be called within a [`withGT`](/docs/node/reference/functions/with-gt) callback so it knows which locale to use.*
+
+## How it works [#how-it-works]
+
+- **Two-step pattern.** [`msg`](/docs/node/reference/functions/msg) registers a string for build-time translation; `getMessages` resolves it at runtime for the active locale.
+- **Module-scope strings.** This pattern suits strings defined at module scope — constants, enums, and error messages — that must be translated per request.
+- **Null passthrough.** If `null` or `undefined` is passed to `m`, it returns `null` or `undefined` respectively.
+
+## Parameters [#parameters]
+
+`getMessages` takes no parameters. The returned `m` resolver takes:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`encodedMsg`](#encoded-msg) | An encoded message string returned by `msg()`. | `string \| null \| undefined` | No | — |
+| [`options`](#options) | Variable values and translation options to interpolate into the resolved message. | `GTTranslationOptions` | Yes | `{}` |
+
+### `encodedMsg` [#encoded-msg]
+
+**Type** `string | null | undefined` · **Required**
+
+An encoded message string returned by [`msg`](/docs/node/reference/functions/msg). Returns `null`/`undefined` if given `null`/`undefined`.
+
+### `options` [#options]
+
+**Type** `GTTranslationOptions` · **Optional**
+
+Variable values to interpolate into the resolved message using `{key}` syntax, plus translation options such as `$context`, `$id`, `$locale`, and `$maxChars`. When the encoded message already carries interpolation options (from `msg('...', { ... })`), those are used and this argument is ignored.
+
+## Returns [#returns]
+
+**Type** `Promise<MFunctionType>`
+
+Resolves to the `m` message-resolution function. `m(encodedMsg, options?)` returns the decoded and interpolated translation, preserving `null`/`undefined` inputs.
+
+## Examples [#examples]
+
+```ts title="messages.js"
+// Register messages at module scope
+import { msg } from 'gt-node';
+
+export const GREETING = msg('Hello, world!');
+export const WELCOME = msg('Welcome, {name}!');
+```
+
+```ts title="handler.js"
+// Resolve messages for the request locale
+import { withGT, getMessages } from 'gt-node';
+import { GREETING, WELCOME } from './messages';
+
+function handleRequest(locale) {
+  return withGT(locale, async () => {
+    const m = await getMessages();
+    return {
+      greeting: m(GREETING),
+      welcome: m(WELCOME, { name: 'Alice' }),
+    };
+  });
+}
+```
+
+```ts title="handler.js"
+// With variables — pass values as the second argument
+import { msg, getMessages, withGT } from 'gt-node';
+
+const ORDER_STATUS = msg('Order {orderId} is {status}.');
+
+function getOrderMessage(locale, orderId, status) {
+  return withGT(locale, async () => {
+    const m = await getMessages();
+    return m(ORDER_STATUS, { orderId, status });
+  });
+}
+```
+
+## Notes [#notes]
+
+- [`msg`](/docs/node/reference/functions/msg) registers a string for build-time translation; `getMessages` resolves it at runtime.
+- This pattern is useful for strings defined at module scope (constants, enums, error messages) that need per-request translation.
+- If `null` or `undefined` is passed to `m`, it returns `null` or `undefined` respectively.

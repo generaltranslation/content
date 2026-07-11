@@ -1,0 +1,142 @@
+---
+
+title: checkJobStatus
+description: Check the current status of a translation or setup job. API reference for checkJobStatus.
+
+---
+
+Checks the current status of one or more General Translation jobs by their identifiers. Use it to monitor the asynchronous operations started by [`setupProject`](/docs/platform/core/reference/gt-class-methods/translation/setup-project) or [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files).
+
+## Overview [#overview]
+
+Call `checkJobStatus` with an array of job IDs. It returns a flat array of status objects, one per job.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const statuses = await gt.checkJobStatus(['job-123', 'job-456']);
+statuses.forEach((job) => console.log(`${job.jobId}: ${job.status}`));
+```
+
+Signature:
+
+```typescript
+checkJobStatus(
+  jobIds: string[],
+  timeoutMs?: number
+): Promise<CheckJobStatusResult>
+```
+
+*Note: `checkJobStatus` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. To check a setup job, first call both [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) and [`setupProject`](/docs/platform/core/reference/gt-class-methods/translation/setup-project).*
+
+## How it works [#how-it-works]
+
+- **Batch checks.** You can check multiple jobs in a single call for efficiency.
+- **Job sources.** Job IDs come from [`setupProject`](/docs/platform/core/reference/gt-class-methods/translation/setup-project) or [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files); store them so you can check status later.
+- **Automatic setup.** Setup runs automatically when elements of context are missing — it handles corpus analysis, context generation, glossary generation, and so on.
+
+For automatic polling instead of manual checks, use [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`jobIds`](#job-ids) | Unique job identifiers to check. | `string[]` | No | — |
+| [`timeoutMs`](#timeout-ms) | Timeout in milliseconds for the API request. | `number` | Yes | — |
+
+### `jobIds` [#job-ids]
+
+**Type** `string[]` · **Required**
+
+The unique identifiers of the jobs to check.
+
+### `timeoutMs` [#timeout-ms]
+
+**Type** `number` · **Optional**
+
+Request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<CheckJobStatusResult>`
+
+Resolves to a flat array of job status objects:
+
+```typescript
+type CheckJobStatusResult = {
+  jobId: string;
+  status: JobStatus;
+  error?: { message: string };
+}[];
+```
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `jobId` | The job identifier that was checked. | `string` |
+| `status` | Current status of the job. | [`JobStatus`](#jobstatus) |
+| `error` | Error information when the status is `'failed'`. | `{ message: string }` |
+
+### `JobStatus`
+
+```typescript
+type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'unknown';
+```
+
+- `'queued'` — job is waiting to be processed.
+- `'processing'` — job is currently being executed.
+- `'completed'` — job finished successfully.
+- `'failed'` — job encountered an error and failed.
+- `'unknown'` — job status could not be determined.
+
+## Examples [#examples]
+
+```typescript
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+const fileRefs = [
+  {
+    fileId: 'file-123',
+    versionId: 'version-456',
+    branchId: 'branch-789',
+    fileName: 'app.json',
+    fileFormat: 'JSON',
+  },
+  {
+    fileId: 'file-789',
+    versionId: 'version-012',
+    branchId: 'branch-789',
+    fileName: 'content.md',
+    fileFormat: 'MD',
+  },
+];
+
+const setupResult = await gt.setupProject(fileRefs);
+
+async function pollJobStatus(jobIds: string[]) {
+  const status = await gt.checkJobStatus(jobIds);
+
+  status.forEach((job) => {
+    console.log(`Job ${job.jobId}:`);
+    console.log(`  Status: ${job.status}`);
+
+    if (job.error) {
+      console.log(`  Error: ${job.error.message}`);
+    }
+  });
+
+  return status;
+}
+
+const jobStatus = await pollJobStatus([setupResult.jobId]);
+```
+
+## Notes [#notes]
+
+- Setup runs automatically when elements of context are missing, and is responsible for corpus analysis, context generation, glossary generation, and similar steps.
+- Job IDs are returned by [`setupProject`](/docs/platform/core/reference/gt-class-methods/translation/setup-project) or [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) and should be stored for status checking.
+- You can check multiple jobs in a single call for efficiency.

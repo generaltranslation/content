@@ -1,0 +1,109 @@
+---
+
+title: Queue translations
+description: Queue uploaded source files for background translation in a General Translation Project. API reference for Queue translations.
+
+---
+
+Enqueues background translation jobs for source files that were already uploaded. Reference up to 100 files and the target locales to translate them into.
+
+## Overview [#overview]
+
+```http
+POST https://api.gtx.dev/v2/project/translations/enqueue
+```
+
+**Permission** `project:translations:enqueue` · **Rate limit** Heavy (30/min)
+
+Start background translation of uploaded files. Upload the files first with [Upload source files](/docs/platform/openapi/reference/files/upload-source), then track the resulting jobs with [Get translation job status](/docs/platform/openapi/reference/translation/job-status).
+
+## How it works [#how-it-works]
+
+- Each referenced source file must already exist. Missing source files are reported in a `400` response with a `missing` list and a `count`.
+- A missing `branchId` resolves to the default branch. Set `transformFormat` to translate a file into a different output file format.
+- When `targetLocales` is omitted, the Project's configured locales are used. Files already translated into a locale are skipped unless `force` is `true`.
+- The response shape depends on the API version sent via the `gt-api-version` header. Version `2025-11-03.v1` and later return `jobData` keyed by job. See [versioning in the Quickstart](/docs/platform/openapi/quickstart#api-basics).
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Source files to translate (1–100). | `object[]` | No | — |
+| `targetLocales` | Locales to translate into. | `string[]` | Yes | Project locales |
+| `sourceLocale` | Source locale of the files. | `string` | Yes | Project default locale |
+| `force` | Re-translate files that already have translations. | `boolean` | Yes | `false` |
+| `modelProvider` | Model provider to use for translation. | `string` | Yes | — |
+| `publish` | Publish the resulting translations to the CDN. | `boolean` | Yes | — |
+
+#### `files` [#files]
+
+**Type** `object[]` · **Required**
+
+Each element references one uploaded source file:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Stable file identifier; required. | `string` | No | — |
+| `versionId` | Version identifier; required. | `string` | No | — |
+| `branchId` | Branch the file is attached to. | `string` | Yes | Default branch |
+| `fileName` | File name. | `string` | Yes | — |
+| `transformFormat` | Output file format to translate into. | `string` | Yes | Source file format |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "jobData": {
+    "job_...": {
+      "sourceFileId": "sf_...",
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "branchId": "br_...",
+      "targetLocale": "es",
+      "projectId": "prj_...",
+      "force": false
+    }
+  },
+  "locales": ["es", "fr"],
+  "message": "Enqueued 2 translation(s)."
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, invalid locale, or referenced source files not found (returned with `missing` and `count`). |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:translations:enqueue`. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api.gtx.dev/v2/project/translations/enqueue \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "fileId": "file_...",
+        "versionId": "ver_..."
+      }
+    ],
+    "targetLocales": ["es", "fr"]
+  }'
+```

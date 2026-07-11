@@ -1,0 +1,157 @@
+---
+
+title: Constructor
+description: Initialize a GT instance with API keys, Project settings, default locales, and locale mappings. API reference for Constructor.
+
+---
+
+Creates a new `GT` instance, the entry point to all General Translation translation, formatting, and locale functionality. Call it once and reuse the instance across your application.
+
+## Overview [#overview]
+
+Construct a `GT` instance with an optional configuration object. Any credentials and locales you set here become the defaults for every method call on the instance.
+
+```typescript
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id',
+  sourceLocale: 'en',
+  targetLocale: 'es',
+});
+```
+
+Signature:
+
+```typescript
+new GT(params?: GTConstructorParams): GT
+```
+
+*Note: You can omit `apiKey`, `devApiKey`, and `projectId` — the constructor reads them from the `GT_API_KEY`, `GT_DEV_API_KEY`, and `GT_PROJECT_ID` environment variables when they are set.*
+
+## How it works [#how-it-works]
+
+- **Environment fallback.** When `apiKey`, `devApiKey`, or `projectId` are not passed, the constructor looks them up in the `GT_API_KEY`, `GT_DEV_API_KEY`, and `GT_PROJECT_ID` environment variables.
+- **Locale standardization then validation.** Each provided locale code (`sourceLocale`, `targetLocale`, and every entry in `locales`) is first standardized to its canonical BCP 47 form, then validated. The **stored values are the standardized/normalized forms**, not the raw strings you passed. The constructor throws for invalid codes.
+- **Custom mapping applies to `sourceLocale`/`targetLocale` but not to `locales`.** `sourceLocale` and `targetLocale` are validated **with** the [`customMapping`](/docs/platform/core/reference/types/custom-mapping), so a custom alias is accepted for them. Each entry of `locales` is validated **without** the mapping, so a `customMapping` alias is rejected if it appears inside `locales`.
+- **Custom mapping precedence.** A [`customMapping`](/docs/platform/core/reference/types/custom-mapping) lets you define locale aliases, override the standard BCP 47 validation, and override the standard locale properties (name, emoji, and so on). Custom mappings take precedence over the standard BCP 47 data.
+
+## Parameters [#parameters]
+
+The constructor accepts a single optional [`GTConstructorParams`](/docs/platform/core/reference/types/gt-constructor-params) object (defaults to `{}`) with the following properties:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`apiKey`](#api-key) | Production API key for the translation service. | `string` | Yes | `GT_API_KEY` env |
+| [`devApiKey`](#dev-api-key) | Development API key, which takes precedence in development. | `string` | Yes | `GT_DEV_API_KEY` env |
+| [`projectId`](#project-id) | Unique Project identifier. | `string` | Yes | `GT_PROJECT_ID` env |
+| [`sourceLocale`](#source-locale) | Default source locale for translations. | `string` | Yes | — |
+| [`targetLocale`](#target-locale) | Default target locale for translations. | `string` | Yes | — |
+| [`locales`](#locales) | Supported locale codes. | `string[]` | Yes | — |
+| [`baseUrl`](#base-url) | Custom API base URL for enterprise deployments. | `string` | Yes | — |
+| [`customMapping`](#custom-mapping) | Custom locale code mappings and property overrides. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | — |
+
+### `apiKey` [#api-key]
+
+**Type** `string` · **Optional** · **Default** `GT_API_KEY` env
+
+Production API key for the translation service. Read from the `GT_API_KEY` environment variable when not provided. Required for any API operation.
+
+### `devApiKey` [#dev-api-key]
+
+**Type** `string` · **Optional** · **Default** `GT_DEV_API_KEY` env
+
+Development API key. Takes precedence over `apiKey` in development. Read from the `GT_DEV_API_KEY` environment variable when not provided.
+
+### `projectId` [#project-id]
+
+**Type** `string` · **Optional** · **Default** `GT_PROJECT_ID` env
+
+Unique Project identifier. Read from the `GT_PROJECT_ID` environment variable when not provided. Required for any API operation.
+
+### `sourceLocale` [#source-locale]
+
+**Type** `string` · **Optional**
+
+Default source locale for translations, such as `en`. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+
+### `targetLocale` [#target-locale]
+
+**Type** `string` · **Optional**
+
+Default target locale for translations, such as `es`. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Optional**
+
+Array of supported locale codes. Each code is standardized to its canonical form and stored in that normalized form, then validated **without** the `customMapping` — so a `customMapping` alias that is valid for `sourceLocale`/`targetLocale` is rejected if it appears inside `locales`.
+
+### `baseUrl` [#base-url]
+
+**Type** `string` · **Optional**
+
+Custom API base URL, used for enterprise deployments that point at a self-hosted or region-specific endpoint.
+
+### `customMapping` [#custom-mapping]
+
+**Type** [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) · **Optional**
+
+Custom locale code mappings and property overrides. Use it to (1) define aliases for locale codes, (2) override the standard BCP 47 validation, and (3) override the standard BCP 47 locale properties such as name and emoji.
+
+## Returns [#returns]
+
+**Type** `GT`
+
+A new `GT` instance with all translation, formatting, and locale methods available.
+
+## Examples [#examples]
+
+```typescript
+import { GT } from 'generaltranslation';
+
+// Minimal setup — reads credentials from environment variables
+const gt = new GT();
+```
+
+```typescript
+// With API credentials
+const gt = new GT({
+  projectId: 'my-project-id',
+  apiKey: 'my-api-key',
+  targetLocale: 'fr',
+});
+```
+
+```typescript
+// With a custom locale alias: use `cn` as an alias for `zh`.
+// The General Translation API does not support `cn`, so a custom mapping is required.
+const gt = new GT({
+  projectId: 'my-project-id',
+  apiKey: 'my-api-key',
+  targetLocale: 'es',
+  customMapping: {
+    cn: { code: 'zh' },
+  },
+});
+```
+
+```typescript
+// Custom mappings can also override names, emojis, and other locale properties
+const gt = new GT({
+  projectId: 'my-project-id',
+  apiKey: 'my-api-key',
+  targetLocale: 'es',
+  customMapping: { 'en-US': { name: 'Mandarin', emoji: '🇫🇷' } },
+});
+```
+
+## Notes [#notes]
+
+- All parameters are optional, but API operations require `apiKey` (or `devApiKey`) and `projectId`.
+- The constructor standardizes every locale code to its canonical form (the stored value is the normalized form), then validates it and throws for invalid codes.
+- `sourceLocale` and `targetLocale` are validated with the `customMapping`; each entry of `locales` is validated without it.
+- Custom mappings take precedence over standard BCP 47 validation and properties.
+
+*Note: the `GT` class extends `GTRuntime`. In 9.0 the translation, formatting, and locale helpers live on `GTRuntime`, while the file-workflow methods (uploads, enqueue, downloads, and so on) live on `GT`. Both the constructor and `setConfig` are defined on `GTRuntime`, so usage is unaffected via inheritance.*

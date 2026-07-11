@@ -1,0 +1,223 @@
+---
+
+title: uploadSourceFiles
+description: Upload source files to a Project before queueing translation. API reference for uploadSourceFiles.
+
+---
+
+Uploads source files to the General Translation platform for translation processing. This is usually the first step in a file translation workflow, before setting up a Project or queueing translation jobs.
+
+## Overview [#overview]
+
+Call `uploadSourceFiles` with an array of files and an options object that sets the source locale. It returns the uploaded file references you use in later steps.
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const result = await gt.uploadSourceFiles(files, {
+  sourceLocale: 'en',
+});
+```
+
+Signature:
+
+```typescript
+uploadSourceFiles(
+  files: { source: FileUpload }[],
+  options: UploadFilesOptions
+): Promise<UploadFilesResponse>
+```
+
+*Note: `uploadSourceFiles` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+
+## How it works [#how-it-works]
+
+- **File encoding.** File content is automatically Base64 encoded for safe transmission.
+- **File references.** The returned file references (including `fileId`, `versionId`, and `branchId`) are required inputs for later operations.
+- **Typical workflow.** `uploadSourceFiles` is the entry point of the file pipeline: upload source files, then [`setupProject`](/docs/platform/core/reference/gt-class-methods/translation/setup-project) → [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) → [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) → [`downloadFileBatch`](/docs/platform/core/reference/gt-class-methods/translation/download-file-batch).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Array of source files to upload. | `{ source: FileUpload }[]` | No | — |
+| [`options`](#options) | Configuration options for the upload. | `UploadFilesOptions` | No | — |
+
+### `files` [#files]
+
+**Type** `{ source: FileUpload }[]` · **Required**
+
+The source files to upload. Each entry wraps a `FileUpload` under a `source` key:
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `content` | Raw file content as a string. | `string` | No |
+| `fileName` | Unique file identifier, typically the file path plus name. | `string` | No |
+| `fileFormat` | Format of the file. One of `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, or `TWILIO_CONTENT_JSON`. | `FileFormat` | No |
+| `transformFormat` | Output format requested for generated translations. | `FileFormat` | Yes |
+| `dataFormat` | Format of the data within the file (ICU, I18NEXT, JSX). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
+| `locale` | Locale of the source file content. | `string` | No |
+| `versionId` | Version ID, for advanced use cases. | `string` | Yes |
+| `fileId` | File ID, for advanced use cases. | `string` | Yes |
+
+### `options` [#options]
+
+**Type** `UploadFilesOptions` · **Required**
+
+Configuration for the upload:
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `sourceLocale` | The source locale for all uploaded files. | `string` | No |
+| `modelProvider` | AI model provider preference. | `string` | Yes |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+*Note: `branchId` is not an upload option. It is a per-file field on each file object, not part of `UploadFilesOptions`.*
+
+## Returns [#returns]
+
+**Type** `Promise<UploadFilesResponse>`
+
+Resolves to an `UploadFilesResponse` containing the uploaded file references and a summary:
+
+```typescript
+type UploadFilesResponse = {
+  uploadedFiles: FileReference[]; // references for subsequent operations
+  count: number; // number of files successfully uploaded
+  message: string; // status message from the API
+};
+```
+
+Each `FileReference` has the shape:
+
+```typescript
+type FileReference = {
+  fileId: string;
+  versionId: string;
+  branchId: string;
+  fileName: string;
+  fileFormat: FileFormat;
+  transformFormat?: FileFormat; // output format requested for generated translations
+  dataFormat?: DataFormat;
+};
+```
+
+## Examples [#examples]
+
+```typescript
+// Basic usage: upload JSON translation files
+import { GT } from 'generaltranslation';
+import fs from 'fs';
+
+const gt = new GT({
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id',
+});
+
+const files = [
+  {
+    source: {
+      content: fs.readFileSync('./locales/en/common.json', 'utf8'),
+      fileName: 'common.json',
+      fileFormat: 'JSON' as const,
+      locale: 'en',
+    },
+  },
+  {
+    source: {
+      content: fs.readFileSync('./locales/en/navigation.json', 'utf8'),
+      fileName: 'navigation.json',
+      fileFormat: 'JSON' as const,
+      locale: 'en',
+    },
+  },
+];
+
+const result = await gt.uploadSourceFiles(files, {
+  sourceLocale: 'en',
+});
+
+console.log(`Uploaded ${result.count} files`);
+result.uploadedFiles.forEach((file) => {
+  console.log(`  ${file.fileName}: ${file.fileId} (branch: ${file.branchId})`);
+});
+```
+
+```typescript
+// With explicit data format specification
+const files = [
+  {
+    source: {
+      content: '{"welcome": "Welcome, {name}!"}',
+      fileName: 'messages.json',
+      fileFormat: 'JSON' as const,
+      dataFormat: 'ICU' as const, // ICU message format
+      locale: 'en',
+    },
+  },
+  {
+    source: {
+      content: '{"greeting": "Hello {{name}}"}',
+      fileName: 'i18next.json',
+      fileFormat: 'JSON' as const,
+      dataFormat: 'I18NEXT' as const,
+      locale: 'en',
+    },
+  },
+];
+
+const result = await gt.uploadSourceFiles(files, {
+  sourceLocale: 'en',
+  modelProvider: 'gpt-4',
+  timeout: 30000,
+});
+```
+
+```typescript
+// Batch upload with error handling
+import { glob } from 'glob';
+import path from 'path';
+
+async function uploadAllJsonFiles() {
+  try {
+    // Find all JSON files
+    const jsonPaths = await glob('./locales/en/**/*.json');
+
+    const files = jsonPaths.map((filePath) => ({
+      source: {
+        content: fs.readFileSync(filePath, 'utf8'),
+        fileName: path.relative('./locales/en', filePath),
+        fileFormat: 'JSON' as const,
+        locale: 'en',
+      },
+    }));
+
+    console.log(`Uploading ${files.length} files...`);
+
+    const result = await gt.uploadSourceFiles(files, {
+      sourceLocale: 'en',
+      timeout: 60000, // 60 second timeout for large uploads
+    });
+
+    if (result.count !== files.length) {
+      console.warn(`Expected ${files.length} files, but only ${result.count} uploaded`);
+    }
+
+    return result.uploadedFiles;
+  } catch (error) {
+    console.error('Upload failed:', error);
+    throw error;
+  }
+}
+
+const uploadedFiles = await uploadAllJsonFiles();
+```
+
+## Notes [#notes]
+
+- File content is automatically Base64 encoded for safe transmission.
+- File names should be unique identifiers, typically including the file path.
+- The `locale` field in each file should match the `sourceLocale` option.
+- Large files or many files may require increased timeout values.
+- File references returned from this method are needed for subsequent operations, and include `branchId` for versioning with branch support.
+- Supported file formats are `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, and `TWILIO_CONTENT_JSON` — see the `FileFormat` type for the complete list.

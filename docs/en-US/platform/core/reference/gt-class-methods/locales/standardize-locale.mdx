@@ -1,0 +1,80 @@
+---
+
+title: standardizeLocale
+description: Normalize a locale code into a standard format. API reference for standardizeLocale.
+
+---
+
+Standardizes a BCP-47 locale code to ensure correct formatting and casing on a [GT](/docs/platform/core/reference/gt-class/constructor) instance. General Translation converts locale codes to their canonical form, making them consistent across your application and suitable for use with internationalization APIs.
+
+## Overview [#overview]
+
+Call `standardizeLocale` on a `GT` instance with an optional locale code. When omitted, it uses the instance's `targetLocale`.
+
+```typescript
+const gt = new GT({ sourceLocale: 'en', targetLocale: 'es-ES' });
+
+console.log(gt.standardizeLocale('en-us')); // "en-US"
+```
+
+Signature:
+
+```typescript
+standardizeLocale(locale?: string): string
+```
+
+*Note: `standardizeLocale` runs locally and does not require an API key. It uses the instance's `targetLocale` when `locale` is omitted. For normalization without a `GT` instance, see the standalone [`standardizeLocale`](/docs/platform/core/reference/utility-functions/locales/standardize-locale).*
+
+*Note: the source docs previously stated that invalid input returns an empty string and that underscores are converted to hyphens. In the current library code, `standardizeLocale` delegates to [`Intl.getCanonicalLocales`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/getCanonicalLocales): it normalizes casing on hyphenated codes and returns the input unchanged when the code cannot be standardized (underscore-separated codes such as `en_US` are not recognized and are returned as-is). Flag for human review against the targeted release.*
+
+## How it works [#how-it-works]
+
+- **Canonicalization.** Delegates to `Intl.getCanonicalLocales`, which normalizes casing: language subtags become lowercase and region subtags become uppercase.
+- **Locale fallback.** When `locale` is omitted, the instance's `targetLocale` is used.
+- **Passthrough on failure.** Returns the input string unchanged if it cannot be standardized.
+- **Missing locale.** Throws an `Error` if no locale is provided and the instance has no `targetLocale` configured.
+
+Common casing corrections applied to hyphenated codes:
+
+- `en-us` → `en-US` (region uppercased)
+- `EN-gb` → `en-GB` (language lowercased, region uppercased)
+- `fr-ca` → `fr-CA` (proper casing throughout)
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | The BCP-47 locale code to standardize. | `string` | Yes | `this.targetLocale` |
+
+### `locale` [#locale]
+
+**Type** `string` · **Optional** · **Default** `this.targetLocale`
+
+The BCP-47 locale code to standardize. If not provided, uses the instance's `targetLocale`.
+
+## Returns [#returns]
+
+**Type** `string`
+
+The standardized BCP-47 locale code, or the input string unchanged if it cannot be standardized. Throws an `Error` if no locale is provided and the instance has no `targetLocale` configured.
+
+## Examples [#examples]
+
+```typescript
+const gt = new GT({ sourceLocale: 'en', targetLocale: 'es-ES' });
+
+// Casing is normalized for hyphenated codes
+console.log(gt.standardizeLocale('en-us')); // "en-US"
+console.log(gt.standardizeLocale('EN-gb')); // "en-GB"
+console.log(gt.standardizeLocale('fr-ca')); // "fr-CA"
+
+// Already standardized locales pass through unchanged
+console.log(gt.standardizeLocale('es-ES')); // "es-ES"
+console.log(gt.standardizeLocale('ja-JP')); // "ja-JP"
+```
+
+## Notes [#notes]
+
+- Normalizes casing: language codes become lowercase, region codes become uppercase.
+- Returns the input string unchanged when the code cannot be standardized.
+- Preserves locale extensions and variants when present.

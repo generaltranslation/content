@@ -1,0 +1,109 @@
+---
+
+title: Plugin
+description: Reference for the General Translation gt-react-native Babel plugin, which injects the Intl polyfills React Native needs. API reference for the gt-react-native plugin.
+
+---
+
+`gt-react-native/plugin` is a Babel plugin that injects the `@formatjs` `Intl` polyfills `gt-react-native` needs. React Native's JavaScript runtime does not ship the full `Intl` APIs used to format numbers, dates, plurals, and locale names, so the plugin adds them at your app's entry point.
+
+Configure it in `babel.config.js`. It is part of the standard React Native [setup](/docs/react/react-native/setup); this page documents what it does and its options.
+
+## Overview [#overview]
+
+Add the plugin to your Babel config, pointing `entryPointFilePath` at your app's entry file and passing the locales to polyfill. The plugin is a **named export**, so destructure it (`const { plugin } = require('gt-react-native/plugin')`) rather than using the module object directly.
+
+```js title="babel.config.js"
+const { plugin: gtPlugin } = require('gt-react-native/plugin');
+const gtConfig = require('./gt.config.json');
+
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: [
+      [
+        gtPlugin,
+        {
+          locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+          entryPointFilePath: require.resolve('expo-router/entry'),
+        },
+      ],
+    ],
+  };
+};
+```
+
+## How it works [#how-it-works]
+
+At build time, when Babel transforms the file at `entryPointFilePath`, the plugin prepends `import` statements for:
+
+- The base `@formatjs` polyfills — `getcanonicallocales`, `locale`, `displaynames`, `listformat`, `pluralrules`, `numberformat`, `relativetimeformat`, and `datetimeformat` (with all time zones) — minus any listed in `excludePolyfills`.
+- The locale data for each resolved locale, across the `displaynames`, `listformat`, `pluralrules`, `numberformat`, `relativetimeformat`, and `datetimeformat` polyfills.
+
+It only modifies the entry file, and it skips any polyfill import you already have. The locales are resolved from `locales`, or from `config`/`configFilePath` if you pass those instead.
+
+*Note: if the plugin does not work in your setup, import the polyfills manually at the top of your entry file. See [FormatJS's polyfill documentation](https://formatjs.github.io/docs/polyfills).*
+
+## Options [#options]
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locales`](#locales) | Locale codes to load locale data for. | `string[]` | Yes | From `config` |
+| [`entryPointFilePath`](#entry-point-file-path) | Path to the entry file the polyfills are added to. | `string` | Yes | `src/App.tsx` |
+| [`config`](#config) | General Translation config object to read locales from. | `object` | Yes | — |
+| [`configFilePath`](#config-file-path) | Path to a `gt.config.json` to read locales from. | `string` | Yes | — |
+| [`excludePolyfills`](#exclude-polyfills) | Base polyfills to skip. | `string[]` | Yes | `[]` |
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Optional**
+
+The locale codes to load `@formatjs` locale data for. Include your default locale and every target locale, for example `[gtConfig.defaultLocale, ...gtConfig.locales]`. When omitted, locales are resolved from `config` or `configFilePath`.
+
+### `entryPointFilePath` [#entry-point-file-path]
+
+**Type** `string` · **Optional** · **Default** `src/App.tsx`
+
+Absolute path to the file the polyfill imports are injected into. This must be your app's true entry point. Common values are `require.resolve('expo-router/entry')` for Expo and `path.resolve(__dirname, 'index.js')` for the bare React Native CLI.
+
+### `config` [#config]
+
+**Type** `{ defaultLocale: string; locales: string[] } & Record<string, unknown>` · **Optional**
+
+A General Translation config object to resolve locales from, as an alternative to passing `locales` directly.
+
+### `configFilePath` [#config-file-path]
+
+**Type** `string` · **Optional**
+
+Path to a `gt.config.json` file to resolve locales from, as an alternative to passing `locales` or `config`.
+
+### `excludePolyfills` [#exclude-polyfills]
+
+**Type** `string[]` · **Optional** · **Default** `[]`
+
+Base polyfill import paths to skip, in case you provide one yourself. Values must match the plugin's base polyfill import paths, such as `@formatjs/intl-datetimeformat/add-all-tz`.
+
+## Example [#example]
+
+Bare React Native CLI, pointing at `index.js`:
+
+```js title="babel.config.js"
+const path = require('path');
+const { plugin: gtPlugin } = require('gt-react-native/plugin');
+const gtConfig = require('./gt.config.json');
+
+module.exports = {
+  presets: ['module:@react-native/babel-preset'],
+  plugins: [
+    [
+      gtPlugin,
+      {
+        locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+        entryPointFilePath: path.resolve(__dirname, 'index.js'),
+      },
+    ],
+  ],
+};
+```

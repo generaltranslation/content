@@ -1,0 +1,107 @@
+---
+
+title: determineLocale
+description: Find the best matching locale from a list of approved locales. API reference for determineLocale.
+
+---
+
+Determines the best matching locale from a list of approved locales based on user preferences, on a [GT](/docs/platform/core/reference/gt-class/constructor) instance. General Translation implements locale negotiation to find the most suitable locale when an exact match is not available.
+
+## Overview [#overview]
+
+Call `determineLocale` on a `GT` instance with one or more preferred locales, in preference order. It returns the best matching approved locale, or `undefined` when none matches.
+
+```typescript
+const gt = new GT({
+  sourceLocale: 'en-US',
+  locales: ['en-US', 'es-ES', 'fr-FR', 'de-DE'],
+});
+
+// Exact match
+console.log(gt.determineLocale('en-US')); // 'en-US'
+
+// Language fallback
+console.log(gt.determineLocale('en-GB')); // 'en-US' (closest English variant)
+
+// Multiple preferences (preference order wins)
+console.log(gt.determineLocale(['fr-CA', 'es-MX', 'en-US'])); // 'fr-FR' (closest to first preference)
+
+// No match
+console.log(gt.determineLocale('it-IT')); // undefined
+```
+
+Signature:
+
+```typescript
+determineLocale(
+  locales: string | string[],
+  approvedLocales?: string[],
+  customMapping?: CustomMapping
+): string | undefined
+```
+
+*Note: `determineLocale` runs locally and does not require an API key. When `approvedLocales` and `customMapping` are omitted, it uses the instance's `locales` and `customMapping`. For matching without a `GT` instance, see the standalone [`determineLocale`](/docs/platform/core/reference/utility-functions/locales/determine-locale).*
+
+*Note: the source docs previously showed `['fr-CA', 'es-MX', 'en-US']` resolving to `'es-ES'`; because higher-preference language matches win over lower-preference exact matches, the first preference `fr-CA` resolves to `fr-FR`.*
+
+## How it works [#how-it-works]
+
+- **Exact match first.** Returns the first exact match from the approved locales.
+- **Language fallback.** When an exact region is not available, falls back to language matches.
+- **Preference order.** Respects the order of the input array, so a higher-preference language match is chosen over a lower-preference exact match.
+- **No match.** Returns `undefined` when no suitable match is found.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locales`](#locales) | A single locale or array of locales in preference order. | `string \| string[]` | No | — |
+| [`approvedLocales`](#approved-locales) | Array of approved locales in preference order. | `string[]` | Yes | `this.locales` |
+| [`customMapping`](#custom-mapping) | Custom locale mapping for resolution. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | `this.customMapping` |
+
+### `locales` [#locales]
+
+**Type** `string | string[]` · **Required**
+
+A single locale or an array of locales in preference order (for example, a browser `Accept-Language` list).
+
+### `approvedLocales` [#approved-locales]
+
+**Type** `string[]` · **Optional** · **Default** `this.locales`
+
+Array of approved locales in preference order. When omitted, the instance's `locales` are used.
+
+### `customMapping` [#custom-mapping]
+
+**Type** [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) · **Optional** · **Default** `this.customMapping`
+
+Custom locale mapping used during resolution. When omitted, the instance's `customMapping` is used.
+
+## Returns [#returns]
+
+**Type** `string | undefined`
+
+The best matching locale, or `undefined` if no match is found.
+
+## Examples [#examples]
+
+```typescript
+// User locale negotiation
+const gt = new GT({
+  sourceLocale: 'en-US',
+  locales: ['en-US', 'en-GB', 'es-ES', 'fr-FR'],
+});
+
+// Simulate a browser Accept-Language header
+const userPreferences = ['fr-CA', 'en-GB', 'en'];
+const bestMatch = gt.determineLocale(userPreferences);
+console.log(bestMatch); // 'fr-FR' based on preference order
+```
+
+## Notes [#notes]
+
+- Returns the first exact match from approved locales.
+- Falls back to language matches when the exact region is not available.
+- Respects preference order in the input array.
+- Returns `undefined` when no suitable match is found.
+- Essential for implementing locale negotiation in web applications.

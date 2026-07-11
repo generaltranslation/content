@@ -1,0 +1,127 @@
+---
+
+title: msg
+description: Mark and encode a string at module scope for translation with General Translation. API reference for msg.
+
+---
+
+Registers a string (or array of strings) for translation. Pair `msg` with [`getMessages`](/docs/node/reference/functions/get-messages) to register strings — typically at module scope — and resolve their translations at runtime.
+
+## Overview [#overview]
+
+Call `msg` with a string. When you pass no options, it returns the string unchanged. When you pass options (interpolation variables or metadata), it returns an encoded string that carries those options. Pass the result to [`getMessages`](/docs/node/reference/functions/get-messages) to retrieve the translation.
+
+```ts
+const registered = msg('Hello, world!');
+console.log(registered); // "Hello, world!" (unchanged)
+
+const withVars = msg('Hello, {name}!', { name: 'Brian' });
+console.log(withVars); // "Hello, Brian:<encoded-options>"
+```
+
+Signature:
+
+```ts
+msg<T extends string | string[]>(message: T): T;
+msg<T extends string | string[]>(message: T, options?: GTTranslationOptions): T extends string ? string : string[];
+```
+
+*Note: `msg` returns the message unchanged when called without options. Only when you pass options does it produce an encoded string. To recover the original text from an encoded string, decode it with [`decodeMsg`](/docs/node/reference/functions/decode-msg).*
+
+## How it works [#how-it-works]
+
+- **Registration.** `msg` marks content so the [`gt` CLI](/docs/cli/quickstart) discovers and translates it. The translation itself is resolved later by [`getMessages`](/docs/node/reference/functions/get-messages).
+- **Production.** Content inside a `msg` call is translated before deployment. Translations are stored in the CDN or your app's build output, according to your configuration, and served from there. If a translation is not found, it falls back to the original content.
+- **Development.** With a `projectId` and `devApiKey`, `msg` content translates on demand, which is useful for previewing in different languages. Expect a delay that does not occur in production builds.
+- **Encoding.** When options are provided, the return value is `interpolatedContent:encodedOptions` — the interpolated content, a colon, and the base64-encoded options. Resolve it with [`getMessages`](/docs/node/reference/functions/get-messages) or decode it with [`decodeMsg`](/docs/node/reference/functions/decode-msg).
+- **Arrays.** Passing a `string[]` registers each entry. With `$id`, each entry gets a unique id of `${$id}.${index}`.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | The string or array of strings to register. | `string \| string[]` | No | — |
+| [`options`](#options) | Translation options and interpolation variables. | `GTTranslationOptions` | Yes | — |
+
+### `message` [#message]
+
+**Type** `string | string[]` · **Required**
+
+The string content to register for translation, or an array of strings to register several at once.
+
+### `options` [#options]
+
+**Type** `GTTranslationOptions` · **Optional**
+
+Translation options plus interpolation variables:
+
+- `$context?: string` — additional context to help disambiguate translations.
+- `$id?: string` — a custom ID for the translation entry (arrays produce `${$id}.${index}`).
+- `$format?: string` — the message format. Defaults to `'ICU'`.
+- `$maxChars?: number` — maximum character count for the translation.
+- `$requiresReview?: boolean` — whether the translation requires approval before use.
+- Any other keys are treated as values to interpolate into the string using `{key}` syntax.
+
+## Returns [#returns]
+
+**Type** `string | string[]`
+
+The message unchanged when no options are passed, or an encoded string (with interpolated variables applied) when options are passed. Arrays return an array of the same shape.
+
+## Decoding [#decoding]
+
+To recover the original interpolated string from an encoded message, decode it with [`decodeMsg`](/docs/node/reference/functions/decode-msg).
+
+```ts
+import { msg, decodeMsg } from 'gt-node';
+
+const encoded = msg('Hello, {name}!', { name: 'Brian' });
+const decoded = decodeMsg(encoded);
+console.log(decoded); // "Hello, Brian"
+```
+
+## Examples [#examples]
+
+```ts
+// Basic usage — mark a string for translation
+import { msg, getMessages } from 'gt-node';
+
+const greeting = msg('Hello, world!');
+
+const m = await getMessages();
+const translated = m(greeting);
+console.log(translated); // "Hello, world!" (translated to the user's preferred language)
+```
+
+```ts
+// Using variables — "Alice" is a variable and is not translated
+import { msg, getMessages } from 'gt-node';
+
+const greeting = msg('Hello, {name}!', { name: 'Alice' });
+
+const m = await getMessages();
+const translated = m(greeting);
+console.log(translated); // "Hello, Alice!" (translated)
+```
+
+```ts
+// Using ICU message format to format variables
+import { msg, getMessages } from 'gt-node';
+
+const encodedString = msg(
+  'There are {count, plural, =0 {no items} =1 {one item} other {{count} items}} in the cart',
+  { count: 10 }
+);
+
+const m = await getMessages();
+const translated = m(encodedString);
+console.log(translated);
+```
+
+*Note: [ICU message format](https://unicode-org.github.io/icu/userguide/format_parse/messages/) is a powerful way to format your variables.*
+
+## Notes [#notes]
+
+- `msg` marks strings for translation; translation happens before runtime during the build process (except in development).
+- Without options, `msg` returns the input unchanged; with options it returns an encoded string.
+- Resolve encoded strings with [`getMessages`](/docs/node/reference/functions/get-messages), or recover the original text with [`decodeMsg`](/docs/node/reference/functions/decode-msg).

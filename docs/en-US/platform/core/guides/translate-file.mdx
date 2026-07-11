@@ -1,0 +1,170 @@
+---
+
+title: Translate files 
+description: Upload a source file, enqueue translation, check status, and download the translated file with the `generaltranslation` library.
+
+---
+
+The `generaltranslation` library can translate full source files. This page explains how to upload, enqueue, status, and download workflows for files.
+
+## Before you start [#before-start]
+
+Make sure you've completed the [Quickstart](/docs/platform/core/quickstart) to install `generaltranslation` and initialize the [GT](/docs/platform/core/reference/gt-class/constructor) class.
+
+## How file translation works [#file-translation-works]
+
+Files are translated as jobs:
+
+1. Upload the source file.
+2. Enqueue the file for translation.
+3. Check translation status.
+4. Download the translated file.
+
+File translation uses multiple calls because Projects often translate many files. Separate steps give you more flexibility in using the API: making it easier to batch files, retry failed work, poll jobs, and download output when ready. 
+
+Launch a job by uploading a file; uploading many files will launch many jobs. See the [uploadSourceFiles](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) and [queryFileData](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) methods for more information.
+
+## 1. Upload the source file [#upload]
+
+As an example, this guide translates this English JSON file:
+
+```json
+{
+  "hello": "Hello",
+  "world": "World"
+}
+```
+
+Read the file, format contents, and then call [uploadSourceFiles](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) to upload files.
+
+```typescript title="src/index.ts"
+import fs from 'fs';
+import path from 'path';
+import { FileUpload } from 'generaltranslation';
+
+// (i) Read the content of a file
+const filePath = path.join(process.cwd(), 'en.json');
+const fileContents = fs.readFileSync(filePath, 'utf8');
+
+// (ii) Format the file contents
+const fileUpload: FileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [ { source: fileUpload } ];
+
+// (iii) Upload the file
+const { uploadedFiles } = await gt.uploadSourceFiles(
+  files,
+  {
+    sourceLocale: 'en'
+  }
+);
+```
+
+The response returns a list of file references. This allows you to later enqueue the file for translation, check the status of the file, and download the translated file.
+
+```ts title="Output"
+[
+  {
+    fileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
+    versionId: '427269616e204c6f75206d6f7265206c696b65204c696f6e2042726f20686121',
+    branchId: '123456789',
+    fileName: '/Users/demo/en.json',
+    fileFormat: 'JSON'
+  }
+]
+```
+
+## 2. Enqueue the file for translation [#enqueue]
+
+Use [enqueueFiles](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) with the uploaded file reference and target locales. In this example, we will translate to Spanish (`es`).
+
+```typescript title="src/index.ts"
+const fileUploadRef = {
+  fileId: uploadedFiles[0].fileId,
+  versionId: uploadedFiles[0].versionId,
+  branchId: uploadedFiles[0].branchId,
+  fileName: uploadedFiles[0].fileName,
+  fileFormat: uploadedFiles[0].fileFormat,
+};
+
+const enqueueResult = await gt.enqueueFiles(
+  [fileUploadRef],
+  {
+    sourceLocale: 'en',
+    targetLocales: ['es'],
+  }
+);
+```
+
+The response returns a result with job information.
+
+```ts title="Output"
+{
+  jobId: 'job-123456',
+  locales: ['es'],
+  message: 'Creating 1 translation(s).'
+}
+```
+
+## 3. Check file status [#status]
+
+Use [queryFileData](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to check whether the translated file is complete and ready for download.
+
+```typescript title="src/index.ts"
+const { fileId, versionId, branchId } = uploadedFiles[0];
+
+const status = await gt.queryFileData({
+  translatedFiles: [
+    {
+      fileId,
+      versionId,
+      branchId,
+      locale: 'es',
+    },
+  ],
+});
+```
+
+If the file is still being translated, `completedAt` is `null`. When complete, it contains a timestamp:
+
+```ts title="Output"
+{
+  translatedFiles: [
+    {
+      fileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
+      versionId: '427269616e204c6f75206d6f7265206c696b65204c696f6e2042726f20686121',
+      branchId: '123456789',
+      locale: 'es',
+      completedAt: '2024-01-15T12:00:00Z'
+    }
+  ]
+}
+```
+
+## 4. Download the translated file [#download]
+
+Finally, download the translated file with the [downloadFile](/docs/platform/core/reference/gt-class-methods/translation/download-file) method.
+
+```typescript title="src/index.ts"
+const { fileId, branchId } = uploadedFiles[0];
+
+const content = await gt.downloadFile({
+  fileId,
+  branchId,
+  locale: 'es',
+});
+```
+
+The response returns the translated file content. This example returns:
+
+```json title="Output"
+{
+  "hello": "Hola",
+  "world": "Mundo"
+}
+```
+

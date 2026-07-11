@@ -1,0 +1,105 @@
+---
+
+title: Move files
+description: Move or rename files in a General Translation Project. API reference for Move files.
+
+---
+
+Moves or renames files by cloning each source file and its translations under a new file ID and name. Send one entry per file to move.
+
+## Overview [#overview]
+
+```http
+POST https://api.gtx.dev/v2/project/files/moves
+```
+
+**Permission** `project:files:write` · **Rate limit** Medium (120/min)
+
+Reflect renamed or relocated source files without losing their translations. To detect which files have become stale, use [Get orphaned files](/docs/platform/openapi/reference/files/orphaned-files).
+
+## How it works [#how-it-works]
+
+- Each move clones the existing source file and its translations to the `newFileId` and `newFileName`, preserving the translations.
+- A missing `branchId` resolves to the default branch. A provided `branchId` must belong to the Project, otherwise the request returns `404`.
+- An empty `moves` array returns an empty result set without error.
+- The response reports a per-move result and a summary count of total, succeeded, and failed moves.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`moves`](#moves) | Array of file moves to process. | `object[]` | No | — |
+| `branchId` | Branch the files are on. | `string` | Yes | Default branch |
+
+#### `moves` [#moves]
+
+**Type** `object[]`
+
+Each element describes one file move:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `oldFileId` | Current file identifier; cannot be blank. | `string` | No | — |
+| `newFileId` | New file identifier; cannot be blank. | `string` | No | — |
+| `newFileName` | New file name; cannot be blank. | `string` | No | — |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "results": [
+    {
+      "oldFileId": "file_old...",
+      "newFileId": "file_new...",
+      "success": true,
+      "newSourceFileId": "sf_...",
+      "clonedTranslationsCount": 2
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "succeeded": 1,
+    "failed": 0
+  }
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:write`. |
+| `404` | Provided `branchId` not found in the Project. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api.gtx.dev/v2/project/files/moves \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moves": [
+      {
+        "oldFileId": "file_old...",
+        "newFileId": "file_new...",
+        "newFileName": "en/renamed.json"
+      }
+    ]
+  }'
+```

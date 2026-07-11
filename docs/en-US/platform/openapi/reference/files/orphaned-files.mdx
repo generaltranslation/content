@@ -1,0 +1,81 @@
+---
+
+title: Get orphaned files
+description: Find General Translation files that are no longer connected to current source files. API reference for Get orphaned files.
+
+---
+
+Returns files on a branch whose file IDs are not in the list of current file IDs you provide. It is used to detect files that were moved, renamed, or deleted locally.
+
+## Overview [#overview]
+
+```http
+POST https://api.gtx.dev/v2/project/files/orphaned
+```
+
+**Permission** `project:files:read` · **Rate limit** Medium (120/min)
+
+Detect stale files before reconciling a branch. To then move or rename them, use [Move files](/docs/platform/openapi/reference/files/move-files).
+
+## How it works [#how-it-works]
+
+- The branch's head files are compared against the `fileIds` you send.
+- Any file on the branch whose `fileId` is not in that list is returned as orphaned.
+- The `branchId` must belong to the Project, otherwise the request returns `404`.
+- An empty `fileIds` list marks every file on the branch as orphaned.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `branchId` | Branch to inspect; required. | `string` | No | — |
+| `fileIds` | Current file IDs to keep. Files not in this list are orphaned. | `string[]` | Yes | `[]` |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "orphanedFiles": [
+    {
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "fileName": "en/removed.json"
+    }
+  ]
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, or missing `branchId`. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:read`. |
+| `404` | Branch not found. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api.gtx.dev/v2/project/files/orphaned \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "branchId": "br_...",
+    "fileIds": ["file_a...", "file_b..."]
+  }'
+```

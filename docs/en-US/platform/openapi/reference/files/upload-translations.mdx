@@ -1,0 +1,138 @@
+---
+
+title: Upload translations
+description: Upload translated files to a General Translation Project that match previously uploaded source files. API reference for Upload translations.
+
+---
+
+Uploads already-translated files for source files that were uploaded earlier. Each entry pairs a source file reference with one or more translations, up to 100 entries per request.
+
+## Overview [#overview]
+
+```http
+POST https://api.gtx.dev/v2/project/files/upload-translations
+```
+
+**Permission** `project:files:write` · **Rate limit** Medium (120/min)
+
+Attach existing translations to a Project so they are stored alongside their source. To upload the source files first, use [Upload source files](/docs/platform/openapi/reference/files/upload-source). To translate source files with General Translation instead, see [Queue translations](/docs/platform/openapi/reference/translation/queue).
+
+## How it works [#how-it-works]
+
+- Each entry's `source` identifies a source file that must already exist. Source files are matched by `branchId`, `versionId`, and `fileId`; a missing `branchId` resolves to the default branch. If a referenced source file is not found, the request fails with `400`.
+- The `source` object is validated the same way as an upload, so `fileId` defaults to a hash of `fileName` and `versionId` defaults to a hash of the content when omitted.
+- Each translation's `content` is base64-encoded and decoded server-side; invalid base64 or an oversized file is rejected.
+- Translations inherit the `fileId`, `versionId`, `branchId`, and `fileName` of their source. Set `transformFormat` to store the translation under a different output file format.
+- Uploaded translations are marked completed. If the Project has auto-approval enabled, they are also marked approved. `GTJSON` translations receive per-component review metadata derived from the source object.
+- Each source file's locale list is updated to include the uploaded translation locales. Files are published to the CDN when the Project has the CDN enabled.
+- If `sourceLocale` is sent and differs from the Project's current default locale, the Project default locale is updated.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`data`](#data) | Array of source/translation entries (1–100). | `object[]` | No | — |
+| `sourceLocale` | Source locale for the uploaded files. | `string` | Yes | Project default locale |
+
+#### `data` [#data]
+
+**Type** `object[]` · **Required**
+
+Each element is `{ "source": { ... }, "translations": [ ... ] }`.
+
+The `source` object identifies the previously uploaded source file:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `content` | Base64-encoded source content. Max file size applies. | `string` | No | — |
+| `fileName` | File name; cannot be empty. | `string` | No | — |
+| `fileFormat` | File format identifier (for example, `JSON`, `MDX`). | `string` | No | — |
+| `locale` | Locale of the source content; cannot be empty. | `string` | No | — |
+| `dataFormat` | Data format for structured content. | `string` | Yes | — |
+| `fileId` | Stable file identifier. | `string` | Yes | Hash of `fileName` |
+| `versionId` | Version identifier for this content. | `string` | Yes | Hash of content |
+| `branchId` | Branch the source file is attached to. | `string` | Yes | Default branch |
+| `formatMetadata` | Extra format-specific metadata. | `object` | Yes | — |
+
+Each element of `translations` is one translated file. At least one translation is required per entry:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `content` | Base64-encoded translated content. Max file size applies. | `string` | No | — |
+| `fileName` | File name; cannot be empty. | `string` | No | — |
+| `fileFormat` | File format identifier. | `string` | No | — |
+| `locale` | Target locale of the translation; cannot be empty. | `string` | No | — |
+| `dataFormat` | Data format for structured content. | `string` | Yes | — |
+| `transformFormat` | Output file format to store the translation as. | `string` | Yes | Source file format |
+
+## Response [#response]
+
+**Status** `201 Created`
+
+```json title="Response"
+{
+  "uploadedFiles": [
+    {
+      "branchId": "br_...",
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "fileName": "en/common.json",
+      "locale": "es",
+      "fileFormat": "JSON",
+      "dataFormat": "JSON"
+    }
+  ],
+  "count": 1,
+  "message": "Successfully uploaded 1 translation file(s)"
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, invalid locale/format, decode failure, file too large, or referenced source file not found. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:write`. |
+| `429` | Rate limit exceeded. |
+| `503` | Server busy; retry with backoff. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api.gtx.dev/v2/project/files/upload-translations \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sourceLocale": "en",
+    "data": [
+      {
+        "source": {
+          "content": "eyJoZWxsbyI6ICJIZWxsbyJ9",
+          "fileName": "en/common.json",
+          "fileFormat": "JSON",
+          "locale": "en"
+        },
+        "translations": [
+          {
+            "content": "eyJoZWxsbyI6ICJIb2xhIn0=",
+            "fileName": "en/common.json",
+            "fileFormat": "JSON",
+            "locale": "es"
+          }
+        ]
+      }
+    ]
+  }'
+```

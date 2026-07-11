@@ -1,0 +1,52 @@
+---
+
+title: TranslationsLoader
+description: The callable type for custom translation loaders in General Translation Python. API reference for TranslationsLoader.
+
+---
+
+The type of a custom translation loader — the callback you pass as `load_translations` to bring your own translations. It maps a locale code to a translations dict.
+
+*Note: `TranslationsLoader` is a **type alias**, not a class, protocol, or ABC. You do not subclass it; you provide any callable that matches its shape.*
+
+## Overview [#overview]
+
+`TranslationsLoader` is defined as a `Callable` alias:
+
+```python
+from collections.abc import Awaitable, Callable
+
+TranslationsLoader = Callable[[str], dict[str, str] | Awaitable[dict[str, str]]]
+```
+
+A loader takes a locale code and returns a `dict[str, str]` mapping message hashes to translated strings. It may be synchronous or return an awaitable — the manager awaits the result when it is awaitable.
+
+Import `TranslationsLoader` from `gt_i18n`. It is not re-exported by the framework packages.
+
+## How it works [#how-it-works]
+
+- **Input.** A single locale code string (for example, `"es"`).
+- **Output.** A `dict[str, str]` of hash → translated string, or an awaitable resolving to one.
+- **Where it is used.** Passed as `load_translations` to [`I18nManager`](/docs/python/reference/classes/i18n-manager) or [`initialize_gt`](/docs/python/reference/functions/initialize-gt). When provided, it overrides the built-in CDN loader. Keys should be hashes produced by [`hash_message`](/docs/python/reference/functions/hash-message).
+
+## Example [#example]
+
+```python
+import json
+from pathlib import Path
+from gt_i18n import I18nManager, TranslationsLoader
+
+# A synchronous loader reading one JSON file per locale
+def load_translations(locale: str) -> dict[str, str]:
+    path = Path("translations") / f"{locale}.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+loader: TranslationsLoader = load_translations
+manager = I18nManager(default_locale="en", locales=["es"], load_translations=loader)
+```
+
+```python
+# An async loader is also valid
+async def load_translations(locale: str) -> dict[str, str]:
+    return await fetch_from_somewhere(locale)
+```

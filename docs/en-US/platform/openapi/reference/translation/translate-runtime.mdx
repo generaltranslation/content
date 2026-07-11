@@ -1,0 +1,114 @@
+---
+
+title: Translate content at runtime
+description: Translate strings or structured content directly from an application or service with General Translation. API reference for Translate content at runtime.
+
+---
+
+Translates a batch of keyed requests into a single target locale and returns the translations in the response. General Translation uses a cache-first path so repeat requests are fast and inexpensive.
+
+## Overview [#overview]
+
+```http
+POST https://runtime.gtx.dev/v2/translate
+```
+
+**Permission** `project:translations:generate` · **Rate limit** Default (200/min)
+
+Translate content on demand from your own application or service. This endpoint uses the runtime base URL `https://runtime.gtx.dev`. To translate whole files in the background instead, use [Queue translations](/docs/platform/openapi/reference/translation/queue).
+
+## How it works [#how-it-works]
+
+- Requests are a map of your own keys to source content. Each request is resolved independently, and results are keyed by the same keys.
+- The service checks its memoized cache first, then in-progress translations, and finally completes any remaining translations before returning. Newly completed translations are written back to the cache.
+- Each request's `dataFormat` selects how its `source` is parsed: `STRING` (default), `JSX`, `ICU`, or `I18NEXT`.
+- Setting `metadata.modelProvider` requires an Enterprise plan; otherwise the request returns `403`.
+- Target locales are enforced against the Project's allowed locales.
+- A successful response is `201` (or `200` when every request was served from cache).
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`requests`](#requests) | Map of request key to content to translate; at least one required. | `object` | No | — |
+| `targetLocale` | Locale to translate into; cannot be empty. | `string` | No | — |
+| `sourceLocale` | Locale of the source content; cannot be empty. | `string` | No | — |
+| `metadata` | Metadata shared by all requests. | `object` | Yes | — |
+
+The shared `metadata` object accepts `modelProvider` (an allowed model provider identifier; Enterprise only).
+
+#### `requests` [#requests]
+
+**Type** `object` · **Required**
+
+Each value is a single translation request:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `source` | Source content to translate. Shape depends on `metadata.dataFormat`. | `unknown` | No | — |
+| `metadata` | Per-request metadata. | `object` | Yes | See below |
+
+Per-request `metadata` fields:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `dataFormat` | Content format: `STRING`, `JSX`, `ICU`, or `I18NEXT`. | `string` | Yes | `STRING` |
+| `context` | Extra context to guide the translation. | `string` | Yes | — |
+| `id` | Caller-supplied identifier for the entry. | `string` | Yes | — |
+| `hash` | Content hash; computed server-side when omitted. | `string` | Yes | — |
+| `maxChars` | Maximum character length for the translation. | `number` | Yes | — |
+| `actionType` | Translation action type. | `string` | Yes | `fast` |
+| `sourceCode` | Surrounding source-code snippets for additional context. | `object` | Yes | — |
+
+## Response [#response]
+
+**Status** `201 Created`
+
+Each entry is keyed by its request key. Successful entries include the translation; failed entries include an error and code.
+
+```json title="Response"
+{
+  "key1": {
+    "success": true,
+    "translation": "Hola, mundo",
+    "dataFormat": "STRING",
+    "locale": "es"
+  }
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, or invalid source/target locale. |
+| `401` | Missing or invalid API key. |
+| `402` | Token quota exhausted or the request cannot be billed. |
+| `403` | API key lacks `project:translations:generate`, or a custom `modelProvider` requires an Enterprise plan. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://runtime.gtx.dev/v2/translate \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requests": {
+      "key1": { "source": "Hello, world" }
+    },
+    "sourceLocale": "en",
+    "targetLocale": "es"
+  }'
+```

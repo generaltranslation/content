@@ -1,0 +1,109 @@
+---
+
+title: GTProvider
+description: Provide the active locale and translations to a General Translation gt-react component tree. API reference for GTProvider.
+
+---
+
+The `<GTProvider>` component supplies the active locale and its translations to your component tree. It is required for any client-side translation in `gt-react` — every [`<T>`](/docs/react/reference/components/t), variable component, and hook reads from it.
+
+*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
+
+*Note: how the locale and translations reach `<GTProvider>` differs by framework. In `gt-react` you pass them as props (below); `gt-next`, `gt-tanstack-start`, and `gt-react-native` resolve them through their own setup, documented in each framework's section.*
+
+## Overview [#overview]
+
+Wrap your app in `<GTProvider>` after [initialization](/docs/react/reference/config#initialization). Pass the active `locale` and the `translations` for that locale, loaded with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot).
+
+```tsx
+import { GTProvider } from 'gt-react';
+
+<GTProvider locale={locale} translations={translations}>
+  <App />
+</GTProvider>
+```
+
+*Note: `loadTranslations`, `loadDictionary`, and credentials go on the [initialization call](/docs/react/reference/config#initialization), not on `<GTProvider>`. The provider consumes the resolved locale and translations synchronously.*
+
+## How it works [#how-it-works]
+
+- **Synchronous translations.** The provider requires `translations` up front so translated content renders synchronously, without a loading flash. Produce this object with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) after initialization.
+- **Context for the tree.** Components below the provider read the active locale, translations, dictionaries, and region from it. Rendering a `<T>` or calling a hook such as [`useGT`](/docs/react/reference/hooks/use-gt) outside a provider will not resolve translations.
+- **Toggling translation.** When `enableI18n` is `false`, the provider renders source-locale content and skips translation, which is useful for previewing the untranslated app.
+
+## Props [#props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | Active locale for the tree. | `string` | No | — |
+| [`translations`](#translations) | Translations for the active locale. | `object` | No | — |
+| [`dictionaries`](#dictionaries) | Per-locale dictionaries for [`useTranslations`](/docs/react/reference/hooks/use-translations). | `object` | Yes | — |
+| [`region`](#region) | Active region code. | `string` | Yes | — |
+| [`enableI18n`](#enable-i18n) | Translate content. When `false`, renders the source locale. | `boolean` | Yes | `true` |
+| [`children`](#children) | The app tree. | `ReactNode` | Yes | — |
+
+### `locale` [#locale]
+
+**Type** `string` · **Required**
+
+The active locale for the tree, as a BCP 47 code such as `es`. Read it downstream with [`useLocale`](/docs/react/reference/hooks/use-locale).
+
+### `translations` [#translations]
+
+**Type** `object` · **Required**
+
+The translations for the active locale, in the shape the provider consumes synchronously. Produce it with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) after initialization.
+
+### `dictionaries` [#dictionaries]
+
+**Type** `object` · **Optional**
+
+Per-locale dictionaries used by [`useTranslations`](/docs/react/reference/hooks/use-translations) for id-based lookups. Omit this when you only use `<T>` and `useGT`.
+
+### `region` [#region]
+
+**Type** `string` · **Optional**
+
+The active region code (for example, `US` or `GB`), used for region-specific formatting and by the region hooks and selectors.
+
+### `enableI18n` [#enable-i18n]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+Whether to translate content. When `false`, the provider renders source-locale content and skips translation.
+
+### `children` [#children]
+
+**Type** `ReactNode` · **Optional**
+
+Your application tree. Every component that translates or reads locale state must be a descendant of the provider.
+
+## Examples [#examples]
+
+```tsx title="src/main.tsx"
+import { createRoot } from 'react-dom/client';
+import { GTProvider, initializeGTSPA, getTranslationsSnapshot } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import App from './App';
+
+const loadTranslations = (locale: string) =>
+  import(`./_gt/${locale}.json`).then((m) => m.default);
+
+await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+
+const locale = gtConfig.defaultLocale;
+const translations = await getTranslationsSnapshot(locale);
+
+createRoot(document.getElementById('root')!).render(
+  <GTProvider locale={locale} translations={translations}>
+    <App />
+  </GTProvider>
+);
+```
+
+```tsx
+// Preview the untranslated (source-locale) app
+<GTProvider locale={locale} translations={translations} enableI18n={false}>
+  <App />
+</GTProvider>
+```

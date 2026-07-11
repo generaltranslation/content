@@ -1,0 +1,98 @@
+---
+
+title: gt translate
+description: Translate a project through the General Translation API. API reference for the gt translate command.
+
+---
+
+Translates your project. It reads `gt.config.json` to find your files, scans your source code for inline content when you use a framework library, includes your dictionary, and saves translations to your codebase or the CDN.
+
+This is the primary command for using the General Translation API. Run it in CI before a production build. For the full workflow, see [Generate translations](/docs/cli/guides/generate-translations). Under the hood, `translate` stages and downloads in one step; to run those parts separately, use [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt download`](/docs/cli/reference/commands/download).
+
+*Note: For production use only. Set a production `GT_API_KEY` and `GT_PROJECT_ID` as environment variables, and never store your API key in `gt.config.json`.*
+
+```bash
+npx gt translate
+```
+
+## How it works [#how-it-works]
+
+1. Reads `gt.config.json` to determine the target locales, the files to translate, and their output paths.
+2. For `gt-next`, `gt-react`, and `gt-react-native` projects, scans your `src` globs for inline content — `<T>` components and `useGT` calls — and includes your dictionary file.
+3. Auto-detects a third-party i18n library from `package.json` — `next-intl` or `i18next` (with `i18next-icu` support) — and translates its JSON files while respecting that library's syntax.
+4. Stages the collected content and downloads the results in one step. Internally this is [`gt stage`](/docs/cli/reference/commands/stage) followed by [`gt download`](/docs/cli/reference/commands/download); use the split commands to run those parts separately.
+5. Saves translations to your codebase, and to the CDN when `--publish` or the [`publish`](/docs/cli/reference/config#publish) config key is set.
+
+By default, the CLI does not overwrite local translation changes unless the source content has changed. Use `--force` to re-translate everything, or `--force-download` to re-download without re-translating.
+
+## Flags [#flags]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--api-key <key>` | Production API key. | `string` | Yes | `GT_API_KEY` |
+| `--project-id <id>` | Project ID. | `string` | Yes | `GT_PROJECT_ID` |
+| `--version-id <id>` | Version ID for the run. | `string` | Yes | Content hash |
+| `-c, --config <path>` | Path to the config file. | `string` | Yes | `gt.config.json` |
+| `--default-locale <locale>` | Source locale for the project. | `string` | Yes | `en` |
+| `--locales <locales...>` | Extra target locales, appended to config locales. | `string[]` | Yes | — |
+| `--timeout <seconds>` | Translation wait timeout in seconds. | `number` | Yes | `900` |
+| `--dry-run` | Parse and validate without calling the API. | `boolean` | Yes | `false` |
+| `--force` | Re-translate all content, overwriting existing translations. | `boolean` | Yes | `false` |
+| `--force-download` | Re-download all translations, overwriting local changes. | `boolean` | Yes | `false` |
+| `--save-local` | Save local edits before enqueuing. | `boolean` | Yes | `false` |
+| `--publish` | Publish translations to the CDN. | `boolean` | Yes | `false` |
+| `--enable-branching` | Enable branch-based tracking. | `boolean` | Yes | `false` |
+| `--branch <branch>` | Branch name instead of auto-detecting. | `string` | Yes | — |
+| `--disable-branch-detection` | Use only the specified branch, without relationship detection. | `boolean` | Yes | `false` |
+| `--remote-name <name>` | Git remote used for branch detection. | `string` | Yes | `origin` |
+| `--tag [value]` | Tag the run; auto-resolves from git when no value is given. | `string` | Yes | — |
+| `-m, --message <message>` | Message attached to the translation tag. | `string` | Yes | — |
+
+### Source scanning flags [#source]
+
+These apply when scanning source code in `gt-next`, `gt-react`, and `gt-react-native` projects.
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--src <paths...>` | Glob patterns for source files. | `string[]` | Yes | `src`, `app`, `pages`, `components` globs |
+| `--dictionary <path>` | Path to the dictionary file. | `string` | Yes | — |
+| `--tsconfig, --jsconfig <path>` | Path to a TS or JS config file. | `string` | Yes | Auto-detected |
+| `--inline` | Include inline content such as `<T>` and `useGT`. | `boolean` | Yes | `true` |
+| `--ignore-errors` | Ignore errors found while scanning inline content. | `boolean` | Yes | `false` |
+
+### Experimental flags [#experimental]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--experimental-localize-static-urls` | Localize URLs in translated `md`/`mdx` files. | `boolean` | Yes | `false` |
+| `--experimental-hide-default-locale` | Hide the default locale from localized paths. | `boolean` | Yes | `false` |
+| `--experimental-flatten-json-files` | Flatten JSON files into a single file. | `boolean` | Yes | `false` |
+| `--experimental-localize-static-imports` | Localize static imports in `md`/`mdx` files. | `boolean` | Yes | `false` |
+| `--experimental-localize-relative-assets` | Rewrite relative image asset URLs in translated `md`/`mdx` files. | `boolean` | Yes | `false` |
+| `--experimental-clear-locale-dirs` | Clear locale directories before downloading. | `boolean` | Yes | `false` |
+
+## Example [#example]
+
+```bash
+# Translate using gt.config.json, reading GT_API_KEY and GT_PROJECT_ID from the environment
+npx gt translate
+
+# Parse and validate the project without calling the API
+npx gt translate --dry-run
+
+# Save translations locally and publish them to the CDN for runtime loading
+npx gt translate --publish
+
+# Tag the run so it is easy to identify in the Dashboard
+npx gt translate --tag v2.1.0 -m "Added checkout page translations"
+```
+
+## Other notes [#notes]
+
+- **Content sources:** the CLI scans `src`, `app`, `pages`, and `components` by default. Override with `--src` or the [`src`](/docs/cli/reference/config#src) config key.
+- **Dictionary:** when `--dictionary` is not set, the CLI looks for `dictionary.[json|ts|js]` in `./src` and `./`.
+- **Overwriting:** `--force` overwrites all existing translations and bills for new ones; `--force-download` overwrites local edits with the latest translations without re-translating.
+- **Tagging:** tagging is non-blocking — if tag creation fails, the run continues. Pass `--tag` with no value to use the current git commit hash and message.
+- **Publishing:** enable the CDN in your Project settings before using `--publish`. If the CDN is not enabled, the run translates successfully but the publish step fails with a warning.
+- **Branching:** pass `--enable-branching` to track translations per git branch. See [Track translations by branch](/docs/cli/guides/branching).
+- **Security:** never store your API key in `gt.config.json`. The CLI reads `GT_API_KEY` and `GT_PROJECT_ID` from the environment automatically.

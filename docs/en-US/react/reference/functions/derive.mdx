@@ -1,0 +1,114 @@
+---
+
+title: derive
+description: Mark finite content variants inside a string translation for extraction with General Translation gt-react. API reference for derive.
+
+---
+
+The `derive` function allows static function calls or variable expressions inside a string translation. It is the string equivalent of the [`<Derive>`](/docs/react/reference/components/derive) component, useful for reusable code, internationalizing fragmented sentences, and preserving word agreement.
+
+*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
+
+## Overview [#overview]
+
+Wrap a function call or expression whose result varies. The CLI resolves every possible outcome and creates a translation entry for each.
+
+```tsx
+const getDisplayName = (condition) => (condition ? 'User' : 'Admin');
+
+gt(`${derive(getDisplayName(condition))} says hello.`);
+// Creates two entries:
+// "User says hello."  -> "Usuario dice hola."
+// "Admin says hello." -> "Administrador dice hola."
+```
+
+*Note: `derive` creates a separate translation entry for each possible outcome, which can significantly increase the number of translations. Use it judiciously, and prefer ICU select statements when the multiplication factor becomes excessive.*
+
+## How it works [#how-it-works]
+
+- **Build-time analysis.** The CLI analyzes the wrapped expression, determines all possible static return values, and creates a separate translation entry for each. This preserves word agreement, conjugation, and word order across languages.
+- **Unchanged at runtime.** `derive` returns its argument unchanged at runtime; the derivation only affects extraction. Run `gt validate` after adding or changing `derive` calls to confirm the CLI can resolve each expression.
+- **Static requirement.** Only content known at build time can be derived. Wrap any dynamic content with [`declareVar`](/docs/react/reference/functions/declare-var).
+- **Performance.** Like [`<Derive>`](/docs/react/reference/components/derive), multiple `derive` calls in one string multiply the total entries.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`content`](#content) | A static expression that returns translatable content. | `string \| boolean \| number \| null \| undefined` | No | — |
+
+### `content` [#content]
+
+**Type** `string | boolean | number | null | undefined` · **Required**
+
+A static function call or expression whose possible outcomes are analyzable at build time.
+
+## Returns [#returns]
+
+**Type** `T`
+
+Returns `content` unchanged, preserving its type `T`.
+
+## Examples [#examples]
+
+```tsx title="FragmentedSentence.tsx"
+import { derive, gt } from 'gt-react';
+
+function getSubject(gender) {
+  return gender === 'male' ? 'boy' : 'girl';
+}
+
+function Component({ gender }) {
+  const translation = gt(`The ${derive(getSubject(gender))} is playing.`);
+  return <p>{translation}</p>;
+}
+// "The boy is playing"  -> "El niño está jugando"
+// "The girl is playing" -> "La niña está jugando"
+```
+
+```tsx title="WithVariables.tsx"
+import { derive, declareVar, gt } from 'gt-react';
+
+function getGreeting(name) {
+  return name ? `Hello, ${declareVar(name)}` : 'Hello, stranger';
+}
+
+function Component({ name }) {
+  const translation = gt(`${derive(getGreeting(name))}! How are you?`);
+  return <p>{translation}</p>;
+}
+```
+
+```tsx title="ComplexFunction.tsx"
+import { derive, gt } from 'gt-react';
+
+function getStatusMessage(status, priority) {
+  if (status === 'complete') {
+    return priority === 'high' ? 'Urgent task completed' : 'Task completed';
+  } else if (status === 'pending') {
+    return priority === 'high' ? 'Urgent task pending' : 'Task pending';
+  }
+  return 'Task status unknown';
+}
+
+function Component({ status, priority }) {
+  const message = gt(`${derive(getStatusMessage(status, priority))}.`);
+  return <p>{message}</p>;
+}
+```
+
+```tsx title="InlineExpression.tsx"
+import { derive, gt } from 'gt-react';
+
+function Component({ gender }) {
+  const message = gt(`The ${derive(gender === 'male' ? 'boy' : 'girl')} is playing.`);
+  return <p>{message}</p>;
+}
+```
+
+## Notes [#notes]
+
+- Use `derive` judiciously — it can exponentially increase translation entries.
+- All possible outcomes must be statically analyzable at build time.
+- Wrap dynamic values within derived functions in [`declareVar`](/docs/react/reference/functions/declare-var).
+- For the JSX form, see the [`<Derive>`](/docs/react/reference/components/derive) component.

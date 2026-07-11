@@ -1,116 +1,176 @@
 ---
+
 title: Configuration
-description: Config docs for the gt.config.json file
+description: Configure the General Translation CLI with the gt.config.json file. API reference for gt.config.json.
+
 ---
 
-## Overview
+The `gt.config.json` file configures what the CLI translates and where results are saved. Place it at the root of your project. Create it with [`gt init`](/docs/cli/reference/commands/init) or [`gt configure`](/docs/cli/reference/commands/configure), or write it by hand.
 
-The `gt.config.json` file is used to configure your project's GT settings. It should be placed in the root of your project.
+*Note: Add the [JSON Schema](https://assets.gtx.dev/config-schema.json) with a `$schema` key for editor validation and autocompletion.*
 
-The CLI setup wizard [`npx gt init`](/docs/cli/init) will create a `gt.config.json` file for you in your project.
+## Options [#options]
 
-## Configuration
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`defaultLocale`](#default-locale) | Locale your source content is written in. | `string` | Yes | `en` |
+| [`locales`](#locales) | Target locales to translate into. | `string[]` | Yes | — |
+| [`files`](#files) | Which files to translate and where to save them. | `object` | Yes | — |
+| [`publish`](#publish) | Publish translated files to the CDN. | `boolean` | Yes | `false` |
+| [`stageTranslations`](#stage) | Require human review before translations are served. | `boolean` | Yes | `false` |
+| [`requiresReview`](#requires-review) | Default review-gating policy for all translated files. | `boolean` | Yes | `false` |
+| [`src`](#src) | Glob patterns for source files scanned for inline content. | `string[]` | Yes | See [`src`](#src) |
+| [`dictionary`](#dictionary) | Path to a dictionary file. | `string` | Yes | — |
+| [`branchOptions`](#branch-options) | Branch-based translation tracking settings. | `object` | Yes | — |
+| [`customMapping`](#custom-mapping) | Locale aliases and property overrides. | `object` | Yes | — |
 
-The `gt.config.json` file accepts the following properties, but is not limited to them:
+## `defaultLocale` [#default-locale]
 
-- `defaultLocale`: The default locale for your project. This is the locale that your source content is written in. This is also the fallback locale for your project (if using `gt-next` or `gt-react`).
+**Type** `string` · **Optional** · **Default** `en`
 
-- `locales`: An array of locales for your project. These are the locales that you want to translate your project into. See the [supported locales](/docs/platform/supported-locales) for more information.
-  If you are using `gt-next` or `gt-react`, these are also the locales that your app supports.
-
-- `files`: This is an object that contains information about the content you want to translate.
-
-- `publish`: An optional boolean flag. When `true`, translated files are published to the GT CDN after running `translate`, `upload`, or `save-local`. Defaults to `false` (no publishing). Can also be set per-command with `--publish`. See [CDN publishing](#cdn-publishing) for details.
-
-- `stageTranslations`: An optional boolean flag that indicates whether your project is configured to use human review.
-
-- `src`: An optional array of file glob patterns for your source files. By default, set to:
-
-```json
-[
-  "src/**/*.{js,jsx,ts,tsx}",
-  "app/**/*.{js,jsx,ts,tsx}",
-  "pages/**/*.{js,jsx,ts,tsx}",
-  "components/**/*.{js,jsx,ts,tsx}"
-]
-```
-
-- `dictionary`: An optional string that specifies the relative path to the dictionary file.
-
-- `branchOptions`: An optional object for configuring branch-based translation tracking. See [branching](/docs/cli/branching) for more details.
-
-<Callout type="info">
-  To help validate your `gt.config.json` file, you can use the [JSON Schema](https://assets.gtx.dev/config-schema.json) for the CLI.
-
-Add it to the top of your `gt.config.json` file:
-
-```json title="gt.config.json" copy
-{
-  "$schema": "https://assets.gtx.dev/config-schema.json"
-}
-```
-
-</Callout>
-
-Here is a skeleton of the `gt.config.json` file:
+The locale your source content is written in. This is the locale the CLI translates from, and the fallback locale when you use `gt-next` or `gt-react`.
 
 ```json title="gt.config.json"
 {
-  "$schema": "https://assets.gtx.dev/config-schema.json",
-  "defaultLocale": "en",
-  "locales": ["fr", "es"],
+  "defaultLocale": "en"
+}
+```
+
+## `locales` [#locales]
+
+**Type** `string[]` · **Optional** · **Default** —
+
+The target locales to translate into. See [supported locales](/docs/platform/dashboard/reference/supported-locales) for accepted codes. When you use `gt-next` or `gt-react`, these are also the locales your app supports.
+
+```json title="gt.config.json"
+{
+  "locales": ["fr", "es", "ja"]
+}
+```
+
+## `files` [#files]
+
+**Type** `object` · **Optional** · **Default** —
+
+An object with one key per file type to translate. Each type maps to an object of settings. See [File formats](/docs/cli/reference/formats/gt-jsx-files) for per-type guidance.
+
+### Supported file types
+
+| Key | File type | Reference |
+| --- | --- | --- |
+| `gt` | General Translation files for `gt-next`, `gt-react`, and `gt-react-native`. | [GT](/docs/cli/reference/formats/gt-jsx-files) |
+| `json` | JSON files. | [JSON](/docs/cli/reference/formats/json-files) |
+| `yaml` | YAML files (`.yaml` and `.yml`). | [YAML](/docs/cli/reference/formats/yaml-files) |
+| `pot` | PO/POT gettext files. | [PO / POT](/docs/cli/reference/formats/po-pot-files) |
+| `mdx` | MDX files. | [MDX and Markdown](/docs/cli/reference/formats/mdx-md-files) |
+| `md` | Markdown files. | [MDX and Markdown](/docs/cli/reference/formats/mdx-md-files) |
+| `ts` | TypeScript files. | [TypeScript and JavaScript](/docs/cli/reference/formats/ts-js-files) |
+| `js` | JavaScript files. | [TypeScript and JavaScript](/docs/cli/reference/formats/ts-js-files) |
+| `html` | HTML files. | [HTML](/docs/cli/reference/formats/html-files) |
+| `txt` | Plain text files. | [Plain text](/docs/cli/reference/formats/plain-text-files) |
+| `twilioContentJson` | Twilio Content JSON templates. | — |
+
+### File type keys
+
+Each file type accepts the following keys.
+
+- `include` — an array of glob patterns matching files to translate. Use the `[locale]` placeholder: the CLI replaces it with `defaultLocale` to find source files, and with each target code to save translations. Required for every type except `gt`.
+- `exclude` — an array of glob patterns to skip. The `[locale]` placeholder is optional here; use `[locales]` to exclude a path across all locales.
+- `transform` — remaps output file names. A string with a `*` wildcard remaps the extension (for example `*.[locale].json`). An object with `match` and `replace` supports regex capture groups and the `{locale}` placeholder.
+- `transformationFormat` — outputs translated files in a different format than the source. For example, `pot` sources with `"transformationFormat": "PO"` produce `.po` files.
+- `requiresReview` — gates translated files behind human review. Accepts `true`/`false`, or an object with `include` and `exclude` glob arrays where `exclude` takes precedence.
+- `output` — for `gt` files only, the local save path with a `[locale]` placeholder, such as `public/i18n/[locale].json`.
+- `parsingFlags` — for `gt` files only, flags that control inline content parsing. See [`autoderive`](/docs/cli/guides/autoderive) and [automatic JSX injection](/docs/cli/guides/auto-jsx).
+
+```json title="gt.config.json"
+{
   "files": {
     "gt": {
-      "output": "..."
-    },
-    "json": {
-      "include": [...]
+      "output": "public/i18n/[locale].json"
     },
     "mdx": {
-      "include": [...]
+      "include": ["content/docs/[locale]/**/*.mdx"],
+      "transform": "*.[locale].mdx"
     },
-    "md": {
-      "include": [...]
+    "json": {
+      "include": ["resources/[locale]/**/*.json"],
+      "exclude": ["resources/[locale]/exclude/**/*.json"]
     }
-  },
+  }
+}
+```
+
+## `publish` [#publish]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+When `true`, translated files are published to the General Translation CDN after `translate`, `upload`, or `save-local`. See [CDN publishing](#cdn-publishing) for per-file and per-command control.
+
+```json title="gt.config.json"
+{
+  "publish": true
+}
+```
+
+## `stageTranslations` [#stage]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+When `true`, translations require human review before they are served. The CLI sets this automatically the first time you run [`gt stage`](/docs/cli/reference/commands/stage). Once enabled, running `translate` without first staging a version causes the CLI to exit with an error.
+
+## `requiresReview` [#requires-review]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+The project-wide default for review gating: when `true`, translated artifacts require approval before the client uses them. This must be a boolean — use the per-file [`files.<type>.requiresReview`](#files) key (which accepts a boolean or `{ include, exclude }` globs) for glob-scoped overrides. A per-file policy takes precedence; files matching neither an `include` nor `exclude` glob fall back to this top-level default.
+
+```json title="gt.config.json"
+{
+  "requiresReview": true
+}
+```
+
+## `src` [#src]
+
+**Type** `string[]` · **Optional** · **Default** `src`, `app`, `pages`, `components` globs
+
+An array of glob patterns for the source files scanned for inline content when you use `gt-next`, `gt-react`, or `gt-react-native`.
+
+```json title="gt.config.json"
+{
   "src": [
-    "src/**/*.{ts,tsx}",
-  ],
+    "src/**/*.{js,jsx,ts,tsx}",
+    "app/**/*.{js,jsx,ts,tsx}",
+    "pages/**/*.{js,jsx,ts,tsx}",
+    "components/**/*.{js,jsx,ts,tsx}"
+  ]
+}
+```
+
+## `dictionary` [#dictionary]
+
+**Type** `string` · **Optional** · **Default** —
+
+The relative path to a dictionary file. When omitted, the CLI looks for `dictionary.[json|ts|js]` in `./src` and `./`.
+
+```json title="gt.config.json"
+{
   "dictionary": "./dictionary.json"
 }
 ```
 
-### Locale aliasing
+## `branchOptions` [#branch-options]
 
-In the case you want to alias a locale (e.g. `cn` instead of `zh`), you can specify a custom mapping in the `gt.config.json` file.
+**Type** `object` · **Optional** · **Default** —
 
-```json title="gt.config.json"
-{
-  "customMapping": {
-    // The alias locale
-    "cn": {
-      "code": "zh" // The official BCP 47 locale code
-    }
-  }
-}
-```
+Configures branch-based translation tracking. See [Track translations by branch](/docs/cli/guides/branching). CLI flags take precedence over these values.
 
-You can also specify different attributes for the aliased locale.
-
-```json title="gt.config.json"
-{
-  "customMapping": {
-    "cn": {
-      "code": "zh",
-      "name": "Mandarin"
-    }
-  }
-}
-```
-
-### Branch options
-
-If you want to configure branching settings in your config file, you can use the `branchOptions` object:
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `enabled` | Enable branching for the Project. | `boolean` | Yes | `false` |
+| `currentBranch` | Override the detected branch name. | `string` | Yes | — |
+| `autoDetectBranches` | Detect incoming and checked-out branch relationships. | `boolean` | Yes | `true` |
+| `remoteName` | Git remote used for branch detection. | `string` | Yes | `origin` |
 
 ```json title="gt.config.json"
 {
@@ -123,549 +183,30 @@ If you want to configure branching settings in your config file, you can use the
 }
 ```
 
-| Property             | Description                                                                   | Default     |
-| -------------------- | ----------------------------------------------------------------------------- | ----------- |
-| `enabled`            | Enable branching for the project                                              | `false`     |
-| `currentBranch`      | Override the current branch name (instead of auto-detect)                     | `undefined` |
-| `autoDetectBranches` | Automatically detect branch relationships (incoming and checked-out branches) | `true`      |
-| `remoteName`         | The git remote name used for branch detection                                 | `"origin"`  |
+## `customMapping` [#custom-mapping]
 
-<Callout type="info">
-  CLI flags take precedence over config file options. See the [branching guide](/docs/cli/branching) for more details.
-</Callout>
+**Type** `object` · **Optional** · **Default** —
 
----
-
-## `files`
-
-### Supported file types
-
-`files` should contain a key for each file type that you want to translate.
-You can configure your project to mix and match different file types, and have them all be translated.
-We currently support the following file types:
-
-- `gt`: General Translation files. Used by [`gt-next`](/docs/next), [`gt-react`](/docs/react), and [`gt-react-native`](/docs/react-native).
-- `json`: JSON files.
-- `pot`: PO/POT (gettext) files.
-- `yaml`: YAML files.
-- `mdx`: Markdown component (MDX) files.
-- `md`: Markdown (MD) files.
-- `js`: JavaScript files.
-- `ts`: TypeScript files.
-- `html`: HTML files.
-- `txt`: Text files.
-- `twilioContentJson`: Twilio Content JSON files. Used for translating [Twilio Content Templates](https://www.twilio.com/docs/content).
-
-Each file type should correspond to an object that contains one or more of the following keys:
-
-- `include`
-- `exclude`
-- `transform`
-- `transformationFormat`
-- `requiresReview`
-- `output`
-
-### `include`
-
-If used, the value of the `include` key should be an array of glob patterns that match the files you want to translate.
-
-You must use the `[locale]` placeholder in your glob patterns to ensure that source files are found correctly, and translated files are saved to the correct location.
-The CLI tool will replace the `[locale]` placeholder with the `defaultLocale` value when searching for translatable files.
-
-The CLI tool will save translated files to the corresponding path, with the `[locale]` placeholder replaced with the target locale code.
-
-```json
-{
-  "include": ["docs/[locale]/**/*.json"]
-}
-```
-
-### `exclude`
-
-If used, the value of the `exclude` key should be an array of glob patterns that match the files you want to exclude from translation.
-
-The pattern is the same as the `include` pattern, with the exception that the `[locale]` placeholder is optional. If provided, it will be replaced with the `defaultLocale` value.
-
-```json
-{
-  "exclude": ["docs/[locale]/exclude/**/*.json"]
-}
-```
-
-If you want to exclude files from translation for all locales, you can use the `[locales]` placeholder instead of `[locale]`.
-
-```json
-{
-  "exclude": ["docs/[locales]/exclude/**/*.json"]
-}
-```
-
-### `transform`
-
-`transform` can either be a string or an object.
-
-If `transform` is a string, it defines a remapping of the file name. It should contain a wildcard `*` that will be replaced with the original file name (anything before the first `.`).
-
-For example, if you want the extension of all of your translated files to have `.[locale].json` instead of `.json`, you can use the following configuration:
-
-```json
-{
-  "transform": "*.[locale].json"
-}
-```
-
-Alternatively, if `transform` is an object, it should contain the following properties:
-
-- `match` (optional): A regex pattern to match strings, supports capture groups
-- `replace` (required): String or regex pattern to replace the match with
-
-Both values support regex capture groups and are mapped to the full relative file name of the output file.
-
-```json
-{
-  "transform": {
-    "match": "^(.*)$",
-    "replace": "{locale}/$1"
-  }
-}
-```
-
-For example, the above configuration will cause translated files to be saved under a target locale subdirectory.
-
-#### Special placeholders
-
-The transform option supports several special placeholders that can be used in both `match` and `replace` strings:
-
-- `{locale}`: The locale code placeholder that behaves differently depending on context:
-  - **In `match` strings**: Replaced with the default locale code (e.g., `"en"`) to help identify source files
-  - **In `replace` strings**: Replaced with the target locale code (e.g., `"fr"`, `"es"`) for the translated output files
-
-For example, if your default locale is `"en"` and you're translating to `"fr"`:
-
-- A `match` pattern of `"content/{locale}/file.md"` becomes `"content/en/file.md"`
-- A `replace` pattern of `"content/{locale}/file.md"` becomes `"content/fr/file.md"`
-
-Additionally, any other property from `getLocaleProperties` can be used as a placeholder with the same context-dependent behavior.
-
-<Callout type="info">
-
-This is useful if your docs or i18n framework requires a specific file extension for translated files instead of subdirectory-based locale routing.
-
-</Callout>
-
-### `transformationFormat`
-
-The `transformationFormat` key specifies a different file format for the translated output files. This is useful when your source files are templates that should produce a different file type after translation.
-
-For example, POT (PO Template) files are source templates, but the translated output should be PO files:
-
-```json
-{
-  "files": {
-    "pot": {
-      "include": ["locales/[locale]/**/*.pot"],
-      "transformationFormat": "PO"
-    }
-  }
-}
-```
-
-The value should be a string matching one of the supported file format keys (e.g., `"PO"`).
-
-### `requiresReview`
-
-The `requiresReview` key gates the translated versions of matched files behind a human-review step before they are served. It accepts either a boolean or an object of glob string arrays.
-
-When set to `true`, every translated file of that type is withheld from download until it is approved:
-
-```json
-{
-  "files": {
-    "json": {
-      "include": ["json_files/[locale]/**/*.json"],
-      "requiresReview": true
-    }
-  }
-}
-```
-
-The object form opts path groups in or out with globs. `exclude` takes precedence over `include`, and files matching neither inherit the top-level `requiresReview` default:
-
-```json
-{
-  "files": {
-    "json": {
-      "include": ["json_files/[locale]/**/*.json"],
-      "requiresReview": {
-        "include": ["json_files/[locale]/legal/**/*.json"],
-        "exclude": ["json_files/[locale]/drafts/**/*.json"]
-      }
-    }
-  }
-}
-```
-
-You can also set a top-level `requiresReview` boolean in your configuration to apply a default review policy across all file types. Per-file-type config overrides the default.
-
-<Callout type="info">
-**Note:** File-type `requiresReview` config sets the review policy for matched files without changing individual content hashes. To gate a single component or string, use the `requiresReview` / `$requiresReview` prop instead.
-</Callout>
-
-### `output`
-
-This key is exclusively used for General Translation files, specifically for saving translations locally. If you are using the GT CDN, this key is not needed.
-
-The value should be a string containing a `[locale]` placeholder indicating the location where the translations will be saved.
-
-For example, if you want to your Spanish translations to a file called `ui.es.json` in the `public/i18n` directory, you should use the following string:
-
-```json
-{
-  "output": "public/i18n/[locale].json"
-}
-```
-
-<Callout type="info">
-
-This option should only be used if you are using `gt-next` or `gt-react`, and want to save translations locally, instead of using the GT CDN.
-
-Currently, only one file for each locale can be generated.
-
-</Callout>
-
----
-
-### File type: `gt` [#gt]
-
-**Supported Keys**
-
-- `output` (Required)
-
-**Example**
+Aliases a locale to a different code, and optionally overrides its properties. For example, alias `cn` to the official code `zh`.
 
 ```json title="gt.config.json"
 {
-  "defaultLocale": "en",
-  "locales": ["fr", "es"],
-  "files": {
-    "gt": {
-      "output": "public/i18n/[locale].json"
+  "customMapping": {
+    "cn": {
+      "code": "zh",
+      "name": "Mandarin"
     }
   }
 }
 ```
-
-This configuration will tell the CLI tool to save your French and Spanish translations to the `public/i18n/[locale].json` directory.
-
-By default, the CLI tool will not publish your translations to the GT CDN with this configuration.
-
----
-
-### File type: `json` [#json]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["fr", "es"],
-  "files": {
-    "json": {
-      "include": ["json_files/[locale]/**/*.json"],
-      "exclude": ["json_files/[locale]/exclude/**/*.json"]
-    }
-  }
-}
-```
-
-Let's say your project's default locale is `en`, and you want to translate your project into `fr` and `es`.
-
-With this configuration, the CLI will search for all JSON files under the subdirectory `json_files/en/` and save the translated files to `json_files/fr/` and `json_files/es/`.
-
-It will ignore any files in the subdirectory `json_files/en/exclude/`.
-
----
-
-### File type: `yaml` [#yaml]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["fr", "es"],
-  "files": {
-    "yaml": {
-      "include": ["yaml_files/[locale]/**/*.yaml"],
-      "exclude": ["yaml_files/[locale]/exclude/**/*.yaml"]
-    }
-  }
-}
-```
-
-Let's say your project's default locale is `en`, and you want to translate your project into `fr` and `es`.
-
-With this configuration, the CLI will search for all YAML files under the subdirectory `yaml_files/en/` and save the translated files to `yaml_files/fr/` and `yaml_files/es/`.
-
-It will ignore any files in the subdirectory `yaml_files/en/exclude/`.
-
----
-
-### File type: `mdx` [#mdx]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["ja"],
-  "files": {
-    "mdx": {
-      "include": ["content/docs/[locale]/**/*.mdx"],
-      "transform": "*.[locale].mdx"
-    }
-  }
-}
-```
-
-This configuration will tell the CLI tool to search for all MDX files under the `content/docs/en` directory and save the translated files to the `content/docs/ja` directory.
-
-The `transform` key causes the extension of the translated files to be changed to `.ja.mdx`.
-
----
-
-### File type: `md` [#md]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["ja"],
-  "files": {
-    "md": {
-      "include": ["content/docs/[locale]/**/*.md"],
-      "exclude": ["content/docs/[locale]/exclude/**/*.md"],
-      "transform": "*.[locale].md"
-    }
-  }
-}
-```
-
-This configuration will tell the CLI tool to search for all MD files under the `content/docs/en` directory and save the translated files to the `content/docs/ja` directory.
-
-The `transform` key causes the extension of the translated files to be changed to `.ja.md`.
-
-All files in the `content/docs/en/exclude` directory will be ignored.
-
----
-
-### File type: `js` [#js]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["fr", "es"],
-  "files": {
-    "js": {
-      "include": ["scripts/[locale]/**/*.js"]
-    }
-  }
-}
-```
-
-This configuration will tell the CLI tool to search for all JavaScript files under the `scripts/en` directory and save the translated files to the `scripts/fr` and `scripts/es` directories.
-
----
-
-### File type: `ts` [#ts]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["fr", "es"],
-  "files": {
-    "ts": {
-      "include": ["scripts/[locale]/**/*.ts"]
-    }
-  }
-}
-```
-
-This configuration will tell the CLI tool to search for all TypeScript files under the `scripts/en` directory and save the translated files to the `scripts/fr` and `scripts/es` directories.
-
----
-
-### File type: `html` [#html]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["ja"],
-  "files": {
-    "html": {
-      "include": ["content/docs/[locale]/**/*.html"],
-      "exclude": ["content/docs/[locale]/exclude/**/*.html"],
-      "transform": "*.[locale].html"
-    }
-  }
-}
-```
-
-This configuration will tell the CLI tool to search for all HTML files under the `content/docs/en` directory and save the translated files to the `content/docs/ja` directory.
-
-The `transform` key causes the extension of the translated files to be changed to `.ja.html`.
-
-All files in the `content/docs/en/exclude` directory will be ignored.
-
----
-
-### File type: `txt` [#txt]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["ja"],
-  "files": {
-    "txt": {
-      "include": ["content/docs/[locale]/**/*.txt"],
-      "exclude": ["content/docs/[locale]/exclude/**/*.txt"],
-      "transform": "*.[locale].txt"
-    }
-  }
-}
-```
-
-This configuration will tell the CLI tool to search for all text files under the `content/docs/en` directory and save the translated files to the `content/docs/ja` directory.
-
-The `transform` key causes the extension of the translated files to be changed to `.ja.txt`.
-
-All files in the `content/docs/en/exclude` directory will be ignored.
-
----
-
-### File type: `twilioContentJson` [#twilioContentJson]
-
-**Supported Keys**
-
-- `include` (Required)
-- `exclude` (Optional)
-- `transform` (Optional)
-
-**Example**
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["es", "fr"],
-  "files": {
-    "twilioContentJson": {
-      "include": ["twilio/[locale]/**/*.json"]
-    }
-  }
-}
-```
-
-This configuration will tell the CLI tool to search for all Twilio Content JSON files under the `twilio/en` directory and save the translated files to the `twilio/es` and `twilio/fr` directories.
-
-Twilio Content JSON files are structured templates used by [Twilio's Content Template Builder](https://www.twilio.com/docs/content) for WhatsApp, SMS, and RCS messaging. The CLI translates the user-facing string values (body text, button labels, card titles) while preserving the template structure, variable placeholders, and non-translatable fields.
-
----
 
 ## CDN publishing [#cdn-publishing]
 
-By default, the CLI does not publish translated files to the GT CDN. If you have enabled the CDN in your project settings, you can control publishing globally, per-file, or per-command.
+By default the CLI does not publish to the CDN. When the CDN is enabled in your Project settings, you can control publishing globally, per file, or per command.
 
-### Global publish flag
-
-Set `publish` at the top level to publish **all** translated files to the CDN:
-
-```json title="gt.config.json"
-{
-  "publish": true
-}
-```
-
-You can also pass `--publish` to the `translate`, `upload`, or `save-local` commands:
-
-```bash
-npx gt translate --publish
-```
-
-### GT JSON publish flag
-
-To publish only GT's internal translation format, use the `publish` key under `files.gt`:
-
-```json title="gt.config.json"
-{
-  "files": {
-    "gt": {
-      "output": "public/i18n/[locale].json",
-      "publish": true
-    }
-  }
-}
-```
-
-### Per-file publish control
-
-For other file types (`json`, `yaml`, `mdx`, `md`, `po`, `xliff`, `csv`, `properties`), you can control publishing per-file by using an object in the `include` array instead of a plain glob string:
+- **Global:** set top-level [`publish`](#publish) to `true`, or pass `--publish` to `translate`, `upload`, or `save-local`.
+- **GT files only:** set `publish: true` under `files.gt`.
+- **Per file:** in an `include` array, replace a glob string with an object of `pattern` and `publish` to opt matched files in or out.
 
 ```json title="gt.config.json"
 {
@@ -680,28 +221,13 @@ For other file types (`json`, `yaml`, `mdx`, `md`, `po`, `xliff`, `csv`, `proper
 }
 ```
 
-Each entry in `include` can be either:
-- A **string** — a glob pattern (no publish preference; uses the global `publish` setting)
-- An **object** with `pattern` (glob) and `publish` (boolean) — explicitly opts the matched files in or out
+For any file, the CLI resolves publishing in this order: an explicit `"publish": false` opt-out, then an explicit `"publish": true` opt-in, then the global `publish` setting. If no publish configuration exists at any level, the publish step is skipped.
 
-### Resolution order
-
-For any given file, the CLI resolves whether to publish in this order:
-
-1. **Explicit opt-out** — file matches an include entry with `"publish": false` → not published or removed from the CDN
-2. **Explicit opt-in** — file matches an include entry with `"publish": true` → published to the CDN
-3. **Global fallback** — uses the top-level `publish` setting (defaults to `false` if unset)
-
-If no publish configuration exists at any level, the publish step is skipped entirely.
-
----
-
-## Example configuration
-
-Let's break down an example `gt.config.json` file:
+## Example configuration [#example]
 
 ```json title="gt.config.json"
 {
+  "$schema": "https://assets.gtx.dev/config-schema.json",
   "defaultLocale": "en",
   "locales": ["fr", "es"],
   "files": {
@@ -720,22 +246,4 @@ Let's break down an example `gt.config.json` file:
 }
 ```
 
-In this example, we are translating the following files with a single call to [`gt translate`](/docs/cli/translate):
-
-- All MDX files in the `content/docs/en` directory.
-- All JSON files in the `resources/en` directory (excluding any files in the `resources/en/exclude` directory).
-- All inline `<T>` components in your React or Next.js project.
-- Your `dictionary.[json|js|ts]` file.
-
-GT: Translations will be saved to `public/i18n/es.json` and `public/i18n/fr.json`. These files can be loaded using [`loadTranslations`](/docs/react/api/config/load-translations).
-
-MDX: Translations will be saved to the `content/docs/fr` and `content/docs/es` directories.
-The file extensions will be changed to `.fr.mdx` and `.es.mdx` respectively (from `.mdx`).
-
-JSON: Translations will be saved to the `resources/fr` and `resources/es` directories.
-
----
-
-## Next steps
-
-Learn how to use the [init command](/docs/cli/init) to generate this configuration file.
+A single [`gt translate`](/docs/cli/reference/commands/translate) run with this config translates the MDX files under `content/docs/en` (saved to `content/docs/fr` and `content/docs/es` as `.fr.mdx` and `.es.mdx`), the JSON files under `resources/en` (excluding `resources/en/exclude`), and any inline `<T>` components and dictionary entries. GT translations are saved to `public/i18n/fr.json` and `public/i18n/es.json`.

@@ -1,0 +1,126 @@
+---
+
+title: Manage translations
+description: Manage General Translation Sanity translations with imports, reference patching, bulk publishing, and field behavior.
+
+---
+
+Manage generated Sanity translations after setup with the plugin's translation tools.
+
+This guide covers the site-wide **Translations** tool, reference patching, bulk publishing, field behavior, and custom serialization.
+
+## Use the Translations tool [#translations-tool]
+
+The plugin registers a site-wide **Translations** tool that lists every translatable document. From it you can:
+
+- Generate translations for all documents (**Translate All**).
+- Import all ready translations, overwriting existing ones (**Import All**).
+- Import only translations not yet recorded in the source document's metadata (**Import Missing**).
+- Patch references across translated documents (**Patch Document References**).
+- Publish translated documents whose source document is published (**Publish Translations**).
+
+Turn on **Auto-refresh** to poll translation status, or use **Refresh Status** to check once.
+
+## Import translations [#import]
+
+Generated translations must be imported into Sanity before they appear as translated documents. On import, the plugin merges the translated fields with the source document, so fields that were not sent for translation are carried over.
+
+- For a single document, import from the **Translate** action or the optional **General Translation** tab.
+- For many documents, use **Import All** or **Import Missing** on the Translations tool.
+
+## Patch references [#patch-references]
+
+Translated documents may reference other documents. Reference patching rewrites each reference `_ref` to point to the referenced document's translation for the same locale, when one exists. The plugin resolves these from the `translation.metadata` documents.
+
+Use **Patch Document References** on the Translations tool to run this across existing translated documents. In the single-document dialog, it also runs automatically after import (auto-patch is on by default there).
+
+## Publish translations [#publish]
+
+Use **Publish Translations** to publish translated documents in bulk. The plugin publishes only translation documents whose source document is published. This is useful after importing many translations or patching references across a locale.
+
+## Manage field behavior [#field-behavior]
+
+Use field matchers when some fields should not be translated normally. Each matcher targets fields with a JSONPath `property` expression and, optionally, a document `_id`.
+
+### Copy fields without translating
+
+Use `ignoreFields` for fields that should be copied from the source document but not sent to the translation API, such as categories, tags, or internal metadata.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  ignoreFields: [
+    { fields: [{ property: '$.category' }] },
+    { fields: [{ property: '$..linkType' }] },
+  ],
+});
+```
+
+### Copy fields and make them unique
+
+Use `dedupeFields` for fields that should start from the source value but become unique per locale. This is common for slugs.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  dedupeFields: [{ fields: [{ property: '$.slug', type: 'slug' }] }],
+});
+```
+
+For a Sanity slug, `{ _type: 'slug', current: 'about' }` becomes `{ _type: 'slug', current: 'about-es' }` for Spanish. If an editor later changes the translated slug, future imports preserve that edited value.
+
+### Remove fields from translations
+
+Use `skipFields` for fields that should not be copied to translated documents at all, such as source-only metadata or slugs that editors set manually per language.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  skipFields: [
+    { fields: [{ property: '$.slug', type: 'slug' }] },
+    { fields: [{ property: '$.canonicalUrl' }] },
+  ],
+});
+```
+
+See the [field matcher reference](/docs/integrations/sanity/reference/plugin-configuration#field-matchers) for the full type.
+
+## Stop custom types from translating [#stop-types]
+
+By default, the plugin preserves a set of non-translatable schema types. Use `additionalStopTypes` to add your own custom types.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  additionalStopTypes: ['codeBlock', 'mux.video', 'mux.videoAsset'],
+});
+```
+
+See the full [default stop types](/docs/integrations/sanity/reference/plugin-configuration#stop-types).
+
+## Customize serialization [#serialization]
+
+The plugin converts documents to HTML for translation and back. Most projects do not need to change this. Use custom serializers only when your schema has custom marks or block types that the defaults do not handle.
+
+```ts title="sanity.config.ts"
+import { attachGTData, gtPlugin } from 'gt-sanity';
+
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'zh', 'ja'],
+  additionalSerializers: {
+    marks: {
+      link: ({ value, children }) =>
+        attachGTData(`<a>${children}</a>`, value, 'markDef'),
+      inlineMath: ({ value, children }) =>
+        attachGTData(`<span>${children}</span>`, value, 'markDef'),
+    },
+  },
+});
+```
+
+`attachGTData(html, data, 'markDef')` embeds the mark's data into the serialized HTML so the plugin can rebuild the mark when it merges the translation back. See the [serialization reference](/docs/integrations/sanity/reference/plugin-configuration#serialization).

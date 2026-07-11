@@ -1,0 +1,111 @@
+---
+
+title: Middleware
+description: Add locale routing and detection to a Next.js app with the General Translation createNextMiddleware helper from gt-next/middleware. API reference for createNextMiddleware.
+
+---
+
+`createNextMiddleware` from `gt-next/middleware` adds locale-based routing and detection to your Next.js app. It detects each visitor's locale, persists it in a cookie, and routes them to the localized version of the page — a French visitor to `/fr/about`, an English visitor to `/about`.
+
+Use this page as the reference for the middleware and its options. It is optional: `gt-next` translates content without it, but the middleware is what gives you locale-prefixed URLs and automatic detection.
+
+## Overview [#overview]
+
+Create the middleware and export it, along with a path matcher, from your middleware file. Place it in your project root — `proxy.ts` on Next.js 16+, or `middleware.ts` on Next.js 15 and below — at the same level as your `app/` directory, not inside it.
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware();
+
+export const config = {
+  // Match all paths except API routes, static files, and Next.js internals
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
+};
+```
+
+To use locale-prefixed URLs, move your pages under a dynamic `[locale]` segment in `app/`, so every page lives at `app/[locale]/...`.
+
+## How it works [#how-it-works]
+
+The middleware resolves each request's locale from these sources, in order:
+
+1. **URL locale** — a locale prefix in the pathname, such as `/es/about`.
+2. **Cookie** — the visitor's previously selected locale.
+3. **Browser headers** — the `Accept-Language` header.
+4. **Default locale** — your configured `defaultLocale` as the fallback.
+
+It then sets a locale cookie and, when `localeRouting` is enabled, redirects or rewrites to the correct localized path. By default the `defaultLocale` is not prefixed (`/about` stays `/about`), while other locales are (`/es/about`). Locale codes are standardized to canonical form when General Translation services are enabled, and unsupported locales produce a build-time warning.
+
+## Options [#options]
+
+`createNextMiddleware` takes a single options object. All fields are optional.
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`localeRouting`](#locale-routing) | Enable locale-based routing. | `boolean` | Yes | `true` |
+| [`prefixDefaultLocale`](#prefix-default-locale) | Prefix the default locale in the URL too. | `boolean` | Yes | `false` |
+| [`ignoreSourceMaps`](#ignore-source-maps) | Skip Next.js source-map requests. | `boolean` | Yes | `true` |
+| [`pathConfig`](#path-config) | Localized path overrides. | `object` | Yes | `{}` |
+
+*Note: to restrict which pathnames the middleware runs on, set [`pathRegex`](/docs/react/nextjs/config#path-regex) in `withGTConfig` — it is not a middleware option. The `matcher` in your exported `config` is what Next.js uses to decide when the middleware runs at all.*
+
+### `localeRouting` [#locale-routing]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+Enables locale-based routing and redirects. When `false`, the middleware still detects and stores the locale but does not add locale prefixes or rewrite paths.
+
+### `prefixDefaultLocale` [#prefix-default-locale]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+When `false` (the default), the default locale is served without a prefix (`/about`) while other locales are prefixed (`/es/about`). When `true`, every locale is prefixed, including the default (`/en/about`).
+
+### `ignoreSourceMaps` [#ignore-source-maps]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+When `true`, requests for Next.js source maps are passed through untouched.
+
+### `pathConfig` [#path-config]
+
+**Type** `object` · **Optional** · **Default** `{}`
+
+Maps shared paths to localized paths, so a route can have a different URL per locale. Each key is the shared path; each value is either a single localized path or a per-locale map. Dynamic segments such as `[id]` are preserved.
+
+```ts title="proxy.ts"
+export default createNextMiddleware({
+  pathConfig: {
+    // English: /products, Chinese: /zh/产品
+    '/products': {
+      zh: '/产品',
+    },
+    // Dynamic routes: /product/123, /zh/产品/123
+    '/product/[id]': {
+      zh: '/产品/[id]',
+    },
+  },
+});
+```
+
+## Example [#example]
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware({
+  prefixDefaultLocale: true,
+  pathConfig: {
+    '/about': {
+      fr: '/a-propos',
+    },
+  },
+});
+
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
+};
+```
+
+*Warning: test your matcher carefully. An overly broad matcher can cause redirect loops or break static assets.*

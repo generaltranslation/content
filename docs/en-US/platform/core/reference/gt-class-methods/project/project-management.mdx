@@ -1,0 +1,161 @@
+---
+
+title: Project and file management
+description: Manage a General Translation Project's info, branches, file moves, CDN publishing, and edit diffs from a GT instance. API reference for the Project and file management methods.
+
+---
+
+Lower-level methods on a [GT](/docs/platform/core/reference/gt-class/constructor) instance for managing a Project's metadata, branches, file lifecycle, and edit history. These are used mainly by tooling such as the [CLI](/docs/cli/quickstart); most applications use the higher-level [translation methods](/docs/platform/core/reference/gt-class-methods/translation/translate) instead.
+
+*Note: every method on this page calls the General Translation API and requires an API key on the `GT` instance. Locale codes in arguments are normalized to their canonical form before the request.*
+
+| Method | Description | Returns |
+| --- | --- | --- |
+| [`getProjectInfo`](#get-project-info) | Fetch the authenticated Project's name, locales, and review settings. | `Promise<ProjectInfoResult>` |
+| [`queryBranchData`](#query-branch-data) | Look up branch IDs by name. | `Promise<BranchDataResult>` |
+| [`createBranch`](#create-branch) | Create (or return an existing) branch. | `Promise<CreateBranchResult>` |
+| [`getOrphanedFiles`](#orphaned-files) | Find files on a branch that are no longer in the local file set. | `Promise<GetOrphanedFilesResult>` |
+| [`processFileMoves`](#process-moves) | Clone source files and translations under new file IDs after a move or rename. | `Promise<ProcessMovesResponse>` |
+| [`publishFiles`](#publish-files) | Publish or unpublish files on the CDN. | `Promise<PublishFilesResult>` |
+| [`submitUserEditDiffs`](#edit-diffs) | Submit user edits so future generations preserve intent. | `Promise<void>` |
+
+## `getProjectInfo` [#get-project-info]
+
+Fetches metadata for the authenticated Project: its name, organization, default and current locales, and review settings.
+
+```typescript
+getProjectInfo(options?: { timeout?: number }): Promise<ProjectInfoResult>
+```
+
+- **`options.timeout`** — optional request timeout in milliseconds.
+
+Returns a `ProjectInfoResult`:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `id` | Project ID. | `string` |
+| `name` | Project name. | `string` |
+| `orgId` | Organization ID. | `string` |
+| `defaultLocale` | The Project's default (source) locale. | `string` |
+| `currentLocales` | The Project's configured target locales. | `string[]` |
+| `autoApprove` | Whether translations are auto-approved without review. | `boolean` (optional) |
+
+```typescript
+const info = await gt.getProjectInfo();
+console.log(info.defaultLocale, info.currentLocales);
+```
+
+## `queryBranchData` [#query-branch-data]
+
+Resolves branch names to their branch records, and returns the Project's default branch.
+
+```typescript
+queryBranchData(query: { branchNames: string[] }): Promise<BranchDataResult>
+```
+
+- **`query.branchNames`** — the branch names to look up.
+
+Returns a `BranchDataResult` with `branches` (`{ id, name }[]`) and `defaultBranch` (`{ id, name }` or `null`).
+
+```typescript
+const { branches, defaultBranch } = await gt.queryBranchData({
+  branchNames: ['main'],
+});
+```
+
+## `createBranch` [#create-branch]
+
+Creates a branch, or returns the existing branch if one with that name already exists.
+
+```typescript
+createBranch(query: {
+  branchName: string;
+  defaultBranch: boolean;
+}): Promise<CreateBranchResult>
+```
+
+- **`query.branchName`** — the branch name to create.
+- **`query.defaultBranch`** — whether this branch is the Project's default branch.
+
+Returns a `CreateBranchResult` with the created `branch` (`{ id, name }`).
+
+```typescript
+const { branch } = await gt.createBranch({
+  branchName: 'feature/new-copy',
+  defaultBranch: false,
+});
+```
+
+## `getOrphanedFiles` [#orphaned-files]
+
+Returns files that exist on a branch but whose file IDs are not in the provided list — files that were likely moved, renamed, or deleted locally. Used for move detection.
+
+```typescript
+getOrphanedFiles(
+  branchId: string,
+  fileIds: string[],
+  options?: { timeout?: number }
+): Promise<GetOrphanedFilesResult>
+```
+
+- **`branchId`** — the branch to check.
+- **`fileIds`** — the current (non-orphaned) file IDs.
+- **`options.timeout`** — optional request timeout in milliseconds.
+
+Returns a `GetOrphanedFilesResult` with `orphanedFiles` (`{ fileId, versionId, fileName }[]`). Large `fileIds` lists are batched automatically, and a file is reported as orphaned only if it is absent from every batch.
+
+## `processFileMoves` [#process-moves]
+
+Preserves translations when files are moved or renamed by cloning the source files and their translations under new file IDs.
+
+```typescript
+processFileMoves(
+  moves: MoveMapping[],
+  options?: { branchId?: string; timeout?: number }
+): Promise<ProcessMovesResponse>
+```
+
+- **`moves`** — an array of `{ oldFileId, newFileId, newFileName }` mappings.
+- **`options.branchId`** — the branch the moves apply to.
+- **`options.timeout`** — optional request timeout in milliseconds.
+
+Returns a `ProcessMovesResponse` with per-move `results` and a `summary` (`{ total, succeeded, failed }`). Moves are batched automatically.
+
+```typescript
+const result = await gt.processFileMoves(
+  [{ oldFileId: 'abc123', newFileId: 'def456', newFileName: 'locales/en.json' }],
+  { branchId: 'main' }
+);
+```
+
+## `publishFiles` [#publish-files]
+
+Publishes or unpublishes source files and translations on the CDN.
+
+```typescript
+publishFiles(files: PublishFileEntry[]): Promise<PublishFilesResult>
+```
+
+Each entry is a `PublishFileEntry`:
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `fileId` | The file to publish or unpublish. | `string` | No |
+| `versionId` | The file version. | `string` | No |
+| `publish` | `true` to publish, `false` to unpublish. | `boolean` | No |
+| `branchId` | The branch the file belongs to. | `string` | Yes |
+| `fileName` | The file name. | `string` | Yes |
+
+Returns a `PublishFilesResult` with per-file `results` (`{ fileId, versionId, branchId, success, locale?, error? }`). A `locale` on a result indicates a translation; its absence indicates a source file.
+
+## `submitUserEditDiffs` [#edit-diffs]
+
+Submits user edits to existing translations so future generations preserve the user's intent.
+
+```typescript
+submitUserEditDiffs(payload: {
+  diffs: SubmitUserEditDiff[];
+}): Promise<void>
+```
+
+Each `SubmitUserEditDiff` includes `fileName`, `locale`, `diff`, `branchId`, `versionId`, `fileId`, and `localContent`. Locales are normalized to canonical form before submission, and diffs are batched automatically. Resolves when submission succeeds.

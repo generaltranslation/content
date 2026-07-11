@@ -1,0 +1,186 @@
+---
+
+title: initialize_gt
+description: Configure the General Translation Python SDK once for a Flask or FastAPI app. API reference for initialize_gt.
+
+---
+
+Configures General Translation for a Flask or FastAPI app. Call `initialize_gt` once at startup — before any other translation function — to build the translation manager, register per-request locale detection, and set up translation delivery.
+
+## Overview [#overview]
+
+Call `initialize_gt` with your app. Settings load from `gt.config.json` in the current working directory, and any keyword arguments override the file values. It returns the configured [`I18nManager`](/docs/python/reference/classes/i18n-manager) and registers it as the active manager, so later calls to [`t`](/docs/python/reference/functions/t) and the locale helpers work automatically.
+
+```python
+from flask import Flask
+from gt_flask import initialize_gt
+
+app = Flask(__name__)
+initialize_gt(app)
+```
+
+Signature:
+
+```python
+initialize_gt(
+    app,
+    *,
+    default_locale: str | None = None,
+    locales: list[str] | None = None,
+    custom_mapping: CustomMapping | None = None,
+    project_id: str | None = None,
+    cache_url: str | None = None,
+    version_id: str | None = None,
+    get_locale: Callable[..., str] | None = None,
+    load_translations: Callable[[str], dict[str, str]] | None = None,
+    eager_loading: bool = True,
+    config_path: str | None = None,
+    load_config: Callable[[str | None], GTConfig] | None = None,
+) -> I18nManager
+```
+
+Import `initialize_gt` from `gt_flask` or `gt_fastapi`, depending on your framework. The signature is identical in both. There is no core-library `initialize_gt`; without a framework, build an [`I18nManager`](/docs/python/reference/classes/i18n-manager) and call [`set_i18n_manager`](/docs/python/reference/functions/set-i18n-manager) instead.
+
+*Note: There is no `api_key` parameter. CDN delivery is driven by `project_id` and `cache_url`.*
+
+## How it works [#how-it-works]
+
+- **Config resolution.** It loads config (via `load_config`, an explicit `config_path`, or the default `gt.config.json`), then resolves each setting as the keyword argument, then the config value, then the library default.
+- **Manager setup.** It constructs an `I18nManager` with the resolved settings and registers it with `set_i18n_manager`.
+- **Locale detection.** On Flask it registers a `before_request` hook; on FastAPI it adds an HTTP middleware and wraps the app lifespan. Each request sets the locale from `get_locale` if provided, otherwise from the `Accept-Language` header.
+- **Eager loading.** When `eager_loading` is true and target locales are known, it loads all translations up front. On Flask this checks the `locales` argument you pass directly (not config-only locales); on FastAPI it runs inside the wrapped lifespan against the resolved locales.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`app`](#app) | The Flask or FastAPI application instance. | `Flask \| FastAPI` | No | — |
+| [`default_locale`](#default-locale) | Source and fallback locale. | `str` | Yes | Config, then `"en"` |
+| [`locales`](#locales) | Supported target locales. | `list[str]` | Yes | Config |
+| [`custom_mapping`](#custom-mapping) | Custom locale codes and property overrides. | `CustomMapping` | Yes | Config |
+| [`project_id`](#project-id) | Project ID; enables the CDN loader when set. | `str` | Yes | Config |
+| [`cache_url`](#cache-url) | CDN base URL override. | `str` | Yes | Config |
+| [`version_id`](#version-id) | Pinned translation version. | `str` | Yes | Config |
+| [`get_locale`](#get-locale) | Custom locale detection callback. | `(request) -> str` | Yes | `Accept-Language` |
+| [`load_translations`](#load-translations) | Custom loader returning translations for a locale. | `(locale: str) -> dict[str, str]` | Yes | — |
+| [`eager_loading`](#eager-loading) | Preload all translations at startup. | `bool` | Yes | `True` |
+| [`config_path`](#config-path) | Path to a `gt.config.json` file. | `str` | Yes | `gt.config.json` |
+| [`load_config`](#load-config) | Custom config loader replacing the default. | `(path: str \| None) -> GTConfig` | Yes | — |
+
+### `app` [#app]
+
+**Type** `Flask | FastAPI` · **Required**
+
+The application instance to configure. It is passed positionally; every other parameter is keyword-only.
+
+### `default_locale` [#default-locale]
+
+**Type** `str` · **Optional** · **Default** config value, then `"en"`
+
+The source locale your content is written in, and the fallback when no translation is found. Resolves to the argument, then `defaultLocale` in `gt.config.json`, then `"en"`.
+
+### `locales` [#locales]
+
+**Type** `list[str]` · **Optional** · **Default** config value
+
+The target locales to support. Resolves to the argument, otherwise the `locales` array in `gt.config.json`. The default locale is always included in the manager's locale set.
+
+### `custom_mapping` [#custom-mapping]
+
+**Type** `CustomMapping` · **Optional** · **Default** config value
+
+A mapping of custom locale codes to standard codes or property overrides. See [`customMapping`](/docs/python/reference/config#custom-mapping).
+
+### `project_id` [#project-id]
+
+**Type** `str` · **Optional** · **Default** config value
+
+Your General Translation Project ID. When set (and no `load_translations` is provided), it enables CDN translation loading at `{cache_url}/{project_id}/{locale}`.
+
+### `cache_url` [#cache-url]
+
+**Type** `str` · **Optional** · **Default** config value
+
+An override for the CDN base URL used to load translations. The General Translation CDN is `https://cdn.gtx.dev`.
+
+### `version_id` [#version-id]
+
+**Type** `str` · **Optional** · **Default** config value
+
+A pinned translation version to load. Corresponds to the `_versionId` config key and is returned by [`get_version_id`](/docs/python/reference/functions/get-version-id).
+
+### `get_locale` [#get-locale]
+
+**Type** `(request) -> str` · **Optional** · **Default** `Accept-Language` parsing
+
+A custom locale detection callback. It receives the request and returns a locale code, fully replacing the built-in `Accept-Language` detection. A falsy return value resolves to the default locale.
+
+```python
+def get_locale(request):
+    return request.args.get("lang") or "en"
+
+initialize_gt(app, get_locale=get_locale)
+```
+
+### `load_translations` [#load-translations]
+
+**Type** `(locale: str) -> dict[str, str]` · **Optional**
+
+A custom function that loads translations for a locale from your own source instead of the CDN. When provided, it overrides the CDN loader. It may be synchronous or return an awaitable.
+
+```python
+def load_translations(locale: str) -> dict[str, str]:
+    # Load translations from your own source
+    ...
+
+initialize_gt(app, load_translations=load_translations)
+```
+
+### `eager_loading` [#eager-loading]
+
+**Type** `bool` · **Optional** · **Default** `True`
+
+When true, all translations are loaded at startup rather than on first use. See the [How it works](#how-it-works) note on the Flask vs. FastAPI locale-source difference.
+
+### `config_path` [#config-path]
+
+**Type** `str` · **Optional** · **Default** `gt.config.json`
+
+The path to a `gt.config.json` file. Defaults to `gt.config.json` in the current working directory. An explicit path that does not exist raises `FileNotFoundError`.
+
+### `load_config` [#load-config]
+
+**Type** `(path: str | None) -> GTConfig` · **Optional**
+
+A custom config loader that replaces the default file loader. It receives `config_path` and returns a `GTConfig` dict.
+
+## Returns [#returns]
+
+**Type** `I18nManager`
+
+The configured [`I18nManager`](/docs/python/reference/classes/i18n-manager), already registered as the active manager.
+
+## Examples [#examples]
+
+```python
+# Minimal setup, reading gt.config.json
+from flask import Flask
+from gt_flask import initialize_gt
+
+app = Flask(__name__)
+initialize_gt(app)
+```
+
+```python
+# Explicit locales with a custom translation loader
+from fastapi import FastAPI
+from gt_fastapi import initialize_gt
+
+app = FastAPI()
+
+def load_translations(locale: str) -> dict[str, str]:
+    # Load translations from your own source
+    ...
+
+initialize_gt(app, default_locale="en", locales=["es", "fr"], load_translations=load_translations)
+```

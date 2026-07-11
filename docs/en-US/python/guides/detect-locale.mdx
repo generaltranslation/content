@@ -1,0 +1,48 @@
+---
+
+title: Detect the request locale
+description: Resolve each request's locale automatically or with your own logic in General Translation for Python.
+
+---
+
+Every [`t`](/docs/python/reference/functions/t) call translates into the current request's locale. `initialize_gt` registers locale detection for you; you can rely on the default or provide your own callback.
+
+## Use the default detection [#default]
+
+By default the SDK reads the `Accept-Language` header, parses its quality values, and picks the best match from your configured locales, falling back to the default locale. Flask does this in a `before_request` hook; FastAPI does it in HTTP middleware. No extra setup is required.
+
+Read the resolved locale anywhere in a request with [`get_locale`](/docs/python/reference/functions/get-locale).
+
+```python
+from gt_flask import get_locale  # or: from gt_fastapi import get_locale
+
+get_locale()
+```
+
+## Provide custom detection [#custom]
+
+To honor an explicit choice — a query parameter, cookie, or path prefix — pass a `get_locale` callback to `initialize_gt`. A custom callback fully replaces `Accept-Language` detection; it is not consulted when you supply your own.
+
+<Tabs items={['Flask', 'FastAPI']}>
+  <Tab value="Flask">
+    ```python
+    def detect_locale(request):
+        return request.args.get("lang") or request.cookies.get("locale") or "en"
+
+    initialize_gt(app, default_locale="en", locales=["es", "fr"], get_locale=detect_locale)
+    ```
+  </Tab>
+
+  <Tab value="FastAPI">
+    ```python
+    def detect_locale(request):
+        return request.query_params.get("lang") or request.cookies.get("locale") or "en"
+
+    initialize_gt(app, default_locale="en", locales=["es", "fr"], get_locale=detect_locale)
+    ```
+  </Tab>
+</Tabs>
+
+The value you return is stored as-is for the request. If your callback returns a falsy value such as `None`, the locale resolves to the configured default locale (not `Accept-Language`), so return an explicit fallback if you want different behavior.
+
+*Note: Unlike the built-in `Accept-Language` detection, a custom callback's return value is not re-validated against your configured `locales`. Return a supported locale, or resolve unsupported values yourself.*

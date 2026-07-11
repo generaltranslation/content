@@ -1,0 +1,61 @@
+---
+
+title: Translate strings
+description: Translate strings with variables, context, and options using the General Translation t and msg functions in Python.
+
+---
+
+The [`t`](/docs/python/reference/functions/t) function translates a string into the active request locale. Write your source language directly and interpolate values with ICU message syntax.
+
+## Translate with `t` [#t]
+
+Call `t` with your source string. Pass interpolation values as keyword arguments matching the ICU placeholders — not a dict.
+
+```python
+from gt_flask import t  # or: from gt_fastapi import t, or: from gt_i18n import t
+
+t("Hello, world!")
+t("Hello, {name}!", name="Alice")
+```
+
+`t` hashes the source message, looks up a cached translation for the current locale, interpolates your variables with ICU MessageFormat, and falls back to the interpolated source string when no translation exists. When the current locale does not require translation (for example, it matches the default locale), `t` skips the lookup and only interpolates.
+
+## Add context and options [#options]
+
+Reserved options use a leading underscore so they are not treated as interpolation variables. All three affect the message hash, so changing one produces a distinct translation entry.
+
+- `_context` — disambiguate a string that has more than one meaning.
+- `_id` — give an entry a stable identifier.
+- `_max_chars` — cap the character length of the translation.
+
+```python
+t("Bank", _context="the edge of a river")
+t("Welcome", _id="home.hero.title")
+t("This is a long message that may need truncation", _max_chars=20)
+```
+
+*Note: A user variable whose name starts with a single underscore (for example, `_name`) is still passed through as an interpolation variable — only the reserved keys above are filtered out.*
+
+## Insert dynamic values [#variables]
+
+For a value that should not be translated — such as a user name embedded in a sentence — wrap it with [`declare_var`](/docs/python/reference/functions/declare-var) so it is preserved across languages.
+
+```python
+from gt_flask import t, declare_var
+
+t(f"Signed in as {declare_var(email, name='email')}")
+```
+
+See [Declare variables and variants](/docs/python/guides/derive) for `declare_var`, `derive`, and related helpers.
+
+## Register a message for later [#msg]
+
+Use [`msg`](/docs/python/reference/functions/msg) to attach translation options to a string now and resolve it later, for example when you build a message in one place and render it in another. With no options `msg` returns the message unchanged; with options it returns an encoded `{interpolated}:{base64options}` string that [`m_fallback`](/docs/python/reference/functions/m-fallback) can later decode.
+
+```python
+from gt_i18n import msg, m_fallback
+
+encoded = msg("Save", _context="button")
+# ... later, at render time:
+m_fallback(encoded)
+```

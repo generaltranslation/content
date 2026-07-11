@@ -1,0 +1,89 @@
+---
+
+title: Server components
+description: Translate content in React Server Components with General Translation, and understand how gt-next behaves in server versus client components.
+
+---
+
+`gt-next` works in both React Server Components (RSC) and client components. The same `<T>` component and translation hooks are imported from `gt-next` in either place, and the library picks the right implementation for the environment. Server-only functions live in a separate `gt-next/server` entry point.
+
+Read this page to understand where translation runs and which imports are available in each kind of component. For the full server API, see [Server functions](/docs/react/nextjs/server-functions).
+
+## Server and client imports [#imports]
+
+The main `gt-next` entry resolves to a different implementation depending on where you import it:
+
+- In a **server component**, `<T>` and `<GTProvider>` are server implementations that load translations on the server. The hooks (`useGT`, `useTranslations`, `useMessages`) resolve their async server equivalents internally, so they work without a `'use client'` boundary.
+- In a **client component** (a file with `'use client'`), the same imports resolve to the shared `gt-react` implementations.
+
+Because the import path is identical, you rarely think about which one you get. Wrap JSX in `<T>` and it translates in place, whether the component renders on the server or the client.
+
+```tsx title="app/page.tsx"
+import { T } from 'gt-next';
+
+export default function Page() {
+  return (
+    <T>
+      <h1>Welcome</h1>
+      <p>This content is translated automatically.</p>
+    </T>
+  );
+}
+```
+
+*Note: server-only functions (`getGT`, `getLocale`, `tx`, and the rest of [`gt-next/server`](/docs/react/nextjs/server-functions)) cannot be imported into a client component. Importing them from a `'use client'` file throws.*
+
+## The provider in Next.js [#provider]
+
+In Next.js, `<GTProvider>` is a server component. Place it in your root layout and it loads translations on the server, then passes them to your client components. You do **not** pass `locale` or `translations` props — the server resolves them from the request.
+
+```tsx title="app/layout.tsx"
+import { GTProvider } from 'gt-next';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html>
+      <body>
+        <GTProvider>{children}</GTProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+This is the key difference from the other frameworks: in a plain React SPA or TanStack Start app you build the `translations` snapshot yourself and pass it to the provider, but in Next.js the server does it for you.
+
+## Translating strings [#strings]
+
+For standalone strings — placeholders, `aria-label` values, alt text — you need a translation function rather than the `<T>` component:
+
+- **In any component**, call the `useGT` hook from `gt-next`. It works in both server and client components.
+- **In an async server component**, you can instead `await getGT` from [`gt-next/server`](/docs/react/nextjs/server-functions#get-gt).
+
+```tsx title="app/page.tsx"
+import { getGT } from 'gt-next/server';
+
+export default async function Page() {
+  const gt = await getGT();
+  return <p>{gt('Hello, world!')}</p>;
+}
+```
+
+`getGT` and `useGT` translate content that is known at build time. For content only known at request time, use runtime translation instead.
+
+## Runtime translation [#runtime]
+
+Server components can also translate on demand at request time with the `<Tx>` component and the `tx` function from [`gt-next/server`](/docs/react/nextjs/server-functions#tx). Use these only when the content is not known ahead of time — they translate through the General Translation API on the server as the request runs, so they are slower than build-time translation. Runtime translation is server-only; it is not available in client components.
+
+## How translation runs [#how-it-runs]
+
+`gt-next` behaves differently in production and development, detected from `NODE_ENV`:
+
+- **Production.** Build-time translations are loaded from the General Translation CDN by default, or from your local bundle if you configure [local translations](/docs/react/nextjs/config#translations). On-demand translation with `<Tx>` and `tx` still runs in server components.
+- **Development.** With a development API key, content rendered in a non-default locale is translated on demand through the General Translation API and cached in memory, so you can preview locales as you edit. This delay does not exist in production.
+
+*Note: a production API key (prefixed `gtx-api-`) makes `gt-next` behave as in production even during local development, disabling on-demand hot reloading.*

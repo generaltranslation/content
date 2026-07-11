@@ -1,0 +1,191 @@
+---
+
+title: Configuration
+description: Configure the General Translation gt-node library with initializeGT. API reference for gt-node configuration.
+
+---
+
+The `gt-node` library is configured through a single [`initializeGT`](/docs/node/reference/functions/initialize-gt) call at startup. `gt-node` does not read `gt.config.json` or environment variables automatically — every value is read from the object you pass to `initializeGT`. This page documents the keys that call accepts.
+
+## Overview [#overview]
+
+Call `initializeGT` once, before handling requests, with a configuration object. It is synchronous and returns nothing.
+
+```ts
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+```
+
+The keys mirror the ones the [`gt` CLI](/docs/cli/quickstart) reads from `gt.config.json`. To keep both in sync, import your `gt.config.json` and spread its fields into the call:
+
+```ts
+import { initializeGT } from 'gt-node';
+import gtConfig from './gt.config.json' with { type: 'json' };
+
+initializeGT(gtConfig);
+```
+
+The configuration type is `InitializeGTParams`, the combination of the locale-resolution options and the translation-cache options.
+
+## Options [#options]
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`defaultLocale`](#default-locale) | Source and fallback locale. | `string` | Yes | `'en'` |
+| [`locales`](#locales) | Supported target locales. | `string[]` | Yes | `[defaultLocale]` |
+| [`projectId`](#project-id) | Project ID; enables the General Translation CDN loader when set. | `string` | Yes | — |
+| [`devApiKey`](#dev-api-key) | Development API key for on-demand translation. | `string` | Yes | — |
+| [`apiKey`](#api-key) | Production API key. | `string` | Yes | — |
+| [`cacheUrl`](#cache-url) | Translation cache host. `null` disables remote loading. | `string \| null` | Yes | GT CDN |
+| [`runtimeUrl`](#runtime-url) | Runtime translation host. `null` disables it. | `string \| null` | Yes | GT runtime |
+| [`loadTranslations`](#load-translations) | Custom loader returning translations for a locale. | `TranslationsLoader` | Yes | — |
+| [`customMapping`](#custom-mapping) | Locale aliases and property overrides. | `CustomMapping` | Yes | — |
+| [`cacheExpiryTime`](#cache-expiry) | Locale cache lifetime in milliseconds. `null` disables expiry. | `number \| null` | Yes | — |
+| [`dictionary`](#dictionary) | Source-language dictionary read by [`getTranslations`](/docs/node/reference/functions/get-translations). | `Dictionary` | Yes | — |
+| [`loadDictionary`](#load-dictionary) | Loader returning a dictionary for a locale. | `DictionaryLoader` | Yes | — |
+| [`runtimeTranslation`](#runtime-translation) | Runtime translation `timeout` and `metadata`. | `object` | Yes | `timeout` 12000 |
+| [`batchConfig`](#batch-config) | Runtime translation batching limits. | `object` | Yes | — |
+| [`modelProvider`](#model-provider) | Model provider key mirrored from `gt.config.json`. Not consumed by the runtime. | `string` | Yes | — |
+
+*Note: `initializeGT` also accepts internal, underscore-prefixed keys (`_versionId`, `_branchId`, `_disableDevHotReload`) and a `files` object used by the CLI compiler. These are not part of the stable public surface and are omitted here.*
+
+## `defaultLocale` [#default-locale]
+
+**Type** `string` · **Optional** · **Default** `'en'`
+
+The default locale for your application. It is the locale your source content is written in, and the fallback locale when no translation is found. When omitted, it defaults to the library default locale, `'en'`.
+
+```ts
+initializeGT({ defaultLocale: 'en-US' });
+```
+
+## `locales` [#locales]
+
+**Type** `string[]` · **Optional** · **Default** `[defaultLocale]`
+
+An array of [locale codes](/docs/platform/core/reference/utility-functions/locales/is-valid-locale) your application supports. The `defaultLocale` is always included in the supported set, even if you omit it here.
+
+```ts
+initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'fr', 'ja'] });
+```
+
+## `projectId` [#project-id]
+
+**Type** `string` · **Optional**
+
+Your General Translation Project ID, required for General Translation cloud services. When set (without a custom `loadTranslations`), it enables the CDN loader that fetches translations at runtime.
+
+## `devApiKey` [#dev-api-key]
+
+**Type** `string` · **Optional**
+
+A development API key. Together with a `projectId`, it enables on-demand runtime translation and development hot reload, so [`getGT`](/docs/node/reference/functions/get-gt), [`getMessages`](/docs/node/reference/functions/get-messages), and [`tx`](/docs/node/reference/functions/tx) can translate new content while you develop. Hot reload only runs when `NODE_ENV` is not `'production'`.
+
+## `apiKey` [#api-key]
+
+**Type** `string` · **Optional**
+
+A production API key. Set it when you need runtime translation in production. For most deployments you generate translations ahead of time with the [`gt` CLI](/docs/cli/quickstart) instead.
+
+## `cacheUrl` [#cache-url]
+
+**Type** `string | null` · **Optional** · **Default** GT CDN
+
+The URL of the translation cache service. Set it to a custom host to load translations from your own CDN, or to `null` to disable remote cache loading.
+
+## `runtimeUrl` [#runtime-url]
+
+**Type** `string | null` · **Optional** · **Default** GT runtime
+
+The URL of the runtime translation service used by [`tx`](/docs/node/reference/functions/tx) and on-demand development translation. Set it to `null` or `''` to disable runtime translation.
+
+## `loadTranslations` [#load-translations]
+
+**Type** `TranslationsLoader` · **Optional**
+
+A custom function that loads translations from your own source instead of the General Translation CDN. It receives a locale code and resolves to that locale's translations:
+
+```ts
+type TranslationsLoader = (locale: string) => Promise<unknown>;
+```
+
+```ts
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es'],
+  loadTranslations: async (locale) => {
+    const res = await fetch(`https://my-api.com/translations/${locale}`);
+    return res.json();
+  },
+});
+```
+
+## `customMapping` [#custom-mapping]
+
+**Type** `CustomMapping` · **Optional**
+
+A mapping of custom locale codes to standard locale codes or [locale property](/docs/node/reference/functions/get-locale-properties) overrides. Use it to alias a code (for example, `cn` to `zh`) or override display properties.
+
+## `cacheExpiryTime` [#cache-expiry]
+
+**Type** `number | null` · **Optional**
+
+Locale cache lifetime in milliseconds. Leave undefined to use the default TTL, set a number for an explicit TTL, or set `null` to disable expiry.
+
+## `dictionary` [#dictionary]
+
+**Type** `Dictionary` · **Optional**
+
+A source-language dictionary of translation entries keyed by id. Entries are resolved per request with [`getTranslations`](/docs/node/reference/functions/get-translations).
+
+## `loadDictionary` [#load-dictionary]
+
+**Type** `DictionaryLoader` · **Optional**
+
+A loader that returns a dictionary for a given locale:
+
+```ts
+type DictionaryLoader = (locale: string) => Promise<Dictionary>;
+```
+
+## `runtimeTranslation` [#runtime-translation]
+
+**Type** `object` · **Optional** · **Default** `timeout` 12000 ms
+
+Runtime translation settings applied by [`tx`](/docs/node/reference/functions/tx) and on-demand development translation:
+
+- `timeout?: number` — request timeout in milliseconds (default `12000`).
+- `metadata?: object` — metadata merged into every runtime translation request. Runtime-only translation hints go here, including `modelProvider` (see [`modelProvider`](#model-provider) below) and `sourceLocale`.
+
+## `batchConfig` [#batch-config]
+
+**Type** `object` · **Optional**
+
+Controls how [`tx`](/docs/node/reference/functions/tx) and on-demand development translation batch runtime translation requests. Leave undefined to use the defaults.
+
+- `maxConcurrentRequests?: number` — maximum number of in-flight batch requests.
+- `maxBatchSize?: number` — maximum number of entries per batch request.
+- `batchInterval?: number` — delay in milliseconds before a batch is flushed.
+
+## `modelProvider` [#model-provider]
+
+**Type** `string` · **Optional**
+
+Mirrors the `modelProvider` key in `gt.config.json`, which the [`gt` CLI](/docs/cli/quickstart) uses to pick a translation model. The `gt-node` runtime does **not** consume this top-level key — it is accepted only so a spread `gt.config.json` does not error. To choose the model used by runtime translation ([`tx`](/docs/node/reference/functions/tx)), set `modelProvider` inside [`runtimeTranslation`](#runtime-translation) `metadata` instead.
+
+## Example [#example]
+
+```ts title="server.js"
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr', 'ja'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+```

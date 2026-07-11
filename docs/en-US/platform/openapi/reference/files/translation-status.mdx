@@ -1,0 +1,95 @@
+---
+
+title: Get translation status
+description: Check translation progress and availability by file and locale in a General Translation Project. API reference for Get translation status.
+
+---
+
+Returns per-locale translation status for a single source file, along with the source file's metadata. Use it to poll whether translations are completed, approved, or published.
+
+## Overview [#overview]
+
+```http
+GET https://api.gtx.dev/v2/project/translations/files/status/:fileId
+```
+
+**Permission** `project:files:read` · **Rate limit** Default (200/min)
+
+Track translation progress for one file. To look up metadata for many files at once, use [Get file information](/docs/platform/openapi/reference/files/file-info).
+
+## How it works [#how-it-works]
+
+- The source file is resolved by `fileId` on the given branch. A missing `branchId` resolves to the default branch, and a missing `versionId` uses the branch head version.
+- The response lists one entry per locale on the source file. For locales without a translation yet, the timestamp fields are `null`.
+- If no source file is found, the request returns `404`.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Path parameters
+
+| Parameter | Description | Type | Required |
+| --- | --- | --- | --- |
+| `fileId` | Stable file identifier to check. | `string` | Yes |
+
+### Query parameters
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `versionId` | Specific version to check. | `string` | Yes | Branch head version |
+| `branchId` | Branch to read from. | `string` | Yes | Default branch |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "translations": [
+    {
+      "locale": "es",
+      "completedAt": "2026-01-01T00:00:00.000Z",
+      "approvedAt": null,
+      "publishedAt": null,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "sourceFile": {
+    "id": "sf_...",
+    "branchId": "br_...",
+    "fileId": "file_...",
+    "versionId": "ver_...",
+    "fileName": "en/common.json",
+    "sourceLocale": "en",
+    "fileFormat": "JSON",
+    "dataFormat": "JSON",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "locales": ["es"]
+  }
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Missing `fileId`. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:read`. |
+| `404` | No source file found, or no translations found. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X GET "https://api.gtx.dev/v2/project/translations/files/status/file_...?branchId=br_..." \
+  -H "x-gt-api-key: gtx-api-..."
+```

@@ -1,0 +1,145 @@
+---
+
+title: T
+description: Translate JSX children in place with General Translation gt-react. API reference for T.
+
+---
+
+The `<T>` component is the primary translation method in `gt-react`. It translates its JSX children — plain text and nested markup — into the active locale, in place.
+
+*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
+
+## Overview [#overview]
+
+Wrap any static JSX in `<T>` and it is translated into the active locale. Use variable components such as [`<Var>`](/docs/react/reference/components/var) and [`<Num>`](/docs/react/reference/components/num) for dynamic values.
+
+```tsx
+<T>
+  Today, I went to
+  <p>
+    the <b>store</b> to buy some <i>groceries</i>.
+  </p>
+</T>
+```
+
+*Note: `<T>` must be rendered inside a [`<GTProvider>`](/docs/react/reference/components/gt-provider) so it can access translations. For standalone strings, use [`useGT`](/docs/react/reference/hooks/use-gt) instead.*
+
+## How it works [#how-it-works]
+
+- **Build-time translation.** In production, the content inside a `<T>` is translated during the build (or deployment) step, before users load the app. This keeps runtime fast, but only content known at build time can be translated. Generated translations are served from the CDN or your app's build output, and fall back to the original content when a translation is missing.
+- **On-demand in development.** With a development API key set, `<T>` translates on demand so you can preview locales while prototyping. While a translation loads, `<T>` returns `undefined` (unless the source and target share a language, such as `en-US` and `en-GB`); on error it returns the original content. This delay does not occur in production builds.
+- **Translates descendants, not dynamic children.** `<T>` translates the JSX literally written between its tags. Content passed in through a variable (for example, `{greeting}`) cannot be translated and causes an error — wrap dynamic values in a variable component. A good rule of thumb: anything literally between the two `<T>` tags is translated. Avoid nesting `<T>` components.
+
+## Props [#props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`children`](#children) | The JSX content to translate. | `ReactNode` | No | — |
+| [`$context`](#context) | Disambiguation context for translators. | `string` | Yes | — |
+| [`$id`](#id) | Stable identifier for the entry. | `string` | Yes | — |
+| [`$maxChars`](#max-chars) | Maximum length of the translation. | `number` | Yes | — |
+
+### `children` [#children]
+
+**Type** `ReactNode` · **Required**
+
+The content to translate. It can be plain text or a JSX structure, including variable and branching components. Content must be static; dynamic values must be wrapped in a variable component.
+
+### `$context` [#context]
+
+**Type** `string` · **Optional**
+
+Additional context to refine the translation. Useful for resolving ambiguous phrases so translators render the intended meaning.
+
+### `$id` [#id]
+
+**Type** `string` · **Optional**
+
+A stable identifier for the translation entry, which keeps translations consistent and makes the entry easy to find in the translation editor.
+
+### `$maxChars` [#max-chars]
+
+**Type** `number` · **Optional**
+
+The maximum character count for the translation. The library enforces this limit, truncating longer output.
+
+## Examples [#examples]
+
+```tsx title="Greeting.tsx"
+import { T } from 'gt-react';
+
+export default function Greeting() {
+  return (
+    <T>
+      Hello, world! // [!code highlight]
+    </T>
+  );
+}
+```
+
+```tsx title="DynamicGreeting.tsx"
+import { T, Var } from 'gt-react';
+
+export default function DynamicGreeting({ user }) {
+  return (
+    <T>
+      Hello, <Var>{user.name}</Var>! // [!code highlight]
+    </T>
+  );
+}
+```
+
+```tsx title="ItemCount.tsx"
+import { T, Plural } from 'gt-react';
+
+export default function ItemCount({ count }) {
+  return (
+    <T>
+      <Plural
+        n={count} // [!code highlight]
+        one={<>You have an item.</>}
+        other={<>You have items.</>}
+      />
+    </T>
+  );
+}
+```
+
+```tsx title="DynamicContent.tsx"
+import { T } from 'gt-react';
+
+export default function DynamicContent({ greeting }) {
+  return (
+    <T>
+      {greeting} // ❌ dynamic children cannot be translated — wrap in <Var> // [!code highlight]
+    </T>
+  );
+}
+```
+
+```tsx title="Descendants.tsx"
+import { T } from 'gt-react';
+
+const ValidTranslation = ({ children }) => <div><b>{children}</b></div>;
+const InvalidTranslation = () => <div><b>No translation</b></div>;
+
+export default function Example() {
+  return (
+    <T>
+      <div><b>This is valid!</b></div> {/* translated */}
+
+      <ValidTranslation>
+        Hello, world! {/* translated */}
+      </ValidTranslation>
+
+      <InvalidTranslation /> {/* not translated — content is not literal here */}
+    </T>
+  );
+}
+```
+
+## Notes [#notes]
+
+- `<T>` is for translating content. Use it for plain text or JSX structures, including variables and pluralization.
+- It must be wrapped in a [`<GTProvider>`](/docs/react/reference/components/gt-provider) to access the translation context.
+- For translating standalone strings such as placeholders and labels, use [`useGT`](/docs/react/reference/hooks/use-gt).

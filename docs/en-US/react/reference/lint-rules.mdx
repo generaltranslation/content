@@ -1,0 +1,148 @@
+---
+
+title: Lint rules
+description: Reference for the General Translation React Core linter rules that keep translatable content static and correct. API reference for the React Core linter rules.
+
+---
+
+The General Translation React Core linter (`@generaltranslation/react-core-linter`) is an ESLint plugin that catches common integration mistakes: dynamic content inside translatable components, non-static strings in translation functions, and unsupported attributes. Its `recommended` config enables every rule as an error, and two of the three rules auto-fix. For installation and ESLint setup, see the [Lint your code](/docs/react/guides/lint-your-code) guide.
+
+*The rules detect General Translation components and functions by their import source. `gt-react`, `gt-next`, and `gt-react-native` are recognized by default; add other packages, such as `gt-tanstack-start`, with the [`libs`](#libs) option.*
+
+## Rules [#rules]
+
+| Rule | What it flags | Auto-fix |
+| --- | --- | --- |
+| [`static-string`](#static-string) | Dynamic or non-static strings passed to translation functions (`useGT`, `getGT`, `msg`), and non-static sugar variables. | Yes |
+| [`static-jsx`](#static-jsx) | Dynamic content inside `<T>` that is not wrapped in a variable component. | Yes |
+| [`no-data-attrs-on-branch`](#no-data-attrs) | `data-*` attributes on `<Branch>`, which the component ignores. | No |
+
+All three rules are set to `error` in the `recommended` config and accept the shared [`libs`](#libs) option.
+
+## `static-string` [#static-string]
+
+**Auto-fix** Yes · **Recommended** `error`
+
+Registration functions such as `gt` (from [`useGT`](/docs/react/reference/hooks/use-gt) or `getGT`) and [`msg`](/docs/react/reference/functions/msg) can only accept static strings, because the compiler extracts their content at build time. This rule flags a dynamic first argument and steers you toward ICU-style interpolation, where variables are passed in the options object instead of concatenated into the string.
+
+### How it works
+
+- **Static content required.** The first argument must be a string literal (or, for [`msg`](/docs/react/reference/functions/msg), an array of string literals). String concatenation and template literals that interpolate variables are flagged.
+- **ICU auto-fix.** When the format is ICU (the default), the rule rewrites fixable dynamic expressions into an ICU string plus an options object. Ternaries become `select` statements and other expressions become `{varN}` placeholders.
+- **`derive` is allowed.** A [`derive`](/docs/react/reference/functions/derive) call — standalone or concatenated with static parts — is permitted, since its variants are resolved at build time.
+- **Static sugar variables.** The metadata keys in the options object (`$context`, `$id`, `$format`, `$maxChars`, `$requiresReview`) must also be static strings.
+- **ICU validation.** When a string uses ICU format, the rule validates its syntax and reports `Invalid ICU message format` on a malformed message.
+
+### Examples
+
+```tsx
+// ❌ Incorrect — dynamic value concatenated into the string
+const gt = useGT();
+gt('Hello ' + name);
+gt(`Hello ${name}!`);
+
+// ✅ Correct — ICU interpolation, variable passed in the options object
+const gt = useGT();
+gt('Hello {name}!', { name });
+```
+
+```tsx
+// ❌ Incorrect — sugar variable is not a static string
+msg('Save', { $context: label });
+
+// ✅ Correct — static sugar variable
+msg('Save', { $context: 'a button label' });
+
+// ✅ Correct — build-time variants with derive
+gt('Hello ' + derive(getName()));
+```
+
+### Options
+
+Accepts the shared [`libs`](#libs) option.
+
+## `static-jsx` [#static-jsx]
+
+**Auto-fix** Yes · **Recommended** `error`
+
+The [`<T>`](/docs/react/reference/components/t) component must only have static children so the compiler can extract them. This rule flags dynamic content — variables, function calls, member expressions — inside `<T>` and requires it to be wrapped in a variable component: [`<Var>`](/docs/react/reference/components/var), [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency), or [`<DateTime>`](/docs/react/reference/components/datetime).
+
+### How it works
+
+- **Static children only.** Inside `<T>`, only string, number, boolean, and non-interpolating template literals are allowed. Any other expression is flagged.
+- **Auto-wrap in `<Var>`.** A flagged expression is wrapped in [`<Var>`](/docs/react/reference/components/var) (importing it if needed) so the value renders without being translated.
+- **Branch conversions.** A ternary (`cond ? a : b`) or logical-and (`cond && a`) is converted into a [`<Branch>`](/docs/react/reference/components/branch) instead.
+- **Branching attributes.** The rule also checks the content branches of [`<Branch>`](/docs/react/reference/components/branch) and [`<Plural>`](/docs/react/reference/components/plural), requiring each branch value to be static or JSX.
+
+### Examples
+
+```tsx
+// ❌ Incorrect — dynamic content directly inside <T>
+<T>{name}</T>;
+<T>{getGreeting()}</T>;
+
+// ✅ Correct — dynamic content wrapped in a variable component
+<T><Var>{name}</Var></T>;
+<T>You have <Num>{count}</Num> messages.</T>;
+```
+
+```tsx
+// ❌ Incorrect — inline conditional inside <T>
+<T>{isActive ? 'Active' : 'Inactive'}</T>;
+
+// ✅ Correct — the auto-fix converts it into a <Branch>
+<T>
+  <Branch branch={isActive} true="Active">Inactive</Branch>
+</T>;
+```
+
+### Options
+
+Accepts the shared [`libs`](#libs) option.
+
+## `no-data-attrs-on-branch` [#no-data-attrs]
+
+**Auto-fix** No · **Recommended** `error`
+
+The [`<Branch>`](/docs/react/reference/components/branch) component ignores any attribute prefixed with `data-`, because it treats non-reserved props as branch values. This rule flags `data-*` attributes on `<Branch>` so they are not silently dropped. There is no auto-fix; remove the attribute or move it to a wrapping element.
+
+### Examples
+
+```tsx
+// ❌ Incorrect — data-* attribute is ignored by <Branch>
+<Branch branch={status} data-testid="status" active="Active" inactive="Inactive" />;
+
+// ✅ Correct — move the attribute to a wrapping element
+<span data-testid="status">
+  <Branch branch={status} active="Active" inactive="Inactive" />
+</span>;
+```
+
+### Options
+
+Accepts the shared [`libs`](#libs) option.
+
+## Options [#options]
+
+Every rule accepts the same option.
+
+### `libs` [#libs]
+
+**Type** `string[]` · **Optional** · **Default** `['gt-react', 'gt-next', 'gt-react-native', 'gt-i18n', '@generaltranslation/react-core/components', '@generaltranslation/react-core/components-rsc', '@generaltranslation/react-core/hooks', '@generaltranslation/react-core/pure']`
+
+The list of module sources the rule treats as General Translation packages. A component or function is only checked when it is imported from one of these modules, so aliased imports are resolved correctly. Add your framework package when it is not in the default list — for example, `gt-tanstack-start`:
+
+```js title="eslint.config.js"
+const libs = ['gt-tanstack-start'];
+
+export default [
+  {
+    plugins: { '@generaltranslation/react-core-linter': gtLint },
+    rules: {
+      '@generaltranslation/react-core-linter/static-jsx': ['error', { libs }],
+      '@generaltranslation/react-core-linter/static-string': ['error', { libs }],
+      '@generaltranslation/react-core-linter/no-data-attrs-on-branch': ['error', { libs }],
+    },
+  },
+];
+```

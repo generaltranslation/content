@@ -1,0 +1,172 @@
+---
+
+title: downloadFileBatch
+description: Download multiple translated files in one request. API reference for downloadFileBatch.
+
+---
+
+Downloads multiple source or translation files in a single batch request with General Translation. Use it instead of many individual [`downloadFile`](/docs/platform/core/reference/gt-class-methods/translation/download-file) calls to reduce network overhead.
+
+## Overview [#overview]
+
+Call `downloadFileBatch` with an array of file requests. Each request can target a translation (with a `locale`) or a source file (without one).
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const result = await gt.downloadFileBatch([
+  { fileId: 'file-123', branchId: 'branch-456', locale: 'es' },
+  { fileId: 'file-123', branchId: 'branch-456', locale: 'fr' },
+  { fileId: 'file-123', branchId: 'branch-456', locale: 'de' },
+]);
+```
+
+Signature:
+
+```typescript
+downloadFileBatch(
+  requests: DownloadFileBatchRequest,
+  options?: DownloadFileBatchOptions
+): Promise<DownloadFileBatchResult>
+```
+
+*Note: `downloadFileBatch` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. It downloads multiple files in a single API call, which is more efficient than repeated `downloadFile` calls.*
+
+## How it works [#how-it-works]
+
+- **Order.** Files are returned in the same order as the requested items when possible.
+- **Partial success.** A failed individual download within the batch does not cause the whole batch to fail.
+- **Readiness.** Use [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to verify files are ready before downloading.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`requests`](#requests) | Array of file request objects. | `DownloadFileBatchRequest` | No | — |
+| [`options`](#options) | Configuration for the download request. | `DownloadFileBatchOptions` | Yes | — |
+
+### `requests` [#requests]
+
+**Type** `DownloadFileBatchRequest` · **Required**
+
+An array of file requests:
+
+```typescript
+type DownloadFileBatchRequest = {
+  fileId: string;
+  branchId?: string;
+  locale?: string;
+  versionId?: string;
+  useLatestAvailableVersion?: boolean;
+}[];
+```
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Unique identifier of the file to download. | `string` | No | — |
+| `branchId` | Branch to download from. | `string` | Yes | default branch |
+| `locale` | Target locale for the translation. Omit to download the source file. | `string` | Yes | — |
+| `versionId` | Version ID to download. | `string` | Yes | latest version |
+| `useLatestAvailableVersion` | If `true` and the specified `versionId` is not found, fall back to the latest available version instead of failing. | `boolean` | Yes | `false` |
+
+### `options` [#options]
+
+**Type** `DownloadFileBatchOptions` · **Optional**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<DownloadFileBatchResult>`
+
+Resolves to a `DownloadFileBatchResult` containing the downloaded files and a count:
+
+```typescript
+type DownloadFileBatchResult = {
+  files: DownloadedFile[];
+  count: number;
+};
+
+type DownloadedFile = {
+  id: string;
+  branchId: string;
+  fileId: string;
+  versionId: string;
+  locale?: string; // present when the file is a translation
+  fileName?: string; // present for source files (when locale is absent)
+  data: string; // file content as a UTF-8 string
+  metadata: JsonObject;
+  fileFormat: FileFormat;
+};
+```
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `files` | Array of downloaded file objects. | `DownloadedFile[]` |
+| `count` | Number of files successfully downloaded. | `number` |
+| `files[].id` | Unique identifier of the downloaded file record. | `string` |
+| `files[].branchId` | Branch ID. | `string` |
+| `files[].fileId` | File ID. | `string` |
+| `files[].versionId` | Version ID. | `string` |
+| `files[].locale` | Locale of the file, present when it is a translation. | `string` (optional) |
+| `files[].fileName` | Original file name, present for source files. | `string` (optional) |
+| `files[].data` | File content as a UTF-8 string. | `string` |
+| `files[].metadata` | Format-specific metadata for the file. | `JsonObject` |
+| `files[].fileFormat` | Format of the file (`JSON`, `MDX`, and so on). | `FileFormat` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+// (1) Create a GT instance
+const targetLocales = ['es', 'fr', 'de'];
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// (2) Upload the file
+const fileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [{ source: fileUpload }];
+const { uploadedFiles } = await gt.uploadSourceFiles(files, { sourceLocale: 'en' });
+
+// (3) Enqueue the file translation job
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: targetLocales,
+});
+
+// (4) Wait for all translations to be completed
+const { fileId, versionId, branchId } = uploadedFiles[0];
+const result = await gt.awaitJobs(enqueueResult);
+
+if (!result.complete) {
+  console.error('Some jobs did not finish in time');
+}
+
+// (5) Download all translations in a batch
+const downloadResult = await gt.downloadFileBatch(
+  targetLocales.map((locale) => ({
+    fileId,
+    branchId,
+    locale,
+  }))
+);
+
+downloadResult.files.forEach((file) => {
+  console.log(`Downloaded ${file.locale}: ${file.fileName}`);
+});
+```
+
+## Notes [#notes]
+
+- Files are returned as UTF-8 strings.
+- Use [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to verify files are ready for download first.
+- Files are returned in the same order as the requested items when possible.
+- Failed individual file downloads within the batch do not cause the entire batch to fail.
