@@ -6,11 +6,81 @@ description: Automatic language detection and URL routing based on user preferen
 Middleware automatically detects user language preferences and redirects them to the appropriate localized version of your site.
 It uses browser settings, geolocation, and user preferences to serve the right language before any content loads.
 
+The App Router uses `createNextMiddleware` for locale routing. The Pages Router instead uses Next.js built-in `i18n` routing and a Pages Router navigation callback.
+
+## Pages Router locale routing [#pages-router-locale-routing]
+
+Do not add `createNextMiddleware` to a Pages Router app. Configure Next.js built-in locale routing so server-rendered and statically generated pages receive the active locale.
+
+### Step 1: Configure locales
+
+Add every supported locale, including the default locale, to your Next.js config:
+
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+
+const nextConfig: NextConfig = {
+  i18n: {
+    locales: ['en', 'es', 'fr', 'ja'],
+    defaultLocale: 'en',
+  },
+};
+
+export default withGTConfig(nextConfig);
+```
+
+Next.js uses the default locale without a URL prefix and prefixes other locales, such as `/es/about` and `/fr/about`.
+
+### Step 2: Navigate when the locale changes
+
+Pass a navigation callback to `GTProvider` in `_app.tsx`. This lets `LocaleSelector` navigate to the selected Next.js locale and load the corresponding page props:
+
+```tsx title="pages/_app.tsx"
+import type { AppProps } from 'next/app';
+import { useRouter } from 'next/router';
+import {
+  GTProvider,
+  type WithGTServerSideProps,
+  type WithGTStaticProps,
+} from 'gt-next';
+
+type GTPageProps = WithGTServerSideProps | WithGTStaticProps;
+
+export default function App({
+  Component,
+  pageProps,
+}: AppProps<GTPageProps>) {
+  const router = useRouter();
+  const { locale, translations, ...restPageProps } = pageProps;
+
+  return (
+    <GTProvider
+      locale={locale}
+      translations={translations}
+      _reload={({ locale: nextLocale }) => {
+        void router.push(
+          { pathname: router.pathname, query: router.query },
+          router.asPath,
+          { locale: nextLocale }
+        );
+      }}
+    >
+      <Component {...restPageProps} />
+    </GTProvider>
+  );
+}
+```
+
+The callback uses `useRouter` from `next/router`, which is the Pages Router API. App Router applications use the separate API from `next/navigation`.
+
+For statically generated pages, follow the [Pages Router SSG instructions](/docs/next/guides/ssg#pages-router-setup).
+
+## App Router middleware setup
+
 <Callout>
   **File location:** Place `proxy.ts` in your project root, at the same level as your `app/` directory - not inside it. `proxy.ts` (Next.js 16+) or `middleware.ts` (Next.js 15 and below)
 </Callout>
-
-## Setup
 
 ### Step 1: Create dynamic route
 Create a `[locale]` directory in your `app/` folder and move all pages inside it:
