@@ -127,8 +127,11 @@ function filePathToUrlPath(relPath: string): string {
   // Remove .mdx extension
   let urlPath = relPath.replace(/\.mdx$/, '');
 
-  // Split into segments
-  const segments = urlPath.split('/');
+  // Split into segments, dropping route-group folders like
+  // "(additional-frameworks)" — fumadocs excludes them from URLs
+  const segments = urlPath
+    .split('/')
+    .filter((segment) => !(segment.startsWith('(') && segment.endsWith(')')));
 
   // Remove locale segment (second segment for docs/, first-level for blog/devlog)
   // Pattern: docs/en-US/... or blog/en-US/...
