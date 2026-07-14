@@ -492,11 +492,30 @@ Do not add "Next steps", "What to read next", "See also", "Learn more", "Related
 
 Callouts are MDX components for a short, important aside. **Use them rarely and never by default** — prefer plain prose, and reach for a callout only when an aside is genuinely important enough to break the flow. Use only these three titles:
 
-- **Note** — a neutral clarification or aside, including version/requirement notes.
+- **Note** — a neutral clarification or aside, including version/requirement notes. For a breaking change across releases, lead the Note with **`Changed in vN:`** instead of `Note:` (see Version and change notes).
 - **Tip** — an optional best practice or shortcut.
 - **Warning** — something that can cause data loss, breakage, or a hard-to-reverse mistake.
 
 Keep each callout to one or two sentences. Do not stack callouts or use them in place of normal steps.
+
+### Version and change notes
+
+Docs serve two readers at once: someone **setting up for the first time** and someone **maintaining an existing project** across an upgrade. Write for both without cluttering either.
+
+- **Setup-first pages document only the current version.** The Quickstart, Get Started, and a guide's happy path show the current API as the single correct way — no legacy snippets, and no "previously…", "in older versions…", or "if you are on vN…" asides. A new reader should never have to reason about past versions to reach first success.
+- **Maintenance-facing pages call out what changed.** Reference pages and the detailed/troubleshooting parts of a guide add a change note when a **public surface changed in a way that breaks or silently alters existing code** — a removed or renamed export, a changed or newly required prop/parameter, a moved responsibility (setup that moved off one API onto another), or a changed default. This is what an upgrading reader needs and a new reader can skip.
+
+When to add a note:
+
+- **Add one** for breaking or behavior-changing updates that affect existing users, at the major version where it changed (write `v11`, the package major — not full semver, unless a specific patch matters).
+- **Do not add one** for purely additive features: document the new capability as current, with no version note. Absence of a note means "this is just how it works now."
+- **One note per affected page**, placed at the relevant spot. Do not repeat the same version note across every page that touches the feature; note it where the reader acts on it (the provider change belongs on the provider reference and the configuring guide, not on every page that renders a `<T>`).
+
+How to write it:
+
+- Use a `Note` callout led with **`Changed in vN:`**, stating what changed **from → to** in one or two sentences, and link to the current API. *Example:* "**Changed in v11:** `GTProvider` no longer accepts `config` or `loadTranslations`; move setup to [`initializeGTSPA`](…) and pass the resolved `locale` and `translations`."
+- For a per-item behavior change on a Reference page, prefer the **Version history** table (columns: Version, Changes) in that item's *Other notes* over a callout (see Reference page).
+- Show old-vs-new code only when it materially helps migration, using `// Before` / `// After` (see Code blocks) — and keep the current ("after") form as the primary example, never leading with the deprecated one.
 
 ### Code blocks
 
@@ -570,6 +589,7 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Structural/navigational folders (`overview`, `get started`, `quickstart`, `guides`, `reference`, and reference subsections) display in lowercase; only proper-noun and product folders keep their casing.
 - Every component, function, hook, class, or method is linked to its reference page on its first mention on the page.
 - Guides and Reference sections have no `index.md` page.
+- Setup-first pages (Quickstart, Get Started, guide happy paths) show only the current version, with no legacy code or "in older versions" asides; breaking changes are noted only on maintenance-facing pages (Reference, guide detail) with a **`Changed in vN:`** note.
 - Page order in the filetree (and the sidebar navigation it drives) is logical (workflow order), not alphabetical.
 - Uncertain items, unverified logic, and close calls are flagged for human review.
 - Navigation separators use `>`, not `->`.
