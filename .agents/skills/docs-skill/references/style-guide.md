@@ -57,19 +57,19 @@ description: A brief description of the page
 
 Use the **official capitalization and spelling** for all product and technology names:
 
-| ✅ Correct | ❌ Incorrect |
-| --- | --- |
-| Next.js | NextJS, Nextjs, next.js |
-| TypeScript | Typescript, typescript |
-| JavaScript | Javascript, javascript |
-| ESLint | eslint, Eslint |
-| React Native | react native, React native |
-| Node.js | NodeJS, Nodejs |
+| ✅ Correct          | ❌ Incorrect                              |
+| ------------------- | ----------------------------------------- |
+| Next.js             | NextJS, Nextjs, next.js                   |
+| TypeScript          | Typescript, typescript                    |
+| JavaScript          | Javascript, javascript                    |
+| ESLint              | eslint, Eslint                            |
+| React Native        | react native, React native                |
+| Node.js             | NodeJS, Nodejs                            |
 | General Translation | General Translations, general translation |
-| `gt-next` | GT Next, gt next |
-| `gt-react` | GT React, gt react |
-| `gt.config.json` | GT config, gt config json |
-| Quickstart | Quick Start, Quick start, quick start |
+| `gt-next`           | GT Next, gt next                          |
+| `gt-react`          | GT React, gt react                        |
+| `gt.config.json`    | GT config, gt config json                 |
+| Quickstart          | Quick Start, Quick start, quick start     |
 
 Package names (`gt-next`, `gt-react`, `gt`, `generaltranslation`) should always appear in **backticks** when referenced in prose.
 
@@ -77,14 +77,14 @@ Package names (`gt-next`, `gt-react`, `gt`, `generaltranslation`) should always 
 
 ### Verb vs. noun/adjective forms
 
-| Context | Correct | Incorrect |
-| --- | --- | --- |
-| Verb ("to set up") | "set up your project" | "setup your project" |
-| Noun/adjective | "the setup wizard" | "the set up wizard" |
-| Verb ("to check out") | "check out the docs" | "checkout the docs" |
-| Noun | "the checkout page" | "the check out page" |
-| Verb ("to log in") | "log in to the dashboard" | "login to the dashboard" |
-| Noun/adjective | "the login page" | "the log in page" |
+| Context               | Correct                   | Incorrect                |
+| --------------------- | ------------------------- | ------------------------ |
+| Verb ("to set up")    | "set up your project"     | "setup your project"     |
+| Noun/adjective        | "the setup wizard"        | "the set up wizard"      |
+| Verb ("to check out") | "check out the docs"      | "checkout the docs"      |
+| Noun                  | "the checkout page"       | "the check out page"     |
+| Verb ("to log in")    | "log in to the dashboard" | "login to the dashboard" |
+| Noun/adjective        | "the login page"          | "the log in page"        |
 
 ### "inline" not "in-line"
 
@@ -208,7 +208,7 @@ Always start callout content with a **bold lead phrase** followed by a colon:
   **Note:** This command requires a production API key!
 </Callout>
 
-<Callout type="warn">
+<Callout type='warn'>
   **For Production Use Only!** This command should not be used in development.
 </Callout>
 ```
@@ -230,6 +230,7 @@ Many docs pages under `docs/en-US/` are **auto-generated** from templates in `do
 ```
 
 When fixing issues in generated files:
+
 1. **Always fix the template first** (`docs-templates/`).
 2. Then fix or regenerate the generated files (`docs/en-US/`).
 3. If you only fix the generated file, your changes will be overwritten.
@@ -252,7 +253,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - `fix:` for corrections (typos, broken links, grammar)
 - `docs:` for new content or significant rewrites
 - `feat:` for new pages or features
-Keep the subject line concise. Use the body for details when a PR touches multiple files:
+  Keep the subject line concise. Use the body for details when a PR touches multiple files:
 
 ```
 fix: correct grammar and typos across templates and generated docs
@@ -348,11 +349,11 @@ Add custom anchors to headings for stable linking:
 
 Templates in `docs-templates/` use these placeholders, which are replaced during generation:
 
-| Placeholder | Meaning |
-| --- | --- |
-| `__DOCS_PATH__` | Base path for docs links (e.g., `/docs/next`) |
-| `__PACKAGE_NAME__` | Package name (e.g., `gt-next`) |
-| `__FRAMEWORK_NAME__` | Framework name (e.g., `Next.js`) |
+| Placeholder          | Meaning                                       |
+| -------------------- | --------------------------------------------- |
+| `__DOCS_PATH__`      | Base path for docs links (e.g., `/docs/next`) |
+| `__PACKAGE_NAME__`   | Package name (e.g., `gt-next`)                |
+| `__FRAMEWORK_NAME__` | Framework name (e.g., `Next.js`)              |
 
 ## CI Restrictions
 

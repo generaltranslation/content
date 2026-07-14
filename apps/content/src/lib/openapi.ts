@@ -8,10 +8,7 @@ import { createOpenAPI } from 'fumadocs-openapi/server';
 // differs between this app and the landing app that renders the same content.
 export const openapi = createOpenAPI({
   input: () => ({
-    'gt-api': path.join(
-      process.cwd(),
-      '../../docs/en-US/api/openapi.yaml'
-    ),
+    'gt-api': path.join(process.cwd(), '../../docs/en-US/api/openapi.yaml'),
   }),
   proxyUrl: '/api/proxy',
 });

@@ -6,8 +6,8 @@ import './global.css';
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="flex min-h-screen flex-col">
+    <html lang='en' suppressHydrationWarning>
+      <body className='flex min-h-screen flex-col'>
         <RootProvider
           search={{
             enabled: false,

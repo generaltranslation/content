@@ -15,12 +15,12 @@ A maintainer will review your PR. CI checks will run automatically to validate y
 
 ## Content structure
 
-| Directory | What belongs here |
-| --- | --- |
-| `docs/en-US/` | Documentation pages |
-| `blog/en-US/` | Blog posts |
-| `devlog/en-US/` | Devlog / release note entries |
-| `authors/` | Author profiles |
+| Directory         | What belongs here                   |
+| ----------------- | ----------------------------------- |
+| `docs/en-US/`     | Documentation pages                 |
+| `blog/en-US/`     | Blog posts                          |
+| `devlog/en-US/`   | Devlog / release note entries       |
+| `authors/`        | Author profiles                     |
 | `docs-templates/` | Shared templates (maintainers only) |
 
 ## MDX formatting conventions

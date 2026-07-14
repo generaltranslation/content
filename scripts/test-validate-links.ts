@@ -7,8 +7,8 @@
  * Usage: npx tsx test-validate-links.ts
  */
 
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "fs";
-import { join } from "path";
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { join } from 'path';
 
 // ─── Test Harness ───────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
 
 // ─── Setup: Tiny Test Project ───────────────────────────────────────────────
 
-const TEST_DIR = join(import.meta.dirname, "__test_fixtures__");
+const TEST_DIR = join(import.meta.dirname, '__test_fixtures__');
 
 function setupTestFixtures(): void {
   // Clean up if exists
@@ -48,15 +48,19 @@ function setupTestFixtures(): void {
   }
 
   // Create structure: docs/en-US/lib/...
-  mkdirSync(join(TEST_DIR, "docs", "en-US", "next", "api"), { recursive: true });
-  mkdirSync(join(TEST_DIR, "docs", "en-US", "next", "guides"), { recursive: true });
-  mkdirSync(join(TEST_DIR, "blog", "en-US"), { recursive: true });
-  mkdirSync(join(TEST_DIR, "devlog", "en-US"), { recursive: true });
-  mkdirSync(join(TEST_DIR, "docs-templates", "guides"), { recursive: true });
+  mkdirSync(join(TEST_DIR, 'docs', 'en-US', 'next', 'api'), {
+    recursive: true,
+  });
+  mkdirSync(join(TEST_DIR, 'docs', 'en-US', 'next', 'guides'), {
+    recursive: true,
+  });
+  mkdirSync(join(TEST_DIR, 'blog', 'en-US'), { recursive: true });
+  mkdirSync(join(TEST_DIR, 'devlog', 'en-US'), { recursive: true });
+  mkdirSync(join(TEST_DIR, 'docs-templates', 'guides'), { recursive: true });
 
   // docs/en-US/next/introduction.mdx
   writeFileSync(
-    join(TEST_DIR, "docs", "en-US", "next", "introduction.mdx"),
+    join(TEST_DIR, 'docs', 'en-US', 'next', 'introduction.mdx'),
     `---
 title: Introduction
 description: Intro to gt-next
@@ -78,7 +82,7 @@ Use it like this.
 
   // docs/en-US/next/index.mdx (index file)
   writeFileSync(
-    join(TEST_DIR, "docs", "en-US", "next", "index.mdx"),
+    join(TEST_DIR, 'docs', 'en-US', 'next', 'index.mdx'),
     `---
 title: Next.js SDK
 ---
@@ -91,7 +95,7 @@ The Next.js SDK overview.
 
   // docs/en-US/next/guides/quickstart.mdx (with links)
   writeFileSync(
-    join(TEST_DIR, "docs", "en-US", "next", "guides", "quickstart.mdx"),
+    join(TEST_DIR, 'docs', 'en-US', 'next', 'guides', 'quickstart.mdx'),
     `---
 title: Quickstart
 ---
@@ -120,7 +124,7 @@ External-looking [link](/pricing) should not be validated.
 
   // docs/en-US/next/api/msg.mdx (for anchor tests)
   writeFileSync(
-    join(TEST_DIR, "docs", "en-US", "next", "api", "msg.mdx"),
+    join(TEST_DIR, 'docs', 'en-US', 'next', 'api', 'msg.mdx'),
     `---
 title: msg
 ---
@@ -137,7 +141,7 @@ Decode with decodeMsg.
 
   // blog post
   writeFileSync(
-    join(TEST_DIR, "blog", "en-US", "my-post.mdx"),
+    join(TEST_DIR, 'blog', 'en-US', 'my-post.mdx'),
     `---
 title: My Post
 ---
@@ -152,7 +156,7 @@ Read [broken docs](/docs/nonexistent-lib).
 
   // devlog
   writeFileSync(
-    join(TEST_DIR, "devlog", "en-US", "v1.mdx"),
+    join(TEST_DIR, 'devlog', 'en-US', 'v1.mdx'),
     `---
 title: v1.0
 ---
@@ -165,7 +169,7 @@ Check [the api](/docs/next/api/msg#decodemsg).
 
   // Template file
   writeFileSync(
-    join(TEST_DIR, "docs-templates", "guides", "variables.mdx"),
+    join(TEST_DIR, 'docs-templates', 'guides', 'variables.mdx'),
     `---
 title: Variables
 ---
@@ -192,41 +196,55 @@ function cleanupTestFixtures(): void {
 // For unit tests of internal functions, we'd need to refactor to exports.
 // For now, we test via subprocess execution.
 
-import { execSync } from "child_process";
+import { execSync } from 'child_process';
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 async function runTests(): Promise<void> {
-  console.log("\n🧪 Running link validator tests...\n");
+  console.log('\n🧪 Running link validator tests...\n');
 
   // Test 1: GitHub slugger behavior
-  console.log("📋 Test: GitHub slugger");
-  const GithubSlugger = (await import("github-slugger")).default;
+  console.log('📋 Test: GitHub slugger');
+  const GithubSlugger = (await import('github-slugger')).default;
 
   const slugger1 = new GithubSlugger();
-  assertEqual(slugger1.slug("Getting Started"), "getting-started", "Basic heading slug");
+  assertEqual(
+    slugger1.slug('Getting Started'),
+    'getting-started',
+    'Basic heading slug'
+  );
 
   const slugger2 = new GithubSlugger();
-  assertEqual(slugger2.slug("What's New"), "whats-new", "Apostrophe in heading");
+  assertEqual(
+    slugger2.slug("What's New"),
+    'whats-new',
+    'Apostrophe in heading'
+  );
 
   const slugger3 = new GithubSlugger();
-  assertEqual(slugger3.slug("Installation"), "installation", "Simple word");
+  assertEqual(slugger3.slug('Installation'), 'installation', 'Simple word');
 
   // Test 2: Custom [#id] extraction via regex
-  console.log("\n📋 Test: Custom heading ID extraction");
+  console.log('\n📋 Test: Custom heading ID extraction');
   const customIdRegex = /\[#([^\]]+)\]\s*$/;
 
-  const match1 = "Installation [#install]".match(customIdRegex);
-  assert(match1 !== null && match1[1] === "install", "Extracts custom ID from [#install]");
+  const match1 = 'Installation [#install]'.match(customIdRegex);
+  assert(
+    match1 !== null && match1[1] === 'install',
+    'Extracts custom ID from [#install]'
+  );
 
-  const match2 = "CDN publishing [#cdn-publishing]".match(customIdRegex);
-  assert(match2 !== null && match2[1] === "cdn-publishing", "Extracts custom ID with hyphen");
+  const match2 = 'CDN publishing [#cdn-publishing]'.match(customIdRegex);
+  assert(
+    match2 !== null && match2[1] === 'cdn-publishing',
+    'Extracts custom ID with hyphen'
+  );
 
-  const match3 = "Normal Heading".match(customIdRegex);
-  assert(match3 === null, "No custom ID in regular heading");
+  const match3 = 'Normal Heading'.match(customIdRegex);
+  assert(match3 === null, 'No custom ID in regular heading');
 
   // Test 3: Frontmatter stripping
-  console.log("\n📋 Test: Frontmatter stripping");
+  console.log('\n📋 Test: Frontmatter stripping');
   const contentWithFm = `---
 title: Test
 description: A test
@@ -234,65 +252,79 @@ description: A test
 
 ## Real Heading`;
 
-  const fmEnd = contentWithFm.indexOf("---", 3);
-  const stripped = "\n".repeat(contentWithFm.slice(0, fmEnd + 3).split("\n").length - 1) + contentWithFm.slice(fmEnd + 3);
-  assert(!stripped.includes("title:"), "Frontmatter content removed");
-  assert(stripped.includes("## Real Heading"), "Real heading preserved");
+  const fmEnd = contentWithFm.indexOf('---', 3);
+  const stripped =
+    '\n'.repeat(contentWithFm.slice(0, fmEnd + 3).split('\n').length - 1) +
+    contentWithFm.slice(fmEnd + 3);
+  assert(!stripped.includes('title:'), 'Frontmatter content removed');
+  assert(stripped.includes('## Real Heading'), 'Real heading preserved');
 
   // Test 4: File path to URL path conversion
-  console.log("\n📋 Test: File path → URL path");
+  console.log('\n📋 Test: File path → URL path');
   // Simulating the logic
   function filePathToUrlPath(relPath: string): string {
-    let urlPath = relPath.replace(/\.mdx$/, "");
-    const segments = urlPath.split("/");
+    let urlPath = relPath.replace(/\.mdx$/, '');
+    const segments = urlPath.split('/');
     const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
     if (segments.length >= 2 && localePattern.test(segments[1])) {
       segments.splice(1, 1);
     }
-    if (segments[segments.length - 1] === "index") {
+    if (segments[segments.length - 1] === 'index') {
       segments.pop();
     }
-    return "/" + segments.join("/");
+    return '/' + segments.join('/');
   }
 
   assertEqual(
-    filePathToUrlPath("docs/en-US/next/introduction.mdx"),
-    "/docs/next/introduction",
-    "Strips locale and extension"
+    filePathToUrlPath('docs/en-US/next/introduction.mdx'),
+    '/docs/next/introduction',
+    'Strips locale and extension'
   );
   assertEqual(
-    filePathToUrlPath("docs/en-US/next/index.mdx"),
-    "/docs/next",
-    "Index file maps to directory"
+    filePathToUrlPath('docs/en-US/next/index.mdx'),
+    '/docs/next',
+    'Index file maps to directory'
   );
   assertEqual(
-    filePathToUrlPath("blog/en-US/my-post.mdx"),
-    "/blog/my-post",
-    "Blog post path"
+    filePathToUrlPath('blog/en-US/my-post.mdx'),
+    '/blog/my-post',
+    'Blog post path'
   );
   assertEqual(
-    filePathToUrlPath("devlog/en-US/v1.mdx"),
-    "/devlog/v1",
-    "Devlog path"
+    filePathToUrlPath('devlog/en-US/v1.mdx'),
+    '/devlog/v1',
+    'Devlog path'
   );
 
   // Test 5: Locale stripping
-  console.log("\n📋 Test: Locale stripping");
+  console.log('\n📋 Test: Locale stripping');
   function stripLocale(urlPath: string): string {
-    const segments = urlPath.split("/").filter(Boolean);
+    const segments = urlPath.split('/').filter(Boolean);
     const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
     if (segments.length >= 1 && localePattern.test(segments[0])) {
-      return "/" + segments.slice(1).join("/");
+      return '/' + segments.slice(1).join('/');
     }
     return urlPath;
   }
 
-  assertEqual(stripLocale("/en-US/docs/next/intro"), "/docs/next/intro", "Strips en-US");
-  assertEqual(stripLocale("/docs/next/intro"), "/docs/next/intro", "No locale to strip");
-  assertEqual(stripLocale("/fr/docs/next/intro"), "/docs/next/intro", "Strips fr");
+  assertEqual(
+    stripLocale('/en-US/docs/next/intro'),
+    '/docs/next/intro',
+    'Strips en-US'
+  );
+  assertEqual(
+    stripLocale('/docs/next/intro'),
+    '/docs/next/intro',
+    'No locale to strip'
+  );
+  assertEqual(
+    stripLocale('/fr/docs/next/intro'),
+    '/docs/next/intro',
+    'Strips fr'
+  );
 
   // Test 6: Integration test against fixtures
-  console.log("\n📋 Test: Integration — fixture validation");
+  console.log('\n📋 Test: Integration — fixture validation');
   setupTestFixtures();
 
   try {
@@ -301,26 +333,39 @@ description: A test
     // the real run against the content repo.
 
     // Verify fixture files exist
-    assert(existsSync(join(TEST_DIR, "docs", "en-US", "next", "introduction.mdx")), "Fixture: introduction.mdx exists");
-    assert(existsSync(join(TEST_DIR, "docs", "en-US", "next", "guides", "quickstart.mdx")), "Fixture: quickstart.mdx exists");
-    assert(existsSync(join(TEST_DIR, "docs-templates", "guides", "variables.mdx")), "Fixture: template exists");
+    assert(
+      existsSync(join(TEST_DIR, 'docs', 'en-US', 'next', 'introduction.mdx')),
+      'Fixture: introduction.mdx exists'
+    );
+    assert(
+      existsSync(
+        join(TEST_DIR, 'docs', 'en-US', 'next', 'guides', 'quickstart.mdx')
+      ),
+      'Fixture: quickstart.mdx exists'
+    );
+    assert(
+      existsSync(join(TEST_DIR, 'docs-templates', 'guides', 'variables.mdx')),
+      'Fixture: template exists'
+    );
 
-    console.log("\n  ℹ️  Full integration test runs via: npx tsx validate-links.ts");
+    console.log(
+      '\n  ℹ️  Full integration test runs via: npx tsx validate-links.ts'
+    );
   } finally {
     cleanupTestFixtures();
   }
 
   // Summary
-  console.log(`\n${"─".repeat(50)}`);
+  console.log(`\n${'─'.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);
   } else {
-    console.log("✅ All tests passed!\n");
+    console.log('✅ All tests passed!\n');
   }
 }
 
 runTests().catch((err) => {
-  console.error("Test runner error:", err);
+  console.error('Test runner error:', err);
   process.exit(1);
 });
