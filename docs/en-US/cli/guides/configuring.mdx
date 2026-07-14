@@ -1,0 +1,116 @@
+---
+
+title: Configuring the CLI
+description: Set up a General Translation gt.config.json with your locales, files, and storage options.
+
+---
+
+The CLI reads a `gt.config.json` file at the root of your project to decide what to translate and where results are saved. This guide shows how to create and edit that file.
+
+*Note: This guide covers the common setup choices. For every available field, see the [configuration reference](/docs/cli/reference/config).*
+
+## Create the config file [#create]
+
+You can create `gt.config.json` three ways. Pick whichever fits your workflow.
+
+### a) Run the full setup wizard
+
+Run [`gt init`](/docs/cli/reference/commands/init) to detect your framework, install dependencies, create the config file, and generate credentials in one pass.
+
+```bash
+npx gt init
+```
+
+### b) Create only the config file
+
+Run [`gt configure`](/docs/cli/reference/commands/configure) to create `gt.config.json` without installing dependencies or changing your framework setup.
+
+```bash
+npx gt configure
+```
+
+### c) Write it by hand
+
+Create the file yourself and add the `$schema` reference for editor validation and autocompletion.
+
+```json title="gt.config.json"
+{
+  "$schema": "https://assets.gtx.dev/config-schema.json",
+  "defaultLocale": "en",
+  "locales": ["fr", "es"]
+}
+```
+
+## Set your locales [#locales]
+
+Set `defaultLocale` to the language your source content is written in, and list your target languages in `locales`.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "es", "ja"]
+}
+```
+
+Both use standard locale codes such as `en`, `en-US`, or `zh`. See [supported locales](/docs/platform/dashboard/reference/supported-locales) for the full list.
+
+To use a custom alias for a locale — for example `cn` instead of `zh` — add a `customMapping` entry pointing to the official code.
+
+```json title="gt.config.json"
+{
+  "customMapping": {
+    "cn": { "code": "zh" }
+  }
+}
+```
+
+## Choose which files to translate [#files]
+
+Add a `files` object with a key for each file type you want to translate. Each type takes an `include` array of glob patterns that use the `[locale]` placeholder to locate source files and to save translated ones.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "es"],
+  "files": {
+    "json": {
+      "include": ["locales/[locale]/**/*.json"]
+    },
+    "mdx": {
+      "include": ["content/docs/[locale]/**/*.mdx"]
+    }
+  }
+}
+```
+
+The CLI replaces `[locale]` with `defaultLocale` when it searches for source files, and with each target code when it saves translations. See [File formats](/docs/cli/reference/formats/gt-jsx-files) for per-type options and [`include`](/docs/cli/reference/config#files) for advanced matching.
+
+## Choose where translations are stored [#storage]
+
+If you use `gt-next`, `gt-react`, or `gt-react-native`, decide how translations are delivered.
+
+- **Save locally** to bundle translations in your app. Add a `gt` entry with an `output` path that includes `[locale]`.
+- **Publish to the CDN** to load translations at runtime instead of bundling them. Set `publish` to `true`.
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "output": "public/i18n/[locale].json"
+    }
+  }
+}
+```
+
+See [CDN publishing](/docs/cli/reference/config#cdn-publishing) to control publishing globally, per file, or per command.
+
+## Add your credentials [#credentials]
+
+The [`translate`](/docs/cli/reference/commands/translate) command needs a production API key and Project ID. Keep them out of `gt.config.json` and set them as environment variables instead.
+
+```bash title=".env"
+GT_API_KEY=your-api-key
+GT_PROJECT_ID=your-project-id
+```
+
+Run [`gt auth`](/docs/cli/reference/commands/auth) to generate these and write them to `.env.local` automatically.

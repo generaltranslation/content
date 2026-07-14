@@ -1,0 +1,97 @@
+---
+
+title: Storing translations locally
+description: Bundle General Translation translations in your app instead of loading them from the CDN, across React, Next.js, TanStack Start, and React Native.
+
+---
+
+By default, General Translation loads translations from its CDN at runtime. Alternatively, you can generate translation files, bundle them in your app, and load them yourself. This removes the runtime CDN dependency at the cost of redeploying to update translations.
+
+## Configure a local output path [#configure]
+
+In `gt.config.json`, set the `gt` file output to a path in your source, using the `[locale]` placeholder. This is the same for every framework.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": { "gt": { "output": "src/_gt/[locale].json" } }
+}
+```
+
+## Generate the files [#generate]
+
+Run the CLI to translate your content and write one file per locale to that path.
+
+```bash
+npx gt translate
+```
+
+Add it to your build so the files stay current — for example, `"build": "npx gt translate && vite build"` (or `next build`, `expo export`, and so on).
+
+## Load them into your app [#load]
+
+Provide a [`loadTranslations`](/docs/react/reference/functions/load-translations) callback that imports the file for a locale. How you register it depends on the framework.
+
+<Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
+  <Tab value="React">
+    Pass `loadTranslations` to the initialization call.
+
+    ```tsx title="src/main.tsx"
+    import { initializeGTSPA } from 'gt-react';
+    import gtConfig from '../gt.config.json';
+
+    const loadTranslations = (locale: string) =>
+      import(`./_gt/${locale}.json`).then((m) => m.default);
+
+    await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+    ```
+  </Tab>
+
+  <Tab value="Next.js">
+    Create a `loadTranslations.ts` file at your project root. The `withGTConfig` plugin auto-detects it (or set `loadTranslationsPath` explicitly).
+
+    ```ts title="loadTranslations.ts"
+    export default async function loadTranslations(locale: string) {
+      const t = await import(`./_gt/${locale}.json`);
+      return t.default;
+    }
+    ```
+
+    ```ts title="next.config.ts"
+    import { withGTConfig } from 'gt-next/config';
+
+    export default withGTConfig(nextConfig, { loadTranslationsPath: './loadTranslations.ts' });
+    ```
+  </Tab>
+
+  <Tab value="TanStack Start">
+    Pass `loadTranslations` to the initialization call.
+
+    ```tsx
+    import { initializeGT } from 'gt-tanstack-start';
+    import gtConfig from '../gt.config.json';
+
+    const loadTranslations = (locale: string) =>
+      import(`./_gt/${locale}.json`).then((m) => m.default);
+
+    initializeGT({ ...gtConfig, loadTranslations });
+    ```
+  </Tab>
+
+  <Tab value="React Native">
+    Pass `loadTranslations` to the initialization call.
+
+    ```tsx
+    import { initializeGT } from 'gt-react-native';
+    import gtConfig from '../gt.config.json';
+
+    const loadTranslations = (locale: string) =>
+      import(`./_gt/${locale}.json`).then((m) => m.default);
+
+    initializeGT({ ...gtConfig, loadTranslations });
+    ```
+  </Tab>
+</Tabs>
+
+With a local loader in place, translations are read from your bundle and no CDN request is made. To switch back to CDN delivery, remove the loader and provide a `projectId` instead (see [Configure General Translation](/docs/react/guides/configuring#delivery)).

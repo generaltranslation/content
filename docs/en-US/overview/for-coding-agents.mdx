@@ -1,0 +1,246 @@
+---
+
+title: For coding agents
+description: Use AI coding agents and LLMs with General Translation by pointing them at the machine-readable docs, the MCP server, and a drop-in agent guide.
+
+---
+
+General Translation is built to work with AI coding agents and LLMs. The libraries are open-source, configuration is predictable, and the docs are published in machine-readable formats. An agent such as Cursor, Claude Code, or Copilot can add and run General Translation for you with accurate, current context.
+
+*For fully automated localization that opens pull requests on its own, use our dedicated agent [Locadex](/docs/platform/locadex/get-started) instead of driving your own agent.*
+
+## Drop-in agent guide [#agent-guide]
+
+Give your agent everything it needs in one paste. Copy the guide below into an `AGENTS.md` (or `CLAUDE.md`, a Cursor rule, or your tool's instructions file) at your project root, and your agent will add and run General Translation correctly. Use the copy button in the top-right of the block.
+
+````markdown title="AGENTS.md"
+# General Translation — agent guide
+
+Instructions for AI coding agents adding [General Translation](https://generaltranslation.com) to a project. General Translation is a full-stack localization product: open-source i18n libraries plus a CLI that translate an app and its content into any language. Follow these rules when internationalizing code or wiring up translations.
+
+## What to use
+
+Pick the package that matches the stack:
+
+- **Next.js (App Router)** → `gt-next`
+- **React (SPA, e.g. Vite)** → `gt-react`
+- **Node.js server** → `gt-node`
+- **Any JavaScript runtime, or lower-level control** → `generaltranslation` (the Core library)
+- **Translating content files (JSON, MDX, YAML, and more) or running translation in CI** → the `gt` CLI
+
+All of these are free and open-source. The libraries work with or without a General Translation account; an API key unlocks on-demand translation in development and the hosted translation API.
+
+## Setup
+
+Prefer the wizard. From the project root, run:
+
+```bash
+npx gt init
+```
+
+It installs the right library and the `gt` CLI, wires up the framework (for Next.js, adds `withGTConfig` and `GTProvider`), creates `gt.config.json`, and generates API credentials.
+
+For manual setup, install the packages yourself:
+
+```bash
+npm install gt-next   # or gt-react / gt-node / generaltranslation
+npm install -D gt
+```
+
+Then create `gt.config.json` in the project root — this is the single source of truth for locales:
+
+```json
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": { "gt": { "output": "public/_gt/[locale].json" } }
+}
+```
+
+- `defaultLocale` — the language the source is written in.
+- `locales` — the languages to translate into.
+- `files.gt.output` — where the CLI writes translation files (`[locale]` is replaced per language). Add this directory to `.gitignore`; the files are generated.
+
+Set API credentials as environment variables (in `.env.local` for Next.js, `.env` otherwise):
+
+```bash
+GT_API_KEY="gtx-dev-..."   # gtx-dev- in development, gtx-api- in production/CI
+GT_PROJECT_ID="..."
+```
+
+Never commit `GT_API_KEY`, expose it to the browser, or prefix it with `NEXT_PUBLIC_`.
+
+## Core usage
+
+Wrap user-facing JSX in `<T>`. Write source copy directly — no translation keys needed:
+
+```tsx
+import { T } from 'gt-next'; // or 'gt-react'
+
+// Everything inside <T> is translated as a unit
+<T>
+  <h1>Welcome to my app</h1>
+</T>;
+```
+
+Use `useGT()` for standalone strings (placeholders, `aria-label`, `alt`, button labels). `useGT()` returns the translation function directly:
+
+```tsx
+import { useGT } from 'gt-next';
+
+const gt = useGT(); // ✅ correct
+// const { gt } = useGT(); // ❌ wrong — useGT returns the function, not an object
+
+<input placeholder={gt('Search products')} />;
+```
+
+In async server components, use `getGT` instead:
+
+```tsx
+import { getGT } from 'gt-next/server';
+
+const gt = await getGT();
+```
+
+Wrap dynamic or private values (names, emails, IDs) in `<Var>` so they are not translated and never sent to the API. Use `<Currency>`, `<DateTime>`, and `<Num>` for values that should be reformatted but not translated:
+
+```tsx
+import { T, Var } from 'gt-next';
+
+// Generates one translation, keeps the name unchanged
+<T>
+  Hello, <Var>{name}</Var>!
+</T>;
+```
+
+For Node.js servers, initialize once and resolve translations per request:
+
+```js
+import { initializeGT, withGT, getGT } from 'gt-node';
+
+initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'fr'] });
+// wrap handlers in withGT(locale, ...); then `const gt = await getGT()` inside them
+```
+
+Keep all locale configuration in `gt.config.json` — do not scatter locale lists across the codebase.
+
+## Commands
+
+| Command | When to run |
+| --- | --- |
+| `npx gt init` | Once, to set up a project (installs deps, configures the framework, creates `gt.config.json`, generates credentials). |
+| `npx gt configure` | To create or update `gt.config.json` (locales and files) without the full wizard. |
+| `npx gt auth` | To generate or refresh API credentials. |
+| `npx gt translate` | To translate the project via the General Translation API. Run in CI **before** building for production. |
+| `npx gt generate` | To create translation file templates to translate manually (no API key needed). |
+
+Add translation to the production build so translations stay current, for example: `"build": "npx gt translate && next build"`.
+
+## Rules — do and don't
+
+Do:
+
+- Wrap every new piece of user-facing copy in `<T>` (or `useGT()`/`getGT()` for standalone strings) as you write it.
+- Run `npx gt translate` before committing or building for production so new copy is translated.
+- Keep the locale list in `gt.config.json` only.
+- Wrap dynamic and private values in `<Var>`, and add `context` when a string is ambiguous.
+
+Don't:
+
+- Hardcode already-translated strings in the source, or add per-language `if`/`switch` branches — translate the source copy instead.
+- Hand-edit generated translation files (the CLI overwrites them).
+- Commit `GT_API_KEY` or expose it to the client.
+- Duplicate the locale configuration outside `gt.config.json`.
+
+## Links
+
+- [`llms.txt`](/llms.txt) — short, machine-readable docs index.
+- [`sitemap.md`](/sitemap.md) — map of every docs page.
+- Quickstarts: [React](/docs/react/get-started/react-quickstart), [Node](/docs/node/quickstart), [Core library](/docs/platform/core/quickstart), and the [CLI](/docs/cli/quickstart).
+- [Key concepts](/docs/overview/key-concepts) — locales, context, and static vs. dynamic content.
+````
+
+## Point agents at the docs [#point-agents]
+
+Give your agent direct access to the docs so its answers stay accurate. General Translation publishes several machine-readable entry points at the site root:
+
+- [`llms.txt`](/llms.txt) — a short, [llmstxt.org](https://llmstxt.org/)-style index of the docs.
+- [`sitemap.md`](/sitemap.md) — a linked map of every page in navigation order.
+
+Every docs page is also available as **raw Markdown**: append `.md` to any page URL (for example, `/docs/cli/quickstart.md`) to fetch the clean source instead of parsing rendered HTML.
+
+To add the docs as context, paste a docs URL or the `llms.txt` link into your agent's context, or add the docs as a source in tools that support documentation indexing.
+
+## MCP server [#mcp]
+
+General Translation offers a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that lets agents query the docs directly. It comes in two forms:
+
+- **Local (stdio)** — the published [`@generaltranslation/mcp`](https://www.npmjs.com/package/@generaltranslation/mcp) npm package, run on your machine with `npx`.
+- **Remote (HTTP/SSE)** — a hosted endpoint at `https://mcp.gtx.dev`.
+
+Configure the connection using whichever transport your tool supports. The config shape is identical across tools — add it to your tool's MCP config file (for example, `.mcp.json`):
+
+<Tabs items={['Local', 'Streamable HTTP', 'SSE']}>
+  <Tab value="Local">
+    Run the docs server locally with `npx`. Best for tools that maintain a persistent connection, such as Cursor and Claude Code.
+
+    ```json title=".mcp.json"
+    {
+      "mcpServers": {
+        "generaltranslation": {
+          "command": "npx",
+          "args": ["-y", "@generaltranslation/mcp@latest"]
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="Streamable HTTP">
+    Connect to the hosted server over streamable HTTP.
+
+    ```json title=".mcp.json"
+    {
+      "mcpServers": {
+        "generaltranslation": {
+          "type": "streamable-http",
+          "url": "https://mcp.gtx.dev"
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="SSE">
+    For tools that do not support streamable HTTP, use the SSE endpoint.
+
+    ```json title=".mcp.json"
+    {
+      "mcpServers": {
+        "generaltranslation": {
+          "type": "sse",
+          "url": "https://mcp.gtx.dev/sse"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+Once connected, ask your agent to use the `generaltranslation` MCP server. *Example: "Use the generaltranslation MCP server to explain how to use a [`<T>`](/docs/react/reference/components/t) component."*
+
+## Editor-specific tips [#editor-tips]
+
+Most setup is the same across agents; these are the few places the guidance differs.
+
+- **Cursor** — register the MCP server, then ask it to "use the `generaltranslation` tool". Add the docs as a source, or reference `/llms.txt` in your prompt.
+- **Claude Code** — reads a root `AGENTS.md` automatically, so dropping the [agent guide](#agent-guide) into your project's `AGENTS.md` is enough to prime it. Register the MCP server and ask it to "use the `generaltranslation` MCP server".
+- **Copilot** — put repo-wide guidance in your instructions file (for example, `.github/copilot-instructions.md`) and reference the docs `/llms.txt` there.
+
+## Best practices [#best-practices]
+
+Agents are reliable for mechanical i18n work, but translation quality and configuration still need a human. Use this split:
+
+- **Hand to the agent:** wrapping user-facing copy in `<T>`, adding [`useGT()`](/docs/react/reference/hooks/use-gt) for standalone strings, scaffolding `gt.config.json`, and running `npx gt init`.
+- **Verify by hand:** the [translation context](/docs/overview/key-concepts#context) (Glossary and Directives) the agent writes, the locale configuration (`defaultLocale` and `locales`), and that dynamic or private values are wrapped in [`<Var>`](/docs/react/reference/components/var).
+- **Never let the agent do:** hand-editing generated translation files, or hardcoding already-translated strings instead of translating source copy with the CLI.

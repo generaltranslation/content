@@ -1,0 +1,62 @@
+---
+
+title: Translating strings
+description: Translate handler strings, registered messages, and dynamic content with General Translation in gt-node.
+
+---
+
+`gt-node` offers three ways to translate a string. Which you use depends on where the string lives and whether it is known ahead of time.
+
+*Note: All three run inside a [`withGT`](/docs/node/guides/detecting-locale) scope so they know the request's locale.*
+
+## Translate handler strings with `getGT` [#get-gt]
+
+For strings written directly in a handler, await [`getGT`](/docs/node/reference/functions/get-gt) to get a translation function, then call it. Interpolate values with ICU placeholders.
+
+```ts
+import { getGT } from 'gt-node';
+
+app.get('/api/greeting', async (req, res) => {
+  const gt = await getGT();
+  res.json({
+    message: gt('Hello, world!'),
+    welcome: gt('Welcome, {name}!', { name: 'Alice' }),
+  });
+});
+```
+
+This is the default choice for one-off strings. Add `$context` to disambiguate a term.
+
+## Reuse registered messages with `msg` [#msg]
+
+For strings defined outside a handler — shared constants, error messages, enums — register them with [`msg`](/docs/node/reference/functions/msg) at module scope, then resolve them with [`getMessages`](/docs/node/reference/functions/get-messages).
+
+```ts
+import { msg, getMessages } from 'gt-node';
+
+const NOT_FOUND = msg('Resource not found.');
+
+app.use(async (req, res) => {
+  const m = await getMessages();
+  res.status(404).json({ error: m(NOT_FOUND) });
+});
+```
+
+## Translate dynamic content with `tx` [#tx]
+
+For content not known ahead of time and not pre-generated, use [`tx`](/docs/node/reference/functions/tx) to translate at runtime. It makes a network request on a cache miss, so reserve it for genuinely dynamic strings.
+
+```ts
+import { tx } from 'gt-node';
+
+const translated = await tx(`Status: ${status}`);
+```
+
+*Note: `tx` does not use ICU placeholders — embed values with a template literal before calling it.*
+
+## Choose an approach [#choose]
+
+- One-off handler strings → `getGT`.
+- Shared constants and errors → `msg` with `getMessages`.
+- Dynamic, unpredictable content → `tx`.
+- Centralized, key-based copy → a dictionary with [`getTranslations`](/docs/node/reference/functions/get-translations).

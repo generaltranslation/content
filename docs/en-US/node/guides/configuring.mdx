@@ -1,0 +1,54 @@
+---
+
+title: Configuring gt-node
+description: Initialize General Translation gt-node with locales, credentials, and translation delivery.
+
+---
+
+`gt-node` is configured entirely through the [`initializeGT`](/docs/node/reference/functions/initialize-gt) call you make once at startup. This guide covers what to pass and how translations are delivered.
+
+*Note: Unlike `gt-next`, `gt-node` does not read `gt.config.json` or environment variables automatically. Pass every value explicitly.*
+
+## Initialize at startup [#initialize]
+
+Call `initializeGT` once, before any request is handled, with your locales and credentials.
+
+```ts title="server.js"
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+```
+
+To keep values in sync with the CLI, import your `gt.config.json` and spread its fields into the call.
+
+## Add credentials [#credentials]
+
+Set your Project ID and API key as environment variables and pass them in. Use the development key while developing and the production key in production.
+
+```ts title="server.js"
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  projectId: process.env.GT_PROJECT_ID,
+  devApiKey: process.env.NODE_ENV !== 'production' ? process.env.GT_API_KEY : undefined,
+  apiKey: process.env.NODE_ENV === 'production' ? process.env.GT_API_KEY : undefined,
+});
+```
+
+In development, a `projectId` and development API key enable on-demand translation and hot reload, so new strings translate as you work. In production, translations come from your pre-generated files or the CDN. See the [Configuration reference](/docs/node/reference/config) for every option.
+
+## Choose how translations are delivered [#delivery]
+
+`gt-node` resolves translations in one of these modes:
+
+- **General Translation CDN:** provide a `projectId` (without a custom loader) to fetch translations from GT's CDN.
+- **Local files:** provide a [`loadTranslations`](/docs/react/reference/functions/load-translations) callback that returns translations for a locale. See [Storing translations locally](/docs/node/guides/storing-translations).
+- **Custom endpoint:** set a custom `cacheUrl` to load from your own host, or `null` to disable remote loading.
+
+## Handle missing translations [#missing]
+
+When a translation is missing, `gt-node` returns the source string interpolated with your variables rather than throwing, so a request always renders. Dictionary lookups via [`getTranslations`](/docs/node/reference/functions/get-translations) are the exception: an unknown dictionary id throws. Keep `initializeGT` values aligned with what the CLI generates so production has translations ready.

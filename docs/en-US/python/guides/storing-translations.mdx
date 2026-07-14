@@ -1,0 +1,50 @@
+---
+
+title: Storing translations locally
+description: Load General Translation translations from local files instead of the CDN in Python.
+
+---
+
+By default the Python SDK loads translations from the General Translation CDN. Alternatively, generate translation files, ship them with your app, and load them with a `load_translations` callback. This removes the runtime CDN dependency at the cost of redeploying to update translations.
+
+## Configure a local output path [#configure]
+
+In `gt.config.json`, set the `gt` file output to a path in your project, using the `[locale]` placeholder.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": { "gt": { "output": "translations/[locale].json" } }
+}
+```
+
+## Generate the files [#generate]
+
+Run the [CLI](/docs/cli/quickstart) to translate your content and write one file per locale.
+
+```bash
+gt translate
+```
+
+## Load them at initialization [#load]
+
+Pass a `load_translations` callback to [`initialize_gt`](/docs/python/reference/functions/initialize-gt) that reads the file for a locale and returns a dict.
+
+```python
+import json
+from pathlib import Path
+
+def load_translations(locale: str) -> dict[str, str]:
+    path = Path("translations") / f"{locale}.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+initialize_gt(
+    app,
+    default_locale="en",
+    locales=["es", "fr"],
+    load_translations=load_translations,
+)
+```
+
+With a local loader in place, translations are read from disk and no CDN request is made. To switch back to CDN delivery, remove `load_translations` and set `project_id` (see [Configure the Python SDK](/docs/python/guides/configuring#delivery)).
