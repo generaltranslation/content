@@ -8,6 +8,11 @@ description: Pre-render internationalized pages at build time for optimal perfor
 Static Site Generation (SSG) pre-renders pages at build time, creating static HTML files that can be served directly without server-side processing.
 When combined with internationalization, SSG generates pre-rendered versions for each locale.
 
+The setup differs by router:
+
+- **Pages Router** - Use Next.js built-in locale routing and `withGTStaticProps`
+- **App Router** - Use `createNextMiddleware`, a `[locale]` route, and `generateStaticParams`
+
 <Callout type='info'>
 
 **Watch out for any of the following issues when setting up SSG:**
@@ -22,7 +27,126 @@ When combined with internationalization, SSG generates pre-rendered versions for
 
 ---
 
-## Setup
+## Pages Router setup
+
+The Pages Router can generate a separate static version of each page for every locale. Use Next.js built-in locale routing rather than `createNextMiddleware` so Next.js provides the generated locale to `getStaticProps`.
+
+### Step 1: Configure locale routing
+
+Add every supported locale, including the default locale, to the `i18n` configuration in your Next.js config:
+
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+
+const nextConfig: NextConfig = {
+  i18n: {
+    locales: ['en', 'es', 'fr', 'ja'],
+    defaultLocale: 'en',
+  },
+};
+
+export default withGTConfig(nextConfig);
+```
+
+Next.js now invokes `getStaticProps` once for each configured locale. For example, a page at `pages/about.tsx` generates `/about` for English, `/es/about` for Spanish, and `/fr/about` for French.
+
+<Callout type='warn'>
+  **Keep locales aligned:** The locales and default locale in the Next.js `i18n` configuration must match your `gt.config.json` settings.
+</Callout>
+
+### Step 2: Wrap getStaticProps
+
+Wrap the page's `getStaticProps` function with `withGTStaticProps`:
+
+```tsx title="pages/about.tsx"
+import type { GetStaticProps } from 'next';
+import { T, withGTStaticProps } from 'gt-next';
+
+type AboutPageProps = {
+  generatedAt: string;
+};
+
+export const getStaticProps: GetStaticProps<AboutPageProps> =
+  withGTStaticProps(async () => ({
+    props: {
+      generatedAt: new Date().toISOString(),
+    },
+  }));
+
+export default function AboutPage({ generatedAt }: AboutPageProps) {
+  return (
+    <main>
+      <T>
+        <h1>About us</h1>
+      </T>
+      <p>Generated at: {generatedAt}</p>
+    </main>
+  );
+}
+```
+
+If the page does not need its own props, use the no-argument form:
+
+```tsx title="pages/index.tsx"
+import { withGTStaticProps } from 'gt-next';
+
+export const getStaticProps = withGTStaticProps();
+```
+
+`withGTStaticProps` adds the generated `locale` and its translation snapshot to the page props. The default locale receives an empty snapshot because its source content is already present. Redirects, `notFound`, and incremental static regeneration options pass through unchanged.
+
+### Step 3: Configure GTProvider navigation
+
+Pass the generated locale and translations to `GTProvider` in `_app.tsx`. Connect locale changes to the Pages Router so selecting a locale loads that locale's static props:
+
+```tsx title="pages/_app.tsx"
+import type { AppProps } from 'next/app';
+import { useRouter } from 'next/router';
+import { GTProvider, type WithGTStaticProps } from 'gt-next';
+
+export default function App({
+  Component,
+  pageProps,
+}: AppProps<WithGTStaticProps>) {
+  const router = useRouter();
+  const { locale, translations, ...restPageProps } = pageProps;
+
+  return (
+    <GTProvider
+      locale={locale}
+      translations={translations}
+      _reload={({ locale: nextLocale }) => {
+        void router.push(
+          { pathname: router.pathname, query: router.query },
+          router.asPath,
+          { locale: nextLocale }
+        );
+      }}
+    >
+      <Component {...restPageProps} />
+    </GTProvider>
+  );
+}
+```
+
+This callback performs a Pages Router navigation rather than a full browser reload. Next.js loads the selected locale's pre-generated page props, and `GTProvider` receives the matching translation snapshot.
+
+You can now use `LocaleSelector` normally:
+
+```tsx title="pages/about.tsx"
+import { LocaleSelector } from 'gt-next';
+
+export default function AboutPage() {
+  return <LocaleSelector />;
+}
+```
+
+<Callout type='info'>
+  **Dynamic routes:** Pages such as `pages/products/[id].tsx` still require `getStaticPaths` for their dynamic parameters. Next.js generates each returned path once per configured locale.
+</Callout>
+
+## App Router setup
 
 ### Setup requirements
 
@@ -123,7 +247,7 @@ export default withGTConfig(nextConfig, {
 });
 ```
 
-## Common issues [#common-issues]
+## App Router common issues [#common-issues]
 
 ### Next.js version compatibility
 
@@ -246,6 +370,7 @@ This also applies to `twitter-image.tsx` and any other metadata image routes.
   **See it in action:** Check out the [static site generation example app](https://github.com/gt-examples/static-site-generation) for a working demo — [live preview](https://static-site-generation.generaltranslation.dev).
 </Callout>
 
-- Check out the [middleware guide](/docs/next/guides/middleware) required for locale routing
+- Set up [Pages Router locale routing](/docs/next/guides/middleware#pages-router-locale-routing)
+- Check out the [middleware guide](/docs/next/guides/middleware) required for App Router locale routing
 - Check out the [release notes](/devlog/gt-next_v6_10_0) for migrating from legacy SSG pattern
 - See an example app in the monorepo [here](https://github.com/generaltranslation/gt/tree/main/examples/next-ssg)
