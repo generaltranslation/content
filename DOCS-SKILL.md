@@ -1,22 +1,20 @@
 ---
-
 name: General Translation docs internal skill
 description: Follow these rules when creating, editing, reviewing, or restructuring General Translation documentation content. Use this style guide when the user asks about docs voice, structure, naming, or formatting conventions.
-
 ---
 
 # General Translation docs style guide
 
 Rules for authoring and updating the General Translation docs. Follow these to preserve the established style, structure, and flow.
 
-General Translation is **one full-stack product**, and every top-level docs section is a capability of it. They all follow the same **Get Started/Quickstart → Guides → Reference** spine. A few rules are specific to the Platform section (Dashboard, Locadex, OpenAPI, Core) and are marked *(Platform-specific)*.
+General Translation is **one full-stack product**, and every top-level docs section is a capability of it. They all follow the same **Get Started/Quickstart → Guides → Reference** spine. A few rules are specific to the Platform section (Dashboard, Locadex, OpenAPI, Core) and are marked _(Platform-specific)_.
 
 ## Before you write: understand the system first
 
 Good docs come from understanding, not paraphrasing. Before applying any formatting rule below — especially on a first rewrite with access to the codebase — work in this order:
 
 1. **Understand the application and the logic of each piece first.** For the product/section you are documenting, work out what each feature, function, endpoint, or setting actually does, who uses it, and why it exists — including inputs, outputs, defaults, constraints, and failure modes. Only once the behavior is clear should you spin out into the structure and formatting conventions in this guide. Do not start from the formatting.
-2. **Read the existing docs for that area, but treat the code as the source of truth.** Existing pages often contain human-written explanations, product guardrails, edge cases, and nuance that are not evident from the code alone. Treat them as *supplementary* material only: mine them for intent and fold that in, and rework or delete duplicative content freely. They are a second pass on top of the code, never a substitute for it. **The code is ALWAYS the source of truth. Whenever the code and the existing docs disagree, follow the code without exception**, correct the docs to match, and flag the discrepancy for human review. Never carry over a behavior, signature, parameter, default, return type, or option from the old docs once you have seen the code contradict it — do not "stay faithful to the old docs" in those cases. When you cannot find something in the code, verify it against the code before documenting it; do not invent or assume, and note it as missing/unverifiable instead.
+2. **Read the existing docs for that area, but treat the code as the source of truth.** Existing pages often contain human-written explanations, product guardrails, edge cases, and nuance that are not evident from the code alone. Treat them as _supplementary_ material only: mine them for intent and fold that in, and rework or delete duplicative content freely. They are a second pass on top of the code, never a substitute for it. **The code is ALWAYS the source of truth. Whenever the code and the existing docs disagree, follow the code without exception**, correct the docs to match, and flag the discrepancy for human review. Never carry over a behavior, signature, parameter, default, return type, or option from the old docs once you have seen the code contradict it — do not "stay faithful to the old docs" in those cases. When you cannot find something in the code, verify it against the code before documenting it; do not invent or assume, and note it as missing/unverifiable instead.
 3. **Then apply the conventions below** for architecture, naming, structure, and voice. Before writing full docs content, first ask user to confirm filetree structure.
 
 ## Always flag for human review
@@ -71,10 +69,10 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 
 - Address the reader as "you"; use active voice and imperatives.
 - **Fragment vs. sentence in lists**: use fragments when simply listing pieces or labels (no period needed); use full sentences (including standalone imperatives like "Revoke unused keys.") when describing steps or actions, and end those with a period. Be consistent within a single list. List items that complete a lead-in stem ("From the page, you can:") are fragments and take no period.
-- **Italicize notes and examples**: write them as *Note: …* and *Example: …*.
+- **Italicize notes and examples**: write them as _Note: …_ and _Example: …_.
 - **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **App Root Directory**).
 - **Inline code** for code identifiers, file names, locale codes, environment variables, key prefixes, and headers (`en-US`, `GT_API_KEY`, `gtx-api-`, `x-gt-api-key`).
-- **Summarize runtime wording; do not quote it verbatim.** Paraphrase interactive prompts, success and log messages, and console output rather than copying exact strings, so the docs stay correct when that wording changes. Reproduce a string exactly only when the value is part of the contract — environment variable names, flags, config keys, file names, commands, and error codes/identifiers. *Example: write "the wizard asks which API key type to generate" rather than quoting the full prompt sentence.*
+- **Summarize runtime wording; do not quote it verbatim.** Paraphrase interactive prompts, success and log messages, and console output rather than copying exact strings, so the docs stay correct when that wording changes. Reproduce a string exactly only when the value is part of the contract — environment variable names, flags, config keys, file names, commands, and error codes/identifiers. _Example: write "the wizard asks which API key type to generate" rather than quoting the full prompt sentence._
 
 #### Referring to Dashboard locations
 
@@ -85,7 +83,7 @@ Use a bolded breadcrumb with `>`: **Locadex > Configuration > General**, **Proje
 - **Default to bullet points** for readability and quick scanning, and for all conceptual explanations. Do not overuse tables.
 - **Use a table only when comparing fixed reference data across the same dimensions:**
   - A matrix (roles × permissions with ✓).
-  - Items compared across fixed dimensions (annotation types: *Best For* / *Usage*).
+  - Items compared across fixed dimensions (annotation types: _Best For_ / _Usage_).
   - Reference lookups with parallel columns (locale code / language / script / region / description; API key resource / Read / Write).
   - A Reference overview table listing every option/method covered on the page (see Reference page).
 - Do not use a table for a simple enumeration, a single description column, or a conceptual explanation.
@@ -110,11 +108,11 @@ Use a bolded breadcrumb with `>`: **Locadex > Configuration > General**, **Proje
 
 Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Directive** (and **Directives**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
 
-*Note: capitalize **Autoderive** only when referring to the feature in prose; the `gt.config.json` key stays lowercase in code as `autoderive`. Do not write "General Translation Autoderive" — the feature name stands on its own.*
+_Note: capitalize **Autoderive** only when referring to the feature in prose; the `gt.config.json` key stays lowercase in code as `autoderive`. Do not write "General Translation Autoderive" — the feature name stands on its own._
 
 Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as Projects and Context Groups may still be pluralized.
 
-Do not use the **plural of "product"** in reference to the General Translation product itself — no "products", "product suite", or "product line" (it is one full-stack product). *Exception:* other companies' products can take the plural (e.g. "the world's best products should be available to the whole world").
+Do not use the **plural of "product"** in reference to the General Translation product itself — no "products", "product suite", or "product line" (it is one full-stack product). _Exception:_ other companies' products can take the plural (e.g. "the world's best products should be available to the whole world").
 
 Capitalize the scope noun even inside hyphenated compounds (Organization-level, Project-wide, Project-scoped, Project-specific). Keep it lowercase only inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
 
@@ -162,7 +160,7 @@ The docs have these top-level sections, in this order:
 6. **Python**
 7. **Integrations** — plugins for third-party content platforms (for example, Sanity, Storyblok, and Google Drive).
 
-Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Get Started → Key Concepts → For coding agents**).
+Some sections are **multi-part**: they group several capabilities, and _each_ capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Get Started → Key Concepts → For coding agents**).
 
 ### The three-section spine
 
@@ -181,15 +179,15 @@ The **exact per-page structure** for each of these types is defined in Page stru
 The **React** section documents several frameworks that share one API — `gt-react` (React SPAs), `gt-next` (Next.js), TanStack Start, and `gt-react-native` — plus the React Core linter. Because the components, hooks, and functions are (mostly) identical across them, do **not** split these into separate top-level sections; fold them into one React section shaped like this:
 
 - **Get Started** (folder). One **Overview** page plus **one Quickstart page per meaningfully different framework**. The Overview orients the reader (what the ecosystem is, shared concepts, how to pick a framework) and links to the quickstarts. Each quickstart is titled **"[Framework] Quickstart"** — **React Quickstart**, **Next.js Quickstart**, **TanStack Start Quickstart**, **React Native Quickstart** — with the file named for the framework (`get-started/react.md`, `get-started/nextjs.md`, `get-started/tanstack-start.md`, `get-started/react-native.md`) and the Overview at `get-started/overview.md`. Only give a framework its own quickstart when its setup path is genuinely different; if two frameworks install and initialize identically, use tabs on one page instead.
-- **Guides** and **Reference** are **shared across all frameworks**. Write one page per task/symbol, and show the per-framework implementation differences with **tabs**, not duplicate pages. Use this exact tab order where frameworks differ: `<Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>`. When a symbol or behavior is unavailable in a framework, say so with an italicized *Note:* (for example, server-only functions are Next.js-only). When a symbol is identical everywhere, no tabs are needed.
+- **Guides** and **Reference** are **shared across all frameworks**. Write one page per task/symbol, and show the per-framework implementation differences with **tabs**, not duplicate pages. Use this exact tab order where frameworks differ: `<Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>`. When a symbol or behavior is unavailable in a framework, say so with an italicized _Note:_ (for example, server-only functions are Next.js-only). When a symbol is identical everywhere, no tabs are needed.
 - **Framework-specific pages** — anything that only applies to one framework (for example, Next.js server components, middleware, the config plugin, and localized `<Link>`; React Native's native plugin/setup; TanStack Start's server setup) lives in a **folder named for that framework**, and those framework folders are grouped under a single **`(additional-frameworks)` route group** at the section root (`react/(additional-frameworks)/nextjs`, `.../react-native`, `.../tanstack-start`). A **route group** is a folder wrapped in parentheses: it groups pages under one sidebar heading (displayed here as **Additional Frameworks**) **without adding a URL segment**, so the parenthesized folder disappears from the link. Folder display names use the framework's official spelling; link slugs stay lowercase-hyphenated and omit the route group (`/docs/react/nextjs/...`, `/docs/react/react-native/...`, `/docs/react/tanstack-start/...`).
-- **Linter.** Fold the React Core linter (ESLint plugin and its rules) into the shared Guides (a *Lint your code* guide) and Reference (a lint-rules page), with tabs for the per-framework ESLint config where it differs.
+- **Linter.** Fold the React Core linter (ESLint plugin and its rules) into the shared Guides (a _Lint your code_ guide) and Reference (a lint-rules page), with tabs for the per-framework ESLint config where it differs.
 
 This is the one **exception** to the single-part "section landing page is the Quickstart" rule: the React section landing is the **Get Started → Overview** page. Keep terminology, examples, and page order consistent across the framework tabs.
 
 ### Filetree (`meta.json`)
 
-The filetree is defined by **per-folder `meta.json` files** (the Fumadocs convention), not a single root `filetree.json`. Every section and subsection folder has a `meta.json` that sets its display name and the order of its pages. When you add, remove, or reorder pages in *any* section, update the relevant folder's `meta.json` (and confirm the structure with the user before writing a new section's pages).
+The filetree is defined by **per-folder `meta.json` files** (the Fumadocs convention), not a single root `filetree.json`. Every section and subsection folder has a `meta.json` that sets its display name and the order of its pages. When you add, remove, or reorder pages in _any_ section, update the relevant folder's `meta.json` (and confirm the structure with the user before writing a new section's pages).
 
 A `meta.json` supports these keys:
 
@@ -227,7 +225,7 @@ Document these entry points for developers on the **Overview → For coding agen
 
 ### AGENTS.md (for product users' agents)
 
-Publish a root **`AGENTS.md`** aimed at the **coding agents of developers who use General Translation** — *not* at agents editing this docs repo. A developer drops it (or its contents) into their own project so their agent knows how to add and run General Translation correctly. Keep it self-contained, imperative, and short enough to fit an agent's context window.
+Publish a root **`AGENTS.md`** aimed at the **coding agents of developers who use General Translation** — _not_ at agents editing this docs repo. A developer drops it (or its contents) into their own project so their agent knows how to add and run General Translation correctly. Keep it self-contained, imperative, and short enough to fit an agent's context window.
 
 Structure it in this order:
 
@@ -266,12 +264,12 @@ Use **Reference** for complete, standardized descriptions of how something works
 
 In short:
 
-- **Guides answer "How do I do this?"** They are practical and customer-sendable. Titles use the **gerund (-ing) form** (*Configuring Locadex workflows*, *Reviewing and editing translations*, *Translating content*, *Querying translations*), and steps run in order toward a goal. The file name and link slug follow the gerund title (*Using translations* → `using-translations.md`).
+- **Guides answer "How do I do this?"** They are practical and customer-sendable. Titles use the **gerund (-ing) form** (_Configuring Locadex workflows_, _Reviewing and editing translations_, _Translating content_, _Querying translations_), and steps run in order toward a goal. The file name and link slug follow the gerund title (_Using translations_ → `using-translations.md`).
 - **Reference answers "What exactly does this setting / command / API / page do?"** Reference pages are exact, standardized, and comprehensive within a consistent structure; they can read more "robotic" than guides.
 
 Scope guides by outcome, not by surface area:
 
-- **Name guides by the outcome the reader achieves, never one-per-command or one-per-function.** Fold several related commands or functions into a single workflow guide (for example, `upload` + `enqueue` + `download` + `stage` + `save-local` → one *Managing translations* guide) and keep the exhaustive per-command flags in Reference.
+- **Name guides by the outcome the reader achieves, never one-per-command or one-per-function.** Fold several related commands or functions into a single workflow guide (for example, `upload` + `enqueue` + `download` + `stage` + `save-local` → one _Managing translations_ guide) and keep the exhaustive per-command flags in Reference.
 - **Only add a "Configure the [capability]" guide when it covers materially more than the Quickstart** — multiple setup paths, locales, file selection, storage choices, or credentials. If it would restate the Quickstart, omit it and let the Reference configuration page carry the detail.
 - **Do not create a standalone FAQs page.** FAQs may appear as a section on a Get Started or overview page; otherwise individual questions belong inside the relevant guide.
 
@@ -284,7 +282,7 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 - **The filetree is the source of truth for order.** Each folder's `meta.json` `pages` array is the canonical order. Set and change page order there; the sidebar navigation follows it.
 - Order Guides along the natural workflow, and order Reference from setup outward.
 - **Single-part technical sections (CLI, React, Node, Python) share one Reference spine:** Configuration → Commands (or API) → File formats, each a subsection with one page per command, function, format, or config area. Order commands from setup outward (`init`/`setup`/`configure`/`auth` → `translate` → the CI building blocks → `generate`/`validate`).
-- *Examples:*
+- _Examples:_
   - **Dashboard Guides:** generating context → reviewing and editing translations → adding annotations.
   - **CLI Guides:** configuring the CLI (`configuring-cli.md`) → generating translations → managing translations → tracking by branch → …
   - **CLI Reference:** Configuration → Commands → File Formats.
@@ -299,7 +297,7 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 
 ### File format
 
-- **Generated/draft docs are authored as** `.md`**.** For production they will and should be converted to `**.mdx`** (Markdown with JSX support), UTF-8, with LF line endings. MDX is what enables the shared components (`<Tabs>`, `<Callout>`, `<Files>`, `<Accordion>`) used across the docs. Where this guide says `.md`, read it as `.mdx` once published.
+- **Generated/draft docs are authored as** `.md`**.** For production they will and should be converted to `**.mdx`\*\* (Markdown with JSX support), UTF-8, with LF line endings. MDX is what enables the shared components (`<Tabs>`, `<Callout>`, `<Files>`, `<Accordion>`) used across the docs. Where this guide says `.md`, read it as `.mdx` once published.
 
 ### File and folder naming
 
@@ -313,7 +311,7 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 - **Structural and navigational folder display names are lowercase — the rule is all lowercase.** This covers the spine and grouping folders: `overview`, `get started`, `quickstart`, `guides`, and `reference`. There is no capitalized exception among them (get started and quickstart are lowercase too). Multi-word names keep the space but stay lowercase (`get started`).
 - **Reference subsection folders are lowercase as well** — generic groupings display as `commands`, `formats`, `functions`, `components`, `hooks`, and `types`. Never use dashes in the display name; the build derives the URL/`path` slug by lowercasing and hyphenating.
 - **Only proper nouns and product/brand names keep their official casing** as folder names: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `React Native`, `TanStack Start`, and the `GT Class` reference group. Everything structural around them is lowercase.
-- **Links and URL slugs are always lowercase and hyphenated**, matching the lowercased display name. *Example: the get started section is linked as* `/docs/platform/dashboard/get-started`*.*
+- **Links and URL slugs are always lowercase and hyphenated**, matching the lowercased display name. _Example: the get started section is linked as_ `/docs/platform/dashboard/get-started`_._
 
 ### Frontmatter
 
@@ -331,8 +329,8 @@ description: Use labels, notes, and comments to coordinate translation review by
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The `title` must match the page H1 exactly.
 - `description`: one sentence ending with a period, action-oriented ("Configure…", "Review…", "Learn…"). Spell out **General Translation** here (never open with "GT").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
-  - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type].` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
-  - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic].` — do not start the sentence with "API reference". *Example: "…across every locale. Reference for supported file formats."*
+  - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type].` — including OpenAPI endpoints. _Example: "…into a target locale. API reference for translateField."_
+  - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic].` — do not start the sentence with "API reference". _Example: "…across every locale. Reference for supported file formats."_
 
 ## Page structure
 
@@ -390,7 +388,7 @@ Use common workflow sections on **Get Started pages and other overview/landing p
 
 ### Guide page
 
-Guides are **actionable**: they walk the reader through completing one task, in order. Give them **gerund (-ing) titles** that are easy to understand (*Configuring Locadex workflows*, *Translating content*), and name the file and link slug to match the title (`configuring-workflows.md`, `translating-content.md`).
+Guides are **actionable**: they walk the reader through completing one task, in order. Give them **gerund (-ing) titles** that are easy to understand (_Configuring Locadex workflows_, _Translating content_), and name the file and link slug to match the title (`configuring-workflows.md`, `translating-content.md`).
 
 Anatomy:
 
@@ -400,7 +398,7 @@ Anatomy:
 4. Detailed task sections (`##`): one section per sub-task, each with ordered steps. Name the exact buttons and pages in **bold**. Titles must be understandable and actionable.
 5. Optional **What to use and when**: when a task offers two or more valid approaches, add a short decision list contrasting them (each bullet: the option in **bold**, then when to choose it) so the reader can pick quickly. Model this on the Next.js "What to use and when" bullets.
 
-*Example happy-path workflow (from the context guide):*
+_Example happy-path workflow (from the context guide):_
 
 ```text
 ## Basic context workflow
@@ -420,16 +418,16 @@ Use the `a)` `b)` `c)` sub-section pattern for parallel alternative paths (see N
 - Configuring [integration]
 - Translating content
 - Managing translations
-- Querying translations *or* Using translated content
+- Querying translations _or_ Using translated content
 
 ### Reference page
 
-Reference pages are **comprehensive, exact lookups** for a **technical audience**: cover every field, option, parameter, permission, command, flag, limit, error, and setting for the topic — including defaults and behavior — within a clear, predictable structure. **This is the one place to favor completeness over brevity.** The conciseness rule still governs *wording*, but never drop options, flags, edge cases, or defaults just to keep a page short. When in doubt here, document more. This is the exception to the general "keep it short" guidance that applies elsewhere in the docs.
+Reference pages are **comprehensive, exact lookups** for a **technical audience**: cover every field, option, parameter, permission, command, flag, limit, error, and setting for the topic — including defaults and behavior — within a clear, predictable structure. **This is the one place to favor completeness over brevity.** The conciseness rule still governs _wording_, but never drop options, flags, edge cases, or defaults just to keep a page short. When in doubt here, document more. This is the exception to the general "keep it short" guidance that applies elsewhere in the docs.
 
 - **Write for developers.** Assume familiarity with the terminal, code, and the relevant language or framework; do not simplify away technical detail or restate basics covered in the Quickstart.
 - **Lead with an overview table** that lists every item covered on the page (option, method, field, command, flag, endpoint), and **link each item name to its section on the same page** so a reader can jump straight to it. Model this on the Sanity plugin reference and the Next.js `generateMetadata` reference. For parameter/flag tables, use the column order Name, Description, Type, Optional, Default (see Lists vs. tables). This overview table replaces a separate bullet "table of contents".
-- **The overview table is for navigation and scanning only — it never replaces the detailed sections.** Every reference page still needs its full per-item sections *below* the table (each with an example, expected output, behavior, and notes). A page that is only a table is not finished.
-- **Then one section per item** (`##`, optionally grouped into subsections), in the **same order as the table**. **Each section must stand on its own:** the overview table is high-level navigation, but the reader should get *everything* about that item from its own section without going back to the table. Lead each section with a compact attribute line restating the item's key facts (for a field or parameter: **Type**, **Optional**/**Required**, and **Default** — the same values as its table row, in the format shown below), then give the full description, accepted values, side effects, error/permission behavior, and an example. Do not leave the type or default *only* in the table. Keep entries parallel in shape.
+- **The overview table is for navigation and scanning only — it never replaces the detailed sections.** Every reference page still needs its full per-item sections _below_ the table (each with an example, expected output, behavior, and notes). A page that is only a table is not finished.
+- **Then one section per item** (`##`, optionally grouped into subsections), in the **same order as the table**. **Each section must stand on its own:** the overview table is high-level navigation, but the reader should get _everything_ about that item from its own section without going back to the table. Lead each section with a compact attribute line restating the item's key facts (for a field or parameter: **Type**, **Optional**/**Required**, and **Default** — the same values as its table row, in the format shown below), then give the full description, accepted values, side effects, error/permission behavior, and an example. Do not leave the type or default _only_ in the table. Keep entries parallel in shape.
 - **Group large reference sets into labeled tables** under H2/H3 headings. Always label every table column — never leave header cells blank.
 - **Keep the comments when you show code.** Preserve the `// ...` comments from real examples — especially those in the existing docs — because they carry intent that a bare snippet loses. Prefer pulling a complete, commented example over paraphrasing one.
 
@@ -437,13 +435,13 @@ Reference pages are **comprehensive, exact lookups** for a **technical audience*
 
 **Page shape (general default, not binding).** Adapt per item, but default to this order and include every part that applies:
 
-1. **Overview** — a short intro of what the item is and when to use it, with the **usage/signature block inline** in this section (do not add a separate "Usage" section). Include a *typical workflow* here when one exists.
+1. **Overview** — a short intro of what the item is and when to use it, with the **usage/signature block inline** in this section (do not add a separate "Usage" section). Include a _typical workflow_ here when one exists.
 2. **How it works** — behavior, resolution order, side effects, and the internals a developer needs.
-3. **Flags** / **Options** / **Parameters** — document **every** flag or option, not just the common ones, in a table (columns: Name, Description, Type, Optional, Default). Group large sets into H3 subsections (for example, *Source-scanning flags*, *Experimental flags*).
+3. **Flags** / **Options** / **Parameters** — document **every** flag or option, not just the common ones, in a table (columns: Name, Description, Type, Optional, Default). Group large sets into H3 subsections (for example, _Source-scanning flags_, _Experimental flags_).
 4. **Example** — a runnable example, with its comments; include one whenever one is available. For configuration and field references, pair the input with its result (for example, a config snippet and the file or HTTP response it produces) using an `Output` title or `// Before` / `// After` comments, as the Next.js metadata reference pairs each field with its `<head>` output.
-5. **Other notes** — outputs/returns, limits, errors, availability caveats, and — when behavior changed across releases — a **Version history** table (columns: Version, Changes). When availability varies by library or framework, state it as an italicized *Note:*.
+5. **Other notes** — outputs/returns, limits, errors, availability caveats, and — when behavior changed across releases — a **Version history** table (columns: Version, Changes). When availability varies by library or framework, state it as an italicized _Note:_.
 
-*Example overview table (each name links to its section below):*
+_Example overview table (each name links to its section below):_
 
 ```text
 | Option | Description | Type | Optional | Default |
@@ -452,7 +450,7 @@ Reference pages are **comprehensive, exact lookups** for a **technical audience*
 | [`locales`](#locales) | Target locale codes. | `string[]` | No | — |
 ```
 
-*Example item section:*
+_Example item section:_
 
 ```text
 ## `sourceLocale` [#source-locale]
@@ -473,10 +471,10 @@ Two reference-page shapes recur in single-part technical sections:
 
 Do not add "Next steps", "What to read next", "See also", "Learn more", "Related pages", "Related reference", or similar related-links roundup sections to any page. Related pages are handled globally by a template component appended to the bottom of every page (and surfaced in the header), so per-page roundups are redundant and drift out of date.
 
-- *Note:* the template's section title differs by page type — **Next steps** on Guides, **Related pages** on Reference — but you never author either one by hand; the template adds it afterward.
+- _Note:_ the template's section title differs by page type — **Next steps** on Guides, **Related pages** on Reference — but you never author either one by hand; the template adds it afterward.
 - End a page on its last real content section (e.g. FAQs, the final task section, the OpenAPI spec note).
 - Inline, contextual links inside prose are fine and encouraged (e.g. "install `generaltranslation` in the [Quickstart](…)"). The rule targets standalone roundup sections, not in-context links.
-- **Drop the per-page scaffolding common in older docs:** standalone *Notes*, *Next steps*, *Related*, and repeated *Install* / *Add your environment variables* / *Add to your build process* steps. Setup steps live once in the Quickstart; contextual links inside prose replace roundup sections.
+- **Drop the per-page scaffolding common in older docs:** standalone _Notes_, _Next steps_, _Related_, and repeated _Install_ / _Add your environment variables_ / _Add to your build process_ steps. Setup steps live once in the Quickstart; contextual links inside prose replace roundup sections.
 
 ### Links
 
@@ -513,8 +511,8 @@ When to add a note:
 
 How to write it:
 
-- Use a `Note` callout led with **`Changed in vN:`**, stating what changed **from → to** in one or two sentences, and link to the current API. *Example:* "**Changed in v11:** `GTProvider` no longer accepts `config` or `loadTranslations`; move setup to [`initializeGTSPA`](…) and pass the resolved `locale` and `translations`."
-- For a per-item behavior change on a Reference page, prefer the **Version history** table (columns: Version, Changes) in that item's *Other notes* over a callout (see Reference page).
+- Use a `Note` callout led with **`Changed in vN:`**, stating what changed **from → to** in one or two sentences, and link to the current API. _Example:_ "**Changed in v11:** `GTProvider` no longer accepts `config` or `loadTranslations`; move setup to [`initializeGTSPA`](…) and pass the resolved `locale` and `translations`."
+- For a per-item behavior change on a Reference page, prefer the **Version history** table (columns: Version, Changes) in that item's _Other notes_ over a callout (see Reference page).
 - Show old-vs-new code only when it materially helps migration, using `// Before` / `// After` (see Code blocks) — and keep the current ("after") form as the primary example, never leading with the deprecated one.
 
 ### Code blocks
@@ -525,7 +523,7 @@ How to write it:
 - Highlight specific lines with the Fumadocs syntax `// [!code highlight]`.
 - **Use tabs whenever possible.** This follows the conciseness rule: when the shape of the instructions is the same and only the specific code differs (package managers, language variants, query examples), do not duplicate the instructions — capture the variants in tabs. List all four package managers in this exact order: `<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>`. Use this exact shape, with a `<Tab value="...">` per item wrapping a fenced code block:
 
-```mdx
+````mdx
 <Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
   <Tab value="npm">
     ```bash
@@ -533,17 +531,9 @@ How to write it:
     ```
   </Tab>
 
-  <Tab value="yarn">
-    ```bash
-    yarn add gt-sanity
-    ```
-  </Tab>
+<Tab value='yarn'>```bash yarn add gt-sanity ```</Tab>
 
-  <Tab value="bun">
-    ```bash
-    bun add gt-sanity
-    ```
-  </Tab>
+<Tab value='bun'>```bash bun add gt-sanity ```</Tab>
 
   <Tab value="pnpm">
     ```bash
@@ -551,7 +541,7 @@ How to write it:
     ```
   </Tab>
 </Tabs>
-```
+````
 
 - **Flag correct vs. incorrect patterns with ✅ / ❌** in code comments or prose (e.g. `// ❌ Wrong` / `// ✅ Correct`).
 - **Show migrations as before/after.** Mark the old and new code with `// Before` and `// After` comments (paired blocks, or one block when the diff is small) so the change is unmistakable.
@@ -600,4 +590,3 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - No broken internal links (verify the target file exists).
 - **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
 - No typos; sentences end with periods.
-
