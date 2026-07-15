@@ -107,7 +107,27 @@ gtPlugin(config: GTPluginConfig)
     },
     showDocumentInternationalization: {
       type: 'boolean',
-      description: 'When true (default), automatically adds the @sanity/document-internationalization plugin with language badges, translation menu, and per-language templates. Requires translateDocuments.',
+      description: 'When true (default), automatically adds the @sanity/document-internationalization plugin with language badges, translation menu, and per-language templates. Requires translateDocuments. Document types localized in place via internationalized arrays are excluded automatically.',
+      optional: true,
+    },
+    internationalizedArray: {
+      type: 'GTFieldLevelLocalizationConfig',
+      description: 'Field-level (internationalized array) localization. When enabled, generates internationalizedArray* schema types and input components from sourceLocale and locales.',
+      optional: true,
+    },
+    fieldLevelLocalization: {
+      type: 'GTFieldLevelLocalizationConfig',
+      description: 'Descriptive alias for internationalizedArray.',
+      optional: true,
+    },
+    translationLevel: {
+      type: "'document' | 'internationalizedArray' | 'mixed'",
+      description: 'How matched documents are translated. "document" (default) creates per-locale documents; "internationalizedArray" localizes fields in place; "mixed" uses the array strategy for fieldLevelDocuments and document-level for everything else.',
+      optional: true,
+    },
+    fieldLevelDocuments: {
+      type: "TranslateDocumentFilter[] | string[]",
+      description: 'In "mixed" mode, the document types that use the internationalized-array strategy.',
       optional: true,
     },
   }}
@@ -236,6 +256,78 @@ gtPlugin({
   ],
 });
 ```
+
+## GTFieldLevelLocalizationConfig
+
+Field-level localization options, passed as `internationalizedArray` (or its alias `fieldLevelLocalization`). Locale identity always comes from the plugin's `sourceLocale` and `locales`.
+
+```typescript
+type GTFieldLevelLocalizationConfig = {
+  // Generate internationalizedArray* schema types and input components.
+  // Default: false
+  enabled?: boolean;
+  // Which field types to generate. Built-in shortcuts: 'string', 'text',
+  // 'block' (Portable Text). Object form supplies a custom value field.
+  // Default: ['string', 'text']
+  fieldTypes?: FieldLevelFieldType[];
+  // Per-locale display labels shown in the Studio input.
+  languageTitles?: Record<string, string>;
+  // Compute a display label for a locale (overrides languageTitles).
+  getLanguageTitle?: (locale: string) => string;
+  // Prefix for generated type names. Default: 'internationalizedArray'
+  typePrefix?: string;
+  // When typePrefix is customized, also generate internationalizedArray*
+  // aliases for interop with existing data. Default: true
+  includeCompatibilityTypes?: boolean;
+  // Override or detach the Studio components attached to generated types.
+  // Each slot accepts a component, or false to use Sanity's default rendering.
+  components?: {
+    input?: ComponentType<ArrayOfObjectsInputProps> | false;
+    item?: ComponentType<ObjectItemProps> | false;
+    field?: ComponentType<FieldProps> | false;
+  };
+};
+
+type FieldLevelFieldType =
+  | 'string'
+  | 'text'
+  | 'block'
+  | {
+      name: string; // suffix for the generated type name, e.g. 'seo' → internationalizedArraySeo
+      type: string; // Sanity type of the generated value field
+      title?: string;
+      of?: unknown[];
+      fields?: unknown[];
+      options?: Record<string, unknown>;
+    };
+```
+
+### Example
+
+```typescript
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr'],
+  translateDocuments: [{ type: 'post' }],
+  internationalizedArray: {
+    enabled: true,
+    fieldTypes: ['string', 'text', 'block'],
+    languageTitles: { es: 'Español', fr: 'Français' },
+  },
+  translationLevel: 'internationalizedArray',
+});
+```
+
+Then use the generated types in your schemas:
+
+```typescript
+defineField({
+  name: 'title',
+  type: 'internationalizedArrayString',
+});
+```
+
+The stored data matches `sanity-plugin-internationalized-array`: each field is an array of `{ _key, _type, language, value }` items, so existing internationalized-array content works without migration.
 
 ## Serializer
 
