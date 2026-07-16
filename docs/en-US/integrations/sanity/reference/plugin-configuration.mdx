@@ -33,6 +33,10 @@ gtPlugin({
 | [`singletons`](#singletons) | Document IDs treated as singletons. | `string[]` | Yes | `[]` |
 | [`singletonMapping`](#singleton-mapping) | Maps a source ID and locale to a translated singleton ID. | `(sourceDocumentId: string, locale: string) => string` | Yes | `` `${sourceDocumentId}-${locale}` `` |
 | [`showDocumentInternationalization`](#show-doc-i18n) | Auto-add `@sanity/document-internationalization`. | `boolean` | Yes | `true` |
+| [`internationalizedArray`](#internationalized-array) | Configure field-level localization with internationalized arrays. | `GTFieldLevelLocalizationConfig` | Yes | — |
+| [`fieldLevelLocalization`](#field-level-localization) | Alias for `internationalizedArray`. | `GTFieldLevelLocalizationConfig` | Yes | — |
+| [`translationLevel`](#translation-level) | Choose document-level, field-level, or mixed translation. | `'document' \| 'internationalizedArray' \| 'mixed'` | Yes | `'document'` |
+| [`fieldLevelDocuments`](#field-level-documents) | Document types that use field-level localization in mixed mode. | `TranslateDocumentFilter[] \| string[]` | Yes | `[]` |
 | [`ignoreFields`](#ignore-fields) | Fields copied from the source without translating. | `FieldMatcher[]` | Yes | `[]` |
 | [`dedupeFields`](#dedupe-fields) | Fields copied from the source and made unique per locale. | `FieldMatcher[]` | Yes | `[]` |
 | [`skipFields`](#skip-fields) | Fields removed from translated documents. | `FieldMatcher[]` | Yes | `[]` |
@@ -170,7 +174,85 @@ gtPlugin({
 
 **Type** `boolean` · **Optional** · **Default** `true`
 
-When `true`, the plugin adds the `@sanity/document-internationalization` plugin with language badges, a translation menu, and per-language document templates. It uses the `type` entries in [`translateDocuments`](#translate-documents) as the schema types and `[sourceLocale, ...locales]` as the supported languages, so it only takes effect when `translateDocuments` includes document types. Set to `false` to manage internationalization yourself.
+When `true`, the plugin adds the `@sanity/document-internationalization` plugin with language badges, a translation menu, and per-language document templates. It uses the `type` entries in [`translateDocuments`](#translate-documents) as the schema types and `[sourceLocale, ...locales]` as the supported languages, so it only takes effect when `translateDocuments` includes document types. Document types localized in place with internationalized arrays are excluded automatically. Set to `false` to manage internationalization yourself.
+
+## Field-level localization [#field-level]
+
+Field-level localization stores every locale's value in one document as an internationalized array. The stored data uses the same `{ _key, _type, language, value }` item shape as `sanity-plugin-internationalized-array`, so existing internationalized-array content does not need a migration.
+
+### `internationalizedArray` [#internationalized-array]
+
+**Type** `GTFieldLevelLocalizationConfig` · **Optional**
+
+Configures the schema types and Studio input components used for field-level localization. Locale identity always comes from `sourceLocale` and `locales`.
+
+```ts
+type GTFieldLevelLocalizationConfig = {
+  enabled?: boolean; // default: false
+  fieldTypes?: FieldLevelFieldType[]; // default: ['string', 'text']
+  languageTitles?: Record<string, string>;
+  getLanguageTitle?: (locale: string) => string;
+  typePrefix?: string; // default: 'internationalizedArray'
+  includeCompatibilityTypes?: boolean; // default: true
+  components?: {
+    input?: ComponentType<ArrayOfObjectsInputProps> | false;
+    item?: ComponentType<ObjectItemProps> | false;
+    field?: ComponentType<FieldProps> | false;
+  };
+};
+
+type FieldLevelFieldType =
+  | 'string'
+  | 'text'
+  | 'block'
+  | {
+      name: string;
+      type: string;
+      title?: string;
+      of?: unknown[];
+      fields?: unknown[];
+      options?: Record<string, unknown>;
+    };
+```
+
+The built-in `fieldTypes` shortcuts are `string`, `text`, and `block` (Portable Text). An object entry defines a custom generated type. `getLanguageTitle` overrides `languageTitles` when both are set. Each `components` slot accepts a Studio component or `false` to use Sanity's default rendering.
+
+### `fieldLevelLocalization` [#field-level-localization]
+
+**Type** `GTFieldLevelLocalizationConfig` · **Optional**
+
+A descriptive alias for [`internationalizedArray`](#internationalized-array).
+
+### `translationLevel` [#translation-level]
+
+**Type** `'document' | 'internationalizedArray' | 'mixed'` · **Optional** · **Default** `'document'`
+
+Controls how matched documents are translated:
+
+- `'document'` creates one document per locale
+- `'internationalizedArray'` localizes configured fields in place
+- `'mixed'` uses field-level localization for [`fieldLevelDocuments`](#field-level-documents) and document-level localization for everything else
+
+### `fieldLevelDocuments` [#field-level-documents]
+
+**Type** `TranslateDocumentFilter[] | string[]` · **Optional** · **Default** `[]`
+
+Selects the document types that use internationalized arrays when `translationLevel` is `'mixed'`. It accepts the same filter and shorthand string forms as [`translateDocuments`](#translate-documents).
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr'],
+  translateDocuments: [{ type: 'post' }, { type: 'siteSettings' }],
+  internationalizedArray: {
+    enabled: true,
+    fieldTypes: ['string', 'text', 'block'],
+    languageTitles: { es: 'Español', fr: 'Français' },
+  },
+  translationLevel: 'mixed',
+  fieldLevelDocuments: [{ type: 'siteSettings' }],
+});
+```
 
 ## Field matchers [#field-matchers]
 
