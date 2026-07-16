@@ -350,7 +350,7 @@ description: How to use labels, notes, and comments to coordinate translation re
 
 A few optional fields appear on specific page types:
 
-- `related.links` (optional): a YAML list of root-relative `/docs/...` paths that feed the global related-pages template rendered at the bottom of the page (see No next-steps sections). This is the **only** way to author related links — never write a manual roundup section. List logical page paths (no `.md`/`.mdx`), roughly 2–5 links, most relevant first, and verify each target exists.
+- `related.links` (optional): a YAML list of root-relative `/docs/...` paths that feed the global related-pages template rendered at the bottom of the page (see No next-steps sections). This is the **only** way to author related links — never write a manual roundup section. List logical page paths (no `.md`/`.mdx`), most relevant first, and verify each target exists. For how many links and which ones by page type, see [Choosing `related.links`](#choosing-relatedlinks).
 
   ```yaml
   related:
@@ -515,6 +515,15 @@ Do not add "Next steps", "What to read next", "See also", "Learn more", "Related
 - Inline, contextual links inside prose are fine and encouraged (e.g. "install `generaltranslation` in the [Quickstart](…)"). The rule targets standalone roundup sections, not in-context links.
 - **Drop the per-page scaffolding common in older docs:** standalone _Notes_, _Next steps_, _Related_, and repeated _Install_ / _Add your environment variables_ / _Add to your build process_ steps. Setup steps live once in the Quickstart; contextual links inside prose replace roundup sections.
 
+#### Choosing `related.links`
+
+Populate `related.links` by page type, ordered by **what the reader most likely wants to do next**:
+
+- **Quickstart and section-entry pages** (`quickstart`, the Dashboard/Locadex entry page, and each React per-framework quickstart) link to the **four most relevant guides for that section** — what someone who has just set up their app would do next. **Never link another quickstart or a reference page.**
+- **Guide pages** link to the **four most relevant _other_ guides in the same section** — what someone who has just finished this guide would do next. **Never** link the guide to itself, to another section's guides, to quickstarts, or to reference pages.
+- **If a section has fewer than four guides**, link all of them (excluding the current page); do not pad the list with reference or cross-section links to reach four.
+- **Exception — a section with no guides** (currently OpenAPI): link the most relevant reference pages instead, since there are no guides to point to.
+
 ### Links
 
 - Internal links use root-relative `/docs/...` paths (e.g. `/docs/platform/dashboard/reference/api-keys`).
@@ -641,5 +650,6 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Product/term casing matches the canonical list (Dashboard, Locadex, Core, Project, Context Group, Glossary, Directives, Organization, Enterprise, GitHub).
 - Reference descriptions end with a second sentence: `API reference for X` for API/library pages, or `Reference for X` for non-API reference pages (no trailing period).
 - No broken internal links (verify the target file exists).
+- `related.links` follow the page-type rule: quickstart/entry pages point to that section's guides (four, or all if the section has fewer), guide pages to the most relevant other guides in the same section; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
 - **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
 - No typos; body prose sentences end with periods (descriptions do not).
