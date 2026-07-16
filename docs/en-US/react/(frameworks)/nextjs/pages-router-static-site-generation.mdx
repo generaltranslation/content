@@ -1,0 +1,64 @@
+---
+
+title: Pages Router static site generation
+description: How to pre-render localized Next.js Pages Router pages with General Translation
+related:
+  links:
+    - /docs/react/guides/nextjs-pages-router-quickstart
+    - /docs/react/nextjs/pages-router-middleware
+    - /docs/react/guides/storing-translations
+
+---
+
+Pre-render localized Pages Router pages with `withGTStaticProps`. The setup mirrors `withGTServerSideProps`, but Next.js generates the props at build time.
+
+## Keep your Next.js config [#config]
+
+Static generation does not change your `withGTConfig` setup:
+
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+
+const nextConfig: NextConfig = {};
+
+export default withGTConfig(nextConfig);
+```
+
+## Configure locale routing [#routing]
+
+Follow the [Pages Router middleware guide](/docs/react/nextjs/pages-router-middleware) to create `proxy.ts` and move your routes under `pages/[locale]`.
+
+## Add static props [#static-props]
+
+Wrap each page's `getStaticProps` function with `withGTStaticProps`:
+
+```tsx title="pages/[locale]/about.tsx"
+import type { GetStaticProps } from 'next';
+import { T, Var, withGTStaticProps } from 'gt-next';
+
+type AboutPageProps = {
+  generatedAt: string;
+};
+
+export const getStaticProps: GetStaticProps<AboutPageProps> =
+  withGTStaticProps(async () => ({
+    props: {
+      generatedAt: new Date().toISOString(),
+    },
+  }));
+
+export default function AboutPage({ generatedAt }: AboutPageProps) {
+  return <T>Generated at: <Var>{generatedAt}</Var></T>;
+}
+```
+
+`withGTStaticProps` adds the locale and translation snapshot to the returned page props. If the page has no other props, use the no-argument form:
+
+```tsx title="pages/[locale]/index.tsx"
+import { withGTStaticProps } from 'gt-next';
+
+export const getStaticProps = withGTStaticProps();
+```
+
+Keep passing those values to `GTProvider` in `_app.tsx` as shown in the [Pages Router Quickstart](/docs/react/guides/nextjs-pages-router-quickstart).
