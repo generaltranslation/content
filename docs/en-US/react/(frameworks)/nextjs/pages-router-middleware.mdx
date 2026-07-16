@@ -44,3 +44,39 @@ Move your Pages Router pages under `pages/[locale]`. Keep `_app.tsx` at the root
 </Files>
 
 The route segment receives the locale selected by the middleware. See [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) for routing options and localized path configuration.
+
+## Connect locale changes [#locale-changes]
+
+Override `_reload` on [`GTProvider`](/docs/react/reference/components/gt-provider) so locale changes use Pages Router navigation and load the selected locale's page props:
+
+```tsx title="pages/_app.tsx"
+import type { AppProps } from 'next/app';
+import { useRouter } from 'next/router';
+import { GTProvider, type WithGTStaticProps } from 'gt-next';
+
+export default function App({
+  Component,
+  pageProps,
+}: AppProps<WithGTStaticProps>) {
+  const router = useRouter();
+  const { locale, translations, ...restPageProps } = pageProps;
+
+  return (
+    <GTProvider
+      locale={locale}
+      translations={translations}
+      _reload={({ locale: nextLocale }) => {
+        void router.push(
+          { pathname: router.pathname, query: router.query },
+          router.asPath,
+          { locale: nextLocale }
+        );
+      }}
+    >
+      <Component {...restPageProps} />
+    </GTProvider>
+  );
+}
+```
+
+For server-rendered pages, use `WithGTServerSideProps` instead. The callback replaces the provider's default full-page reload with a Pages Router navigation.
