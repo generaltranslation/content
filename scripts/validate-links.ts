@@ -128,7 +128,7 @@ function filePathToUrlPath(relPath: string): string {
   let urlPath = relPath.replace(/\.mdx$/, '');
 
   // Split into segments, dropping route-group folders like
-  // "(additional-frameworks)" — fumadocs excludes them from URLs
+  // "(frameworks)" — fumadocs excludes them from URLs
   const segments = urlPath
     .split('/')
     .filter((segment) => !(segment.startsWith('(') && segment.endsWith(')')));

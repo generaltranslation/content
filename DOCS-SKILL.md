@@ -16,40 +16,35 @@ General Translation is **one full-stack product**, and every top-level docs sect
 Good docs come from understanding, not paraphrasing. Before applying any formatting rule below — especially on a first rewrite with access to the codebase — work in this order:
 
 1. **Understand the application and the logic of each piece first.** For the product/section you are documenting, work out what each feature, function, endpoint, or setting actually does, who uses it, and why it exists — including inputs, outputs, defaults, constraints, and failure modes. Only once the behavior is clear should you spin out into the structure and formatting conventions in this guide. Do not start from the formatting.
-2. **Read the existing docs for that area, but treat the code as the source of truth.** Existing pages often contain human-written explanations, product guardrails, edge cases, and nuance that are not evident from the code alone. Treat them as _supplementary_ material only: mine them for intent and fold that in, and rework or delete duplicative content freely. They are a second pass on top of the code, never a substitute for it. **The code is ALWAYS the source of truth. Whenever the code and the existing docs disagree, follow the code without exception**, correct the docs to match, and flag the discrepancy for human review. Never carry over a behavior, signature, parameter, default, return type, or option from the old docs once you have seen the code contradict it — do not "stay faithful to the old docs" in those cases. When you cannot find something in the code, verify it against the code before documenting it; do not invent or assume, and note it as missing/unverifiable instead.
-3. **Then apply the conventions below** for architecture, naming, structure, and voice. Before writing full docs content, first ask user to confirm filetree structure.
+2. **Read the existing docs for that area, but treat the code as the source of truth.** Existing pages often contain human-written explanations, product guardrails, edge cases, and nuance that are not evident from the code alone. Treat them as _supplementary_ material only: mine them for intent and fold that in, and rework or delete duplicative content freely. They are a second pass on top of the code, never a substitute for it. **The code is ALWAYS the source of truth. Whenever the code and the existing docs disagree, follow the code without exception** and correct the docs to match. Never carry over a behavior, signature, parameter, default, return type, or option from the old docs once you have seen the code contradict it — do not "stay faithful to the old docs" in those cases. When you cannot find something in the code, verify it against the code before documenting it; do not invent or assume — use your best judgement and prefer omission over invention.
+3. **Then apply the conventions below** for architecture, naming, structure, and voice. Settle the filetree structure before writing full docs content, using your best judgement.
 
-## Always flag for human review
+## Source of truth and best judgement
 
-Docs must always get some form of human review before publishing — never treat AI output as final. To make that review efficient, proactively call out the specific pieces that most need a human's eyes. Automatically surface:
+The codebase is always the source of truth. Resolve questions by reading the code, and use your best judgement to make a decision rather than deferring to a reviewer or leaving the choice open. Do not add review checklists, "flag for human review" notes, or lists of open questions to the docs or the change.
 
-- Anything **unclear in the codebase** or that you could not verify against the code.
-- Anything **logically unclear** or ambiguous in how it should behave.
-- Anything you are **not absolutely certain about**.
-- **Close calls:** when two options for structuring, displaying, or describing important information are similarly good, present both and note the tradeoff instead of silently picking one.
-- **Dashboard and Locadex changes:** these sections describe UI elements (screens, labels, buttons, navigation) that are not verifiable against this codebase and drift as the product UI changes, so any updates to them need closer human review — confirm UI names, breadcrumbs, and screenshots against the live product. Because these pages cannot be code-verified, it is tempting to leave a "to confirm" placeholder — do not. If a UI detail is unconfirmed, omit it and note the gap in the PR summary; never ship a "Details to confirm" section (see Keep review artifacts out of published prose).
-- **Python SDK pages:** the experimental 0.x Python SDK (`generaltranslation`, `gt-i18n`, `gt-flask`, `gt-fastapi`, from the `generaltranslation/gt-python` repo) may not be verifiable against this repo, so it is a **verify-or-omit** zone, like Dashboard and Locadex. Verify every signature, return type, and default against the actual published package before documenting it; when you cannot, mark it as unverified in the PR summary and prefer omission over invention. State the experimental status and version floor once (in the section intro or Reference index `_Note:_`), and add `Changed in vN` notes cautiously given the fast-moving 0.x surface.
-- Anything else noteworthy: assumptions you made, gaps, or content that may be out of date.
+- **Verify against the code, then decide.** When the code and the existing docs disagree, follow the code and correct the docs. When something is unclear, dig into the code until it is clear; when it genuinely cannot be verified from the code, use your best judgement from the existing docs and the live product, document the current known state plainly, and prefer omission over invention.
+- **Close calls:** when two options for structuring, displaying, or describing information are similarly good, pick the stronger one and move on — do not stall or leave both in the page.
+- **UI-only surfaces (Dashboard, Locadex).** These describe screens, labels, and navigation that are not verifiable against this codebase and drift as the product UI changes. Confirm UI names and flows against the live product and use your best judgement; if a UI detail is unconfirmed, omit it rather than guessing. Never ship a "Details to confirm" section.
+- **Experimental Python SDK.** The 0.x Python SDK (`generaltranslation`, `gt-i18n`, `gt-flask`, `gt-fastapi`, from the `generaltranslation/gt-python` repo) may not be verifiable against this repo. Verify every signature, return type, and default against the published package; when you cannot, prefer omission over invention. State the experimental status and version floor once (in the section intro or Reference index `_Note:_`), and add `Changed in vN` notes cautiously given the fast-moving 0.x surface.
 
-List these explicitly (for example, in the summary of changes) so a human can confirm or correct them.
+### No draft artifacts in published prose
 
-### Keep review artifacts out of published prose
-
-Everything you flag for human review goes in the PR/summary channel, never in the published Markdown. Before a page is considered done, it must contain **zero** of the following:
+A page is not done until it reads as finished prose. It must contain **zero** of the following:
 
 - Reviewer directives or notes-to-self ("flag for human review", "confirm against the code", "verify with the team").
 - Draft or placeholder sections ("Details to confirm", "TODO", "FIXME", "TBD", or "coming soon" used as a section).
 - Bracketed fill-ins (`[…]`, `__PLACEHOLDER__`) or commented-out drafts.
 
-If a detail is unverified, either omit it or write it as a normal `_Note:_` describing the current known state — do not leave an instruction to a future editor in the prose. A page with a "to confirm"/"to verify" heading is unfinished and must not ship. All review flags belong in the PR summary.
+If a detail is unverified, either omit it or write it as a normal `_Note:_` describing the current known state — do not leave an instruction to a future editor in the prose. A page with a "to confirm"/"to verify" heading is unfinished and must not ship.
 
 ## Document the complete public surface
 
 Reference docs must cover the **entire public API**, not a curated subset. When you document a library, CLI, or API:
 
 - **Capture every undocumented public surface.** Diff the code's public exports (classes, methods, functions, options, config keys, flags, endpoints, and types) against the existing pages, and add a page or section for anything public that is missing. Do not silently skip a public symbol because it is advanced, low-level, or tooling-oriented — document it (grouping several related low-traffic symbols onto one reference page is fine; omitting them is not). Add crosslinks between related symbols (for example, a method and its inverse, or a flat vs. parts variant) so readers can navigate between them.
-- **Never expose anything marked internal.** If the code marks a symbol as internal — a JSDoc `@internal` tag, a leading-underscore private implementation, a `# private` member, an `__all__` omission, or an equivalent "not public" signal — do **not** document it, do not link to it, and do not reference the internal implementation. Document only the public wrapper that the internal function backs. When it is ambiguous whether a symbol is public, verify against the code and flag it for human review rather than exposing it.
-- **When the surface is genuinely complete, say so** in the review notes (for example, "all N exports have reference pages"), so a reviewer can trust the coverage.
+- **Never expose anything marked internal.** If the code marks a symbol as internal — a JSDoc `@internal` tag, a leading-underscore private implementation, a `# private` member, an `__all__` omission, or an equivalent "not public" signal — do **not** document it, do not link to it, and do not reference the internal implementation. Document only the public wrapper that the internal function backs. When it is ambiguous whether a symbol is public, verify against the code and, if still unclear, treat it as internal (omit it) rather than exposing it.
+- **Confirm the surface is genuinely complete** by cross-checking that every public export has a reference page or section, so the coverage is trustworthy.
 
 ## Audience, voice, and style
 
@@ -165,7 +160,7 @@ Treat General Translation as **one full-stack product**, not a collection of sep
 
 The docs have these top-level sections, in this order:
 
-1. **Overview** — product-level: **Get Started**, **Key Concepts**, and **For coding agents**. Overview also acts as a landing hub (see Overview hub).
+1. **Overview** — product-level: **Introduction**, **Key Concepts**, and **For coding agents**. Overview also acts as a landing hub (see Overview hub).
 2. **Platform** — the Dashboard, Locadex, OpenAPI, and Core capabilities.
 3. **CLI**
 4. **React** — the React ecosystem SDKs (`gt-react`, `gt-next`, TanStack Start, and `gt-react-native`) and the React Core linter, folded into **one multi-framework section** (see React section (multi-framework)).
@@ -173,7 +168,7 @@ The docs have these top-level sections, in this order:
 6. **Python**
 7. **Integrations** — plugins for third-party content platforms (for example, Sanity, Storyblok, and Google Drive).
 
-Some sections are **multi-part**: they group several capabilities, and _each_ capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Get Started → Key Concepts → For coding agents**).
+Some sections are **multi-part**: they group several capabilities, and _each_ capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
 
 ### The three-section spine
 
@@ -193,7 +188,7 @@ The **React** section documents several frameworks that share one API — `gt-re
 
 - **Get Started** (folder). One **Overview** page plus **one Quickstart page per meaningfully different framework**. The Overview orients the reader (what the ecosystem is, shared concepts, how to pick a framework) and links to the quickstarts. Each quickstart is titled **"[Framework] Quickstart"** — **React Quickstart**, **Next.js Quickstart**, **TanStack Start Quickstart**, **React Native Quickstart** — with the file named for the framework (`get-started/react.md`, `get-started/nextjs.md`, `get-started/tanstack-start.md`, `get-started/react-native.md`) and the Overview at `get-started/overview.md`. Only give a framework its own quickstart when its setup path is genuinely different; if two frameworks install and initialize identically, use tabs on one page instead.
 - **Guides** and **Reference** are **shared across all frameworks**. Write one page per task/symbol, and show the per-framework implementation differences with **tabs**, not duplicate pages. Use this exact tab order where frameworks differ: `<Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>`. When a symbol or behavior is unavailable in a framework, say so with an italicized _Note:_ (for example, server-only functions are Next.js-only). When a symbol is identical everywhere, no tabs are needed.
-- **Framework-specific pages** — anything that only applies to one framework (for example, Next.js server components, middleware, the config plugin, and localized `<Link>`; React Native's native plugin/setup; TanStack Start's server setup) lives in a **folder named for that framework**, and those framework folders are grouped under a single **`(additional-frameworks)` route group** at the section root (`react/(additional-frameworks)/nextjs`, `.../react-native`, `.../tanstack-start`). A **route group** is a folder wrapped in parentheses: it groups pages under one sidebar heading (displayed here as **Additional Frameworks**) **without adding a URL segment**, so the parenthesized folder disappears from the link. Folder display names use the framework's official spelling; link slugs stay lowercase-hyphenated and omit the route group (`/docs/react/nextjs/...`, `/docs/react/react-native/...`, `/docs/react/tanstack-start/...`).
+- **Framework-specific pages** — anything that only applies to one framework (for example, Next.js server components, middleware, the config plugin, and localized `<Link>`; React Native's native plugin/setup; TanStack Start's server setup) lives in a **folder named for that framework**, and those framework folders are grouped under a single **`(frameworks)` route group** at the section root (`react/(frameworks)/nextjs`, `.../react-native`, `.../tanstack-start`). A **route group** is a folder wrapped in parentheses: it groups pages under one sidebar heading (displayed here as **Frameworks**) **without adding a URL segment**, so the parenthesized folder disappears from the link. Folder display names use the framework's official spelling; link slugs stay lowercase-hyphenated and omit the route group (`/docs/react/nextjs/...`, `/docs/react/react-native/...`, `/docs/react/tanstack-start/...`).
 - **Linter.** Fold the React Core linter (ESLint plugin and its rules) into the shared Guides (a _Lint your code_ guide) and Reference (a lint-rules page), with tabs for the per-framework ESLint config where it differs.
 
 This is the one **exception** to the single-part "section landing page is the Quickstart" rule: the React section landing is the **Get Started → Overview** page. Keep terminology, examples, and page order consistent across the framework tabs.
@@ -207,7 +202,7 @@ A `meta.json` supports these keys:
 - `title` — the folder's sidebar display name (lowercase for structural folders; see File and folder naming).
 - `description` — the meaning depends on the folder:
   - **On top-level section roots (`"root": true`)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." _Examples:_ CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
-  - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary, reused as the folder's landing page intro.
+  - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder (these folders have no landing page, so it is not rendered as page content — no trailing period, like every description).
 - `pages` — the ordered list of entries; **this array is the source of truth for page order**.
 - `icon` — a named icon token (e.g. `Terminal`, `React`, `Python`, `Globe`) shown next to the section in the nav. Set it only on the top-level section roots.
 - `root` — set `"root": true` on the seven top-level sections only; it marks the folder as a navigable section root.
@@ -215,13 +210,13 @@ A `meta.json` supports these keys:
 
 Entries in `pages` take three forms:
 
-- **A child page or folder** — a relative reference: `"./quickstart"`, `"./guides"`, `"./(additional-frameworks)"`.
+- **A child page or folder** — a relative reference: `"./quickstart"`, `"./guides"`, `"./(frameworks)"`.
 - **A section separator** — a label wrapped in triple dashes: `"---Frameworks---"`, `"---Platform---"`. This renders a labeled divider in the sidebar; use it to group entries within one section.
 - **A cross-section link** — a Markdown link to another page: `"[Dashboard](/docs/platform/dashboard/get-started)"`. Use these to point out of the current section (see Overview hub).
 
 ### Overview hub
 
-The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (get started, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Keep those curated links in sync with the sections they point to, and only link pages that exist.
+The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Keep those curated links in sync with the sections they point to, and only link pages that exist.
 
 ### Machine-readable outputs
 
@@ -253,14 +248,15 @@ Structure it in this order:
 5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, hand-edit generated translation files).
 6. **Links** — point to `llms.txt`, the sitemap, and the most useful pages for deeper detail.
 
-Document only capabilities that exist, and flag anything uncertain for human review (see Always flag for human review). This file is written by an agent connected to the product codebase; this guide defines its **shape**, not its exact contents.
+Document only capabilities that exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement). This file is written by an agent connected to the product codebase; this guide defines its **shape**, not its exact contents.
 
 ### Get Started vs. Quickstart
 
 The entry page for a capability is named for its audience:
 
-- **Technical libraries and APIs use** `quickstart.md`**.** Quickstart is the developer-facing tone: install the library or SDK, authenticate, and run the first call. This applies to Core, CLI, React, Node, Python, OpenAPI, and integration plugins.
-- **Product/nontechnical capabilities use** `get-started.md`**.** Get Started is the setup-and-orientation tone for product pieces, not a developer install path. This applies to the **Dashboard**, **Locadex**, and the **Overview** section.
+- **Technical libraries and APIs use** `quickstart.md`**.** Quickstart is the developer-facing tone: install the library or SDK, authenticate, and run the first call. This applies to Core, CLI, React, Node, Python, Locadex, and integration plugins.
+- **The OpenAPI section uses** `overview.md` **(titled "Overview").** The public API is documented as a reference surface rather than an install path, so its entry page orients the reader to base URLs, authentication, versioning, and errors instead of a numbered install flow.
+- **Product/nontechnical capabilities use** `get-started.md`**.** Get Started is the setup-and-orientation tone for product pieces, not a developer install path. This applies to the **Dashboard** and the **Overview** section (whose entry page is `get-started.md` but displays as **Introduction**).
 
 Shape the entry page itself:
 
@@ -306,7 +302,8 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 
 ### Section landing pages
 
-- Landing pages appear wherever a folder's `meta.json` lists one; there is no fixed rule mandating or forbidding an `index` page. The sidebar navigation, driven by `meta.json`, is what determines each section's structure and entry points.
+- **Guides and Reference folders do not have an `index` landing page.** The folder is a sidebar grouping only; its pages are listed directly in `meta.json` and the reader reaches them from the sidebar. Do not add `guides/index.md` or `reference/index.md` (with a `<Cards>` grid or otherwise) — those pages are not served, so a link to the bare `/docs/<section>/guides` or `/docs/<section>/reference` path does not resolve; link to a specific child page instead.
+- Landing pages otherwise appear only where a folder's `meta.json` points to a real page — a section-root Quickstart/Get Started/Introduction, or a hub page such as `platform/index.md`. The sidebar navigation, driven by `meta.json`, determines each section's structure and entry points.
 - Get Started is a single page, so it does not need a separate index.
 
 ## Files and frontmatter
@@ -321,7 +318,7 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 - **General principle:** name a file for its topic using the **fewest words that stay clear and self-explanatory** when read on their own (in a URL or the sidebar), together with the folder for context. Lowercase, hyphenated, **usually three words or fewer** — never padded, and never truncated to a cryptic stub (`edit-translations.md`, `configure-workflows.md`, `vm-image.md`).
 - **Keep a single word only when it is standard or unambiguous in its folder** (`config.md`, `quickstart.md`, `webhooks.md`; `agent.md` under Locadex Reference clearly reads as the Locadex Agent). **Expand a vague single word** into two or three words that say what the page actually covers (`translation-context.md`, not `context.md`; `locale-codes.md`, not `locales.md`).
 - Name reference and conceptual pages by topic, not verb phrase (`monorepos.md`, `annotations.md`). **Guides are the exception:** their file name and link slug use the **gerund (-ing) form** matching the guide title (`using-translations.md`, `configuring-workflows.md`, `translating-content.md`).
-- **The entry page is** `quickstart.md` **for technical capabilities and** `get-started.md` **for product/nontechnical ones** (see Get Started vs. Quickstart). Core, CLI, React, Node, Python, OpenAPI, and integration plugins use `quickstart.md`; Dashboard, Locadex, and Overview use `get-started.md`.
+- **The entry page is** `quickstart.md` **for technical capabilities and** `get-started.md` **for product/nontechnical ones** (see Get Started vs. Quickstart). Core, CLI, React, Node, Python, Locadex, and integration plugins use `quickstart.md`; OpenAPI uses `overview.md`; Dashboard and Overview use `get-started.md` (Overview displays as **Introduction**).
 - **Configuration reference pages are named and linked simply** `config.md` in most cases (not `configuration.md` or `config-reference.md`).
 - **Command reference pages are named by the command**, lowercase-hyphenated, matching the invoked subcommand (`translate.md`, `save-local.md`, `keyed-metadata.md`).
 - **Consolidate near-identical formats or variants onto one page** (MDX + Markdown → `mdx.md`; TypeScript + JavaScript → `ts.md`). Name the page after the primary variant and cover the sibling on the same page.
@@ -337,17 +334,19 @@ Use this exact structure (blank line after the opening `---`, blank line before 
 ```text
 ---
 
-title: Add annotations
-description: Use labels, notes, and comments to coordinate translation review by entry and locale.
+title: Adding annotations
+description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard
 
 ---
 ```
 
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The `title` must match the page H1 exactly.
-- `description`: one sentence ending with a period, action-oriented ("Configure…", "Review…", "Learn…"). Spell out **General Translation** here (never open with "GT").
+- `description`: no backticks and **no trailing period** — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters and a trailing period reads as noise. (Internal sentence periods on a two-sentence reference description are fine; only the final period is dropped.) Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `&lt;T&gt;` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
+  - **Guides** lead with **"How to…"** for SEO, naming the task the guide accomplishes and the relevant tool. When the guide walks through several steps, add a `: this guide covers …` clause listing them. For a guide that explains a concept rather than a task, use a question instead. _Examples:_ "How to translate files with the generaltranslation library: this guide covers uploading a source file, enqueuing translation, checking status, and downloading the translated file" / "What are locale codes, and how are they used in the General Translation stack?"
+  - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence, with no trailing period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
-  - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type].` — including OpenAPI endpoints. _Example: "…into a target locale. API reference for translateField."_
-  - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic].` — do not start the sentence with "API reference". _Example: "…across every locale. Reference for supported file formats."_
+  - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. _Example: "…into a target locale. API reference for translateField"_
+  - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic]` — do not start the sentence with "API reference". _Example: "…across every locale. Reference for supported file formats"_
 
 A few optional fields appear on specific page types:
 
@@ -405,7 +404,7 @@ Cover, in this order (drop any part that does not yet exist rather than inventin
 5. **Editor-specific tips** — short, parallel bullets for the common agents (Cursor, Claude Code, Copilot), only where the guidance genuinely differs. Use tabs when the shape is identical (see Code blocks).
 6. **Best practices** — a short decision list of what to hand an agent versus what to verify by hand (for example, let it wire up `<T>` components, but always review generated translation context and locale configuration).
 
-Only document capabilities that actually exist, and flag anything uncertain for human review (see Always flag for human review).
+Only document capabilities that actually exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement).
 
 ### Common workflow sections
 
@@ -589,7 +588,7 @@ How to write it:
 
 ### Card grids
 
-Use `<Cards>` wrapping child `<Card title="…" href="…">` elements for the navigational grids on section landing pages (the section's `guides`/`reference` landing page and hub pages such as `platform/index.mdx`). Each card's `title` is the target page's display name in its natural casing (`useGT`, `gt translate`, `GTProvider`) and its body is a single short fragment describing the page, matching the target page's `description`. Group cards under `##` headings that mirror the section's subsections. Cards are for landing and hub pages only — do not scatter them mid-page in place of prose or inline links.
+Use `<Cards>` wrapping child `<Card title="…" href="…">` elements for the navigational grids on **hub and landing pages** (hub pages such as `platform/index.mdx` and `integrations/index.mdx`, and the Overview landing) — **not** on `guides`/`reference` folders, which have no landing page. Each card's `title` is the target page's display name in its natural casing (`useGT`, `gt translate`, `GTProvider`) and its body is a single short fragment describing the page, matching the target page's `description` (no trailing period; escape component tags as `&lt;T&gt;`). Group cards under `##` headings that mirror the section's subsections. Cards are for hub and landing pages only — do not scatter them mid-page in place of prose or inline links.
 
 ```mdx
 <Cards>
@@ -624,21 +623,23 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 
 - The page reflects real system behavior (verified against code and existing docs), not just restated formatting.
 - Depth and vocabulary match the page audience.
-- Sections are grouped into a few meaningful H2s with H3 subsections, not many small one-off H2s. Flag to human if there are more than 6 H2 subsections.
+- Sections are grouped into a few meaningful H2s with H3 subsections, not many small one-off H2s. Consolidate or restructure if there are more than 6 H2 subsections.
 - First mention of the product on the page (and in the description) uses **General Translation**, not GT.
 - Guides answer "how do I…?" with ordered steps; Reference answers "what exactly does this do?" comprehensively and opens with an overview table linking to each item's section.
 - Guide titles use the gerund (-ing) form, and each guide's file name and link slug match its title.
+- Guide descriptions lead with "How to…" (or a question for concept-only guides) and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `&lt;T&gt;` so the MDX still parses.
+- Descriptions (frontmatter and `meta.json`) have no trailing period; `<Card>` bodies that mirror a description match it (also with no trailing period).
 - Structural/navigational folders (`overview`, `get started`, `quickstart`, `guides`, `reference`, and reference subsections) display in lowercase; only proper-noun and product folders keep their casing.
 - Every component, function, hook, class, or method is linked to its reference page on its first mention on the page.
-- No reviewer directives, TODO/FIXME/placeholder text, or "to confirm"/"to verify" draft sections remain in the page; all review flags were moved to the PR summary.
+- No reviewer directives, TODO/FIXME/placeholder text, or "to confirm"/"to verify" draft sections remain in the page.
 - Setup-first pages (Quickstart, Get Started, guide happy paths) show only the current version, with no legacy code or "in older versions" asides; breaking changes are noted only on maintenance-facing pages (Reference, guide detail) with a **`Changed in vN:`** note.
 - Page order in the filetree (and the sidebar navigation it drives) is logical (workflow order), not alphabetical.
-- Uncertain items, unverified logic, and close calls are flagged for human review.
+- Uncertain items are resolved against the codebase; anything that genuinely cannot be verified is omitted rather than guessed.
 - Navigation separators use `>`, not `->`.
 - `.md` link suffix usage is consistent within the file.
 - Notes and examples are italicized.
 - Product/term casing matches the canonical list (Dashboard, Locadex, Core, Project, Context Group, Glossary, Directives, Organization, Enterprise, GitHub).
-- Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages.
+- Reference descriptions end with a second sentence: `API reference for X` for API/library pages, or `Reference for X` for non-API reference pages (no trailing period).
 - No broken internal links (verify the target file exists).
 - **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
-- No typos; sentences end with periods.
+- No typos; body prose sentences end with periods (descriptions do not).
