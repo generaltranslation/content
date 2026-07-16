@@ -17,7 +17,7 @@ After [initializing](/docs/react/reference/config#initialization) `gt-react`, aw
 const translations = await getTranslationsSnapshot(locale);
 ```
 
-*Note: call `getTranslationsSnapshot` after [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) or [`initializeGT`](/docs/react/reference/config#initialize), which populate the translation cache it reads from.*
+*Note: call `getTranslationsSnapshot` after [`initializeGT`](/docs/react/reference/config#initialize) or [`initializeGTSPA`](/docs/react/reference/config#initialize-spa), which populate the translation cache it reads from.*
 
 ## How it works [#how-it-works]
 
@@ -43,25 +43,35 @@ A promise resolving to the translations snapshot for the locale, in the shape `<
 
 ## Examples [#examples]
 
-```tsx title="src/main.tsx"
-import { createRoot } from 'react-dom/client';
-import { GTProvider, initializeGTSPA, getTranslationsSnapshot } from 'gt-react';
-import gtConfig from '../gt.config.json';
-import App from './App';
+```tsx title="src/routes/root.tsx"
+import {
+  GTProvider,
+  initializeGT,
+  getTranslationsSnapshot,
+  parseLocale,
+} from 'gt-react';
+import gtConfig from '../../gt.config.json';
 
 const loadTranslations = (locale: string) =>
-  import(`./_gt/${locale}.json`).then((m) => m.default);
+  import(`../_gt/${locale}.json`).then((m) => m.default);
 
-await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+initializeGT({ ...gtConfig, loadTranslations });
 
-const locale = gtConfig.defaultLocale;
-const translations = await getTranslationsSnapshot(locale); // [!code highlight]
+export async function loadRoot(request: Request) {
+  const locale = parseLocale(request);
+  return {
+    locale,
+    translations: await getTranslationsSnapshot(locale), // [!code highlight]
+  };
+}
 
-createRoot(document.getElementById('root')!).render(
-  <GTProvider locale={locale} translations={translations}>
-    <App />
-  </GTProvider>
-);
+export function Root({ locale, translations, children }) {
+  return (
+    <GTProvider locale={locale} translations={translations}>
+      {children}
+    </GTProvider>
+  );
+}
 ```
 
 ## Notes [#notes]

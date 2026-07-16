@@ -5,7 +5,9 @@ description: Provide the active locale and translations to a General Translation
 
 ---
 
-The `<GTProvider>` component supplies the active locale and its translations to your component tree. It is required for any client-side translation in `gt-react` — every [`<T>`](/docs/react/reference/components/t), variable component, and hook reads from it.
+The `<GTProvider>` component supplies the active locale and its translations to a server-rendered `gt-react` component tree. Use it when your server loads translations and passes them to the client.
+
+*Note: React SPAs initialized with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) use the global translation cache and do not need a provider.*
 
 *Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
 
@@ -26,13 +28,13 @@ import { GTProvider } from 'gt-react';
 *Note: [`loadTranslations`](/docs/react/reference/functions/load-translations), [`loadDictionary`](/docs/react/reference/functions/load-dictionary), and credentials go on the [initialization call](/docs/react/reference/config#initialization), not on `<GTProvider>`. The provider consumes the resolved locale and translations synchronously.*
 
 <Callout type="info">
-  **Changed in v11:** the `gt-react` `<GTProvider>` no longer accepts `config`, `loadTranslations`, `loadDictionary`, or credentials. Move those to [`initializeGTSPA`](/docs/react/reference/config#initialization) and pass the resolved `locale` and `translations` (from [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot)) to the provider instead.
+  **Changed in v11:** the `gt-react` `<GTProvider>` no longer accepts `config`, `loadTranslations`, `loadDictionary`, or credentials. Move those to the [initialization call](/docs/react/reference/config#initialization) and pass the resolved `locale` and `translations` (from [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot)) to the provider instead.
 </Callout>
 
 ## How it works [#how-it-works]
 
 - **Synchronous translations.** The provider requires `translations` up front so translated content renders synchronously, without a loading flash. Produce this object with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) after initialization.
-- **Context for the tree.** Components below the provider read the active locale, translations, dictionaries, and region from it. Rendering a `<T>` or calling a hook such as [`useGT`](/docs/react/reference/hooks/use-gt) outside a provider will not resolve translations.
+- **Context for the tree.** In a provider-based setup, components below the provider read the active locale, translations, dictionaries, and region from it.
 - **Toggling translation.** When `enableI18n` is `false`, the provider renders source-locale content and skips translation, which is useful for previewing the untranslated app.
 
 ## Props [#props]
@@ -80,29 +82,39 @@ Whether to translate content. When `false`, the provider renders source-locale c
 
 **Type** `ReactNode` · **Optional**
 
-Your application tree. Every component that translates or reads locale state must be a descendant of the provider.
+Your application tree. In a provider-based setup, every component that translates or reads locale state must be a descendant of the provider.
 
 ## Examples [#examples]
 
-```tsx title="src/main.tsx"
-import { createRoot } from 'react-dom/client';
-import { GTProvider, initializeGTSPA, getTranslationsSnapshot } from 'gt-react';
-import gtConfig from '../gt.config.json';
-import App from './App';
+```tsx title="src/routes/root.tsx"
+import {
+  GTProvider,
+  initializeGT,
+  getTranslationsSnapshot,
+  parseLocale,
+} from 'gt-react';
+import gtConfig from '../../gt.config.json';
 
 const loadTranslations = (locale: string) =>
-  import(`./_gt/${locale}.json`).then((m) => m.default);
+  import(`../_gt/${locale}.json`).then((m) => m.default);
 
-await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+initializeGT({ ...gtConfig, loadTranslations });
 
-const locale = gtConfig.defaultLocale;
-const translations = await getTranslationsSnapshot(locale);
+export async function loadRoot(request: Request) {
+  const locale = parseLocale(request);
+  return {
+    locale,
+    translations: await getTranslationsSnapshot(locale),
+  };
+}
 
-createRoot(document.getElementById('root')!).render(
-  <GTProvider locale={locale} translations={translations}>
-    <App />
-  </GTProvider>
-);
+export function Root({ locale, translations, children }) {
+  return (
+    <GTProvider locale={locale} translations={translations}>
+      {children}
+    </GTProvider>
+  );
+}
 ```
 
 ```tsx
