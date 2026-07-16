@@ -3,6 +3,15 @@
 For the humans running or wiring the skill. The protocol itself is
 `SKILL.md`; nothing here changes agent behavior.
 
+## Getting the command
+
+There is nothing to install. Open Claude Code anywhere in a checkout of
+this repo and `/end-to-end-doctesting` is available — the skill loads
+automatically from `.claude/skills/` (a symlink into `.agents/skills/`).
+To use it outside this repo, copy the `end-to-end-doctesting/` folder into
+another repo's `.claude/skills/`, or into `~/.claude/skills/` for a
+personal install that works everywhere.
+
 ## Why this exists
 
 The QS-01 quickstart crash (500 on every route of a fresh project) sat live
