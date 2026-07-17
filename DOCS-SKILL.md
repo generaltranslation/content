@@ -382,7 +382,7 @@ description: How to use labels, notes, and comments to coordinate translation re
 ---
 ```
 
-- `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The `title` must match the page H1 exactly.
+- `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO, naming the task the guide accomplishes and the relevant tool. When the guide walks through several steps, add a `: this guide covers …` clause listing them. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to translate files with the generaltranslation library: this guide covers uploading a source file, enqueuing translation, checking status, and downloading the translated file." / "What are locale codes, and how are they used in the General Translation stack?"
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
@@ -399,16 +399,16 @@ A few optional fields appear on specific page types:
       - /docs/cli/quickstart
       - /docs/react/reference/functions/load-translations
   ```
-- `navTitle` (optional): a shorter sidebar/nav label for when the full `title` is too long for the sidebar. The `title` must still match the page H1 exactly (see Page structure); `navTitle` overrides only the sidebar label. *Example: a page with* `title: Get started with the Dashboard` *sets* `navTitle: "Get started"`*.* Use it sparingly and keep it consistent with the section's other nav labels.
+- `navTitle` (optional): a shorter sidebar/nav label for when the full `title` is too long for the sidebar. The `title` remains the page H1; `navTitle` overrides only the sidebar label. *Example: a page with* `title: Get started with the Dashboard` *sets* `navTitle: "Get started"`*.* Use it sparingly and keep it consistent with the section's other nav labels.
 - `method` (OpenAPI endpoint pages only): the HTTP verb (`GET`, `POST`, `PUT`, `DELETE`, …) rendered as a badge on API-endpoint reference pages. Set it on every OpenAPI endpoint page; omit it everywhere else.
 
 
 
 ## Page structure
 
-1. **H1** right after the frontmatter, matching the title in sentence case.
-2. **Intro**: 1–3 short sentences with no heading, stating what the page is and when to use it. Optionally one more italicized short line for constraints or scope.
-3. **Sections** as `##`.
+1. **Frontmatter title:** the docs layout renders the `title` as the page H1. Do not add a `#` heading to the body.
+2. **Intro:** 1–3 short sentences with no heading, stating what the page is and when to use it. Optionally one more italicized short line for constraints or scope.
+3. **Sections:** use `##` for top-level body sections.
 
 
 
@@ -432,7 +432,7 @@ Link to it with the anchor: `/docs/platform/core/guides/translate-string#variabl
 The entry page orients the reader and gives them a fast path to first success. Shape it to the capability (see Get Started vs. Quickstart for which name to use):
 
 - **Product/nontechnical capabilities (**`get-started.md`**: Dashboard, Locadex, Overview).** Lead with orientation, not code. Dashboard-style: **Key workflows** → **Configuration** → **Navigation** → **FAQs**. Locadex-style: **How [product] works** → numbered setup steps.
-- **Technical capabilities (**`quickstart.md`**: Core, CLI, React, Node, Python, OpenAPI, integration plugins).** The page H1 is **Quickstart**. Open with what the library/API does and when to use it, then put the numbered path to first success (install → authenticate → first call) under a dedicated `## Quickstart [#quickstart]` H2 with `### 1. …` steps — title that section **Quickstart**, not "Translate your first app" or similar. Precede the steps with a short paragraph so the reader has context before acting. If there are concrete prerequisites (minimum runtime/library versions, supported platforms, required accounts or keys), list them explicitly up front — a short **Requirements** or **Before you start** section, or a `Note` callout for a single version floor.
+- **Technical capabilities (**`quickstart.md`**: Core, CLI, React, Node, Python, OpenAPI, integration plugins).** The page title is **Quickstart**. Open with what the library/API does and when to use it, then put the numbered path to first success (install → authenticate → first call) under a dedicated `## Quickstart [#quickstart]` H2 with `### 1. …` steps — title that section **Quickstart**, not "Translate your first app" or similar. Precede the steps with a short paragraph so the reader has context before acting. If there are concrete prerequisites (minimum runtime/library versions, supported platforms, required accounts or keys), list them explicitly up front — a short **Requirements** or **Before you start** section, or a `Note` callout for a single version floor.
 - Do not add a separate conceptual overview page (unless the section is split per Information architecture) or a "Next steps" section (see No next-steps sections).
 
 
@@ -540,7 +540,7 @@ Source language code, such as `en`. Falls back to `defaultLocale` when not provi
 
 Two reference-page shapes recur in single-part technical sections:
 
-- **Command reference page.** Title and H1 are the invoked command (`gt translate`); the `description` ends with `API reference for the <command> command.` Follow the page shape above: an Overview with the usage block inline, then How it works, then a **Flags** section documenting **all** flags (not just the common ones), then an Example, then Other notes.
+- **Command reference page.** The frontmatter title is the invoked command (`gt translate`); the `description` ends with `API reference for the <command> command.` Follow the page shape above: an Overview with the usage block inline, then How it works, then a **Flags** section documenting **all** flags (not just the common ones), then an Example, then Other notes.
 - **File-format reference page.** Cover format-specific behavior — syntax preservation, output/transform quirks, per-format extras such as keyed metadata — and link to the configuration reference for shared file keys. Do not repeat full config-key documentation on each format page. **Name the page for the format(s) it documents, with a** `-files` **suffix** (the suffix keeps the slug explicit and machine-readable). Join a related pair with a hyphen: `ts-js-files`, `po-pot-files`, `mdx-md-files`, `gt-jsx-files`. A page covering a single format uses that format's name plus the suffix: `json-files`, `yaml-files`, `html-files`, `plain-text-files`.
 
 The OpenAPI section (~40 endpoint pages) uses its own reference shape:
@@ -717,4 +717,3 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
 - **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
 - No typos; body prose sentences end with periods, and so do descriptions (a description that is a question ends with `?`; section-root tab subtitles take no period).
-
