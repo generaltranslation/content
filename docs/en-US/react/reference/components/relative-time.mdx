@@ -1,0 +1,169 @@
+---
+
+title: RelativeTime
+description: Format a localized relative time such as "2 hours ago" with General Translation gt-react. API reference for RelativeTime.
+
+---
+
+The `<RelativeTime>` component renders a localized relative time, such as "2 hours ago" or "in 3 days". It works either by auto-selecting the best unit from a `Date`, or from an explicit value and unit.
+
+*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
+
+## Overview [#overview]
+
+Pass a `Date` as children and `<RelativeTime>` picks the best unit and formats the time relative to `baseDate`.
+
+```tsx
+<RelativeTime>{someDate}</RelativeTime>
+// Output: "2 hours ago"
+```
+
+All formatting is handled locally with [`Intl.RelativeTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/RelativeTimeFormat).
+
+*Note: `<RelativeTime>` can cause React hydration errors in server-rendered apps. See [Avoiding hydration errors](#hydration).*
+
+## How it works [#how-it-works]
+
+- **Two modes.** Provide a `Date` (via `children` or `date`) and the component auto-selects the best unit relative to `baseDate`, or provide an explicit `value` and `unit`, mirroring `Intl.RelativeTimeFormat`.
+- **Local formatting.** The relative time is computed and formatted in the browser; the value is never sent to the General Translation API.
+- **Renders nothing without input.** If neither a date nor a value is provided, the component renders `null`.
+
+## Props [#props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`children`](#children) | A `Date` to compute relative time from. | `Date` | Yes | — |
+| [`date`](#date) | A `Date` to compute from. Takes precedence over `children`. | `Date` | Yes | — |
+| [`value`](#value) | Explicit numeric amount. Requires `unit`. | `number` | Yes | — |
+| [`unit`](#unit) | Time unit, used with `value`. | `Intl.RelativeTimeFormatUnit` | Yes | — |
+| [`baseDate`](#base-date) | Date to measure against. | `Date` | Yes | `new Date()` |
+| [`options`](#options) | `Intl.RelativeTimeFormat` options. | `Intl.RelativeTimeFormatOptions` | Yes | `{ numeric: 'auto', style: 'long' }` |
+| [`locales`](#locales) | Locale override for formatting. | `string[]` | Yes | Active locale |
+| [`name`](#name) | Variable name for the entry. | `string` | Yes | — |
+
+### `children` [#children]
+
+**Type** `Date` · **Optional**
+
+A `Date` object. The component automatically selects the best unit (seconds through years) and formats the time relative to `baseDate`.
+
+### `date` [#date]
+
+**Type** `Date` · **Optional**
+
+A `Date` to compute relative time from. When both `date` and `children` are provided, `date` takes precedence.
+
+### `value` [#value]
+
+**Type** `number` · **Optional**
+
+An explicit numeric value for the relative time (for example, `-1` for "yesterday"). Must be used together with `unit`.
+
+### `unit` [#unit]
+
+**Type** `Intl.RelativeTimeFormatUnit` · **Optional**
+
+The unit of time, such as `'second'`, `'minute'`, `'hour'`, `'day'`, `'week'`, `'month'`, or `'year'`. Required when using `value`.
+
+### `baseDate` [#base-date]
+
+**Type** `Date` · **Optional** · **Default** `new Date()`
+
+The base date the relative time is measured against. Defaults to `new Date()` at render time. Set it explicitly to avoid hydration errors — see [below](#hydration).
+
+### `options` [#options]
+
+**Type** `Intl.RelativeTimeFormatOptions` · **Optional** · **Default** `{ numeric: 'auto', style: 'long' }`
+
+Formatting options following the [`Intl.RelativeTimeFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/RelativeTimeFormat) specification.
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Optional** · **Default** Active locale
+
+Locales to format for. When omitted, the active locale is used. See the [locales argument](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl#locales_argument).
+
+### `name` [#name]
+
+**Type** `string` · **Optional**
+
+An optional name for the entry, used for metadata.
+
+## Examples [#examples]
+
+```tsx title="PostTimestamp.tsx"
+import { RelativeTime } from 'gt-react';
+
+export default function PostTimestamp({ post }) {
+  return <RelativeTime>{post.createdAt}</RelativeTime>; // [!code highlight]
+  // Output: "2 hours ago", "3 days ago", "in 5 minutes", etc.
+}
+```
+
+```tsx title="PostTimestamp.tsx"
+import { RelativeTime } from 'gt-react';
+
+export default function PostTimestamp({ post }) {
+  return <RelativeTime date={post.createdAt} />; // [!code highlight]
+}
+```
+
+```tsx title="Reminder.tsx"
+import { RelativeTime } from 'gt-react';
+
+export default function Reminder() {
+  return (
+    <p>
+      Your trial ends <RelativeTime value={3} unit="day" />. // [!code highlight]
+    </p>
+  );
+  // Output: "Your trial ends in 3 days."
+}
+```
+
+```tsx title="Comment.tsx"
+import { T, RelativeTime } from 'gt-react';
+
+export default function Comment({ comment }) {
+  return (
+    <T>
+      Posted <RelativeTime>{comment.createdAt}</RelativeTime> // [!code highlight]
+    </T>
+  );
+}
+```
+
+```tsx title="NumericTimestamp.tsx"
+import { RelativeTime } from 'gt-react';
+
+export default function NumericTimestamp({ date }) {
+  return (
+    <RelativeTime
+      options={{
+        numeric: 'always', // [!code highlight]
+        style: 'narrow', // [!code highlight]
+      }}
+    >
+      {date}
+    </RelativeTime>
+  );
+  // With numeric: 'always', outputs "1 day ago" instead of "yesterday"
+}
+```
+
+## Avoiding hydration errors [#hydration]
+
+Because `<RelativeTime>` computes relative time locally, it can produce different output on the server and the client, causing a hydration error. This typically happens when:
+
+- **`baseDate` defaults to `new Date()` at render time.** The server and client render at slightly different moments. If the relative time crosses a unit boundary between them (for example, "59 seconds ago" → "1 minute ago"), the output will not match.
+- **The default locale differs between environments**, producing different strings (for example, "hace 2 horas" vs. "2 hours ago").
+
+Pin both the locale and a shared `baseDate` so the server and client always produce the same string:
+
+```tsx
+const now = new Date(); // computed once, passed to both server and client
+
+<RelativeTime locales={['en-US']} baseDate={now}>
+  {post.createdAt}
+</RelativeTime>
+```

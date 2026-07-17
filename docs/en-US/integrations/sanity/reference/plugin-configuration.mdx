@@ -1,0 +1,475 @@
+---
+
+title: Sanity plugin configuration
+description: Configure the General Translation gt-sanity plugin for Sanity Studio. API reference for gtPlugin.
+
+---
+
+Configure General Translation in Sanity Studio with the `gtPlugin` function. Pass a single options object.
+
+```ts title="sanity.config.ts"
+import { gtPlugin } from 'gt-sanity';
+
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr'],
+  translateDocuments: [{ type: 'article' }],
+});
+```
+
+## Options [#options]
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`sourceLocale`](#source-locale) | Source language code, such as `en`. | `string` | Yes | `defaultLocale`, then library default |
+| [`defaultLocale`](#default-locale) | Alias for `sourceLocale`, for spreading `gt.config.json`. | `string` | Yes | — |
+| [`locales`](#locales) | Target locale codes. | `string[]` | No | — |
+| [`customMapping`](#custom-mapping) | Custom locale code mappings and property overrides. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | — |
+| [`apiKey`](#api-key) | General Translation API key. | `string` | Yes | Secrets document |
+| [`projectId`](#project-id) | General Translation project ID. | `string` | Yes | Secrets document |
+| [`secretsNamespace`](#secrets-namespace) | `_id` of the private credentials document. | `string` | Yes | `generaltranslation.secrets` |
+| [`languageField`](#language-field) | Document field that stores the locale. | `string` | Yes | `language` |
+| [`translateDocuments`](#translate-documents) | Filter which documents can be translated. | `TranslateDocumentFilter[] \| string[]` | Yes | `[]` |
+| [`singletons`](#singletons) | Document IDs treated as singletons. | `string[]` | Yes | `[]` |
+| [`singletonMapping`](#singleton-mapping) | Maps a source ID and locale to a translated singleton ID. | `(sourceDocumentId: string, locale: string) => string` | Yes | `` `${sourceDocumentId}-${locale}` `` |
+| [`showDocumentInternationalization`](#show-doc-i18n) | Auto-add `@sanity/document-internationalization`. | `boolean` | Yes | `true` |
+| [`internationalizedArray`](#internationalized-array) | Configure field-level localization with internationalized arrays. | `GTFieldLevelLocalizationConfig` | Yes | — |
+| [`fieldLevelLocalization`](#field-level-localization) | Alias for `internationalizedArray`. | `GTFieldLevelLocalizationConfig` | Yes | — |
+| [`translationLevel`](#translation-level) | Choose document-level, field-level, or mixed translation. | `'document' \| 'internationalizedArray' \| 'mixed'` | Yes | `'document'` |
+| [`fieldLevelDocuments`](#field-level-documents) | Document types that use field-level localization in mixed mode. | `TranslateDocumentFilter[] \| string[]` | Yes | `[]` |
+| [`ignoreFields`](#ignore-fields) | Fields copied from the source without translating. | `FieldMatcher[]` | Yes | `[]` |
+| [`dedupeFields`](#dedupe-fields) | Fields copied from the source and made unique per locale. | `FieldMatcher[]` | Yes | `[]` |
+| [`skipFields`](#skip-fields) | Fields removed from translated documents. | `FieldMatcher[]` | Yes | `[]` |
+| [`additionalStopTypes`](#additional-stop-types) | Extra schema types to preserve without translating. | `string[]` | Yes | `[]` |
+| [`additionalSerializers`](#additional-serializers) | Custom HTML serializers for marks and block types. | `Partial<PortableTextHtmlComponents>` | Yes | `{}` |
+| [`additionalDeserializers`](#additional-deserializers) | Custom HTML deserializers. | `CustomDeserializers` | Yes | `{}` |
+| [`additionalBlockDeserializers`](#additional-block-deserializers) | Custom Portable Text block deserializer rules. | `unknown[]` | Yes | `[]` |
+
+## Locale options [#locale-options]
+
+### `sourceLocale` [#source-locale]
+
+**Type** `string` · **Optional** · **Default** `defaultLocale`, then the library default
+
+The source language code, such as `en`. The plugin resolves the source locale in this order: `sourceLocale`, then `defaultLocale`, then the `generaltranslation` library default.
+
+### `defaultLocale` [#default-locale]
+
+**Type** `string` · **Optional**
+
+Alias for `sourceLocale`, accepted so you can spread a `gt.config.json` directly into the plugin. If both are set, `sourceLocale` takes precedence.
+
+```ts
+import gtConfig from './gt.config.json';
+
+gtPlugin({ ...gtConfig });
+```
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Required**
+
+The target locale codes to translate into, such as `['es', 'fr', 'ja']`.
+
+### `customMapping` [#custom-mapping]
+
+**Type** `CustomMapping` · **Optional**
+
+Custom mappings of locale codes to names, or overrides of locale properties. Passed through to the `generaltranslation` library. See [CustomMapping](/docs/platform/core/reference/types/custom-mapping).
+
+## Credentials [#credentials]
+
+By default, the plugin reads credentials from a private Sanity document. See [Store credentials](/docs/integrations/sanity/guides/configuring-sanity#store-credentials).
+
+### `apiKey` [#api-key]
+
+**Type** `string` · **Optional** · **Default** read from the secrets document
+
+Your General Translation API key. If set, it is passed to the library at startup. When a secrets document is present, its `secret` field takes precedence at runtime. Prefer the secrets document so keys stay out of source control.
+
+### `projectId` [#project-id]
+
+**Type** `string` · **Optional** · **Default** read from the secrets document
+
+Your General Translation project ID. When a secrets document is present, its `project` field takes precedence at runtime.
+
+### `secretsNamespace` [#secrets-namespace]
+
+**Type** `string` · **Optional** · **Default** `generaltranslation.secrets`
+
+The `_id` of the private Sanity document that holds credentials. The plugin fetches this document by `_id` and reads its `secret` field as the API key and its `project` field as the project ID. A leading `.` in the `_id` keeps the document private, even in a public dataset.
+
+```js title="populateSecrets.js"
+import { getCliClient } from 'sanity/cli';
+
+const client = getCliClient({ apiVersion: '2026-04-06' });
+
+client.createOrReplace({
+  _id: 'generaltranslation.secrets',
+  _type: 'generaltranslation.secrets',
+  secret: process.env.GT_API_KEY,
+  project: process.env.GT_PROJECT_ID,
+});
+```
+
+## Document options [#document-options]
+
+### `languageField` [#language-field]
+
+**Type** `string` · **Optional** · **Default** `language`
+
+The document field used to store each document's locale. Add a field with this name to every translatable document type, and query it to fetch a specific locale.
+
+### `translateDocuments` [#translate-documents]
+
+**Type** `TranslateDocumentFilter[] | string[]` · **Optional** · **Default** `[]`
+
+Filters which documents can be translated. Accepts filter objects or shorthand type strings. Each string entry `'article'` is normalized to `{ type: 'article' }`, and entries without a `documentId` or `type` are dropped.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  translateDocuments: [
+    { type: 'article' },
+    { documentId: 'homepage' },
+    'page', // shorthand for { type: 'page' }
+  ],
+});
+```
+
+`TranslateDocumentFilter` has this shape:
+
+```ts
+type TranslateDocumentFilter = {
+  documentId?: string; // match a specific document by _id
+  type?: string; // match all documents of a schema type
+};
+```
+
+The `type` entries also determine which schema types [`showDocumentInternationalization`](#show-doc-i18n) enables.
+
+### `singletons` [#singletons]
+
+**Type** `string[]` · **Optional** · **Default** `[]`
+
+Document IDs treated as singletons, such as site settings or navigation. Their translated document IDs are derived by [`singletonMapping`](#singleton-mapping).
+
+### `singletonMapping` [#singleton-mapping]
+
+**Type** `(sourceDocumentId: string, locale: string) => string` · **Optional** · **Default** `` `${sourceDocumentId}-${locale}` ``
+
+Maps a singleton's source document ID and a locale to the translated singleton's document ID. The default is deterministic, so `siteSettings` becomes `siteSettings-es` for Spanish.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  singletons: ['siteSettings'],
+  singletonMapping: (sourceDocumentId, locale) => `${sourceDocumentId}_${locale}`,
+});
+```
+
+### `showDocumentInternationalization` [#show-doc-i18n]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+When `true`, the plugin adds the `@sanity/document-internationalization` plugin with language badges, a translation menu, and per-language document templates. It uses the `type` entries in [`translateDocuments`](#translate-documents) as the schema types and `[sourceLocale, ...locales]` as the supported languages, so it only takes effect when `translateDocuments` includes document types. Document types localized in place with internationalized arrays are excluded automatically. Set to `false` to manage internationalization yourself.
+
+## Field-level localization [#field-level]
+
+Field-level localization stores every locale's value in one document as an internationalized array. The stored data uses the same `{ _key, _type, language, value }` item shape as `sanity-plugin-internationalized-array`, so existing internationalized-array content does not need a migration.
+
+### `internationalizedArray` [#internationalized-array]
+
+**Type** `GTFieldLevelLocalizationConfig` · **Optional**
+
+Configures the schema types and Studio input components used for field-level localization. Locale identity always comes from `sourceLocale` and `locales`.
+
+```ts
+type GTFieldLevelLocalizationConfig = {
+  enabled?: boolean; // default: false
+  fieldTypes?: FieldLevelFieldType[]; // default: ['string', 'text']
+  languageTitles?: Record<string, string>;
+  getLanguageTitle?: (locale: string) => string;
+  typePrefix?: string; // default: 'internationalizedArray'
+  includeCompatibilityTypes?: boolean; // default: true
+  components?: {
+    input?: ComponentType<ArrayOfObjectsInputProps> | false;
+    item?: ComponentType<ObjectItemProps> | false;
+    field?: ComponentType<FieldProps> | false;
+  };
+};
+
+type FieldLevelFieldType =
+  | 'string'
+  | 'text'
+  | 'block'
+  | {
+      name: string;
+      type: string;
+      title?: string;
+      of?: unknown[];
+      fields?: unknown[];
+      options?: Record<string, unknown>;
+    };
+```
+
+The built-in `fieldTypes` shortcuts are `string`, `text`, and `block` (Portable Text). An object entry defines a custom generated type. `getLanguageTitle` overrides `languageTitles` when both are set. Each `components` slot accepts a Studio component or `false` to use Sanity's default rendering.
+
+### `fieldLevelLocalization` [#field-level-localization]
+
+**Type** `GTFieldLevelLocalizationConfig` · **Optional**
+
+A descriptive alias for [`internationalizedArray`](#internationalized-array).
+
+### `translationLevel` [#translation-level]
+
+**Type** `'document' | 'internationalizedArray' | 'mixed'` · **Optional** · **Default** `'document'`
+
+Controls how matched documents are translated:
+
+- `'document'` creates one document per locale
+- `'internationalizedArray'` localizes configured fields in place
+- `'mixed'` uses field-level localization for [`fieldLevelDocuments`](#field-level-documents) and document-level localization for everything else
+
+### `fieldLevelDocuments` [#field-level-documents]
+
+**Type** `TranslateDocumentFilter[] | string[]` · **Optional** · **Default** `[]`
+
+Selects the document types that use internationalized arrays when `translationLevel` is `'mixed'`. It accepts the same filter and shorthand string forms as [`translateDocuments`](#translate-documents).
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr'],
+  translateDocuments: [{ type: 'post' }, { type: 'siteSettings' }],
+  internationalizedArray: {
+    enabled: true,
+    fieldTypes: ['string', 'text', 'block'],
+    languageTitles: { es: 'Español', fr: 'Français' },
+  },
+  translationLevel: 'mixed',
+  fieldLevelDocuments: [{ type: 'siteSettings' }],
+});
+```
+
+Then use the generated types in your schemas:
+
+```ts
+defineField({
+  name: 'title',
+  type: 'internationalizedArrayString',
+});
+```
+
+## Field matchers [#field-matchers]
+
+`ignoreFields`, `dedupeFields`, and `skipFields` each take an array of `FieldMatcher` objects. A matcher targets fields by a JSONPath `property` expression and, optionally, restricts to one source document by `documentId`.
+
+```ts
+type FieldMatcher = {
+  documentId?: string | null; // restrict to a source document by _id
+  fields?: {
+    property: string; // JSONPath expression, such as $.slug
+    type?: string; // optional schema type hint, such as slug
+  }[];
+};
+```
+
+### `ignoreFields` [#ignore-fields]
+
+**Type** `FieldMatcher[]` · **Optional** · **Default** `[]`
+
+Fields copied from the source document to the translated document without being sent to the translation API. Use for values that should stay identical across locales, such as categories or tags.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  ignoreFields: [
+    // Copy category unchanged for all documents
+    { fields: [{ property: '$.category' }] },
+    // Copy tags unchanged only for one document
+    { documentId: 'homepage', fields: [{ property: '$.tags' }] },
+  ],
+});
+```
+
+### `dedupeFields` [#dedupe-fields]
+
+**Type** `FieldMatcher[]` · **Optional** · **Default** `[]`
+
+Fields copied from the source value and made unique by appending the locale when the translated document is first created. Commonly used for slugs.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr'],
+  // "about" becomes "about-es" and "about-fr"
+  dedupeFields: [{ fields: [{ property: '$.slug', type: 'slug' }] }],
+});
+```
+
+For a slug field, the plugin updates the slug object's `current` value. If an editor later changes the translated slug, future imports preserve that edited value.
+
+### `skipFields` [#skip-fields]
+
+**Type** `FieldMatcher[]` · **Optional** · **Default** `[]`
+
+Fields removed entirely from translated documents.
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  skipFields: [
+    { fields: [{ property: '$.slug', type: 'slug' }] },
+    { documentId: 'homepage', fields: [{ property: '$.debugInfo' }] },
+  ],
+});
+```
+
+## Serialization [#serialization]
+
+The plugin serializes documents to HTML for translation and deserializes the result back into Sanity fields. Most projects do not need these options.
+
+### `additionalStopTypes` [#additional-stop-types]
+
+**Type** `string[]` · **Optional** · **Default** `[]`
+
+Extra schema types to preserve without translating, added to the [default stop types](#stop-types).
+
+```ts
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  additionalStopTypes: ['codeBlock', 'mux.video', 'mux.videoAsset'],
+});
+```
+
+### `additionalSerializers` [#additional-serializers]
+
+**Type** `Partial<PortableTextHtmlComponents>` · **Optional** · **Default** `{}`
+
+Custom serializers merged with the defaults, following the `@portabletext/to-html` component shape (`types`, `marks`, `block`, `list`, `listItem`, and more). Most often used to serialize custom `marks`.
+
+For custom marks, wrap the output with `attachGTData` so the mark's data survives translation.
+
+```ts title="sanity.config.ts"
+import { attachGTData, gtPlugin } from 'gt-sanity';
+
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es'],
+  additionalSerializers: {
+    marks: {
+      link: ({ value, children }) =>
+        attachGTData(`<a>${children}</a>`, value, 'markDef'),
+      inlineMath: ({ value, children }) =>
+        attachGTData(`<span>${children}</span>`, value, 'markDef'),
+    },
+  },
+});
+```
+
+`attachGTData(html, data, 'markDef')` base64-encodes `data` into a `data-gt-internal` attribute on the first element of `html` and returns the updated HTML. On import, the plugin reads that attribute to rebuild the mark definition.
+
+```ts
+function attachGTData(
+  html: string,
+  data: Record<string, unknown>,
+  type: 'markDef'
+): string;
+```
+
+### `additionalDeserializers` [#additional-deserializers]
+
+**Type** `CustomDeserializers` · **Optional** · **Default** `{}`
+
+Custom deserializers that convert translated HTML elements back into Sanity objects, keyed by type.
+
+```ts
+type CustomDeserializers = {
+  types?: Record<
+    string,
+    (element: HTMLElement) => Record<string, unknown> | unknown[]
+  >;
+} & Record<string, unknown>;
+```
+
+### `additionalBlockDeserializers` [#additional-block-deserializers]
+
+**Type** `unknown[]` · **Optional** · **Default** `[]`
+
+Extra Portable Text block deserializer rules, appended to the plugin's built-in rules. Each rule is an object with a `deserialize(node, next)` method, matching the `@portabletext/block-tools` rule shape.
+
+## Default stop types [#stop-types]
+
+These schema types are preserved and never sent for translation. Add more with [`additionalStopTypes`](#additional-stop-types).
+
+```ts
+const defaultStopTypes = [
+  'reference',
+  'date',
+  'datetime',
+  'file',
+  'geopoint',
+  'image',
+  'number',
+  'crop',
+  'hotspot',
+  'boolean',
+  'url',
+  'color',
+  'code',
+];
+```
+
+Slug fields are *not* stopped by default, so a slug's `current` string is translated unless you use [`dedupeFields`](#dedupe-fields) or [`skipFields`](#skip-fields).
+
+## Exported helpers [#helpers]
+
+`gt-sanity` also exports building blocks for advanced serialization and custom document nodes. Most projects do not need them.
+
+- `TranslationsTab` — the document tab component for `structureTool`. See [Configure Sanity](/docs/integrations/sanity/guides/configuring-sanity#translations-tab).
+- `attachGTData` / `detachGTData` — attach and read the encoded mark data used by custom serializers.
+- `BaseDocumentSerializer`, `BaseDocumentDeserializer`, `BaseDocumentMerger` — the default serialize, deserialize, and merge implementations.
+- `defaultStopTypes`, `customSerializers` — the default stop types and serializer set.
+- `documentInternationalization` and its types (`DocumentInternationalizationConfig`, `Language`, `Metadata`, `TranslationReference`) — re-exported from `@sanity/document-internationalization`.
+
+## Complete example [#complete-example]
+
+```ts title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { attachGTData, gtPlugin } from 'gt-sanity';
+
+export default defineConfig({
+  plugins: [
+    gtPlugin({
+      // Required
+      sourceLocale: 'en',
+      locales: ['es', 'fr', 'de', 'ja'],
+
+      // Documents and fields
+      languageField: 'language',
+      translateDocuments: [{ type: 'article' }, { type: 'page' }],
+      singletons: ['siteSettings', 'navigation'],
+      singletonMapping: (id, locale) => `${id}_${locale}`,
+
+      // Field behavior
+      ignoreFields: [{ fields: [{ property: '$.category' }] }],
+      dedupeFields: [{ fields: [{ property: '$.slug', type: 'slug' }] }],
+      skipFields: [{ fields: [{ property: '$.internalNotes' }] }],
+
+      // Serialization — only if the defaults do not handle your schema
+      additionalSerializers: {
+        marks: {
+          link: ({ value, children }) =>
+            attachGTData(`<a>${children}</a>`, value, 'markDef'),
+        },
+      },
+    }),
+  ],
+});
+```

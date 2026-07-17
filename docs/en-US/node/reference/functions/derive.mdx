@@ -1,0 +1,69 @@
+---
+
+title: derive
+description: Mark computed content as derivable for General Translation extraction. API reference for derive.
+
+---
+
+Marks content that is computed from source code as derivable by the General Translation compiler and CLI. Use `derive` when a translated string interpolates a value that should be discovered during extraction rather than treated as a runtime variable.
+
+## Overview [#overview]
+
+Wrap a computed expression with `derive` inside a translated string. The CLI resolves the expression into every possible static value and includes those values in the source content to translate. At runtime, `derive` returns its argument unchanged.
+
+```ts
+import { derive, getGT } from 'gt-node';
+
+const gt = await getGT();
+const message = gt(`My name is ${derive(getSubject())}`);
+```
+
+Signature:
+
+```ts
+derive<T extends string | boolean | number | null | undefined>(content: T): T
+```
+
+*Note: `derive` is a compile-time marker. Run `gt validate` after adding or changing `derive` calls to confirm the CLI can resolve each derivable expression.*
+
+## How it works [#how-it-works]
+
+- **Extraction hint.** The CLI attempts to resolve the wrapped expression into all of its possible static values and adds them to the content sent for translation.
+- **Runtime passthrough.** At runtime, `derive` returns exactly what it received, so it has no effect on the value.
+- **Non-derivable values.** When an expression cannot be statically analyzed, wrap it with [`declareVar`](/docs/node/reference/functions/declare-var) inside the `derive` call.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`content`](#content) | The content to mark as derivable. | `string \| boolean \| number \| null \| undefined` | No | — |
+
+### `content` [#content]
+
+**Type** `string | boolean | number | null | undefined` · **Required**
+
+The content to mark as derivable for translation extraction.
+
+## Returns [#returns]
+
+**Type** `T`
+
+The same content, unchanged at runtime.
+
+## Examples [#examples]
+
+```ts
+import { derive, getGT } from 'gt-node';
+
+function getSubject() {
+  return Math.random() > 0.5 ? 'Alice' : 'Brian';
+}
+
+const gt = await getGT();
+const greeting = gt(`My name is ${derive(getSubject())}`);
+```
+
+## Notes [#notes]
+
+- `derive` only affects extraction; it never changes the runtime value.
+- Pair with [`declareVar`](/docs/node/reference/functions/declare-var) for values that cannot be statically resolved.

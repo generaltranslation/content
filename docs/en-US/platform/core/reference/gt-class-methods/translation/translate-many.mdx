@@ -1,0 +1,141 @@
+---
+
+title: translateMany
+description: Translate multiple strings or structured content entries in one request. API reference for translateMany.
+
+---
+
+Translates multiple content entries in a single General Translation API request. Use it for batch translation — it is more efficient than issuing many individual [`translate`](/docs/platform/core/reference/gt-class-methods/translation/translate) calls.
+
+## Overview [#overview]
+
+Call `translateMany` on a configured [`GT`](/docs/platform/core/reference/gt-class/constructor) instance with a collection of entries and either a target locale string (shorthand) or an options object. It accepts the entries as an array or as a record keyed by hash, and returns results in the matching shape.
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const results = await gt.translateMany(
+  ['Hello, world!', 'Welcome to our app', 'Click here to continue'],
+  'es'
+);
+```
+
+Signature:
+
+```typescript
+// Overload 1: array of entries
+translateMany(
+  sources: TranslateManyEntry[],
+  options: string | TranslateOptions,
+  timeout?: number
+): Promise<TranslateManyResult>
+
+// Overload 2: record of entries keyed by hash
+translateMany(
+  sources: Record<string, TranslateManyEntry>,
+  options: string | TranslateOptions,
+  timeout?: number
+): Promise<Record<string, TranslationResult>>
+```
+
+*Note: `translateMany` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+
+## How it works [#how-it-works]
+
+- **Array vs. record.** With an array, entries are hashed internally and results are returned in input order. With a record, the keys are treated as hashes and the response is a record with the same keys.
+- **Independent results.** Individual translation failures do not stop the batch — each result reports success or failure on its own, so partial success is fully supported.
+- **Options shorthand.** Passing a string for `options` is shorthand for `{ targetLocale: string }`, so `gt.translateMany(['Hello'], 'es')` and `gt.translateMany(['Hello'], { targetLocale: 'es' })` are equivalent.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`sources`](#sources) | Array or record of entries to translate. | [`TranslateManyEntry[] \| Record<string, TranslateManyEntry>`](/docs/platform/core/reference/types/translate-many-entry) | No | — |
+| [`options`](#options) | Target locale string, or an options object. | `string \| TranslateOptions` | No | — |
+| [`timeout`](#timeout) | Request timeout in milliseconds. | `number` | Yes | — |
+
+### `sources` [#sources]
+
+**Type** [`TranslateManyEntry[] \| Record<string, TranslateManyEntry>`](/docs/platform/core/reference/types/translate-many-entry) · **Required**
+
+The entries to translate. Each [`TranslateManyEntry`](/docs/platform/core/reference/types/translate-many-entry) is a plain string, or an object with `source` (the [`Content`](/docs/platform/core/reference/types/content)) and optional `metadata` (an [`EntryMetadata`](/docs/platform/core/reference/types/entry-metadata)):
+
+```typescript
+type TranslateManyEntry = string | { source: Content; metadata?: EntryMetadata };
+```
+
+Pass an array to get results back in input order, or a record keyed by hash to get results back under the same keys.
+
+### `options` [#options]
+
+**Type** `string | TranslateOptions` · **Required**
+
+A target locale string such as `'es'`, or an options object:
+
+```typescript
+type TranslateOptions = {
+  targetLocale: string; // locale to translate into
+  sourceLocale?: string; // overrides the instance sourceLocale
+  modelProvider?: string; // optional model provider hint
+};
+```
+
+### `timeout` [#timeout]
+
+**Type** `number` · **Optional**
+
+Request timeout in milliseconds. When omitted, the instance default is used.
+
+## Returns [#returns]
+
+**Type** `Promise<TranslateManyResult> | Promise<Record<string, TranslationResult>>`
+
+- **Array input** resolves to a [`TranslateManyResult`](/docs/platform/core/reference/types/translate-many-result) (an array of [`TranslationResult`](/docs/platform/core/reference/types/translation-result) objects), in the same order as the input.
+- **Record input** resolves to a `Record<string, TranslationResult>`, keyed by the same hashes as the input.
+
+Narrow each result on `success` before reading its translation.
+
+## Examples [#examples]
+
+```typescript
+// Array of strings
+const results = await gt.translateMany(['Home', 'About', 'Products', 'Contact'], 'fr');
+
+results.forEach((result, index) => {
+  if (result.success) {
+    console.log(`Item ${index}: ${result.translation}`);
+  } else {
+    console.error(`Item ${index} failed: ${result.error}`);
+  }
+});
+```
+
+```typescript
+// Array with per-entry metadata
+const results = await gt.translateMany(
+  [
+    { source: 'Hello, world!', metadata: { dataFormat: 'ICU' } },
+    { source: 'Goodbye, world!' },
+  ],
+  { targetLocale: 'es' }
+);
+```
+
+```typescript
+// Record keyed by hash — results come back under the same keys
+const results = await gt.translateMany(
+  {
+    'greeting-hash': 'Hello, world!',
+    'farewell-hash': 'Goodbye, world!',
+  },
+  'es'
+);
+
+console.log(results['greeting-hash'].translation);
+```
+
+## Notes [#notes]
+
+- Translates multiple entries in a single API request.
+- A failure in one entry does not affect the others.
+- Results keep the same order as the input array, or the same keys as the input record.

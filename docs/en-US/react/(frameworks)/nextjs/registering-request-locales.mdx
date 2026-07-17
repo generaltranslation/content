@@ -1,0 +1,68 @@
+---
+
+title: Registering request locales
+description: How to register a locale for Next.js App Router route handlers and generated metadata images with General Translation.
+related:
+  links:
+    - /docs/react/nextjs/reference/functions/register-locale
+    - /docs/react/nextjs/app-router-middleware
+    - /docs/react/nextjs/reference/functions/get-locale
+    - /docs/react/nextjs/reference/functions/get-gt
+
+---
+
+With a root `[locale]` segment, `gt-next` normally reads the locale through `next/root-params`. Route Handlers and generated metadata image handlers cannot use that module. Read the locale from the handler input, then call [`registerLocale`](/docs/react/nextjs/reference/functions/register-locale) before any other `gt-next/server` function.
+
+## Register a Route Handler [#route-handlers]
+
+For a handler below `app/[locale]`, read the locale from `params`:
+
+```ts title="app/[locale]/api/greeting/route.ts"
+import { getGT, registerLocale } from 'gt-next/server';
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ locale: string }> },
+) {
+  const { locale } = await params;
+  registerLocale(locale);
+
+  const gt = await getGT();
+  return Response.json({ greeting: gt('Welcome') });
+}
+```
+
+For a handler outside `[locale]`, derive the locale from the `Request` URL, headers, query parameters, or body according to your API, then register it the same way.
+
+The registered locale is available to [`getGT`](/docs/react/nextjs/reference/functions/get-gt), [`getLocale`](/docs/react/nextjs/reference/functions/get-locale), [`getTranslations`](/docs/react/nextjs/reference/functions/get-translations), [`getMessages`](/docs/react/nextjs/reference/functions/get-messages), and other `gt-next/server` functions for the rest of the request.
+
+## Register a metadata image handler [#metadata-images]
+
+Generated Open Graph, Twitter, icon, and Apple icon files also receive route `params`:
+
+```tsx title="app/[locale]/opengraph-image.tsx"
+import { ImageResponse } from 'next/og';
+import { getGT, registerLocale } from 'gt-next/server';
+
+export default async function Image({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  registerLocale(locale);
+
+  const gt = await getGT();
+  return new ImageResponse(<div>{gt('Welcome')}</div>);
+}
+```
+
+Use the same pattern in `twitter-image.tsx`, `icon.tsx`, and `apple-icon.tsx`.
+
+## Handle other entry points [#other-entry-points]
+
+`generateMetadata` receives dynamic route parameters from the root through its current segment, so it does not have the same limitation as a metadata image handler.
+
+Generated `sitemap.ts`, `robots.ts`, and `manifest.ts` files do not receive route parameters or a request object. Choose the locale explicitly in your generation logic, then register it before calling a `gt-next/server` function.
+
+Registration is request-scoped. Call `registerLocale` once, after resolving the locale and before any other General Translation server function.

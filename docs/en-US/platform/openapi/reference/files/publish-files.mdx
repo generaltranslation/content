@@ -1,0 +1,101 @@
+---
+
+title: Publish files
+description: Mark a General Translation Project's translated files as published so they are ready for delivery. API reference for Publish files.
+
+method: POST
+---
+
+Publishes or unpublishes translated files to the General Translation CDN. Set `publish` per file to control delivery, and receive a per-file, per-locale result.
+
+## Overview [#overview]
+
+```http
+POST https://api2.gtx.dev/v2/project/files/publish
+```
+
+**Permission** `project:files:write` · **Rate limit** Default (200/min)
+
+Control which translations the CDN serves. The Project must have the CDN enabled.
+
+## How it works [#how-it-works]
+
+- The Project must have the CDN enabled. Otherwise the request fails with `400`.
+- For each file, the source file's published state is updated. Every completed translation of that file is then published or unpublished and its CDN cache entry is written or deleted.
+- When `publish` is `true` and a translation's data is missing or too large to publish, that locale is reported as failed. A too-large file that was previously published is also unpublished.
+- When `publish` is `false`, the translations are unpublished and removed from the CDN cache.
+- Processing is per file and per locale, so the response contains one result entry for each translation acted on. A source file that is not found is reported as a failed result rather than failing the whole request.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Array of files to publish or unpublish; cannot be empty. | `object[]` | No | — |
+
+#### `files` [#files]
+
+**Type** `object[]` · **Required**
+
+Each element identifies a file and the desired published state:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Stable file identifier. | `string` | No | — |
+| `versionId` | Version identifier for this content. | `string` | No | — |
+| `publish` | `true` to publish, `false` to unpublish. | `boolean` | No | — |
+| `branchId` | Branch the file is attached to. | `string` | Yes | Default branch |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "results": [
+    {
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "locale": "es",
+      "branchId": "br_...",
+      "success": true
+    }
+  ]
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, or the CDN is not enabled for the Project. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:write`. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api2.gtx.dev/v2/project/files/publish \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "fileId": "file_...",
+        "versionId": "ver_...",
+        "publish": true
+      }
+    ]
+  }'
+```

@@ -14,24 +14,24 @@
  * Usage: npx tsx validate-links.ts [--verbose]
  */
 
-import { readFileSync, existsSync, readdirSync, statSync } from "fs";
-import { join, relative, extname, dirname, basename } from "path";
-import { fromMarkdown } from "mdast-util-from-markdown";
-import { mdxFromMarkdown } from "mdast-util-mdx";
-import { mdxjs } from "micromark-extension-mdxjs";
-import { visit } from "unist-util-visit";
-import GithubSlugger from "github-slugger";
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { join, relative, extname, dirname, basename } from 'path';
+import { fromMarkdown } from 'mdast-util-from-markdown';
+import { mdxFromMarkdown } from 'mdast-util-mdx';
+import { mdxjs } from 'micromark-extension-mdxjs';
+import { visit } from 'unist-util-visit';
+import GithubSlugger from 'github-slugger';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 /** Root of the content repository (one level up from scripts/) */
-const CONTENT_ROOT = join(import.meta.dirname, "..");
+const CONTENT_ROOT = join(import.meta.dirname, '..');
 
 /** Directories containing MDX content to validate */
-const CONTENT_DIRS = ["docs", "blog", "devlog"];
+const CONTENT_DIRS = ['docs', 'blog', 'devlog'];
 
 /** Template directory with placeholder files */
-const TEMPLATE_DIR = "docs-templates";
+const TEMPLATE_DIR = 'docs-templates';
 
 /** Known locale codes that may appear as path prefixes */
 const LOCALE_PATTERN = /^[a-z]{2}(-[A-Z]{2})?$/;
@@ -45,23 +45,23 @@ const TEMPLATE_TARGETS: Record<
   { DOCS_PATH: string; FRAMEWORK_NAME: string; PACKAGE_NAME: string }
 > = {
   next: {
-    DOCS_PATH: "/docs/next",
-    FRAMEWORK_NAME: "Next.js",
-    PACKAGE_NAME: "gt-next",
+    DOCS_PATH: '/docs/next',
+    FRAMEWORK_NAME: 'Next.js',
+    PACKAGE_NAME: 'gt-next',
   },
   react: {
-    DOCS_PATH: "/docs/react",
-    FRAMEWORK_NAME: "React",
-    PACKAGE_NAME: "gt-react",
+    DOCS_PATH: '/docs/react',
+    FRAMEWORK_NAME: 'React',
+    PACKAGE_NAME: 'gt-react',
   },
-  "react-native": {
-    DOCS_PATH: "/docs/react-native",
-    FRAMEWORK_NAME: "React Native",
-    PACKAGE_NAME: "gt-react-native",
+  'react-native': {
+    DOCS_PATH: '/docs/react-native',
+    FRAMEWORK_NAME: 'React Native',
+    PACKAGE_NAME: 'gt-react-native',
   },
 };
 
-const VERBOSE = process.argv.includes("--verbose");
+const VERBOSE = process.argv.includes('--verbose');
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ function findMdxFiles(dir: string): string[] {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...findMdxFiles(fullPath));
-    } else if (extname(entry.name) === ".mdx") {
+    } else if (extname(entry.name) === '.mdx') {
       results.push(fullPath);
     }
   }
@@ -125,10 +125,13 @@ function findMdxFiles(dir: string): string[] {
  */
 function filePathToUrlPath(relPath: string): string {
   // Remove .mdx extension
-  let urlPath = relPath.replace(/\.mdx$/, "");
+  let urlPath = relPath.replace(/\.mdx$/, '');
 
-  // Split into segments
-  const segments = urlPath.split("/");
+  // Split into segments, dropping route-group folders like
+  // "(frameworks)" — fumadocs excludes them from URLs
+  const segments = urlPath
+    .split('/')
+    .filter((segment) => !(segment.startsWith('(') && segment.endsWith(')')));
 
   // Remove locale segment (second segment for docs/, first-level for blog/devlog)
   // Pattern: docs/en-US/... or blog/en-US/...
@@ -137,24 +140,24 @@ function filePathToUrlPath(relPath: string): string {
   }
 
   // Strip trailing /index for index files
-  if (segments[segments.length - 1] === "index") {
+  if (segments[segments.length - 1] === 'index') {
     segments.pop();
   }
 
-  return "/" + segments.join("/");
+  return '/' + segments.join('/');
 }
 
 /**
  * Strip YAML frontmatter from MDX content.
  */
 function stripFrontmatter(content: string): string {
-  if (content.startsWith("---")) {
-    const endIdx = content.indexOf("---", 3);
+  if (content.startsWith('---')) {
+    const endIdx = content.indexOf('---', 3);
     if (endIdx !== -1) {
       // Preserve line count with empty lines so positions stay correct
       const frontmatter = content.slice(0, endIdx + 3);
-      const lineCount = frontmatter.split("\n").length - 1;
-      return "\n".repeat(lineCount) + content.slice(endIdx + 3);
+      const lineCount = frontmatter.split('\n').length - 1;
+      return '\n'.repeat(lineCount) + content.slice(endIdx + 3);
     }
   }
   return content;
@@ -180,7 +183,7 @@ function extractHeadings(content: string): Set<string> {
     if (customIdMatch) {
       headings.add(customIdMatch[1]);
       // Also add the github-slugged version of the full text (some links might use it)
-      headings.add(slugger.slug(headingText.replace(/\s*\[#[^\]]+\]\s*$/, "")));
+      headings.add(slugger.slug(headingText.replace(/\s*\[#[^\]]+\]\s*$/, '')));
     } else {
       headings.add(slugger.slug(headingText));
     }
@@ -193,13 +196,13 @@ function extractHeadings(content: string): Set<string> {
  * Recursively collect plain text from an AST node.
  */
 function collectText(node: any): string {
-  if (node.type === "text" || node.type === "inlineCode") {
-    return node.value || "";
+  if (node.type === 'text' || node.type === 'inlineCode') {
+    return node.value || '';
   }
   if (node.children) {
-    return node.children.map(collectText).join("");
+    return node.children.map(collectText).join('');
   }
-  return "";
+  return '';
 }
 
 /**
@@ -213,7 +216,7 @@ function buildFileIndex(): void {
     for (const absPath of files) {
       const relPath = relative(CONTENT_ROOT, absPath);
       const urlPath = filePathToUrlPath(relPath);
-      const content = readFileSync(absPath, "utf-8");
+      const content = readFileSync(absPath, 'utf-8');
       const headings = extractHeadings(content);
 
       fileIndex.set(urlPath, { absPath, relPath, headings });
@@ -246,15 +249,17 @@ function extractLinks(
   } catch {
     // Fall back to regex extraction if AST parsing fails
     if (VERBOSE) {
-      console.warn(`  ⚠ AST parse failed for ${filePath}, using regex fallback`);
+      console.warn(
+        `  ⚠ AST parse failed for ${filePath}, using regex fallback`
+      );
     }
     const linkRegex = /\]\(([^)]+)\)/g;
-    const lines = content.split("\n");
+    const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
       let match;
       while ((match = linkRegex.exec(lines[i])) !== null) {
         const href = match[1];
-        if (href.startsWith("/") || href.startsWith("#")) {
+        if (href.startsWith('/') || href.startsWith('#')) {
           links.push({ link: href, line: i + 1, column: match.index + 1 });
         }
       }
@@ -263,9 +268,9 @@ function extractLinks(
   }
 
   // Walk AST for markdown links: [text](url)
-  visit(tree, "link", (node: any) => {
-    const href: string = node.url || "";
-    if (href.startsWith("/") || href.startsWith("#")) {
+  visit(tree, 'link', (node: any) => {
+    const href: string = node.url || '';
+    if (href.startsWith('/') || href.startsWith('#')) {
       links.push({
         link: href,
         line: node.position?.start?.line ?? 0,
@@ -277,12 +282,12 @@ function extractLinks(
   // Also check for links in JSX href attributes (e.g. <a href="/..."> or <Card href="/...">)
   // We use regex on the raw content for this since mdast doesn't expose JSX attrs easily
   const jsxHrefRegex = /href=["']([^"']+)["']/g;
-  const lines = content.split("\n");
+  const lines = content.split('\n');
   for (let i = 0; i < lines.length; i++) {
     let match;
     while ((match = jsxHrefRegex.exec(lines[i])) !== null) {
       const href = match[1];
-      if (href.startsWith("/") || href.startsWith("#")) {
+      if (href.startsWith('/') || href.startsWith('#')) {
         // Avoid duplicates with AST-extracted links on same line
         const alreadyFound = links.some(
           (l) => l.line === i + 1 && l.link === href
@@ -302,9 +307,9 @@ function extractLinks(
  * e.g. /en-US/docs/next/intro → /docs/next/intro
  */
 function stripLocale(urlPath: string): string {
-  const segments = urlPath.split("/").filter(Boolean);
+  const segments = urlPath.split('/').filter(Boolean);
   if (segments.length >= 1 && LOCALE_PATTERN.test(segments[0])) {
-    return "/" + segments.slice(1).join("/");
+    return '/' + segments.slice(1).join('/');
   }
   return urlPath;
 }
@@ -331,19 +336,19 @@ function resolveLink(urlPath: string): FileInfo | null {
  */
 function validateFile(absPath: string, relPath: string): LinkError[] {
   const errors: LinkError[] = [];
-  const content = readFileSync(absPath, "utf-8");
+  const content = readFileSync(absPath, 'utf-8');
   const links = extractLinks(content, relPath);
   const currentFile = fileIndex.get(filePathToUrlPath(relPath));
 
   for (const { link, line, column } of links) {
     // Split into path and fragment
-    const hashIdx = link.indexOf("#");
+    const hashIdx = link.indexOf('#');
     const pathPart = hashIdx >= 0 ? link.slice(0, hashIdx) : link;
     const fragment = hashIdx >= 0 ? link.slice(hashIdx + 1) : null;
 
     // Same-page anchor (just #something)
-    if (pathPart === "" && fragment !== null) {
-      if (fragment === "") continue; // bare # is ok (top of page)
+    if (pathPart === '' && fragment !== null) {
+      if (fragment === '') continue; // bare # is ok (top of page)
       if (currentFile && !currentFile.headings.has(fragment)) {
         errors.push({
           file: relPath,
@@ -352,8 +357,8 @@ function validateFile(absPath: string, relPath: string): LinkError[] {
           link,
           reason: `Anchor "#${fragment}" not found in this file. Available headings: ${
             currentFile.headings.size > 0
-              ? [...currentFile.headings].join(", ")
-              : "(none)"
+              ? [...currentFile.headings].join(', ')
+              : '(none)'
           }`,
         });
       }
@@ -361,14 +366,14 @@ function validateFile(absPath: string, relPath: string): LinkError[] {
     }
 
     // External links (shouldn't reach here, but guard)
-    if (!pathPart.startsWith("/")) continue;
+    if (!pathPart.startsWith('/')) continue;
 
     // Resolve the path
     const target = resolveLink(pathPart);
     if (!target) {
       // Check if it's a known non-MDX route (e.g. /pricing, /dashboard)
       // We only validate links that point into our content dirs
-      const topSegment = pathPart.split("/").filter(Boolean)[0];
+      const topSegment = pathPart.split('/').filter(Boolean)[0];
       if (topSegment && CONTENT_DIRS.includes(topSegment)) {
         errors.push({
           file: relPath,
@@ -383,7 +388,7 @@ function validateFile(absPath: string, relPath: string): LinkError[] {
     }
 
     // Validate fragment if present
-    if (fragment && fragment !== "") {
+    if (fragment && fragment !== '') {
       if (!target.headings.has(fragment)) {
         errors.push({
           file: relPath,
@@ -392,8 +397,8 @@ function validateFile(absPath: string, relPath: string): LinkError[] {
           link,
           reason: `Anchor "#${fragment}" not found in ${target.relPath}. Available headings: ${
             target.headings.size > 0
-              ? [...target.headings].join(", ")
-              : "(none)"
+              ? [...target.headings].join(', ')
+              : '(none)'
           }`,
         });
       }
@@ -417,7 +422,7 @@ function validateTemplates(): LinkError[] {
 
   for (const absPath of templateFiles) {
     const relPath = relative(CONTENT_ROOT, absPath);
-    const content = readFileSync(absPath, "utf-8");
+    const content = readFileSync(absPath, 'utf-8');
 
     // For each target library, expand placeholders and validate
     for (const [libName, vars] of Object.entries(TEMPLATE_TARGETS)) {
@@ -429,14 +434,14 @@ function validateTemplates(): LinkError[] {
       const links = extractLinks(expanded, relPath);
 
       for (const { link, line, column } of links) {
-        const hashIdx = link.indexOf("#");
+        const hashIdx = link.indexOf('#');
         const pathPart = hashIdx >= 0 ? link.slice(0, hashIdx) : link;
         const fragment = hashIdx >= 0 ? link.slice(hashIdx + 1) : null;
 
-        if (pathPart === "" && fragment !== null) {
+        if (pathPart === '' && fragment !== null) {
           // Same-page anchor — check against the template's own headings (expanded)
           const templateHeadings = extractHeadings(expanded);
-          if (fragment !== "" && !templateHeadings.has(fragment)) {
+          if (fragment !== '' && !templateHeadings.has(fragment)) {
             // Also check the generated file as a fallback
             const templateRelFile = relative(CONTENT_ROOT, absPath).replace(
               TEMPLATE_DIR,
@@ -457,11 +462,11 @@ function validateTemplates(): LinkError[] {
           continue;
         }
 
-        if (!pathPart.startsWith("/")) continue;
+        if (!pathPart.startsWith('/')) continue;
 
         const target = resolveLink(pathPart);
         if (!target) {
-          const topSegment = pathPart.split("/").filter(Boolean)[0];
+          const topSegment = pathPart.split('/').filter(Boolean)[0];
           if (topSegment && CONTENT_DIRS.includes(topSegment)) {
             errors.push({
               file: `${relPath} (template → ${libName})`,
@@ -474,7 +479,7 @@ function validateTemplates(): LinkError[] {
           continue;
         }
 
-        if (fragment && fragment !== "" && !target.headings.has(fragment)) {
+        if (fragment && fragment !== '' && !target.headings.has(fragment)) {
           errors.push({
             file: `${relPath} (template → ${libName})`,
             line,
@@ -493,15 +498,15 @@ function validateTemplates(): LinkError[] {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 function main(): void {
-  console.log("🔗 Link Validator — Scanning content files...\n");
+  console.log('🔗 Link Validator — Scanning content files...\n');
 
   // Step 1: Build file index
-  console.log("📁 Building file index...");
+  console.log('📁 Building file index...');
   buildFileIndex();
   console.log(`   Found ${fileIndex.size} content files.\n`);
 
   // Step 2: Validate all content files
-  console.log("🔍 Validating links in content files...");
+  console.log('🔍 Validating links in content files...');
   const allErrors: LinkError[] = [];
 
   for (const [urlPath, info] of fileIndex) {
@@ -510,18 +515,18 @@ function main(): void {
   }
 
   // Step 3: Validate templates
-  console.log("📝 Validating links in templates...");
+  console.log('📝 Validating links in templates...');
   const templateErrors = validateTemplates();
   allErrors.push(...templateErrors);
 
   // Step 4: Report
-  console.log("");
+  console.log('');
   if (allErrors.length === 0) {
-    console.log("✅ All links are valid!\n");
+    console.log('✅ All links are valid!\n');
     process.exit(0);
   } else {
     console.log(
-      `❌ Found ${allErrors.length} broken link${allErrors.length === 1 ? "" : "s"}:\n`
+      `❌ Found ${allErrors.length} broken link${allErrors.length === 1 ? '' : 's'}:\n`
     );
 
     // Group errors by file for readability
@@ -538,7 +543,7 @@ function main(): void {
         console.log(`     Line ${err.line}: ${err.link}`);
         console.log(`     └─ ${err.reason}`);
       }
-      console.log("");
+      console.log('');
     }
 
     process.exit(1);

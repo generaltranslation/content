@@ -1,0 +1,164 @@
+---
+
+title: Webhooks
+description: Configure webhook endpoints, verify signatures, and handle translation events from General Translation.
+
+---
+
+Webhooks send translation events to your backend as signed HTTP POST requests. Use them to trigger your own workflows when files or jobs change.
+
+## Create a webhook [#create-webhook]
+
+1. Go to **Organization Settings > Webhooks**.
+2. Click **Create Webhook**.
+3. Enter the endpoint URL where you want to receive events. The URL must use HTTPS.
+4. Select the event types you want to subscribe to.
+5. Click **Create**.
+
+After creating the endpoint, open the webhook detail page and copy the signing secret. Use this secret to verify that incoming requests are from General Translation.
+
+You can create up to **5 webhook endpoints** per Organization.
+
+## Event types [#event-types]
+
+Each endpoint can subscribe to one or more event types. You can update subscriptions from the webhook detail page.
+
+- `translated_file.completed` fires when a translated file is completed and ready to download.
+- `translated_file.edited` fires when a translated file is manually edited by a user in the translation editor.
+- `translation_job.completed` fires when a translation job completes.
+
+## Payload format [#payload-format]
+
+Every webhook delivery is an HTTP POST with a JSON body:
+
+```json
+{
+  "id": "evt_xxx",
+  "type": "translated_file.completed",
+  "created_at": "2026-04-30T12:00:00.000Z",
+  "api_version": "2026-03-06.v1",
+  "data": {
+    "object": {
+      "id": "file_xxx",
+      "org_id": "org_xxx",
+      "project_id": "project_xxx",
+      "branch_id": "branch_xxx",
+      "source_file_id": "src_xxx",
+      "file_id": "file_xxx",
+      "version_id": "ver_xxx",
+      "locale": "fr",
+      "file_format": "json",
+      "data_format": null,
+      "completed_at": "2026-04-30T12:00:00.000Z"
+    }
+  }
+}
+```
+
+The top-level `id` is a stable event identifier you can use to deduplicate deliveries.
+
+## Verify signatures [#verify-signatures]
+
+Every webhook request includes three headers:
+
+- `webhook-id` is the event ID, such as `evt_xxx`.
+- `webhook-timestamp` is the Unix timestamp, in seconds, when the request was sent.
+- `webhook-signature` is the `v1,<base64-hmac>` signature.
+
+The signature follows the [Standard Webhooks](https://www.standardwebhooks.com/) convention.
+
+To verify a request:
+
+1. Concatenate `{webhook-id}.{webhook-timestamp}.{raw request body}`.
+2. Base64-decode the secret after removing the `whsec_` prefix to get the signing key.
+3. Compute HMAC-SHA256 over the concatenated string using the decoded signing key.
+4. Base64-encode the result.
+5. Compare it against the signature value after the `v1,` prefix.
+6. Check that the timestamp is within 5 minutes of the current time to prevent replay attacks.
+
+### Example: Node.js
+
+```js
+import crypto from "crypto";
+
+function verifyWebhook(payload, headers, secret) {
+  const msgId = headers["webhook-id"];
+  const timestamp = headers["webhook-timestamp"];
+  const signature = headers["webhook-signature"];
+
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp)) > 300) {
+    throw new Error("Timestamp too old");
+  }
+
+  const signingKey = Buffer.from(secret.replace("whsec_", ""), "base64");
+  const signedContent = `${msgId}.${timestamp}.${payload}`;
+  const expected = crypto
+    .createHmac("sha256", signingKey)
+    .update(signedContent)
+    .digest("base64");
+
+  const received = signature.split(",")[1];
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) {
+    throw new Error("Invalid signature");
+  }
+
+  return JSON.parse(payload);
+}
+```
+
+You can also use the [Standard Webhooks](https://www.standardwebhooks.com/) library for your language, which handles verification automatically.
+
+## Handle retries and delivery [#handle-retries-delivery]
+
+Webhooks use **at-least-once delivery**. 
+
+If your endpoint does not return a `2xx` response within 10 seconds, the delivery is retried with exponential backoff for up to **10 attempts**.
+
+You can manually retry a failed delivery from the webhook detail page in the Dashboard.
+
+## Handle duplicate events [#handle-duplicate-events]
+
+Because delivery is at least once, your endpoint may receive the same event more than once. Use the `id` field in the payload to deduplicate.
+
+```js
+app.post("/webhooks/gt", (req, res) => {
+  const eventId = req.body.id;
+
+  if (alreadyProcessed(eventId)) {
+    return res.status(200).send("OK");
+  }
+
+  // Process the event...
+  markProcessed(eventId);
+  res.status(200).send("OK");
+});
+```
+
+## Manage endpoints [#manage-endpoints]
+
+From the webhook page, you can:
+
+- Enable or disable an endpoint without deleting it
+- Update the subscribed event types
+- View delivery history
+- Inspect individual delivery attempts
+- Retry a failed delivery
+- Reveal the signing secret
+- Delete the endpoint
+
+## Best practices [#best-practices]
+
+- Respond quickly with a `2xx` response, then process the event asynchronously.
+- Verify the `webhook-signature` header before trusting the payload.
+- Store processed event IDs and skip duplicates.
+- Use HTTPS for production webhook endpoints.
+- Monitor delivery history for persistent failures.
+
+## Permissions [#permissions]
+
+Managing webhook endpoints requires the `org:webhooks:write` permission.
+
+Viewing delivery history requires `org:webhooks:read`.
+
+By default, the **Admin** role has both permissions. See [roles and permissions](/docs/platform/dashboard/reference/roles-and-permissions) for details.

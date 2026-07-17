@@ -1,0 +1,78 @@
+---
+
+title: loadTranslations
+description: Customize how translations are loaded in production with General Translation gt-react. API reference for loadTranslations.
+
+---
+
+`loadTranslations` is a loader function you define to customize where `gt-react` reads translations from in production. Pass it to the [initialization call](/docs/react/reference/config#initialization) to load translations from a source other than the default General Translation CDN.
+
+*Applies to `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`, but the wiring differs. `loadTranslations` is a loader you define, not an exported symbol. In `gt-react` and `gt-tanstack-start`, pass it to the initialization call (below). `gt-next` resolves it through the `withGTConfig` plugin (documented in the Next.js section), and `gt-react-native` loads translations through its provider setup. The loader contract on this page is the same everywhere.*
+
+## Overview [#overview]
+
+Define a function that takes a locale and returns its translations, then pass it as the `loadTranslations` option to [`initializeGT`](/docs/react/reference/config#initialize). Single-page apps pass it to [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) instead.
+
+```tsx
+const loadTranslations = (locale: string) =>
+  import(`./_gt/${locale}.json`).then((m) => m.default);
+
+initializeGT({ ...gtConfig, loadTranslations });
+```
+
+*Note: in `gt-react`, `loadTranslations` is a configuration option on the initialization call, not a prop on [`<GTProvider>`](/docs/react/reference/components/gt-provider). By default, translations load from the General Translation CDN.*
+
+## How it works [#how-it-works]
+
+In production, your translations must be stored somewhere they can be read at runtime. By default they come from the General Translation CDN. Provide `loadTranslations` to load them from another source, such as:
+
+- Your app's bundle (most common).
+- A database.
+- An API.
+- A different CDN.
+
+`gt-react` has built-in support for loading translations from local files in your bundle. See [Storing translations locally](/docs/react/guides/storing-translations).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | The locale to load translations for. | `string` | No | — |
+
+### `locale` [#locale]
+
+**Type** `string` · **Required**
+
+The locale for which translations should be loaded.
+
+## Returns [#returns]
+
+**Type** `Promise<unknown>`
+
+A promise resolving to the translations for the given locale.
+
+## Examples [#examples]
+
+```js title="loadTranslations.js"
+export default async function loadTranslations(locale) {
+  const translations = await import(`./_gt/${locale}.json`);
+  return translations.default;
+}
+```
+
+```js title="loadTranslations.js"
+export default async function loadTranslations(locale) {
+  try {
+    const response = await fetch(`https://your-cdn.com/translations/${locale}.json`);
+    return await response.json();
+  } catch (e) {
+    console.error(e);
+    return {};
+  }
+}
+```
+
+## Notes [#notes]
+
+- `loadTranslations` customizes how translations are loaded in production; its most common use is [local translations](/docs/react/guides/storing-translations).
+- For bringing your own human-authored translations as a standalone i18n library, use [`loadDictionary`](/docs/react/reference/functions/load-dictionary) instead.

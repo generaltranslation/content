@@ -1,0 +1,97 @@
+---
+
+title: Configuration
+description: Reference for the gt.config.json General Translation generates for a Mintlify project. Reference for the Mintlify integration configuration.
+
+---
+
+# Configuration
+
+General Translation generates a `gt.config.json` for your Mintlify project during setup — you do not write it by hand. This page documents what that file contains so you can review or fine-tune it after the setup pull request lands.
+
+The configuration is a standard General Translation CLI config. Each shared key is documented once in the [CLI configuration reference](/docs/cli/reference/config); this page covers only the Mintlify-specific choices and the two modes the integration generates.
+
+## Modes [#modes]
+
+The generated config depends on the **Hide default locale in URL paths** setting (see [Configuring Mintlify](/docs/integrations/mintlify/guides/configuring-mintlify)). Both modes translate `docs.json` and every `.mdx`/`.md` page; they differ in how files are laid out and how the default locale is served.
+
+| Key | Description | Hide default locale | Show default locale |
+| --- | --- | --- | --- |
+| [`files.mdx.include`](#files) | Glob patterns for the pages to translate. | `./**/*.mdx`, `./**/*.md` (translated in place) | `./[locale]/**/*.mdx`, `./snippets/[locale]/**/*.mdx`, and the `.md` equivalents |
+| [`files.mdx.transform`](#files) | Rewrites source paths into locale folders. | `{ match: "^(snippets/)?(.*)$", replace: "$1{locale}/$2" }` | *(none)* |
+| [`options.jsonSchema`](#options) | Preset used to localize `docs.json`. | `mintlify-hide-default` | `mintlify` |
+| [`options.docsHideDefaultLocaleImport`](#options) | Hide the default locale in imports. | `true` | *(omitted)* |
+| [`options.experimentalHideDefaultLocale`](#options) | Serve the default locale without a locale prefix. | `true` | *(omitted)* |
+
+## Files [#files]
+
+The `files` block tells the General Translation CLI what to translate. For a Mintlify project it always includes `docs.json` and the docs pages.
+
+- `files.json.include` — always `['./docs.json']`. The `docs.json` navigation and labels are localized with the preset in `options.jsonSchema`.
+- `files.mdx.include` — the `.mdx` and `.md` pages to translate. In hide-default-locale mode this is the whole tree (`./**/*.mdx`, `./**/*.md`) and files are moved into locale folders by the transform; in show-default-locale mode it targets existing per-locale folders.
+- `files.mdx.transform` — in hide-default-locale mode, rewrites each source path into a `{locale}/` folder (keeping a leading `snippets/` prefix in place). Show-default-locale mode omits the transform because content already lives in locale folders.
+- `files.mdx.exclude` — the locale folders themselves plus common repository files that should never be translated (see [Supported content](/docs/integrations/mintlify/reference/supported-content#excluded)).
+
+See the [CLI configuration reference](/docs/cli/reference/config) for the full semantics of `files`, `include`, `exclude`, and `transform`, and the [MDX and Markdown format page](/docs/cli/reference/formats/mdx-md-files) and [JSON format page](/docs/cli/reference/formats/json-files) for per-format behavior.
+
+## Options [#options]
+
+The `options` block configures Mintlify-specific behavior. These keys are set for every Mintlify project unless noted as mode-specific.
+
+- `mintlify.inferTitleFromFilename` — `true`. Derives a page title from its filename when a page has no explicit title.
+- `jsonSchema` — maps `./docs.json` to a preset that knows how to localize Mintlify navigation: `mintlify-hide-default` when the default locale is hidden, otherwise `mintlify`.
+- `docsUrlPattern` — `/[locale]`. The pattern used when localizing documentation URLs.
+- `docsImportPattern` — `/snippets/[locale]`. The pattern used when localizing snippet imports.
+- `generateRedirects` — `./docs.json`. Generates redirects in `docs.json` so existing links keep resolving after the navigation is restructured.
+- `experimentalLocalizeStaticImports` — `true`. Localizes static import paths (such as snippets).
+- `experimentalLocalizeStaticUrls` — `true`. Localizes internal static URLs so links stay within the reader's language.
+- `experimentalLocalizeRelativeAssets` — `true`. Localizes relative asset references.
+- `experimentalAddHeaderAnchorIds` — `'mintlify'`. Adds stable heading anchor IDs so in-page links keep working across languages.
+- `docsHideDefaultLocaleImport` — `true` *(hide-default-locale mode only)*. Hides the default locale in generated imports.
+- `experimentalHideDefaultLocale` — `true` *(hide-default-locale mode only)*. Serves the default locale without a locale prefix.
+
+## Example [#example]
+
+The configuration generated for a project with the default locale hidden (English source, Spanish and French targets):
+
+```json title="gt.config.json"
+{
+  "$schema": "https://assets.gtx.dev/config-schema.json",
+  "files": {
+    "json": {
+      "include": ["./docs.json"]
+    },
+    "mdx": {
+      "include": ["./**/*.mdx", "./**/*.md"],
+      "transform": {
+        "match": "^(snippets/)?(.*)$",
+        "replace": "$1{locale}/$2"
+      },
+      "exclude": [
+        "./[locales]/**/*.mdx",
+        "./snippets/[locales]/**/*.mdx",
+        "./[locales]/**/*.md",
+        "./snippets/[locales]/**/*.md"
+        // plus repository files such as README.md, LICENSE.md, CHANGELOG.md
+      ]
+    }
+  },
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "options": {
+    "mintlify": { "inferTitleFromFilename": true },
+    "jsonSchema": { "./docs.json": { "preset": "mintlify-hide-default" } },
+    "docsUrlPattern": "/[locale]",
+    "docsImportPattern": "/snippets/[locale]",
+    "generateRedirects": "./docs.json",
+    "experimentalLocalizeStaticImports": true,
+    "experimentalLocalizeStaticUrls": true,
+    "experimentalLocalizeRelativeAssets": true,
+    "docsHideDefaultLocaleImport": true,
+    "experimentalHideDefaultLocale": true,
+    "experimentalAddHeaderAnchorIds": "mintlify"
+  }
+}
+```
+
+*Note: after setup, the CLI resolves the `[locales]` exclude placeholder to your actual target locales. Review the generated `gt.config.json` and adjust the excluded files if your repository keeps translatable content in one of the excluded paths.*

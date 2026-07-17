@@ -106,7 +106,9 @@ export function getEntry(collection: string, slug: string[] = []) {
   if (slug.length === 0 || (slug.length === 1 && slug[0] === 'en-US')) return;
 
   const candidates = slugToCandidates(slug);
-  return collections[collection].find((entry) => candidates.has(entry.info.path));
+  return collections[collection].find((entry) =>
+    candidates.has(entry.info.path)
+  );
 }
 
 export function pathToSlugs(path: string) {

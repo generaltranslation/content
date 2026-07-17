@@ -1,0 +1,147 @@
+---
+
+title: setupProject
+description: Prepare uploaded files for Project translation workflows. API reference for setupProject.
+
+---
+
+Initializes the setup process for a translation Project using previously uploaded files with General Translation. It creates an asynchronous setup job that analyzes the files and prepares them for translation workflows.
+
+## Overview [#overview]
+
+Call `setupProject` with the file references from [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files), optionally with setup options. It either queues a setup job (returning a `setupJobId`) or reports that the Project is already set up.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const setupResult = await gt.setupProject(fileRefs, { timeoutMs: 30000 });
+if (setupResult.status === 'queued') {
+  console.log(`Setup job created: ${setupResult.setupJobId}`);
+} else {
+  console.log('Project is already set up');
+}
+```
+
+Signature:
+
+```typescript
+setupProject(
+  files: FileReference[],
+  options?: SetupProjectOptions
+): Promise<SetupProjectResult>
+```
+
+*Note: `setupProject` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. You must upload the files with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) first.*
+
+## How it works [#how-it-works]
+
+- **File analysis.** Setup analyzes file content and structure to optimize translation workflows.
+- **Asynchronous job.** The setup job runs asynchronously — monitor progress with [`checkJobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status).
+- **When required.** Setup is typically required before enqueueing translation jobs for new Projects.
+- **Versioning.** File references include `branchId` for versioning with branch support.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | File references from previously uploaded source files. | `FileReference[]` | No | — |
+| [`options`](#options) | Settings for the setup job. | `SetupProjectOptions` | Yes | — |
+
+### `files` [#files]
+
+**Type** `FileReference[]` · **Required**
+
+The file references returned by [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files):
+
+```typescript
+type FileReference = {
+  fileId: string;
+  versionId: string;
+  branchId: string;
+  fileName: string;
+  fileFormat: FileFormat;
+  transformFormat?: FileFormat; // output format requested for generated translations
+  dataFormat?: DataFormat;
+};
+```
+
+Both `fileName` and `fileFormat` are required on `FileReference`; `transformFormat` and `dataFormat` are optional.
+
+### `options` [#options]
+
+**Type** `SetupProjectOptions` · **Optional**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `force` | Force re-setup by invalidating existing cached translations. | `boolean` | Yes |
+| `locales` | Target locales for the Project. | `string[]` | Yes |
+| `timeoutMs` | Timeout in milliseconds for the API request. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<SetupProjectResult>`
+
+Resolves to a `SetupProjectResult`, a union of two variants:
+
+```typescript
+type SetupProjectResult =
+  | { setupJobId: string; status: 'queued' }
+  | { status: 'completed' };
+```
+
+- When a setup job is created, it returns the `queued` variant with a `setupJobId`.
+- When the Project is already set up, it returns the `completed` variant with no job identifier.
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `setupJobId` | Unique identifier for the queued setup job. Present only on the `queued` variant. | `string` |
+| `status` | `'queued'` when a setup job was created, or `'completed'` when the Project was already set up. | `'queued' \| 'completed'` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// File references from a previous upload
+const fileRefs = [
+  {
+    fileId: 'file-123',
+    versionId: 'version-456',
+    branchId: 'branch-789',
+    fileName: 'app.json',
+    fileFormat: 'JSON',
+  },
+  {
+    fileId: 'file-789',
+    versionId: 'version-012',
+    branchId: 'branch-789',
+    fileName: 'content.md',
+    fileFormat: 'MD',
+  },
+];
+
+const setupResult = await gt.setupProject(fileRefs);
+
+if (setupResult.status === 'queued') {
+  console.log(`Setup initiated with job ID: ${setupResult.setupJobId}`);
+
+  // Monitor job status (checkJobStatus returns a flat array)
+  const jobStatus = await gt.checkJobStatus([setupResult.setupJobId]);
+  console.log(`Job status: ${jobStatus[0].status}`);
+} else {
+  console.log('Project is already set up — no setup job needed');
+}
+```
+
+## Notes [#notes]
+
+- Files must be uploaded with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) before calling `setupProject`.
+- Project setup analyzes file content and structure to optimize translation workflows.
+- The setup job runs asynchronously — monitor progress with [`checkJobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status).
+- Setup is typically required before enqueueing translation jobs for new Projects.
+- File references include `branchId` for versioning with branch support.

@@ -1,0 +1,102 @@
+---
+
+title: Download files
+description: Download multiple translated files from a General Translation Project in one request. API reference for Download files.
+
+method: POST
+---
+
+Downloads multiple source or translated files in a single request. Each entry selects a file by ID, and file content is returned as base64.
+
+## Overview [#overview]
+
+```http
+POST https://api2.gtx.dev/v2/project/files/download
+```
+
+**Permission** `project:files:read` · **Rate limit** Light (300/min)
+
+Fetch many files at once. To download a single file, use [Download file](/docs/platform/openapi/reference/files/download).
+
+## How it works [#how-it-works]
+
+- Send 1 to 100 file references. Each is resolved independently and the successful results are returned together.
+- An entry without `locale` returns the source file; an entry with `locale` returns that translation.
+- A missing `branchId` resolves to the default branch. A missing `versionId` uses the branch head version, unless `useLatestAvailableVersion` is set.
+- File content is returned base64-encoded in the `data` field. `fileName` is present only on source files, and `locale` is present only on translated files.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+The body is a JSON array of 1–100 file references. Each element has these fields:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Stable file identifier; cannot be blank. | `string` | No | — |
+| `branchId` | Branch to read from. | `string` | Yes | Default branch |
+| `versionId` | Specific version to download. | `string` | Yes | Branch head version |
+| `locale` | Locale to download. Omit to download the source file. | `string` | Yes | — |
+| `useLatestAvailableVersion` | Fall back to the latest available version when the requested version is missing. | `boolean` | Yes | `false` |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "files": [
+    {
+      "id": "sf_...",
+      "branchId": "br_...",
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "fileName": "en/common.json",
+      "data": "eyJoZWxsbyI6ICJIZWxsbyJ9",
+      "metadata": {},
+      "fileFormat": "JSON"
+    },
+    {
+      "id": "tf_...",
+      "branchId": "br_...",
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "locale": "es",
+      "data": "eyJoZWxsbyI6ICJIb2xhIn0=",
+      "metadata": {},
+      "fileFormat": "JSON"
+    }
+  ],
+  "count": 2
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, or an entry is missing a valid `fileId`. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:read`. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api2.gtx.dev/v2/project/files/download \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '[
+    { "fileId": "file_...", "locale": "es" },
+    { "fileId": "file_..." }
+  ]'
+```

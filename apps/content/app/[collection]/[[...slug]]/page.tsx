@@ -4,11 +4,7 @@ import {
   EntryHeader,
   PageShell,
 } from '@/components/site';
-import {
-  getEntry,
-  isCollection,
-  staticParams,
-} from '@/content';
+import { getEntry, isCollection, staticParams } from '@/content';
 import { getMDXComponents } from '@/mdx-components';
 import { notFound } from 'next/navigation';
 
@@ -41,10 +37,15 @@ export default async function Page({
 
   return (
     <PageShell
-      aside={<CollectionSidebar collection={collection} currentPath={entry.info.path} />}
+      aside={
+        <CollectionSidebar
+          collection={collection}
+          currentPath={entry.info.path}
+        />
+      }
     >
       <EntryHeader collection={collection} entry={entry} />
-      <article className="article">
+      <article className='article'>
         <MDXContent components={getMDXComponents()} />
       </article>
     </PageShell>

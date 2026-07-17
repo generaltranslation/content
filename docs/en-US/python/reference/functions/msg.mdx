@@ -1,0 +1,68 @@
+---
+
+title: msg
+description: Register a message with its translation options as an encoded string in General Translation Python. API reference for msg.
+
+---
+
+Registers a message together with its translation options and returns an encoded string that can be decoded later. Use it when you build a message in one place and resolve it in another.
+
+## Overview [#overview]
+
+Call `msg` with a source string and any variables or reserved options. With no keyword arguments it returns the message unchanged. With options it returns an encoded `{interpolated}:{base64options}` string that [`m_fallback`](/docs/python/reference/functions/m-fallback), [`decode_msg`](/docs/python/reference/functions/decode-msg), and [`decode_options`](/docs/python/reference/functions/decode-options) can read.
+
+```python
+from gt_i18n import msg
+
+msg("Save", _context="button")
+```
+
+Signature:
+
+```python
+msg(message: str, **kwargs: object) -> str
+```
+
+Import `msg` from `gt_i18n`. It is not re-exported by the framework packages.
+
+## How it works [#how-it-works]
+
+- **No options shortcut.** When `kwargs` is empty, it returns `message` unchanged.
+- **Interpolation.** It interpolates the message with the user variables (reserved keys removed) for the human-readable prefix.
+- **Encoding.** It computes the message hash (or reuses a passed `__hash`), then base64-encodes a JSON options payload that includes all kwargs plus `__source` and `__hash`, and returns `"{interpolated}:{encoded}"`.
+- **Error safety.** If interpolation fails, it returns the original message.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | The ICU MessageFormat source string. | `str` | No | — |
+| [`kwargs`](#kwargs) | Interpolation variables and reserved GT options (`_context`, `_id`, `_max_chars`). | keyword args | Yes | — |
+
+### `message` [#message]
+
+**Type** `str` · **Required**
+
+The ICU MessageFormat source string to register.
+
+### `kwargs` [#kwargs]
+
+**Type** keyword arguments · **Optional**
+
+Interpolation variables and the reserved options `_context`, `_id`, and `_max_chars`, which are folded into the hash. All keys are preserved in the encoded payload.
+
+## Returns [#returns]
+
+**Type** `str`
+
+The message unchanged when no options are given, otherwise an encoded `{interpolated}:{base64options}` string.
+
+## Example [#example]
+
+```python
+from gt_i18n import msg, decode_msg, decode_options
+
+encoded = msg("Hi, {name}!", name="Bob", _id="greet")
+decode_msg(encoded)      # "Hi, Bob!"
+decode_options(encoded)  # {"name": "Bob", "_id": "greet", "__source": "Hi, {name}!", "__hash": "..."}
+```

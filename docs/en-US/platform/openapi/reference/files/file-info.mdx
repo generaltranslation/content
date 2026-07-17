@@ -1,0 +1,110 @@
+---
+
+title: Get file information
+description: Inspect General Translation source file metadata, versions, locales, and translation state. API reference for Get file information.
+
+method: POST
+---
+
+Returns metadata for source and translated files by reference. Query source files, translated files, or both in one request.
+
+## Overview [#overview]
+
+```http
+POST https://api2.gtx.dev/v2/project/files/info
+```
+
+**Permission** `project:files:read` · **Rate limit** Default (200/min)
+
+Look up file metadata without downloading content. For per-locale translation progress on a single file, use [Get translation status](/docs/platform/openapi/reference/files/translation-status).
+
+## How it works [#how-it-works]
+
+- Provide `sourceFiles`, `translatedFiles`, or both. Each list is resolved independently and returned in its own array.
+- Only files that exist are returned; unmatched references are omitted rather than causing an error.
+- The response contains metadata only (locales, formats, timestamps), not file content.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `sourceFiles` | Source file references to look up. | `object[]` | Yes | — |
+| `translatedFiles` | Translated file references to look up. | `object[]` | Yes | — |
+
+Each `sourceFiles` element requires `fileId`, `versionId`, and `branchId`. Each `translatedFiles` element requires `fileId`, `versionId`, `branchId`, and `locale`. All values cannot be blank.
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "sourceFiles": [
+    {
+      "branchId": "br_...",
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "fileName": "en/common.json",
+      "fileFormat": "JSON",
+      "dataFormat": "JSON",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "publishedAt": null,
+      "locales": ["es", "fr"],
+      "sourceLocale": "en"
+    }
+  ],
+  "translatedFiles": [
+    {
+      "branchId": "br_...",
+      "fileId": "file_...",
+      "versionId": "ver_...",
+      "fileFormat": "JSON",
+      "dataFormat": "JSON",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "approvedAt": null,
+      "publishedAt": null,
+      "completedAt": "2026-01-01T00:00:00.000Z",
+      "locale": "es"
+    }
+  ]
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid file query. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:read`. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api2.gtx.dev/v2/project/files/info \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sourceFiles": [
+      {
+        "fileId": "file_...",
+        "versionId": "ver_...",
+        "branchId": "br_..."
+      }
+    ]
+  }'
+```

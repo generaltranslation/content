@@ -1,0 +1,80 @@
+---
+
+title: declareVar
+description: Mark a value as non-derivable within a General Translation derive call. API reference for declareVar.
+
+---
+
+Marks a value as non-derivable — content that cannot be statically analyzed by the General Translation compiler. Use `declareVar` inside a [`derive`](/docs/node/reference/functions/derive) call to isolate the part of an expression that must be treated as a runtime variable.
+
+## Overview [#overview]
+
+Call `declareVar` with a value to get back an encoded ICU `select` string that carries the value as its `other` branch. This lets the compiler keep the surrounding content derivable while treating the wrapped value as a variable.
+
+```ts
+import { declareVar, derive, getGT } from 'gt-node';
+
+const gt = await getGT();
+const message = gt(`My name is ${derive(declareVar(getName()))}`);
+```
+
+Signature:
+
+```ts
+declareVar(
+  variable: string | number | boolean | null | undefined,
+  options?: { $name?: string }
+): string
+```
+
+## How it works [#how-it-works]
+
+- **Non-derivable marker.** `declareVar` wraps its argument in an ICU `select` expression (`{_gt_, select, other {...}}`) so the compiler treats it as a variable rather than a static value.
+- **Optional name.** Pass `$name` to label the variable in the encoded output.
+- **Recovery.** Decode a string containing `declareVar` output back to its interpolated form with [`decodeVars`](/docs/node/reference/functions/decode-vars).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`variable`](#variable) | The value to mark as non-derivable. | `string \| number \| boolean \| null \| undefined` | No | — |
+| [`options`](#options) | Options for the declaration. | `{ $name?: string }` | Yes | — |
+
+### `variable` [#variable]
+
+**Type** `string | number | boolean | null | undefined` · **Required**
+
+The value to mark as non-derivable. It is coerced to a string and sanitized.
+
+### `options` [#options]
+
+**Type** `{ $name?: string }` · **Optional**
+
+- `$name?: string` — an optional name for the variable, included in the encoded output.
+
+## Returns [#returns]
+
+**Type** `string`
+
+An encoded ICU `select` string carrying the value (and optional name).
+
+## Examples [#examples]
+
+```ts
+import { declareVar, derive, getGT } from 'gt-node';
+
+function derivableName() {
+  if (someCondition) {
+    return declareVar(Math.random().toString());
+  }
+  return 'John Doe';
+}
+
+const gt = await getGT();
+const greeting = gt(`My name is ${derive(derivableName())}`);
+```
+
+## Notes [#notes]
+
+- Use `declareVar` only inside a [`derive`](/docs/node/reference/functions/derive) call.
+- Decode encoded variables back to text with [`decodeVars`](/docs/node/reference/functions/decode-vars).

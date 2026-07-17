@@ -18,10 +18,16 @@ function StubComponent() {
 }
 
 function MdxImage({ style, ...props }: ComponentPropsWithoutRef<'img'>) {
-  return <img {...props} style={{ maxWidth: '100%', height: 'auto', ...style }} />;
+  return (
+    <img {...props} style={{ maxWidth: '100%', height: 'auto', ...style }} />
+  );
 }
 
-function TOC({ items }: { items?: React.ComponentProps<typeof InlineTOC>['items'] }) {
+function TOC({
+  items,
+}: {
+  items?: React.ComponentProps<typeof InlineTOC>['items'];
+}) {
   return items ? <InlineTOC items={items} /> : null;
 }
 

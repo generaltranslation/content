@@ -1,0 +1,134 @@
+---
+
+title: setConfig
+description: Update configuration on an existing GT instance. API reference for setConfig.
+
+---
+
+Updates the configuration of an existing [GT](/docs/platform/core/reference/gt-class/constructor) instance. Use it to change API credentials, locales, and other settings after the instance was created with General Translation.
+
+## Overview [#overview]
+
+Call `setConfig` to modify an instance in place. The new values merge with the configuration passed to the constructor and apply to every subsequent method call.
+
+```typescript
+const gt = new GT();
+
+gt.setConfig({
+  apiKey: 'your-new-api-key',
+  projectId: 'your-project-id',
+  sourceLocale: 'en',
+  targetLocale: 'es',
+});
+```
+
+Signature:
+
+```typescript
+setConfig(params: GTConstructorParams): void
+```
+
+*Note: `setConfig` is synchronous and returns `void`; it updates the instance in place.*
+
+## How it works [#how-it-works]
+
+- **Locale standardization then validation.** Each provided locale code (`sourceLocale`, `targetLocale`, and every entry in `locales`) is first standardized to its canonical BCP 47 form, then validated. The **stored values are the standardized/normalized forms**, not the raw strings you passed. `setConfig` throws for invalid codes.
+- **Custom mapping applies to `sourceLocale`/`targetLocale` but not to `locales`.** `sourceLocale` and `targetLocale` are validated **with** the `customMapping`, so a custom alias is accepted for them. Each entry of `locales` is validated **without** the mapping, so a `customMapping` alias is rejected if it appears inside `locales`.
+- **Configuration merge.** New values merge with the configuration passed to the constructor. A `customMapping`, however, completely replaces any existing mapping rather than merging.
+- **No environment re-read.** Environment variables (`GT_API_KEY`, `GT_DEV_API_KEY`, `GT_PROJECT_ID`) are not re-read when calling `setConfig`.
+- **Not atomic.** If validation fails partway through (for example, on the second locale), earlier properties may already be set.
+
+## Parameters [#parameters]
+
+`setConfig` accepts a required [`GTConstructorParams`](/docs/platform/core/reference/types/gt-constructor-params) object with the same properties as the [constructor](/docs/platform/core/reference/gt-class/constructor):
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`apiKey`](#api-key) | Production API key for the translation service. | `string` | Yes | — |
+| [`devApiKey`](#dev-api-key) | Development API key. | `string` | Yes | — |
+| [`projectId`](#project-id) | Unique Project identifier. | `string` | Yes | — |
+| [`sourceLocale`](#source-locale) | Default source locale for translations. | `string` | Yes | — |
+| [`targetLocale`](#target-locale) | Default target locale for translations. | `string` | Yes | — |
+| [`locales`](#locales) | Supported locale codes. | `string[]` | Yes | — |
+| [`baseUrl`](#base-url) | Custom API base URL. | `string` | Yes | — |
+| [`customMapping`](#custom-mapping) | Custom locale code mappings and property overrides. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | — |
+
+The `params` object itself is required, though every property on it is optional — pass only the settings you want to change.
+
+### `apiKey` [#api-key]
+
+**Type** `string` · **Optional**
+
+Production API key for the translation service.
+
+### `devApiKey` [#dev-api-key]
+
+**Type** `string` · **Optional**
+
+Development API key. Takes precedence over `apiKey` in development.
+
+### `projectId` [#project-id]
+
+**Type** `string` · **Optional**
+
+Unique Project identifier.
+
+### `sourceLocale` [#source-locale]
+
+**Type** `string` · **Optional**
+
+Default source locale for translations. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+
+### `targetLocale` [#target-locale]
+
+**Type** `string` · **Optional**
+
+Default target locale for translations. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Optional**
+
+Array of supported locale codes. Each code is standardized to its canonical form and stored in that normalized form, then validated **without** the `customMapping` — so a `customMapping` alias that is valid for `sourceLocale`/`targetLocale` is rejected if it appears inside `locales`.
+
+### `baseUrl` [#base-url]
+
+**Type** `string` · **Optional**
+
+Custom API base URL.
+
+### `customMapping` [#custom-mapping]
+
+**Type** [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) · **Optional**
+
+Custom locale code mappings and property overrides. Unlike the other settings, a new `customMapping` completely replaces the existing mapping instead of merging.
+
+## Returns [#returns]
+
+**Type** `void`
+
+The method updates the instance configuration in place and returns nothing.
+
+## Examples [#examples]
+
+```typescript
+const gt = new GT({
+  sourceLocale: 'en',
+  targetLocale: 'es',
+});
+
+// Switch the target locale from Spanish to French
+gt.setConfig({
+  targetLocale: 'fr',
+});
+```
+
+## Notes [#notes]
+
+- Configuration changes take effect immediately for subsequent method calls.
+- Every locale code is standardized to its canonical form before being stored (the stored value is the normalized form), then validated.
+- `sourceLocale` and `targetLocale` are validated with the `customMapping`; each entry of `locales` is validated without it.
+- Environment variables are not re-read when calling `setConfig`.
+- Custom mappings completely replace existing mappings (they are not merged).
+- The update is **not atomic** — if validation fails partway through, earlier properties may already be set.
+- The method is synchronous and returns `void`.

@@ -1,1 +1,1 @@
-AGENTS.md
+DOCS-SKILL.md

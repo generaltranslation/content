@@ -1,0 +1,185 @@
+---
+
+title: I18nManager
+description: The central orchestrator for locales, translation loading, and caching in General Translation Python. API reference for I18nManager.
+
+---
+
+The central object that holds locale configuration, loads and caches translations, and tracks the current request locale. [`initialize_gt`](/docs/python/reference/functions/initialize-gt) builds one for you; in the core `gt-i18n` library you construct it directly and register it with [`set_i18n_manager`](/docs/python/reference/functions/set-i18n-manager).
+
+## Overview [#overview]
+
+Construct an `I18nManager` with keyword-only arguments, then register it as the active manager. Every translation function reads from the registered manager.
+
+```python
+from gt_i18n import I18nManager, set_i18n_manager
+
+manager = I18nManager(default_locale="en", locales=["es", "fr"])
+set_i18n_manager(manager)
+```
+
+Signature:
+
+```python
+I18nManager(
+    *,
+    default_locale: str = "en",
+    locales: list[str] | None = None,
+    project_id: str | None = None,
+    cache_url: str | None = None,
+    custom_mapping: CustomMapping | None = None,
+    store_adapter: StorageAdapter | None = None,
+    load_translations: TranslationsLoader | None = None,
+    cache_expiry_time: int = 60_000,
+    version_id: str | None = None,
+)
+```
+
+Import `I18nManager` from `gt_i18n`. It is not re-exported by the framework packages.
+
+## How it works [#how-it-works]
+
+- **Locale set.** The default locale is always merged into `locales`, so the manager's locale set always contains it.
+- **Loader selection.** If `load_translations` is given it is used; otherwise, if `project_id` is set, a CDN loader for `{cache_url}/{project_id}/{locale}` is created; otherwise a no-op loader returns an empty dict.
+- **Caching.** Loaded translations are cached per locale for `cache_expiry_time` milliseconds. `get_translations` loads on demand (async); `get_translations_sync` only reads the cache and never blocks.
+- **Locale storage.** The current locale is stored through `store_adapter` (a [`ContextVarStorageAdapter`](/docs/python/reference/classes/context-var-storage-adapter) by default), which isolates the value per request in both threaded and async contexts.
+
+## Constructor parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`default_locale`](#default-locale) | Source and fallback locale. | `str` | Yes | `"en"` |
+| [`locales`](#locales) | Target locales the app supports. | `list[str]` | Yes | `None` |
+| [`project_id`](#project-id) | Project ID; enables the CDN loader when set. | `str` | Yes | `None` |
+| [`cache_url`](#cache-url) | CDN base URL. | `str` | Yes | `None` |
+| [`custom_mapping`](#custom-mapping) | Custom locale codes and property overrides. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | `None` |
+| [`store_adapter`](#store-adapter) | Custom storage adapter for the request locale. | [`StorageAdapter`](/docs/python/reference/classes/storage-adapter) | Yes | `ContextVarStorageAdapter` |
+| [`load_translations`](#load-translations) | Custom loader; overrides the CDN loader. | [`TranslationsLoader`](/docs/python/reference/classes/translations-loader) | Yes | `None` |
+| [`cache_expiry_time`](#cache-expiry) | Cache lifetime in milliseconds. | `int` | Yes | `60000` |
+| [`version_id`](#version-id) | Pinned translation version. | `str` | Yes | `None` |
+
+### `default_locale` [#default-locale]
+
+**Type** `str` · **Optional** · **Default** `"en"`
+
+The source and fallback locale. Defaults to the library default `"en"` (`LIBRARY_DEFAULT_LOCALE`).
+
+### `locales` [#locales]
+
+**Type** `list[str]` · **Optional** · **Default** `None`
+
+Target locales the application supports. The default locale is always added to the set.
+
+### `project_id` [#project-id]
+
+**Type** `str` · **Optional** · **Default** `None`
+
+The General Translation Project ID. When set and no `load_translations` is provided, the manager builds a CDN loader.
+
+### `cache_url` [#cache-url]
+
+**Type** `str` · **Optional** · **Default** `None`
+
+The CDN base URL used by the remote loader. The General Translation CDN is `https://cdn.gtx.dev`.
+
+### `custom_mapping` [#custom-mapping]
+
+**Type** `CustomMapping` · **Optional** · **Default** `None`
+
+Custom locale codes and property overrides, forwarded to the underlying [`GT`](/docs/platform/core/reference/gt-class/constructor) instance.
+
+### `store_adapter` [#store-adapter]
+
+**Type** [`StorageAdapter`](/docs/python/reference/classes/storage-adapter) · **Optional** · **Default** `ContextVarStorageAdapter`
+
+The storage adapter for per-request locale state. Defaults to [`ContextVarStorageAdapter`](/docs/python/reference/classes/context-var-storage-adapter).
+
+### `load_translations` [#load-translations]
+
+**Type** [`TranslationsLoader`](/docs/python/reference/classes/translations-loader) · **Optional** · **Default** `None`
+
+A custom loader returning translations for a locale. Overrides the CDN loader when provided.
+
+### `cache_expiry_time` [#cache-expiry]
+
+**Type** `int` · **Optional** · **Default** `60000`
+
+Cache lifetime in milliseconds (default 60000, i.e. 60 seconds). Once an entry is older than this, it is treated as expired: the async `get_translations` reloads it on its next call, but `get_translations_sync` — the method [`t`](/docs/python/reference/functions/t) uses — returns an empty dict for an expired entry and does **not** trigger a reload. Because the request path reads translations synchronously and nothing re-runs the async loader after startup, expired translations are not reloaded automatically, and `t` falls back to source strings until `load_all_translations` (or `get_translations`) runs again. `initialize_gt` does not expose this parameter, so framework apps cannot change the 60-second window.
+
+### `version_id` [#version-id]
+
+**Type** `str` · **Optional** · **Default** `None`
+
+A pinned translation version, returned by [`get_version_id`](/docs/python/reference/functions/get-version-id).
+
+## Properties and methods [#members]
+
+| Member | Description | Returns |
+| --- | --- | --- |
+| [`default_locale`](#member-default-locale) | The source/default locale (property). | `str` |
+| [`get_locale`](#member-get-locale) | The current request locale, or the default. | `str` |
+| [`set_locale`](#member-set-locale) | Set the current request locale. | `None` |
+| [`get_locales`](#member-get-locales) | The supported locale list. | `list[str]` |
+| [`get_version_id`](#member-version-id) | The configured version id, or `None`. | `str \| None` |
+| [`requires_translation`](#member-requires) | Whether a locale needs translation from the default. | `bool` |
+| [`get_translations`](#member-get-translations) | Load (async) and cache a locale's translations. | `dict[str, str]` |
+| [`get_translations_sync`](#member-get-sync) | Read cached translations without blocking. | `dict[str, str]` |
+| [`load_all_translations`](#member-load-all) | Eagerly load all configured locales (async). | `None` |
+| [`get_gt_instance`](#member-gt-instance) | Build a `GT` instance for the current request. | `GT` |
+
+### `default_locale` [#member-default-locale]
+
+A read-only property returning the source/default locale.
+
+### `get_locale()` [#member-get-locale]
+
+Returns the current request locale from the storage adapter, falling back to the default locale.
+
+### `set_locale(locale)` [#member-set-locale]
+
+Writes the current request locale to the storage adapter.
+
+### `get_locales()` [#member-get-locales]
+
+Returns a copy of the supported locale list (always including the default locale).
+
+### `get_version_id()` [#member-version-id]
+
+Returns the configured version id, or `None`.
+
+### `requires_translation(locale=None)` [#member-requires]
+
+Returns whether `locale` (or the current locale) needs translation from the default, checked against the configured locales.
+
+### `get_translations(locale=None)` [#member-get-translations]
+
+An async method that loads and caches translations for `locale` (or the current locale), deduplicating concurrent loads and returning an empty dict on error.
+
+### `get_translations_sync(locale=None)` [#member-get-sync]
+
+Returns cached translations for `locale` (or the current locale) without blocking, or an empty dict when nothing is cached (or the cache has expired). This is what [`t`](/docs/python/reference/functions/t) reads.
+
+### `load_all_translations()` [#member-load-all]
+
+An async method that eagerly loads translations for every configured locale.
+
+### `get_gt_instance()` [#member-gt-instance]
+
+Returns a `GT` instance configured with the manager's project id, source locale, current target locale, locales, and custom mapping.
+
+## Example [#example]
+
+```python
+import asyncio
+from gt_i18n import I18nManager, set_i18n_manager, t
+
+def load_translations(locale: str) -> dict[str, str]:
+    return {}  # load from your own source
+
+manager = I18nManager(default_locale="en", locales=["es"], load_translations=load_translations)
+set_i18n_manager(manager)
+
+asyncio.run(manager.load_all_translations())  # preload
+manager.set_locale("es")
+t("Hello, world!")
+```

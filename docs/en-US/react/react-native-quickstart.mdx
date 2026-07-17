@@ -1,0 +1,262 @@
+---
+
+title: React Native Quickstart
+description: Add General Translation to a React Native app with gt-react-native, covering both Expo and the bare React Native CLI.
+related:
+  links:
+    - /docs/react/guides/translating-jsx
+    - /docs/react/guides/translating-strings
+    - /docs/react/guides/managing-locales
+    - /docs/react/guides/formatting-variables
+
+---
+
+`gt-react-native` adds automatic internationalization to React Native apps. You initialize General Translation at your app's entry point, add a Babel plugin for the polyfills React Native needs, and wrap your app in `GTProvider`.
+
+This quickstart covers both Expo and the bare React Native CLI. For web React apps use the [React Quickstart](/docs/react/react-quickstart).
+
+<Callout type="warning">
+  `gt-react-native` is experimental and may not work for all projects. It ships a native module, so **Expo Go is not supported** — you need a development build.
+</Callout>
+
+## Quickstart [#quickstart]
+
+Install the package, create a config file, set up polyfills, add a translation loader, initialize General Translation with the provider, mark content for translation, and generate translations.
+
+### 1. Install `gt-react-native`
+
+Install `gt-react-native` as a dependency and the [`gt` CLI](/docs/cli/quickstart) as a dev dependency.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-react-native && npm install gt --save-dev
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-react-native && yarn add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-react-native && bun add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-react-native && pnpm add --save-dev gt
+    ```
+  </Tab>
+</Tabs>
+
+*Note: On the bare React Native CLI, run `cd ios && pod install` after installing to link the native module.*
+
+### 2. Create `gt.config.json`
+
+Create a `gt.config.json` file in your project root. It declares your source language, your target locales, and where translation files are written.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+- `defaultLocale` — the language your app is written in.
+- `locales` — the languages to translate into. Pick from the [supported locales](/docs/platform/dashboard/reference/supported-locales).
+- `files.gt.output` — where the CLI writes translation files. `[locale]` is replaced with each locale code.
+
+### 3. Set up polyfills
+
+React Native's JavaScript runtime does not include the `Intl` APIs that `gt-react-native` needs. Add the included Babel plugin, pointing `entryPointFilePath` at your app's entry file.
+
+<Tabs items={['Expo', 'React Native CLI']}>
+  <Tab value="Expo">
+    ```js title="babel.config.js"
+    const { plugin: gtPlugin } = require('gt-react-native/plugin');
+    const gtConfig = require('./gt.config.json');
+
+    module.exports = function (api) {
+      api.cache(true);
+      return {
+        presets: ['babel-preset-expo'],
+        plugins: [
+          [
+            gtPlugin,
+            {
+              locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+              entryPointFilePath: require.resolve('expo-router/entry'),
+            },
+          ],
+        ],
+      };
+    };
+    ```
+  </Tab>
+
+  <Tab value="React Native CLI">
+    ```js title="babel.config.js"
+    const path = require('path');
+    const { plugin: gtPlugin } = require('gt-react-native/plugin');
+    const gtConfig = require('./gt.config.json');
+
+    module.exports = {
+      presets: ['module:@react-native/babel-preset'],
+      plugins: [
+        [
+          gtPlugin,
+          {
+            locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+            entryPointFilePath: path.resolve(__dirname, 'index.js'),
+          },
+        ],
+      ],
+    };
+    ```
+  </Tab>
+</Tabs>
+
+The plugin is a **named export**, so destructure it: `const { plugin: gtPlugin } = require('gt-react-native/plugin')`. It injects the required `@formatjs` polyfills at the top of your entry file. If it does not work in your setup, import the polyfills manually — see [FormatJS's polyfill documentation](https://formatjs.github.io/docs/polyfills).
+
+### 4. Create a translation loader
+
+Metro (React Native's bundler) does not support dynamic imports, so map each locale to its translation file with static `require` calls.
+
+```ts title="loadTranslations.ts"
+const translations: Record<string, unknown> = {
+  es: require('./src/_gt/es.json'),
+  fr: require('./src/_gt/fr.json'),
+  ja: require('./src/_gt/ja.json'),
+};
+
+export function loadTranslations(locale: string) {
+  return translations[locale] ?? {};
+}
+```
+
+The CLI generates these files when you run `npx gt translate`.
+
+### 5. Initialize General Translation and add the provider
+
+Call [`initializeGT`](/docs/node/reference/functions/initialize-gt) once at your app's entry point, before rendering, then wrap your app in `GTProvider`. Unlike the web packages, `GTProvider` loads translations internally, so you do not pass a `translations` prop and normally do not need to pass `locale` either — it is auto-detected. An optional `locale` prop is still accepted if you need to override detection.
+
+<Tabs items={['Expo', 'React Native CLI']}>
+  <Tab value="Expo">
+    ```tsx title="app/_layout.tsx"
+    import { Slot } from 'expo-router';
+    import { GTProvider, initializeGT } from 'gt-react-native';
+    import gtConfig from '../gt.config.json';
+    import { loadTranslations } from '../loadTranslations';
+
+    // Initialize once, at the module level
+    initializeGT({
+      ...gtConfig,
+      loadTranslations,
+      projectId: process.env.EXPO_PUBLIC_GT_PROJECT_ID,
+      devApiKey: process.env.EXPO_PUBLIC_GT_DEV_API_KEY,
+    });
+
+    export default function RootLayout() {
+      return (
+        <GTProvider>
+          <Slot />
+        </GTProvider>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab value="React Native CLI">
+    ```js title="index.js"
+    import { AppRegistry } from 'react-native';
+    import { initializeGT } from 'gt-react-native';
+    import App from './App';
+    import { name as appName } from './app.json';
+    import gtConfig from './gt.config.json';
+    import { loadTranslations } from './loadTranslations';
+
+    // Initialize once, before the app is registered
+    initializeGT({ ...gtConfig, loadTranslations });
+
+    AppRegistry.registerComponent(appName, () => App);
+    ```
+
+    ```tsx title="App.tsx"
+    import { GTProvider } from 'gt-react-native';
+    import Home from './src/Home';
+
+    export default function App() {
+      return (
+        <GTProvider>
+          <Home />
+        </GTProvider>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+*Note: The `projectId` and `devApiKey` options enable on-demand translation during development. In Expo, expose them with the `EXPO_PUBLIC_` prefix.*
+
+### 6. Mark content for translation
+
+Wrap JSX in the [`<T>`](/docs/react/reference/components/t) component to translate it in place. For standalone strings such as `placeholder` and `accessibilityLabel` values, use the [`useGT`](/docs/react/reference/hooks/use-gt) hook. To build a language switcher, use the [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) hook — `gt-react-native` does not ship a prebuilt selector component.
+
+```tsx title="src/Home.tsx"
+import { Text, View, Pressable, TextInput } from 'react-native';
+import { T, useGT, useLocaleSelector } from 'gt-react-native';
+
+export default function Home() {
+  const gt = useGT();
+  const { locales, locale, setLocale } = useLocaleSelector();
+
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {locales.map((l) => (
+          <Pressable key={l} onPress={() => setLocale(l)}>
+            <Text style={{ fontWeight: l === locale ? 'bold' : 'normal' }}>
+              {l}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <T>
+        <Text>Welcome to my app</Text>
+      </T>
+      <TextInput accessibilityLabel={gt('Email input field')} />
+    </View>
+  );
+}
+```
+
+`useGT()` returns the translation function directly, so call it as `const gt = useGT();`.
+
+### 7. Generate translations
+
+Run the CLI to translate your project through the General Translation API.
+
+```bash
+npx gt translate
+```
+
+Add the command to your build script so production builds always have up-to-date translations:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && <your build command>"
+  }
+}
+```
+
+*Note: `npx gt translate` needs a Project ID and a production API key, set as `GT_PROJECT_ID` and `GT_API_KEY` in your environment. Run `npx gt auth` or visit the [Dashboard](/docs/platform/dashboard/get-started) to get them.*

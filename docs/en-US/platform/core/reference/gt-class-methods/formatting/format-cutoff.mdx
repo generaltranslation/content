@@ -1,0 +1,234 @@
+---
+
+title: formatCutoff
+description: Truncate text with locale-aware cutoff characters and terminators. API reference for formatCutoff.
+
+---
+
+Truncates a string with locale-aware terminators on a [GT](/docs/platform/core/reference/gt-class/constructor) instance, applying appropriate ellipsis characters and spacing for the target locale. General Translation uses this for UI text truncation that respects different languages' conventions for indicating cut-off text.
+
+## Overview [#overview]
+
+Call `formatCutoff` on a [`GT`](/docs/platform/core/reference/gt-class/constructor) instance with the string to truncate and an options object specifying `maxChars`. It returns the truncated string with the terminator applied.
+
+```typescript
+const gt = new GT({ sourceLocale: 'en', targetLocale: 'fr-FR' });
+
+const formatted = gt.formatCutoff('Hello, world!', {
+  maxChars: 8,
+});
+// "Hello,\u202F…" (narrow no-break space before the ellipsis in French)
+```
+
+Signature:
+
+```typescript
+formatCutoff(
+  value: string,
+  options?: { locales?: string | string[] } & CutoffFormatOptions
+): string
+```
+
+*Note: `formatCutoff` runs locally and does not require an API key. By default it uses the instance's target locale, falling back to the source locale and then the library default (`en`); pass `locales` to override. For formatting without a `GT` instance, see the standalone [`formatCutoff`](/docs/platform/core/reference/utility-functions/formatting/format-cutoff).*
+
+*Note: the terminator and separator count toward `maxChars`. The example outputs below reflect the current library behavior and correct several source-doc examples that omitted the terminator from the count (for example, `maxChars: 8` yields `"Hello, …"`, not `"Hello, w…"`).*
+
+## How it works [#how-it-works]
+
+### Locale resolution
+
+- Uses the instance's target locale by default, falling back to the source locale and then the library default (`en`).
+- Can be overridden with an explicit `locales` option.
+
+### Character limit processing
+
+- **Positive `maxChars`:** truncates from the beginning and appends the terminator.
+- **Negative `maxChars`:** slices from the end (following `.slice()` behavior) and prepends the terminator.
+- **Zero `maxChars`:** returns an empty string.
+- **Undefined `maxChars`:** no truncation is applied; returns the original string.
+- If the cutoff results in an empty string, no terminator is added.
+
+### Locale-specific behavior
+
+The method automatically selects appropriate terminators based on language:
+
+- **French (`fr`):** `…` with a narrow non-breaking space (`\u202F`).
+- **Chinese (`zh`):** double ellipsis `……` with no separator.
+- **Japanese (`ja`):** double ellipsis `……` with no separator.
+- **Default:** single ellipsis `…` with no separator.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`value`](#value) | The string to truncate. | `string` | No | — |
+| [`options`](#options) | Truncation configuration. | `object` | Yes | — |
+
+### `value` [#value]
+
+**Type** `string` · **Required**
+
+The string to truncate.
+
+### `options` [#options]
+
+**Type** `{ locales?: string | string[] } & CutoffFormatOptions` · **Optional**
+
+Truncation configuration:
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locales` | Locale(s) to use for terminator selection (overrides instance defaults). | `string \| string[]` | Yes | instance rendering locales |
+| `maxChars` | Maximum characters to display. Undefined means no cutoff; negative values slice from the end; `0` returns an empty string. | `number` | Yes | — |
+| `style` | Terminator style. | `'ellipsis' \| 'none'` | Yes | `'ellipsis'` |
+| `terminator` | Custom terminator to override locale defaults. | `string` | Yes | — |
+| `separator` | Custom separator between the terminator and the text. Ignored if no terminator is provided. | `string` | Yes | — |
+
+The `CutoffFormatOptions` type:
+
+```typescript
+interface CutoffFormatOptions {
+  maxChars?: number;
+  style?: 'ellipsis' | 'none';
+  terminator?: string;
+  separator?: string;
+}
+```
+
+## Returns [#returns]
+
+**Type** `string`
+
+The truncated string with the appropriate terminator applied according to locale conventions.
+
+## Examples [#examples]
+
+```typescript
+// Basic usage with instance locales
+const gt = new GT({ targetLocale: 'en-US' });
+
+const truncated = gt.formatCutoff('Hello, world!', {
+  maxChars: 8,
+});
+console.log(truncated); // "Hello, …"
+```
+
+```typescript
+// Locale override
+const gt = new GT({ targetLocale: 'en-US' });
+
+const french = gt.formatCutoff('Bonjour le monde', {
+  locales: 'fr-FR',
+  maxChars: 10,
+});
+console.log(french); // "Bonjour \u202F…"
+```
+
+```typescript
+// Negative character limits
+const gt = new GT({ targetLocale: 'en-US' });
+
+// Slice from end
+const fromEnd = gt.formatCutoff('JavaScript Framework', {
+  maxChars: -9,
+});
+console.log(fromEnd); // "…ramework"
+
+// Larger negative slice
+const moreFromEnd = gt.formatCutoff('Hello, world!', {
+  maxChars: -3,
+});
+console.log(moreFromEnd); // "…d!"
+```
+
+```typescript
+// Custom styling options
+const gt = new GT({ targetLocale: 'en-US' });
+
+// Custom terminator
+const custom = gt.formatCutoff('Long description text', {
+  maxChars: 12,
+  terminator: '...',
+});
+console.log(custom); // "Long desc..."
+
+// Custom terminator with separator
+const customSep = gt.formatCutoff('Another example', {
+  maxChars: 10,
+  terminator: '[...]',
+  separator: ' ',
+});
+console.log(customSep); // "Anot [...]"
+
+// No terminator
+const none = gt.formatCutoff('Clean cut text', {
+  maxChars: 5,
+  style: 'none',
+});
+console.log(none); // "Clean"
+```
+
+```typescript
+// Multilingual application
+class UserInterface {
+  private gt: GT;
+
+  constructor(locale: string) {
+    this.gt = new GT({ targetLocale: locale });
+  }
+
+  truncateTitle(title: string, maxLength = 20): string {
+    return this.gt.formatCutoff(title, { maxChars: maxLength });
+  }
+
+  truncateDescription(description: string): string {
+    return this.gt.formatCutoff(description, { maxChars: 100 });
+  }
+}
+
+const englishUI = new UserInterface('en-US');
+const chineseUI = new UserInterface('zh-CN');
+
+console.log(englishUI.truncateTitle('Very Long English Title Here', 15));
+// Output: "Very Long Engl…"
+
+console.log(chineseUI.truncateTitle('很长的中文标题在这里', 8));
+// Output: "很长的中文标……"
+```
+
+```typescript
+// Dynamic locale handling
+const gt = new GT({ sourceLocale: 'en', targetLocale: 'en' });
+
+function adaptiveText(text: string, userLocale: string, context: 'title' | 'body') {
+  const limits = {
+    title: { en: 50, fr: 45, de: 40, zh: 25 },
+    body: { en: 200, fr: 180, de: 160, zh: 100 },
+  };
+
+  const maxChars = limits[context][userLocale] || limits[context]['en'];
+
+  return gt.formatCutoff(text, {
+    locales: userLocale,
+    maxChars,
+  });
+}
+
+const userPrefs = [
+  { locale: 'fr-FR', text: 'Une très longue description française' },
+  { locale: 'zh-CN', text: '这是一个非常长的中文描述文本' },
+  { locale: 'de-DE', text: 'Eine sehr lange deutsche Beschreibung' },
+];
+
+userPrefs.forEach(({ locale, text }) => {
+  console.log(`${locale}: ${adaptiveText(text, locale, 'title')}`);
+});
+```
+
+## Notes [#notes]
+
+- The method uses the GT instance's target locale for automatic locale detection, falling back to the source locale and then the library default (`en`).
+- Terminator and separator length are accounted for in character-limit calculations.
+- If the terminator plus separator length exceeds `maxChars`, the method returns an empty string.
+- Custom terminators completely override locale-specific defaults.
+- Performance is optimized through internal caching of formatter instances.

@@ -1,0 +1,114 @@
+---
+
+title: getTranslations
+description: Get a General Translation dictionary resolver for the current request locale. API reference for getTranslations.
+
+---
+
+An async function that returns a `t` function for resolving dictionary entries by id. Use it with a dictionary configured through [`initializeGT`](/docs/node/reference/functions/initialize-gt) to translate centralized, key-based copy per request.
+
+## Overview [#overview]
+
+Await `getTranslations` inside a [`withGT`](/docs/node/reference/functions/with-gt) scope to get a synchronous `t(id, options?)` function, then look up dictionary entries by id.
+
+```ts
+import { getTranslations } from 'gt-node';
+
+const t = await getTranslations();
+const title = t('page.title');
+```
+
+Signature:
+
+```ts
+getTranslations(rootId?: string): Promise<TFunctionType>
+
+type TFunctionType = ((id: string, options?: TranslationVariables) => string) & {
+  obj: (id: string) => DictionaryObjectTranslation;
+};
+```
+
+*Note: `getTranslations` must be called within a [`withGT`](/docs/node/reference/functions/with-gt) callback so it knows which locale to use, and requires a `dictionary` (or [`loadDictionary`](/docs/react/reference/functions/load-dictionary)) configured on [`initializeGT`](/docs/node/reference/functions/initialize-gt).*
+
+## How it works [#how-it-works]
+
+- **Dictionary lookup.** `t(id)` resolves the entry at `id` in the dictionary and returns its translation for the active locale, falling back to the source entry when a translation is missing.
+- **Unknown ids throw.** If the source dictionary has no entry for `id`, `t(id)` throws `Dictionary entry <id> cannot be found`. This is the one translation path in `gt-node` that throws rather than falling back to a source string.
+- **Root scoping.** Pass `rootId` to scope all lookups under a prefix, so `getTranslations('page')` lets you call `t('title')` instead of `t('page.title')`.
+- **Interpolation.** Pass variables in the options object to interpolate into the entry using `{key}` syntax.
+- **Object subtrees.** `t.obj(id)` returns a nested subtree of the dictionary as a plain object of translated strings.
+
+## Parameters [#parameters]
+
+`getTranslations` takes an optional `rootId`. The returned `t` function takes:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`rootId`](#root-id) | Prefix applied to every lookup id. | `string` | Yes | — |
+| [`id`](#id) | The dictionary entry id to resolve. | `string` | No | — |
+| [`options`](#options) | Variable values to interpolate into the entry. | `TranslationVariables` | Yes | `{}` |
+
+### `rootId` [#root-id]
+
+**Type** `string` · **Optional**
+
+A prefix applied to every id passed to `t`. When set, `t('title')` resolves `rootId.title`.
+
+### `id` [#id]
+
+**Type** `string` · **Required**
+
+The id of the dictionary entry to resolve, using dot notation for nested entries (for example, `'page.title'`).
+
+### `options` [#options]
+
+**Type** `TranslationVariables` · **Optional**
+
+A record of variable values to interpolate into the resolved entry using `{key}` syntax.
+
+## Returns [#returns]
+
+**Type** `Promise<TFunctionType>`
+
+Resolves to the `t` function. Calling `t(id, options?)` returns the translated string; `t.obj(id)` returns a translated object subtree.
+
+## Examples [#examples]
+
+```ts title="server.js"
+// Configure a dictionary at startup
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  dictionary: {
+    page: { title: 'Welcome', greeting: 'Hello, {name}!' },
+  },
+});
+```
+
+```ts title="handler.js"
+// Resolve dictionary entries for the request locale
+import { withGT, getTranslations } from 'gt-node';
+
+function handleRequest(locale) {
+  return withGT(locale, async () => {
+    const t = await getTranslations();
+    return {
+      title: t('page.title'),
+      greeting: t('page.greeting', { name: 'Alice' }),
+    };
+  });
+}
+```
+
+```ts title="handler.js"
+// Scope lookups with a rootId
+const t = await getTranslations('page');
+const title = t('title'); // resolves 'page.title'
+```
+
+## Notes [#notes]
+
+- Unknown dictionary ids throw; keep dictionary keys in sync between your source and code.
+- For inline strings, use [`getGT`](/docs/node/reference/functions/get-gt); for module-scope constants, use [`msg`](/docs/node/reference/functions/msg) with [`getMessages`](/docs/node/reference/functions/get-messages).

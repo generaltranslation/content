@@ -1,0 +1,175 @@
+---
+
+title: querySourceFile
+description: Retrieve source file metadata and related translation information. API reference for querySourceFile.
+
+---
+
+Retrieves comprehensive information about a source file and all of its translations with General Translation. This includes file metadata, translation status across every locale, and creation, completion, approval, and publishing timestamps.
+
+## Overview [#overview]
+
+Call `querySourceFile` with a query identifying the file. It returns the source file metadata plus a translation entry for each locale.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const result = await gt.querySourceFile({
+  fileId: 'file-123',
+  versionId: 'version-456',
+});
+
+console.log(`Source file: ${result.sourceFile.fileName}`);
+console.log(`Available in ${result.translations.length} locales`);
+```
+
+Signature:
+
+```typescript
+querySourceFile(
+  data: FileQuery,
+  options?: CheckFileTranslationsOptions
+): Promise<FileQueryResult>
+```
+
+*Note: `querySourceFile` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+
+## How it works [#how-it-works]
+
+- **Full translation status.** Returns the source file and the translation status for every target locale.
+- **Timestamp lifecycle.** Translation timestamps follow the order `createdAt` → `completedAt` → `approvedAt` → `publishedAt`. A `null` timestamp means that stage has not been reached yet.
+- **Configured locales.** The `locales` array on the source file lists all target locales configured for translation.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`data`](#data) | File query specifying which file to retrieve. | `FileQuery` | No | — |
+| [`options`](#options) | Configuration for the request. | `CheckFileTranslationsOptions` | Yes | — |
+
+### `data` [#data]
+
+**Type** `FileQuery` · **Required**
+
+Identifies the file to query:
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `fileId` | Unique identifier of the file to query. | `string` | No |
+| `versionId` | Version ID for the specific file version. | `string` | Yes |
+| `branchId` | Branch ID for the specific branch. | `string` | Yes |
+
+### `options` [#options]
+
+**Type** `CheckFileTranslationsOptions` · **Optional**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<FileQueryResult>`
+
+Resolves to a `FileQueryResult` with the source file info and translation status for all locales:
+
+```typescript
+type FileQueryResult = {
+  sourceFile: {
+    id: string;
+    fileId: string;
+    versionId: string;
+    sourceLocale: string;
+    fileName: string;
+    fileFormat: string;
+    dataFormat: string | null;
+    createdAt: string;
+    updatedAt: string;
+    locales: string[];
+  };
+  translations: {
+    locale: string;
+    completedAt: string | null;
+    approvedAt: string | null;
+    publishedAt: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  }[];
+};
+```
+
+Source file properties:
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `id` | Internal database ID. | `string` |
+| `fileId` | Unique file identifier. | `string` |
+| `versionId` | Version identifier. | `string` |
+| `sourceLocale` | Source language locale. | `string` |
+| `fileName` | Original file name. | `string` |
+| `fileFormat` | File format (JSON, MD, MDX, and others). | `string` |
+| `dataFormat` | Data format within the file (ICU, I18NEXT, JSX). | `string \| null` |
+| `createdAt` | ISO timestamp of file creation. | `string` |
+| `updatedAt` | ISO timestamp of the last update. | `string` |
+| `locales` | List of target locales for this file. | `string[]` |
+
+Translation properties:
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `locale` | Target locale code. | `string` |
+| `completedAt` | ISO timestamp of translation completion. | `string \| null` |
+| `approvedAt` | ISO timestamp of translation approval. | `string \| null` |
+| `publishedAt` | ISO timestamp of translation publishing. | `string \| null` |
+| `createdAt` | ISO timestamp of translation job creation. | `string \| null` |
+| `updatedAt` | ISO timestamp of the last translation update. | `string \| null` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+async function getFileInfo(fileId: string, versionId?: string) {
+  const result = await gt.querySourceFile({
+    fileId,
+    versionId,
+  });
+
+  console.log('=== Source File Info ===');
+  console.log(`Name: ${result.sourceFile.fileName}`);
+  console.log(`Format: ${result.sourceFile.fileFormat}`);
+  console.log(`Source Locale: ${result.sourceFile.sourceLocale}`);
+  console.log(`Created: ${new Date(result.sourceFile.createdAt).toLocaleString()}`);
+  console.log(`Updated: ${new Date(result.sourceFile.updatedAt).toLocaleString()}`);
+
+  console.log('\n=== Translation Status ===');
+  result.translations.forEach((translation) => {
+    console.log(`${translation.locale}:`);
+    console.log(
+      `  Created: ${translation.createdAt ? new Date(translation.createdAt).toLocaleString() : 'Not started'}`
+    );
+    console.log(
+      `  Completed: ${translation.completedAt ? new Date(translation.completedAt).toLocaleString() : 'In progress'}`
+    );
+    console.log(
+      `  Published: ${translation.publishedAt ? new Date(translation.publishedAt).toLocaleString() : 'Not published'}`
+    );
+  });
+
+  return result;
+}
+
+const fileInfo = await getFileInfo('file-123', 'version-456');
+```
+
+## Notes [#notes]
+
+- Returns the source file and translation status for all target locales.
+- Translation timestamps follow the lifecycle `createdAt` → `completedAt` → `approvedAt` → `publishedAt`; `null` timestamps indicate a stage that has not been reached yet.
+- The `locales` array on the source file shows all target locales configured for translation.
+- Use this method for detailed reporting, progress tracking, and file management workflows.

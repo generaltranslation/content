@@ -1,0 +1,183 @@
+---
+
+title: enqueueFiles
+description: Queue uploaded source files for translation into one or more target locales. API reference for enqueueFiles.
+
+---
+
+Queues translation jobs for previously uploaded source files with General Translation. It takes file references and creates a translation job per target locale.
+
+## Overview [#overview]
+
+Call `enqueueFiles` with the file references returned by [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) and an options object listing the target locales.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const result = await gt.enqueueFiles(fileRefs, {
+  sourceLocale: 'en',
+  targetLocales: ['es', 'fr', 'de'],
+});
+```
+
+Signature:
+
+```typescript
+enqueueFiles(
+  files: FileReferenceIds[],
+  options: EnqueueFilesOptions
+): Promise<EnqueueFilesResult>
+```
+
+*Note: `enqueueFiles` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. You can only enqueue files after they have been uploaded.*
+
+## How it works [#how-it-works]
+
+- **Asynchronous jobs.** Translation jobs run asynchronously. Monitor progress with [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data), or wait for completion with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs).
+- **One job per locale.** The response `jobData` is keyed by job ID, with one job created per target locale.
+- **Versioning.** File references include `branchId` for versioning with branch support.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | File reference IDs from previously uploaded files. | `FileReferenceIds[]` | No | — |
+| [`options`](#options) | Configuration options for the translation job. | [`EnqueueFilesOptions`](/docs/platform/core/reference/types/enqueue-files-options) | No | — |
+
+### `files` [#files]
+
+**Type** `FileReferenceIds[]` · **Required**
+
+The file references to enqueue:
+
+```typescript
+type FileReferenceIds = {
+  fileId: string;
+  versionId: string;
+  branchId?: string;
+  fileName?: string;
+  fileFormat?: FileFormat;
+  transformFormat?: FileFormat; // output format requested for generated translations
+  dataFormat?: DataFormat;
+};
+```
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `fileId` | Unique file identifier. | `string` | No |
+| `versionId` | Version identifier. | `string` | No |
+| `branchId` | Branch identifier. | `string` | Yes |
+| `fileName` | File name. | `string` | Yes |
+| `fileFormat` | File format. One of `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, or `TWILIO_CONTENT_JSON`. | `FileFormat` | Yes |
+| `transformFormat` | Output format requested for generated translations. | `FileFormat` | Yes |
+| `dataFormat` | Data format within the file (ICU, I18NEXT, JSX, STRING). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
+
+### `options` [#options]
+
+**Type** [`EnqueueFilesOptions`](/docs/platform/core/reference/types/enqueue-files-options) · **Required**
+
+Configuration for the translation job:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `sourceLocale` | Source locale for translation. | `string` | Yes | instance `sourceLocale` |
+| `targetLocales` | Target locales to translate into. | `string[]` | No | — |
+| `modelProvider` | Specific AI model provider to use for translation. | `string` | Yes | — |
+| `force` | Invalidate cached translations and force re-translation even if translations already exist. | `boolean` | Yes | — |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes | — |
+
+*Note: `requireApproval` was an 8.x-only option and is not present in 9.0.*
+
+## Returns [#returns]
+
+**Type** `Promise<EnqueueFilesResult>`
+
+Resolves to an `EnqueueFilesResult` containing job information and processing details:
+
+```typescript
+type EnqueueFilesResult = {
+  jobData: {
+    [jobId: string]: {
+      sourceFileId: string;
+      fileId: string;
+      versionId: string;
+      branchId: string;
+      targetLocale: string;
+      projectId: string;
+      force: boolean;
+      modelProvider?: string;
+    };
+  };
+  locales: string[]; // target locales for the jobs
+  message: string; // status message from the API
+};
+```
+
+The `jobData` record is keyed by job ID, with each value describing a single translation job.
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+// (1) Create a GT instance
+const targetLocales = ['es', 'fr', 'de'];
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// (2) Upload the file
+const fileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [{ source: fileUpload }];
+const { uploadedFiles } = await gt.uploadSourceFiles(files, { sourceLocale: 'en' });
+
+// (3) Enqueue the file translation job
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: targetLocales,
+});
+
+console.log(`Created ${Object.keys(enqueueResult.jobData).length} translation jobs`);
+
+// (4) Wait for all translations to be completed
+const { fileId, versionId, branchId } = uploadedFiles[0];
+const translatedFileQueries = targetLocales.map((locale) => ({
+  fileId,
+  versionId,
+  branchId,
+  locale,
+}));
+
+while (true) {
+  const result = await gt.queryFileData({
+    translatedFiles: translatedFileQueries,
+  });
+
+  const allCompleted = result.translatedFiles?.every((file) => file.completedAt !== null);
+
+  if (allCompleted) {
+    break;
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+}
+
+// (5) Download the files
+const downloadResult = await gt.downloadFileBatch(
+  targetLocales.map((locale) => ({
+    fileId,
+    branchId,
+    locale,
+  }))
+);
+```
+
+## Notes [#notes]
+
+- File content must be uploaded first with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files).
+- Translation jobs are asynchronous — use [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) or [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs) to monitor progress.
+- File references include `branchId` for versioning with branch support.

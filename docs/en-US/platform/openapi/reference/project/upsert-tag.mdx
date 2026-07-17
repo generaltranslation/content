@@ -1,0 +1,100 @@
+---
+
+title: Create or update tag
+description: Create or update a tag on General Translation file versions for release tracking. API reference for Create or update tag.
+
+method: POST
+---
+
+Creates a tag on a set of file versions, or overwrites an existing tag with the same ID. Use tags to mark the file versions that belong to a release.
+
+## Overview [#overview]
+
+```http
+POST https://api2.gtx.dev/v2/project/tags/create
+```
+
+**Permission** `project:files:write` · **Rate limit** Default (200/min)
+
+Pin a named tag to specific file versions. To resolve the file references first, use [Get file information](/docs/platform/openapi/reference/files/file-info).
+
+## How it works [#how-it-works]
+
+- Each file reference (`fileId` + `versionId` + `branchId`) is resolved to an internal source file. An existing tag with the same `tagId` is overwritten.
+- If none of the references resolve to a source file, the request returns `400`. If some references resolve and others do not, the request returns `400` and lists the unresolved file IDs.
+- The response returns the stored tag, including its timestamps.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `tagId` | Tag identifier (1–255 characters). | `string` | No | — |
+| [`files`](#files) | File versions to tag; at least one required. | `object[]` | No | — |
+| `message` | Optional message for the tag (max 255 characters). | `string` | Yes | — |
+
+#### `files` [#files]
+
+**Type** `object[]` · **Required**
+
+Each element references one file version. All values cannot be blank:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Stable file identifier. | `string` | No | — |
+| `versionId` | Version identifier. | `string` | No | — |
+| `branchId` | Branch the file is attached to. | `string` | No | — |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "tag": {
+    "id": "tag_...",
+    "tagId": "v1.2.0",
+    "message": "Release 1.2.0",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, no matching source files, or some file references could not be resolved. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:write`. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api2.gtx.dev/v2/project/tags/create \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tagId": "v1.2.0",
+    "message": "Release 1.2.0",
+    "files": [
+      {
+        "fileId": "file_...",
+        "versionId": "ver_...",
+        "branchId": "br_..."
+      }
+    ]
+  }'
+```

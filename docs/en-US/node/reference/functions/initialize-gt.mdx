@@ -1,0 +1,92 @@
+---
+
+title: initializeGT
+description: Configure the General Translation gt-node library once at server startup. API reference for initializeGT.
+
+---
+
+Configures General Translation for use in a Node.js runtime. Call `initializeGT` once, before any other translation function, to set up locales, credentials, and translation delivery.
+
+## Overview [#overview]
+
+Call `initializeGT` at the top of your server's entry file. It reads none of your environment or config files automatically — pass every value explicitly. See the [configuration reference](/docs/node/reference/config) for the full option list.
+
+```ts
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  projectId: 'your-project-id',
+});
+```
+
+Signature:
+
+```ts
+initializeGT(config: InitializeGTParams): void
+```
+
+*Note: `initializeGT` must be called before using [`withGT`](/docs/node/reference/functions/with-gt), [`getGT`](/docs/node/reference/functions/get-gt), [`getMessages`](/docs/node/reference/functions/get-messages), or any other translation function. Calling those functions first throws an error.*
+
+## How it works [#how-it-works]
+
+- **One-time setup.** Call `initializeGT` exactly once during server initialization. It sets up locale configuration, the translation cache, and per-request locale storage.
+- **Delivery mode.** Provide `projectId` to load translations from the General Translation CDN, or [`loadTranslations`](/docs/react/reference/functions/load-translations) to bring your own source. For on-demand translation in development, also provide `devApiKey`.
+- **Synchronous.** The call returns immediately and does not await network requests.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`config`](#config) | Configuration object. See the [configuration reference](/docs/node/reference/config). | `InitializeGTParams` | No | — |
+
+### `config` [#config]
+
+**Type** `InitializeGTParams` · **Required**
+
+An object combining locale, credential, cache, and dictionary options. The object is required, but every field on it is optional. Every field is documented in the [configuration reference](/docs/node/reference/config). Commonly used fields:
+
+- `defaultLocale` — source and fallback locale (default `'en'`).
+- `locales` — supported target locales.
+- `projectId` — Project ID; enables the CDN loader when set.
+- `devApiKey` — development API key for on-demand translation.
+- `loadTranslations` — custom loader returning translations for a locale.
+- `customMapping` — locale aliases and property overrides.
+
+## Returns [#returns]
+
+**Type** `void`
+
+## Examples [#examples]
+
+```ts title="server.js"
+// Basic setup
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr', 'ja'],
+  projectId: process.env.GT_PROJECT_ID,
+});
+```
+
+```ts title="server.js"
+// With a custom translation loader
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es'],
+  loadTranslations: async (locale) => {
+    const res = await fetch(`https://my-api.com/translations/${locale}`);
+    return res.json();
+  },
+});
+```
+
+## Notes [#notes]
+
+- `initializeGT` must be called once before any translation function runs.
+- If you use General Translation cloud services, provide `projectId`; for development, also provide `devApiKey`.
+- The `loadTranslations` option lets you bring your own translation source instead of the General Translation CDN.

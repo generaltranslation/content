@@ -1,0 +1,84 @@
+---
+
+title: Supported content
+description: Reference for the Storyblok field types General Translation translates and how content is serialized. API reference for Storyblok supported content.
+
+---
+
+Which Storyblok field types General Translation translates, how it handles rich text and tables, and the data format it uses. General Translation walks each story's content tree, recurses into nested blocks, and extracts translatable fields.
+
+## Overview [#overview]
+
+| Topic | Description |
+| --- | --- |
+| [Translatable field types](#field-types) | The field types sent for translation and their data formats. |
+| [The translatable flag](#translatable-flag) | Why a field must be marked `translatable: true`. |
+| [Field handling](#field-handling) | How each field type is extracted, recursed, or preserved. |
+| [Rich text and tables](#rich-text-tables) | Dedicated serialization for `richtext` and `table` fields. |
+| [Skipped fields](#skipped-fields) | Why a field is skipped, by reason. |
+| [Data format](#data-format) | The `STORYBLOK_CONTENT_JSON` format and its keyed metadata. |
+
+## Translatable field types [#field-types]
+
+General Translation extracts these Storyblok field types and translates them using the listed data format:
+
+| Field type | Data format |
+| --- | --- |
+| `text` | `text` |
+| `textarea` | `text` |
+| `markdown` | `markdown` |
+| `richtext` | `richtext` |
+| `table` | `table` |
+
+`text` and `textarea` are both translated as plain text. `markdown`, `richtext`, and `table` preserve their structure through dedicated serialization.
+
+## The translatable flag [#translatable-flag]
+
+A supported field is only extracted when it is marked `translatable: true` in its component schema. Storyblok stores field-level translations only for translatable fields, so a supported field that is not translatable is preserved (copied, not translated) rather than sent for translation.
+
+Mark fields as translatable in Storyblok's Block Library, or check **Auto-enable supported fields** in the Dashboard to have General Translation set the flag on supported fields across the space. See [Configure Storyblok](/docs/integrations/storyblok/guides/configuring-storyblok#enable-fields).
+
+## Field handling [#field-handling]
+
+Every field in a component schema is handled by one of four actions:
+
+- **Extract** — the field is translated. Applies to `text`, `textarea`, `markdown`, `richtext`, and `table`, but only when the field is `translatable: true`.
+- **Recurse** — the integration descends into nested content. Applies to `bloks` fields, whose items are components processed the same way.
+- **Preserve** — the field is left as-is and not translated. Applies to `option`, `options`, `section`, `number`, `datetime`, and `boolean`, and to any supported field that is not marked translatable.
+- **Skip (unsupported)** — the field type cannot be translated and is reported as skipped. Applies to `custom`, `asset`, `multiasset`, `multilink`, `image`, and `file`.
+
+*Note: a `bloks` field whose items are not valid components reports those items as skipped with the reason `missing_nested_component`.*
+
+## Rich text and tables [#rich-text-tables]
+
+`richtext` and `table` fields have dedicated serialization so their structure survives translation.
+
+- **Rich text** — the rich text document is serialized into a translatable form that preserves marks (such as bold and links) and inline nodes, then reassembled after translation. A `richtext` field whose value is not a rich text document is skipped with the reason `non_string_value`.
+- **Tables** — table header and body cells are serialized cell by cell and reassembled after translation. A `table` field whose value is not a table is skipped with the reason `non_string_value`; a table with no translatable cells is left unchanged.
+
+## Skipped fields [#skipped-fields]
+
+When a field cannot be translated, it is reported as skipped. The results summary groups skipped fields by component, field, type, and reason:
+
+| Reason | Meaning |
+| --- | --- |
+| `missing_component_schema` | The block's component has no schema the integration could read. |
+| `unsupported_field_type` | The field type is not translatable (for example `asset`, `multilink`, `image`, or `custom`). |
+| `non_string_value` | The field value is not the expected shape (for example a `text` field that is not a string, or a `richtext` field that is not a rich text document). |
+| `missing_nested_component` | A nested `bloks` item is not a valid component. |
+
+## Data format [#data-format]
+
+Extracted content is uploaded to General Translation using the `STORYBLOK_CONTENT_JSON` data format. The payload is a JSON object mapping each field's path key to its source string.
+
+Alongside the payload, General Translation attaches keyed metadata — one entry per field, keyed by the same path key — so translations can be merged back into the correct location. Each entry can include:
+
+- `id` and `pathKey` — the field's identifier and path within the story.
+- `provider` and `resourceType` — `STORYBLOK` and `STORYBLOK_SPACE`.
+- `spaceId`, `storyId`, `storyName`, and `storyFullSlug` — the source space and story.
+- `component`, `field`, and `fieldType` — where the value came from and its Storyblok field type.
+- `dataFormat` — the field's translation data format from the table above.
+- `displayPath` — a human-readable path used for context.
+- `context` — generated translation context describing the field's location, type, and story.
+
+*Note: the metadata carries `context` (and can carry `maxChars`) to guide translation quality.*

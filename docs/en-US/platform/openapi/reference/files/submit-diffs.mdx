@@ -1,0 +1,98 @@
+---
+
+title: Submit file diffs
+description: Submit diffs for changed source or translated content to a General Translation Project instead of uploading full files. API reference for Submit file diffs.
+
+method: POST
+---
+
+Overwrites stored translations with locally edited content for files that have changed. Send one entry per changed file and locale, so you can sync local edits without re-uploading every file.
+
+## Overview [#overview]
+
+```http
+POST https://api2.gtx.dev/v2/project/files/diffs
+```
+
+**Permission** `project:files:write` · **Rate limit** Medium (120/min)
+
+Push local translation edits back to a Project. To replace whole files instead, use [Upload translations](/docs/platform/openapi/reference/files/upload-translations).
+
+## How it works [#how-it-works]
+
+- Entries are grouped by `branchId`, `fileId`, `versionId`, and `locale`. Only the first entry per group is applied, so duplicate groups in one request are deduplicated.
+- Entries with empty `localContent` are skipped.
+- For each remaining group, the stored translation is overwritten with `localContent`. A missing `branchId` resolves to the default branch.
+- The response reports how many translations were processed and how many entries were received.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`diffs`](#diffs) | Array of diff entries; cannot be empty. | `object[]` | No | — |
+
+#### `diffs` [#diffs]
+
+**Type** `object[]` · **Required**
+
+Each element describes one changed file and locale:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `localContent` | The full local (edited) content to store for this translation. | `string` | No | — |
+| `locale` | Locale of the edited content; cannot be empty. | `string` | No | — |
+| `fileId` | Stable file identifier. | `string` | No | — |
+| `versionId` | Version identifier for this content. | `string` | No | — |
+| `diff` | Diff of the changed content. | `string` | No | — |
+| `branchId` | Branch the file is attached to. | `string` | Yes | Default branch |
+
+## Response [#response]
+
+**Status** `200 OK`
+
+```json title="Response"
+{
+  "filesProcessed": 1,
+  "entriesReceived": 1,
+  "message": "Processed 1 translation(s)"
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, or the `diffs` array is empty. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:write`. |
+| `429` | Rate limit exceeded. |
+
+## Example [#example]
+
+```bash
+curl -X POST https://api2.gtx.dev/v2/project/files/diffs \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "diffs": [
+      {
+        "fileId": "file_...",
+        "versionId": "ver_...",
+        "locale": "es",
+        "diff": "@@ -1 +1 @@\n-Hola\n+Hola, mundo",
+        "localContent": "{\"hello\": \"Hola, mundo\"}"
+      }
+    ]
+  }'
+```

@@ -1,0 +1,98 @@
+---
+
+title: t
+description: Translate and interpolate an ICU MessageFormat string with General Translation in Python. API reference for t.
+
+---
+
+Translates and interpolates an ICU MessageFormat string into the active request locale. `t` is the primary user-facing translation function.
+
+## Overview [#overview]
+
+Call `t` with a source string and any interpolation variables as keyword arguments. It returns the translated, interpolated string for the current locale, falling back to the interpolated source when no translation is found.
+
+```python
+from gt_flask import t  # or: from gt_fastapi import t, or: from gt_i18n import t
+
+message = t("Hello, {name}!", name="World")
+```
+
+Signature:
+
+```python
+t(message: str, **kwargs: object) -> str
+```
+
+*Note: `t` reads the active manager, so [`initialize_gt`](/docs/python/reference/functions/initialize-gt) (or [`set_i18n_manager`](/docs/python/reference/functions/set-i18n-manager)) must run first. Otherwise it raises `RuntimeError`.*
+
+## How it works [#how-it-works]
+
+- **Locale check.** It reads the current locale from the manager. If that locale does not require translation (for example, it matches the default locale), it skips the lookup and only interpolates the source.
+- **Hash lookup.** Otherwise it hashes the message (with `_context`, `_id`, and `_max_chars`) and reads the cached translation for the locale from the in-memory cache. The cache is synchronous, so a translation must already be loaded — see [eager loading](/docs/python/guides/configuring#preload).
+- **Interpolation.** A found translation is interpolated with ICU MessageFormat, using your variables and the source as a `__fallback` for resolving declared `_gt_` variables.
+- **Fallback.** If no translation is found, it interpolates and returns the source string.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | The ICU MessageFormat source string. | `str` | No | — |
+| [`kwargs`](#kwargs) | Interpolation variables and reserved GT options. | keyword args | Yes | — |
+
+### `message` [#message]
+
+**Type** `str` · **Required**
+
+The ICU MessageFormat source string to translate and interpolate.
+
+### `kwargs` [#kwargs]
+
+**Type** keyword arguments · **Optional**
+
+Interpolation variables matching the ICU placeholders, plus these reserved GT options, which are filtered out of interpolation and folded into the message hash:
+
+- `_context` (`str`) — additional context to disambiguate translations with the same source text.
+- `_id` (`str`) — a custom identifier for the translation entry.
+- `_max_chars` (`int`) — maximum character length applied to the output.
+
+*A user variable whose name starts with a single underscore (for example, `_name`) is still treated as an interpolation variable; only the three keys above are reserved.*
+
+## Returns [#returns]
+
+**Type** `str`
+
+The translated and interpolated string, or the interpolated source when no translation is available.
+
+## Examples [#examples]
+
+```python
+# Simple translation
+t("Hello, world!")
+```
+
+```python
+# With variables
+t("Hello, {name}!", name="Alice")
+```
+
+```python
+# With context to disambiguate identical source text
+t("Bank", _context="financial institution")
+t("Bank", _context="river bank")
+```
+
+```python
+# With f-strings and declare_var — wrap dynamic values so they are preserved
+from gt_flask import t, declare_var
+
+# Before i18n:
+message = f"{name} goes home"
+
+# After i18n — wrap with t() and declare_var():
+message = t(f"{declare_var(name, name='name')} goes home")
+```
+
+```python
+# With a character limit
+t("This is a very long message that might need truncation", _max_chars=20)
+```

@@ -1,0 +1,100 @@
+---
+
+title: Generating translations
+description: "How to translate your project with the General Translation CLI: this guide covers generating translations and saving them to your codebase or the CDN."
+related:
+  links:
+    - /docs/cli/guides/managing-translations
+    - /docs/cli/guides/branching
+    - /docs/cli/guides/configuring
+    - /docs/cli/guides/using-autoderive
+
+---
+
+The [`gt translate`](/docs/cli/reference/commands/translate) command is the primary way to translate your project. It reads `gt.config.json` to find your files, scans your source code for inline content, and generates translations through the General Translation API.
+
+*Note: Run [`translate`](/docs/cli/reference/commands/translate) in your CI pipeline before you build for production. It is not meant for development, where you use a development API key for on-demand translation instead.*
+
+## Before you start [#before]
+
+- Configure your project with a `gt.config.json`. See [Configuring the CLI](/docs/cli/guides/configuring).
+- Set a production `GT_API_KEY` and `GT_PROJECT_ID` as environment variables.
+- Check out the branch you build production from.
+
+## Translate your project [#translate]
+
+Run the command from your project root.
+
+```bash
+npx gt translate
+```
+
+The CLI translates every file matched in `gt.config.json`. If you use `gt-next`, `gt-react`, or `gt-react-native`, it also scans your source code for inline content — such as [`<T>`](/docs/react/reference/components/t) components and [`useGT`](/docs/react/reference/hooks/use-gt) calls — and includes your dictionary file. Translations are saved to your codebase, ready to commit.
+
+If you use `next-intl`, `react-i18next`, or `next-i18next`, the CLI detects the library from your `package.json` and translates your files while preserving that library's string syntax.
+
+## Add it to your build [#build]
+
+Run `translate` before your build command so production always ships with current translations.
+
+```json title="package.json"
+{
+  "scripts": {
+    "translate": "npx gt translate",
+    "build": "npm run translate && <your build command>"
+  }
+}
+```
+
+## Control which content is translated [#content]
+
+By default, the CLI searches `src`, `app`, `pages`, and `components` for inline content. Override this with the `src` field in `gt.config.json` or the `--src` flag.
+
+```bash
+npx gt translate --src "lib/**/*.{ts,tsx}"
+```
+
+To translate into extra locales for a single run without editing your config, pass `--locales`. These are appended to the locales in `gt.config.json`.
+
+```bash
+npx gt translate --locales de it
+```
+
+## Validate without translating [#validate]
+
+Pass `--dry-run` to parse and validate your project without calling the API. This is useful for catching errors in CI before a real run.
+
+```bash
+npx gt translate --dry-run
+```
+
+## Re-translate existing content [#retranslate]
+
+By default, the CLI only translates content whose source has changed, and it preserves local edits. To change that behavior:
+
+- `--force` re-translates all content and overwrites existing translations. Local changes are lost and you are charged for the new translations.
+- `--force-download` re-downloads translations and overwrites local changes without re-translating.
+
+```bash
+npx gt translate --force
+```
+
+## Tag a translation run [#tagging]
+
+Use `--tag` and `-m` to label a run with a human-readable identifier, making versions easier to track in the Dashboard.
+
+```bash
+npx gt translate --tag v2.1.0 -m "Added checkout page translations"
+```
+
+Pass `--tag` with no value to use the current git commit hash as the tag and the commit message as the message. Tagging is non-blocking — if it fails, the translation run continues.
+
+## Publish to the CDN [#publish]
+
+By default, translations are saved locally. Add `--publish` to also publish them to the General Translation CDN for runtime loading.
+
+```bash
+npx gt translate --publish
+```
+
+*Note: Enable the CDN in your Project settings first. Without it, the run translates successfully but the publish step fails with a warning.*

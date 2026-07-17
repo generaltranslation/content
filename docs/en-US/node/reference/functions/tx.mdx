@@ -1,0 +1,107 @@
+---
+
+title: tx
+description: Translate a string on demand at runtime with General Translation. API reference for tx.
+
+---
+
+Translates strings at runtime. Unlike [`getGT`](/docs/node/reference/functions/get-gt), which resolves build-time translations, `tx` sends content for on-demand translation — so it can translate strings that are only known at runtime.
+
+## Overview [#overview]
+
+Await `tx` inside a [`withGT`](/docs/node/reference/functions/with-gt) scope with the string to translate. It resolves to the translated string.
+
+```ts
+import { tx } from 'gt-node';
+
+const translated = await tx('Hello, world!');
+```
+
+Signature:
+
+```ts
+tx(content: string, options?: RuntimeTranslationOptions): Promise<string>
+```
+
+*Note: `tx` performs translation on demand, which means a network request and a delay compared to build-time translation. Use [`getGT`](/docs/node/reference/functions/get-gt) for strings known at build time, and `tx` only when the content is dynamic or not known ahead of time.*
+
+## How it works [#how-it-works]
+
+- **Runtime translation.** Translations happen at runtime via a network request on a cache miss, so there is a delay compared to build-time translation. Reserve `tx` for dynamic content.
+- **No ICU interpolation.** Unlike [`getGT`](/docs/node/reference/functions/get-gt), `tx` does not interpolate `{variable}` placeholders — it treats the string as plain text. Embed variables with JavaScript template literals so their values are included in the content sent for translation.
+- **Fallback.** Returns the original string if no translation is needed.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`content`](#content) | The string to translate. | `string` | No | — |
+| [`options`](#options) | Options to customize translation behavior. | `RuntimeTranslationOptions` | Yes | — |
+
+### `content` [#content]
+
+**Type** `string` · **Required**
+
+The string to translate. Embed dynamic values with template literals rather than `{variable}` placeholders.
+
+### `options` [#options]
+
+**Type** `RuntimeTranslationOptions` · **Optional**
+
+Options to customize runtime translation:
+
+- `$context?: string` — additional context to help disambiguate translations.
+- `$locale?: string` — override the locale set by [`withGT`](/docs/node/reference/functions/with-gt).
+- `$maxChars?: number` — maximum character count for the translation.
+- `$requiresReview?: boolean` — whether the translation requires approval before use.
+
+*Note: `RuntimeTranslationOptions` is like the inline options for [`getGT`](/docs/node/reference/functions/get-gt) but without `$id`, and its `$format` defaults to plain-string (non-ICU) rather than ICU.*
+
+## Returns [#returns]
+
+**Type** `Promise<string>`
+
+Resolves to the translated string, or the original string if no translation is needed.
+
+## Examples [#examples]
+
+```ts title="handler.js"
+// Basic usage
+import { withGT, tx } from 'gt-node';
+
+function handleRequest(locale) {
+  return withGT(locale, async () => {
+    return await tx('Processing complete');
+  });
+}
+```
+
+```ts title="handler.js"
+// With variables — embed values with template literals, not {placeholders}
+import { withGT, tx } from 'gt-node';
+
+function handleStatus(locale, status) {
+  return withGT(locale, async () => {
+    return await tx(`Current status: ${status}`);
+  });
+}
+```
+
+```ts title="handler.js"
+// With context to disambiguate translations
+const translated = await tx('Spring', {
+  $context: 'the season, not a coil',
+});
+```
+
+```ts title="handler.js"
+// Specifying a locale — override the withGT locale
+const translated = await tx('Hello, world!', { $locale: 'fr' });
+```
+
+## Notes [#notes]
+
+- `tx` is async and returns a promise. Always `await` the result.
+- Translations happen at runtime via network request, so there is a delay compared to build-time translations.
+- `tx` does not support ICU `{variable}` interpolation. Use template literals to embed variables.
+- For static strings with ICU variable interpolation, use [`getGT`](/docs/node/reference/functions/get-gt) or [`msg`](/docs/node/reference/functions/msg) with [`getMessages`](/docs/node/reference/functions/get-messages).

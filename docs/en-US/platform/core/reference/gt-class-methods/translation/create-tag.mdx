@@ -1,0 +1,152 @@
+---
+
+title: createTag
+description: Create a tag for grouping or identifying file versions. API reference for createTag.
+
+---
+
+Creates or upserts a translation tag with General Translation, associating a set of source files with a user-defined tag ID and an optional message. Tags label translation versions in the Dashboard with human-readable names instead of content hashes.
+
+## Overview [#overview]
+
+Call `createTag` with a tag ID and the file references to associate with it. It returns the created or updated tag.
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const result = await gt.createTag({
+  tagId: 'v2.1.0',
+  files: uploadedFiles.map((f) => ({
+    fileId: f.fileId,
+    versionId: f.versionId,
+    branchId: f.branchId,
+  })),
+  message: 'Added checkout page translations',
+});
+```
+
+Signature:
+
+```typescript
+createTag(options: CreateTagOptions): Promise<CreateTagResult>
+```
+
+*Note: `createTag` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+
+## How it works [#how-it-works]
+
+- **Upsert.** If a tag with the same `tagId` already exists, it is upserted with the new file references.
+- **Ordering.** Tags are created after source file upload but before translation setup and enqueueing.
+- **Non-fatal in the CLI.** Tag creation is non-fatal in the CLI workflow — failures do not block translations.
+- **CLI integration.** The CLI's `--tag` and `-m` flags use this method internally.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`options`](#options) | Tag creation options. | `CreateTagOptions` | No | — |
+
+### `options` [#options]
+
+**Type** `CreateTagOptions` · **Required**
+
+Tag creation options:
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `tagId` | A unique identifier for the tag (for example, `"v2.1.0"` or a git commit hash). | `string` | No |
+| `files` | File references to associate with this tag. | `CreateTagFileReference[]` | No |
+| `message` | Descriptive message for the tag. | `string` | Yes |
+
+Each `CreateTagFileReference` identifies an uploaded file version:
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `fileId` | The file ID from a previous upload. | `string` | No |
+| `versionId` | The version ID from a previous upload. | `string` | No |
+| `branchId` | The branch ID from a previous upload. | `string` | No |
+
+## Returns [#returns]
+
+**Type** `Promise<CreateTagResult>`
+
+Resolves to a `CreateTagResult` containing the created or updated tag:
+
+```typescript
+type CreateTagResult = {
+  tag: {
+    id: string;
+    tagId: string;
+    message: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+```
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `tag.id` | Internal tag identifier. | `string` |
+| `tag.tagId` | The user-provided tag ID. | `string` |
+| `tag.message` | The tag message, if provided. | `string \| null` |
+| `tag.createdAt` | ISO timestamp of tag creation. | `string` |
+| `tag.updatedAt` | ISO timestamp of the last update. | `string` |
+
+## Examples [#examples]
+
+```typescript
+// Basic usage: tag uploaded files with a version number
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id',
+});
+
+// Upload source files first
+const uploadResult = await gt.uploadSourceFiles(files, {
+  sourceLocale: 'en',
+});
+
+// Tag the uploaded files
+const tagResult = await gt.createTag({
+  tagId: 'v2.1.0',
+  files: uploadResult.uploadedFiles.map((f) => ({
+    fileId: f.fileId,
+    versionId: f.versionId,
+    branchId: f.branchId,
+  })),
+  message: 'Release 2.1 translations',
+});
+
+console.log(`Tagged as ${tagResult.tag.tagId}`);
+```
+
+```typescript
+// Tag with a git commit hash
+import { execSync } from 'node:child_process';
+
+const commitHash = execSync('git rev-parse --short HEAD', {
+  encoding: 'utf-8',
+}).trim();
+const commitMessage = execSync('git log -1 --format=%s', {
+  encoding: 'utf-8',
+}).trim();
+
+const tagResult = await gt.createTag({
+  tagId: commitHash,
+  files: uploadResult.uploadedFiles.map((f) => ({
+    fileId: f.fileId,
+    versionId: f.versionId,
+    branchId: f.branchId,
+  })),
+  message: commitMessage,
+});
+```
+
+## Notes [#notes]
+
+- If a tag with the same `tagId` already exists, it is upserted with the new file references.
+- Tags are created after source file upload but before translation setup and enqueueing.
+- Tag creation is non-fatal in the CLI workflow — failures do not block translations.
+- The CLI's `--tag` and `-m` flags use this method internally.

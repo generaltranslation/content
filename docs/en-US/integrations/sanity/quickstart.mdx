@@ -1,0 +1,180 @@
+---
+
+title: Quickstart
+description: Install gt-sanity, add the General Translation plugin to Sanity Studio, and translate your first document.
+related:
+  links:
+    - /docs/integrations/sanity/guides/translating-content
+    - /docs/integrations/sanity/guides/managing-translations
+    - /docs/integrations/sanity/guides/querying-translations
+    - /docs/integrations/sanity/guides/configuring-sanity
+
+---
+
+General Translation's `gt-sanity` plugin translates Sanity documents from inside Sanity Studio.
+
+The plugin uses document-level localization: each translation is stored as a separate Sanity document with a language field, such as `language: "es"`. Translations are linked to the source document through a `translation.metadata` document managed by `@sanity/document-internationalization`.
+
+## Before you start [#before-start]
+
+You need:
+
+- Sanity Studio 5.0.0 or later.
+- React 19.2.0 or later.
+- An existing Sanity project.
+- A General Translation [project ID](/docs/platform/dashboard/get-started) and a production [API key](/docs/platform/dashboard/reference/api-keys).
+
+## Quickstart [#quickstart]
+
+### 1. Install `gt-sanity` [#install]
+
+Install the plugin in your Sanity Studio project.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-sanity
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-sanity
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-sanity
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-sanity
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Add the plugin [#add-plugin]
+
+Add `gtPlugin` to `sanity.config.ts`. Set your source locale, target locales, and the document types to translate.
+
+```ts title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { gtPlugin } from 'gt-sanity';
+
+export default defineConfig({
+  // ... your existing config
+  plugins: [
+    gtPlugin({
+      sourceLocale: 'en',
+      locales: ['es', 'zh', 'ja'],
+      translateDocuments: [{ type: 'article' }, { type: 'page' }],
+    }),
+  ],
+});
+```
+
+When `translateDocuments` includes document types, the plugin automatically adds the `@sanity/document-internationalization` plugin: language badges, a translation menu in the document toolbar, and per-language document templates. Set `showDocumentInternationalization: false` to disable this.
+
+### 3. Add a language field [#language-field]
+
+Every document type you translate needs a language field. By default it is named `language`.
+
+```ts title="schema/article.ts"
+import { defineField, defineType } from 'sanity';
+
+export const articleType = defineType({
+  name: 'article',
+  title: 'Article',
+  type: 'document',
+  fields: [
+    // ... your existing fields
+    defineField({
+      name: 'language',
+      type: 'string',
+      readOnly: true,
+      hidden: true,
+    }),
+  ],
+});
+```
+
+If you set a custom [`languageField`](/docs/integrations/sanity/reference/plugin-configuration#language-field) in the plugin options, use that name in your schema instead of `language`.
+
+### 4. Store credentials [#credentials]
+
+The plugin reads your General Translation API key and project ID from a private Sanity document. Create a temporary `populateSecrets.js` file in your Studio folder.
+
+```js title="populateSecrets.js"
+import { getCliClient } from 'sanity/cli';
+
+const client = getCliClient({ apiVersion: '2026-04-06' });
+
+client.createOrReplace({
+  // The leading `.` in this _id keeps the document private,
+  // even in a public dataset.
+  _id: 'generaltranslation.secrets',
+  _type: 'generaltranslation.secrets',
+  secret: process.env.GT_API_KEY,
+  project: process.env.GT_PROJECT_ID,
+});
+```
+
+Run the script with your credentials:
+
+```bash
+GT_API_KEY=your-api-key GT_PROJECT_ID=your-project-id npx sanity exec populateSecrets.js --with-user-token
+```
+
+The document `_id` must match the plugin's `secretsNamespace` (default `generaltranslation.secrets`). The plugin reads the `secret` field as the API key and the `project` field as the project ID.
+
+Verify the document exists with the Vision tool in your Studio:
+
+```text
+*[_id == 'generaltranslation.secrets']
+```
+
+If you use multiple datasets, repeat this for each dataset. After verifying, delete `populateSecrets.js`.
+
+### 5. Translate a document [#translate-document]
+
+1. Open a source-language document in Sanity Studio.
+2. Click **Translate** in the document action bar.
+3. Select target locales.
+4. Click **Generate Translations**.
+
+In the document dialog, the plugin polls for completed translations and imports them automatically. After import, it patches document references and publishes the translated documents, since auto-import, auto-patch, and auto-publish are on by default in this dialog.
+
+See the full guides to [translate content](/docs/integrations/sanity/guides/translating-content) and [manage translations](/docs/integrations/sanity/guides/managing-translations).
+
+### 6. Query translated content [#query-content]
+
+Translations are stored as separate documents with a language field. To fetch translated content, filter by the language field.
+
+<Tabs items={['Source query', 'Localized query']}>
+  <Tab value="Source query">
+    ```text
+    // Source-language documents do not set the language field by default
+    *[_type == "article" && !defined(language)]{
+      title,
+      slug,
+      body
+    }
+    ```
+  </Tab>
+
+  <Tab value="Localized query">
+    ```text
+    // Fetch articles in Spanish
+    *[_type == "article" && language == "es"]{
+      title,
+      slug,
+      body
+    }
+    ```
+  </Tab>
+</Tabs>
+
+See [Querying translations](/docs/integrations/sanity/guides/querying-translations) for more query patterns.

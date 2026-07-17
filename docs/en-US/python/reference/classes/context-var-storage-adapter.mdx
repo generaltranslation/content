@@ -1,0 +1,51 @@
+---
+
+title: ContextVarStorageAdapter
+description: Default context-variable storage adapter for the request locale in General Translation Python. API reference for ContextVarStorageAdapter.
+
+---
+
+The default [`StorageAdapter`](/docs/python/reference/classes/storage-adapter) for the request locale, backed by a `contextvars.ContextVar`. It works for both threaded (Flask) and async (FastAPI) contexts, giving each request its own isolated locale automatically.
+
+## Overview [#overview]
+
+[`I18nManager`](/docs/python/reference/classes/i18n-manager) uses this adapter unless you pass a custom `store_adapter`. You rarely construct it yourself.
+
+```python
+from gt_i18n import ContextVarStorageAdapter, I18nManager
+
+manager = I18nManager(default_locale="en", store_adapter=ContextVarStorageAdapter())
+```
+
+Import `ContextVarStorageAdapter` from `gt_i18n`. It is not re-exported by the framework packages.
+
+## How it works [#how-it-works]
+
+- **Context variable.** It stores the locale in a module-level `ContextVar`, so concurrent requests do not see each other's locale.
+- **Locale key only.** It handles only the `"locale"` key; `get_item` returns `None` for any other key, and `set_item` ignores it.
+- **Unset default.** When no locale has been set in the current context, `get_item("locale")` returns `None`, and the manager falls back to the default locale.
+
+## Methods [#members]
+
+| Member | Description | Returns |
+| --- | --- | --- |
+| [`get_item`](#member-get-item) | Read the request locale from the context variable. | `str \| None` |
+| [`set_item`](#member-set-item) | Write the request locale to the context variable. | `None` |
+
+### `get_item(key)` [#member-get-item]
+
+Returns the current context's locale when `key` is `"locale"`, otherwise `None`.
+
+### `set_item(key, value)` [#member-set-item]
+
+Sets the current context's locale when `key` is `"locale"`, otherwise does nothing.
+
+## Example [#example]
+
+```python
+from gt_i18n import ContextVarStorageAdapter
+
+adapter = ContextVarStorageAdapter()
+adapter.set_item("locale", "es")
+adapter.get_item("locale")  # "es" (within the same context)
+```

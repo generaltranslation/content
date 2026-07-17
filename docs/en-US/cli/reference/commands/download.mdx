@@ -1,0 +1,66 @@
+---
+
+title: gt download
+description: Download completed translations from General Translation. API reference for the gt download command.
+
+---
+
+Downloads completed translations that were previously sent for translation with [`gt enqueue`](/docs/cli/reference/commands/enqueue) or [`gt stage`](/docs/cli/reference/commands/stage), and saves them to the output paths in your config. See [Manage translations](/docs/cli/guides/managing-translations#split).
+
+*Note: For production use only. Requires a production `GT_API_KEY` and `GT_PROJECT_ID`.*
+
+```bash
+npx gt download
+```
+
+## How it works [#how-it-works]
+
+1. Reads `gt.config.json` to determine the file configuration.
+2. Reads staged version data when `stageTranslations` is enabled; otherwise collects and hashes files to determine what to download.
+3. Polls the General Translation API for completed translations.
+4. Saves translation files to the output paths in your config.
+
+## Flags [#flags]
+
+`download` accepts the full [`gt translate`](/docs/cli/reference/commands/translate#flags) flag set, minus the source-scanning flags (`--src`, `--dictionary`, `--tsconfig`/`--jsconfig`, `--inline`, `--ignore-errors`), which only apply when scanning source code. Every flag below is accepted; the ones that affect a download-only run are the API, config, timeout, download, and branch flags.
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--api-key <key>` | Production API key. | `string` | Yes | `GT_API_KEY` |
+| `--project-id <id>` | Project ID. | `string` | Yes | `GT_PROJECT_ID` |
+| `--version-id <id>` | Version ID to download. | `string` | Yes | Content hash |
+| `-c, --config <path>` | Path to the config file. | `string` | Yes | `gt.config.json` |
+| `--default-locale <locale>` | Source locale for the project. | `string` | Yes | `en` |
+| `--locales <locales...>` | Extra target locales, appended to config locales. | `string[]` | Yes | — |
+| `--timeout <seconds>` | Wait timeout in seconds. | `number` | Yes | `900` |
+| `--dry-run` | Parse and validate without calling the API. | `boolean` | Yes | `false` |
+| `--force` | Invalidate cached translations and re-translate. | `boolean` | Yes | `false` |
+| `--force-download` | Overwrite local files, bypassing `gt-lock.json` checks. | `boolean` | Yes | `false` |
+| `--save-local` | Detect and save local edits before downloading. | `boolean` | Yes | `false` |
+| `--publish` | Publish translations to the CDN. | `boolean` | Yes | `false` |
+| `--enable-branching` | Enable branch-based tracking. | `boolean` | Yes | — |
+| `--branch <branch>` | Branch name instead of auto-detecting. | `string` | Yes | — |
+| `--disable-branch-detection` | Use only the specified branch, without relationship detection. | `boolean` | Yes | `false` |
+| `--remote-name <name>` | Git remote used for branch detection. | `string` | Yes | `origin` |
+| `--tag [value]` | Tag the run; auto-resolves from git when no value is given. | `string` | Yes | — |
+| `-m, --message <message>` | Message attached to the translation tag. | `string` | Yes | — |
+
+`download` also accepts the experimental flags listed under [`gt translate`](/docs/cli/reference/commands/translate#experimental) (for example `--experimental-clear-locale-dirs`, which clears locale directories before writing new translations).
+
+## Example [#example]
+
+```bash
+# Stage 1: upload source files
+npx gt upload
+
+# Stage 2: enqueue translations
+npx gt enqueue
+
+# Stage 3: download the completed translations (this command)
+npx gt download
+```
+
+## Other notes [#notes]
+
+- When `stageTranslations` is enabled, `download` reads the staged version data; otherwise it collects and hashes files to determine what to download.
+- `download` polls the API until translations are ready or the `--timeout` is reached, so it can run in a later CI job than [`gt enqueue`](/docs/cli/reference/commands/enqueue).

@@ -1,0 +1,145 @@
+---
+
+title: awaitJobs
+description: Poll queued translation jobs until they complete, fail, or time out. API reference for awaitJobs.
+
+---
+
+Polls the status of translation jobs and resolves once every job reaches a terminal state (`completed`, `failed`, or `unknown`) or a timeout is reached. It is a convenience wrapper around [`checkJobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status) that handles polling for you.
+
+## Overview [#overview]
+
+Pass the result of [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) to `awaitJobs`, optionally with polling settings. It resolves with the final status of each job.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: ['es', 'fr'],
+});
+
+const result = await gt.awaitJobs(enqueueResult);
+
+if (result.complete) {
+  console.log('All jobs finished');
+} else {
+  console.log('Timed out — some jobs still in progress');
+}
+```
+
+Signature:
+
+```typescript
+awaitJobs(
+  enqueueResult: EnqueueFilesResult,
+  options?: AwaitJobsOptions
+): Promise<AwaitJobsResult>
+```
+
+*Warning: `complete: true` means all jobs reached a terminal state — it does **not** mean all jobs succeeded. Check each `job.status` to confirm success.*
+
+## How it works [#how-it-works]
+
+- **Automatic polling.** Replaces manual polling loops — you do not need to call `checkJobStatus` in a `while` loop yourself.
+- **Terminal states.** Resolves when every job is `completed`, `failed`, or `unknown`. Jobs the API cannot find are treated as `'unknown'`.
+- **Best-effort timeout.** The timeout is a best-effort limit — the method finishes the current poll before resolving.
+- **Empty input.** If `enqueueResult` contains no jobs, the method resolves immediately with `{ complete: true, jobs: [] }`.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`enqueueResult`](#enqueue-result) | The result object returned by `enqueueFiles`. | [`EnqueueFilesResult`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) | No | — |
+| [`options`](#options) | Polling configuration. | `AwaitJobsOptions` | Yes | — |
+
+### `enqueueResult` [#enqueue-result]
+
+**Type** [`EnqueueFilesResult`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) · **Required**
+
+The result returned by [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files). Its `jobData` identifies the jobs to poll.
+
+### `options` [#options]
+
+**Type** `AwaitJobsOptions` · **Optional**
+
+Polling configuration:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `pollingIntervalSeconds` | How often to poll for status updates. | `number` | Yes | `5` |
+| `timeoutSeconds` | Maximum time to wait before resolving with the current statuses. | `number` | Yes | `600` (10 min) |
+
+## Returns [#returns]
+
+**Type** `Promise<AwaitJobsResult>`
+
+Resolves to an `AwaitJobsResult` with an overall flag and the final status of each job:
+
+```typescript
+type AwaitJobsResult = {
+  /** Whether all jobs reached a terminal state (not necessarily success). */
+  complete: boolean;
+  jobs: JobResult[];
+};
+
+type JobResult = {
+  jobId: string;
+  status: JobStatus;
+  error?: { message: string };
+};
+```
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `complete` | `true` if no jobs are still in progress; `false` if the timeout was reached. | `boolean` |
+| `jobs` | Final status of each job. | `JobResult[]` |
+| `jobs[].jobId` | The job identifier. | `string` |
+| `jobs[].status` | Terminal status: `'completed'`, `'failed'`, or `'unknown'`. | [`JobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status#jobstatus) |
+| `jobs[].error` | Error details if the job failed. | `{ message: string }` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// Upload and enqueue
+const { uploadedFiles } = await gt.uploadSourceFiles(files, {
+  sourceLocale: 'en',
+});
+
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: ['es', 'fr', 'de'],
+});
+
+// Wait for all jobs to finish (polls every 10s, times out after 5 min)
+const result = await gt.awaitJobs(enqueueResult, {
+  pollingIntervalSeconds: 10,
+  timeoutSeconds: 300,
+});
+
+if (!result.complete) {
+  console.warn('Some jobs did not finish in time');
+}
+
+// Check individual results
+for (const job of result.jobs) {
+  if (job.status === 'completed') {
+    console.log(`Job ${job.jobId} succeeded`);
+  } else if (job.status === 'failed') {
+    console.error(`Job ${job.jobId} failed: ${job.error?.message}`);
+  }
+}
+```
+
+## Notes [#notes]
+
+- Jobs that are not found by the API are treated as `'unknown'` status.
+- If `enqueueResult` contains no jobs, the method resolves immediately with `{ complete: true, jobs: [] }`.
+- The timeout is a best-effort limit — the method finishes the current poll before resolving.

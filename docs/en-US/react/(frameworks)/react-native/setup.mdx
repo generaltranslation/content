@@ -1,0 +1,133 @@
+---
+
+title: Set up React Native
+description: Initialize General Translation in a React Native app, add the provider, and load translations, for both Expo and the bare React Native CLI.
+
+---
+
+`gt-react-native` is set up at your app's entry point: you call [`initializeGT`](/docs/node/reference/functions/initialize-gt) once at the module level, then wrap your app in [`<GTProvider>`](/docs/react/reference/components/gt-provider). Unlike the web packages, the provider loads translations itself, so you do not pass it a `translations` prop and it resolves the `locale` from the device by default.
+
+This page covers the React Native-specific parts of setup. For the full step-by-step path including installation and the CLI, follow the [React Native Quickstart](/docs/react/react-native-quickstart). For the polyfill plugin that setup depends on, see [Plugin](/docs/react/react-native/plugin).
+
+*Warning: `gt-react-native` ships a native module, so Expo Go is not supported — run a development build (`npx expo run:ios` / `run:android`). On the bare React Native CLI, run `cd ios && pod install` after installing.*
+
+## Initialize General Translation [#initialize]
+
+Call `initializeGT` once, at the module level of your entry file, before your app renders. Spread in your `gt.config.json` and pass a [`loadTranslations`](/docs/react/reference/functions/load-translations) function. Add `projectId` and `devApiKey` to enable on-demand translation during development.
+
+```tsx
+import { initializeGT } from 'gt-react-native';
+import gtConfig from './gt.config.json';
+import { loadTranslations } from './loadTranslations';
+
+// Initialize once, at the module level
+initializeGT({
+  ...gtConfig,
+  loadTranslations,
+  projectId: process.env.EXPO_PUBLIC_GT_PROJECT_ID,
+  devApiKey: process.env.EXPO_PUBLIC_GT_DEV_API_KEY,
+});
+```
+
+`initializeGT` accepts the same locale and delivery options as the other frameworks — see the [configuration reference](/docs/react/reference/config#initialization). `gt.config.json` is not read automatically, so import it and spread it into the call.
+
+*Note: in Expo, public environment variables must be prefixed with `EXPO_PUBLIC_`. Never expose a production API key in your app bundle.*
+
+## Add the provider [#provider]
+
+Wrap your app in `<GTProvider>`. In React Native, the provider loads the active locale's translations internally and manages locale state, so it does not require a `translations` prop and resolves the `locale` from the device by default (you can still pass an optional `locale` override — see below). It renders a loading fallback while translations load; pass a `fallback` prop to customize it.
+
+```tsx title="App.tsx"
+import { GTProvider } from 'gt-react-native';
+import Home from './src/Home';
+
+export default function App() {
+  return (
+    <GTProvider>
+      <Home />
+    </GTProvider>
+  );
+}
+```
+
+The provider also accepts optional `locale`, `region`, and `enableI18n` props to override the values it would otherwise resolve from the device.
+
+## Load translations [#load-translations]
+
+Metro, React Native's bundler, does not support dynamic imports, so map each locale to its translation file with static `require` calls. The CLI generates these files when you run `npx gt translate`.
+
+```ts title="loadTranslations.ts"
+const translations: Record<string, unknown> = {
+  es: require('./src/_gt/es.json'),
+  fr: require('./src/_gt/fr.json'),
+  ja: require('./src/_gt/ja.json'),
+};
+
+export function loadTranslations(locale: string) {
+  return translations[locale] ?? {};
+}
+```
+
+## Entry points [#entry-points]
+
+Where you call `initializeGT` depends on your project type.
+
+<Tabs items={['Expo', 'React Native CLI']}>
+  <Tab value="Expo">
+    Initialize in your root layout, at the module level, then render the provider.
+
+    ```tsx title="app/_layout.tsx"
+    import { Slot } from 'expo-router';
+    import { GTProvider, initializeGT } from 'gt-react-native';
+    import gtConfig from '../gt.config.json';
+    import { loadTranslations } from '../loadTranslations';
+
+    initializeGT({
+      ...gtConfig,
+      loadTranslations,
+      projectId: process.env.EXPO_PUBLIC_GT_PROJECT_ID,
+      devApiKey: process.env.EXPO_PUBLIC_GT_DEV_API_KEY,
+    });
+
+    export default function RootLayout() {
+      return (
+        <GTProvider>
+          <Slot />
+        </GTProvider>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab value="React Native CLI">
+    Initialize in `index.js`, before the app is registered, and add the provider in `App.tsx`.
+
+    ```js title="index.js"
+    import { AppRegistry } from 'react-native';
+    import { initializeGT } from 'gt-react-native';
+    import App from './App';
+    import { name as appName } from './app.json';
+    import gtConfig from './gt.config.json';
+    import { loadTranslations } from './loadTranslations';
+
+    initializeGT({ ...gtConfig, loadTranslations });
+
+    AppRegistry.registerComponent(appName, () => App);
+    ```
+
+    ```tsx title="App.tsx"
+    import { GTProvider } from 'gt-react-native';
+    import Home from './src/Home';
+
+    export default function App() {
+      return (
+        <GTProvider>
+          <Home />
+        </GTProvider>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+Both entry points also need the [polyfill plugin](/docs/react/react-native/plugin) configured in `babel.config.js`, or the `Intl` APIs `gt-react-native` relies on will be missing.

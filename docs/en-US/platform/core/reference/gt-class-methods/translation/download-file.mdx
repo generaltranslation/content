@@ -1,0 +1,139 @@
+---
+
+title: downloadFile
+description: Download one translated file after translation is complete. API reference for downloadFile.
+
+---
+
+Downloads the content of a single file as a UTF-8 string with General Translation. Depending on whether you pass a locale, it returns either the source file or the corresponding translation.
+
+## Overview [#overview]
+
+Call `downloadFile` with a file descriptor. Include a `locale` to download a translation, or omit it to download the source file.
+
+```typescript
+const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
+
+// Download a translation
+const translatedContent = await gt.downloadFile({
+  fileId: 'file-123',
+  branchId: 'branch-456',
+  locale: 'es',
+  versionId: 'version-789',
+});
+
+// Download the source file (no locale specified)
+const sourceContent = await gt.downloadFile({
+  fileId: 'file-123',
+  branchId: 'branch-456',
+});
+```
+
+Signature:
+
+```typescript
+downloadFile(
+  file: {
+    fileId: string;
+    branchId?: string;
+    locale?: string;
+    versionId?: string;
+    useLatestAvailableVersion?: boolean;
+  },
+  options?: DownloadFileOptions
+): Promise<string>
+```
+
+*Note: `downloadFile` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. When downloading translations, it only works with completed translations — verify status with [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) first.*
+
+## How it works [#how-it-works]
+
+- **Source vs. translation.** When a `locale` is provided, the file must have a completed translation for that locale. When no `locale` is provided, the source file is returned.
+- **Format preserved.** The returned string is in the same format as the original source file; for translations, all translatable text is converted to the target locale.
+- **Failure.** The call fails if the file is not found.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`file`](#file) | File information specifying which file to download. | `object` | No | — |
+| [`options`](#options) | Configuration for the download request. | `DownloadFileOptions` | Yes | — |
+
+### `file` [#file]
+
+**Type** `object` · **Required**
+
+Identifies the file to download:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Unique identifier of the file to download. | `string` | No | — |
+| `branchId` | Branch to download from. | `string` | Yes | default branch |
+| `locale` | Target locale of the translation to download. Omit to download the source file. | `string` | Yes | — |
+| `versionId` | Version ID for the file. | `string` | Yes | latest version |
+| `useLatestAvailableVersion` | If `true` and the specified `versionId` is not found, fall back to the latest available version instead of failing. | `boolean` | Yes | `false` |
+
+### `options` [#options]
+
+**Type** `DownloadFileOptions` · **Optional**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<string>`
+
+Resolves to the file content as a UTF-8 string, in the same format as the original source file. For translations, all translatable text is converted to the target locale.
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+// (1) Create a GT instance
+const targetLocales = ['es', 'fr', 'de'];
+const gt = new GT({
+  projectId: 'your-project-id',
+  apiKey: 'your-api-key',
+});
+
+// (2) Upload the file
+const fileUpload = {
+  content: fileContents,
+  fileName: filePath,
+  fileFormat: 'JSON',
+  locale: 'en',
+};
+const files = [{ source: fileUpload }];
+const { uploadedFiles } = await gt.uploadSourceFiles(files, { sourceLocale: 'en' });
+
+// (3) Enqueue the file translation job
+const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: targetLocales,
+});
+
+// (4) Wait for all translations to be completed
+const { fileId, versionId, branchId } = uploadedFiles[0];
+const result = await gt.awaitJobs(enqueueResult);
+
+if (!result.complete) {
+  console.error('Some jobs did not finish in time');
+}
+
+// (5) Download a single file
+const spanishContent = await gt.downloadFile({
+  fileId,
+  branchId,
+  locale: 'es',
+});
+
+console.log('Spanish translation:', spanishContent);
+```
+
+## Notes [#notes]
+
+- Retrieves the downloaded file as a UTF-8 string.
+- When a locale is provided, the file must have a completed translation for that locale.
+- When no locale is provided, the source file is returned.
+- The call fails if the file is not found.

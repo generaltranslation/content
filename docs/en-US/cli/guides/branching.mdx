@@ -1,0 +1,83 @@
+---
+
+title: Tracking translations by branch
+description: How to track translations separately per git branch with General Translation while you work on features.
+related:
+  links:
+    - /docs/cli/guides/generating-translations
+    - /docs/cli/guides/managing-translations
+    - /docs/cli/guides/configuring
+    - /docs/cli/guides/using-auto-jsx
+
+---
+
+Branching tracks translations separately for each git branch. Use it when a feature branch adds or changes content and you want those translations isolated from production until the branch merges.
+
+*Note: Branching is a General Translation Cloud feature and requires a paid plan. Without one, creating a non-default branch falls back to the default branch.*
+
+## Enable branching [#enable]
+
+Pass `--enable-branching` to the [`gt translate`](/docs/cli/reference/commands/translate) command. The CLI detects your current git branch and associates new translations with it.
+
+```bash
+npx gt translate --enable-branching
+```
+
+To set the branch name yourself instead of detecting it from git, add `--branch`.
+
+```bash
+npx gt translate --enable-branching --branch my-feature-branch
+```
+
+You can also enable branching in `gt.config.json`. CLI flags take precedence over these values.
+
+```json title="gt.config.json"
+{
+  "branchOptions": {
+    "enabled": true,
+    "autoDetectBranches": true,
+    "remoteName": "origin"
+  }
+}
+```
+
+## How inheritance works [#inheritance]
+
+When branching is on, the CLI identifies your current branch and the default branch (from the remote HEAD), then tracks how they relate:
+
+- **Checked-out branch:** the branch yours was created from. A new feature branch inherits all existing translations from it, so shared content is not re-translated or double-charged.
+- **Incoming branches:** branches merged into yours. Their translations are incorporated into your branch.
+
+New translations stay associated with your feature branch until it merges. After you merge back into the default branch, the feature branch's translations are incorporated there automatically.
+
+## Example workflow [#workflow]
+
+1. Create a feature branch and add new content.
+
+   ```bash
+   git checkout -b feature/new-landing-page
+   ```
+
+2. Translate with branching enabled. New translations attach to `feature/new-landing-page`.
+
+   ```bash
+   npx gt translate --enable-branching
+   ```
+
+3. Merge the feature branch, then translate on the default branch to incorporate its translations.
+
+   ```bash
+   git checkout main
+   git merge feature/new-landing-page
+   npx gt translate --enable-branching
+   ```
+
+## Troubleshoot branch detection [#troubleshoot]
+
+- **Branch not detected:** set it manually with `--branch <branch>`.
+- **Non-standard remote:** if your remote is not `origin`, set `--remote-name <name>` or `branchOptions.remoteName`.
+- **Use only the current branch:** add `--disable-branch-detection` to skip incoming and parent branch tracking.
+
+```bash
+npx gt translate --enable-branching --branch my-branch --disable-branch-detection
+```

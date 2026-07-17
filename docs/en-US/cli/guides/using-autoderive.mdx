@@ -1,0 +1,79 @@
+---
+
+title: Using auto-derived translations
+description: How to automatically generate a separate translation entry for each interpolated value with Autoderive in the General Translation CLI.
+related:
+  links:
+    - /docs/cli/guides/using-auto-jsx
+    - /docs/cli/guides/generating-translations
+    - /docs/cli/guides/managing-translations
+    - /docs/cli/guides/configuring
+
+---
+
+Autoderive parses interpolated values as if they were wrapped in [`derive()`](/docs/react/reference/functions/derive), generating a separate translation entry for each possible value. This preserves word agreement and conjugation across languages when a sentence contains a variable.
+
+Autoderive is disabled by default and applies in two contexts: interpolated values in `t()`, `gt()`, and `msg()` calls, and expressions inside [`<T>`](/docs/react/reference/components/t) components that reference `const` declarations.
+
+## Enable Autoderive [#enable]
+
+Set `autoderive` under `files.gt.parsingFlags` in `gt.config.json`. A boolean enables it for both strings and JSX.
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "parsingFlags": {
+        "autoderive": true
+      }
+    }
+  }
+}
+```
+
+To enable it for only strings or only JSX, pass an object.
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "parsingFlags": {
+        "autoderive": { "jsx": true, "strings": false }
+      }
+    }
+  }
+}
+```
+
+## Derive string values [#strings]
+
+With Autoderive on, an interpolated value in a translation call generates one entry per possible value.
+
+```jsx
+const gt = useGT();
+const role = isAdmin ? 'admin' : 'user';
+
+// Parsed as derived — generates:
+//   "Welcome back, admin!" → "¡Bienvenido de nuevo, administrador!"
+//   "Welcome back, user!"  → "¡Bienvenido de nuevo, usuario!"
+gt(`Welcome back, ${role}!`);
+```
+
+Without Autoderive, you get the same result by calling [`derive()`](/docs/react/reference/functions/derive) explicitly.
+
+## Derive JSX values [#jsx]
+
+Inside a `<T>` component, Autoderive resolves `const` variables referenced in an expression and generates an entry for each value.
+
+```jsx
+const label = condition ? 'boy' : 'girl';
+
+// Generates two entries:
+//   "Hello, boy"  → "Hola, chico"
+//   "Hello, girl" → "Hola, chica"
+<T>Hello, {label}</T>
+```
+
+Autoderive for JSX supports ternary and nested ternary expressions, string, number, and boolean literals, string concatenation and template literals, and chained `const` references.
+
+*Note: Only `const` declarations are supported. `let` and `var` produce a warning because they can be reassigned, and destructured variables such as `const { x } = obj` are not supported. The `t` tagged template macro is unaffected — it handles derivation through its template literal syntax.*

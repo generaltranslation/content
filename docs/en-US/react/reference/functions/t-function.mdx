@@ -1,0 +1,130 @@
+---
+
+title: t
+description: Translate strings synchronously at module scope with General Translation gt-react. API reference for t.
+
+---
+
+The `t` function is a synchronous, module-level string translation function for client-side `gt-react` apps. Unlike [`useGT`](/docs/react/reference/hooks/use-gt) (which requires React context) or [`msg`](/docs/react/reference/functions/msg) (which encodes strings for later resolution), `t` returns the translated string directly and can be called anywhere in browser code, including outside React components.
+
+*Available in `gt-react` and `gt-tanstack-start`. Examples import from `gt-react`; import from `gt-tanstack-start` for TanStack Start.*
+
+*Note: not exported by `gt-next` or `gt-react-native`. In `gt-next`, use [`useGT`](/docs/react/reference/hooks/use-gt) in synchronous components or [`getGT`](/docs/react/nextjs/reference/functions/get-gt) in async App Router components.*
+
+## Overview [#overview]
+
+Import `t` from `gt-react` and call it with a string.
+
+```tsx
+import { t } from 'gt-react';
+
+const greeting = t('Hello, world!');
+```
+
+It can also be used as a tagged template literal:
+
+```tsx
+import { t } from 'gt-react';
+
+const greeting = t`Hello, ${name}!`;
+```
+
+*Note: `t` reads translations from the client cache populated by [`initializeGTSPA`](/docs/react/reference/config#initialize-spa). Make sure initialization has run before any module that calls `t` at module scope. Calling `t` at module scope in a server-rendered app is forbidden: it throws in development, and in production it logs an error and falls back to the default locale value.*
+
+## How it works [#how-it-works]
+
+- **Synchronous, module-scope translation.** Once translations are loaded for the active locale, `t` reads from them synchronously with no overhead. Because it does not use React context, it works at module scope (constants, route tables) as well as inside components.
+- **Resolved at load time.** Translations are resolved when modules are evaluated, so **switching locales requires a full page reload** — the browser must re-execute modules to pick up the new locale. This pattern works in client-side apps only.
+- **Variables are not translated.** Interpolated values are inserted into the translated string but never translated.
+- **Server behavior.** Calling `t` at module scope is forbidden when the render strategy is `server-render` — that is, before the request-time condition store is initialized. In development this throws an error; in production it logs an error and falls back to the `defaultLocale` value. For server-side translation, use context-based hooks such as [`useGT`](/docs/react/reference/hooks/use-gt).
+
+## Tagged template literal [#tagged-template]
+
+`t` can be used as a tagged template for a more natural syntax. These are equivalent:
+
+```tsx
+import { t } from 'gt-react';
+
+t('Hello, {name}!', { name: 'Alice' });
+t`Hello, ${name}!`;
+```
+
+The tagged form interpolates variables directly from the template, so you do not need ICU-style placeholders or an options object.
+
+### Global registration [#macros]
+
+Instead of importing `t` in every file, register it globally by importing the macros entry once in your app's entry point:
+
+```tsx
+import 'gt-react/macros';
+```
+
+This sets `globalThis.t`, making the tagged template available everywhere without an explicit import:
+
+```tsx
+// No import needed
+const labels = {
+  save: t`Save`,
+  cancel: t`Cancel`,
+};
+```
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | The string to translate. | `string` | No | — |
+| [`options`](#options) | Interpolation variables and translation options. | `GTTranslationOptions` | Yes | — |
+
+### `message` [#message]
+
+**Type** `string` · **Required**
+
+The string to translate. When used as a tagged template, this is the template string instead.
+
+### `options` [#options]
+
+**Type** `GTTranslationOptions` · **Optional**
+
+Interpolation variables and options such as `$context` and `$id`. See [`InlineTranslationOptions`](/docs/react/reference/types/inline-translation-options).
+
+## Returns [#returns]
+
+**Type** `string`
+
+The translated string for the active locale, or the source string when no translation is available.
+
+## Examples [#examples]
+
+```tsx title="constants.ts"
+import { t } from 'gt-react';
+
+export const ERROR_MESSAGES = {
+  notFound: t('Page not found'),
+  unauthorized: t('You do not have permission to view this page'),
+  serverError: t('Something went wrong. Please try again later.'),
+};
+```
+
+```tsx title="routes.ts"
+import { t } from 'gt-react';
+
+export const routes = [
+  { path: '/', label: t('Home') },
+  { path: '/dashboard', label: t('Dashboard') },
+  { path: '/settings', label: t('Settings') },
+];
+```
+
+```tsx
+import { t } from 'gt-react';
+
+const message = t('Hello, {name}!', { name: 'Alice' });
+// Variable values are inserted, not translated.
+```
+
+## Notes [#notes]
+
+- `t` is synchronous and can be called at module scope; it does not use React context.
+- Switching locales requires a full page reload.
+- For translating strings inside components, use [`useGT`](/docs/react/reference/hooks/use-gt); to encode strings for later resolution, use [`msg`](/docs/react/reference/functions/msg).
