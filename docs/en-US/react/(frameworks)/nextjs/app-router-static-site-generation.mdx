@@ -1,0 +1,60 @@
+---
+
+title: App Router static site generation
+description: How to pre-render localized Next.js App Router pages with General Translation
+related:
+  links:
+    - /docs/react/nextjs-quickstart
+    - /docs/react/nextjs/app-router-middleware
+    - /docs/react/nextjs/config
+
+---
+
+Pre-render one App Router route per locale with `generateStaticParams`. Locale routing and request locale resolution use the same setup as dynamic routes.
+
+## Keep your Next.js config [#config]
+
+Static generation does not change your `withGTConfig` setup:
+
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+
+const nextConfig: NextConfig = {};
+
+export default withGTConfig(nextConfig);
+```
+
+## Configure locale routing [#routing]
+
+Follow the [App Router middleware guide](/docs/react/nextjs/app-router-middleware) to create `proxy.ts`, move your routes under `app/[locale]`, and define the custom `getLocale` function.
+
+## Disable region detection [#region]
+
+The default region resolver reads a cookie, which makes the route dynamic. Add `getRegion.ts` at your project root to disable region detection during prerendering:
+
+```ts title="./getRegion.ts"
+export default async function getRegion() {
+  return undefined;
+}
+```
+
+`withGTConfig` detects this file automatically.
+
+## Generate locale routes [#generate-routes]
+
+Return one route parameter for every configured locale:
+
+```tsx title="app/[locale]/page.tsx"
+import { getLocales, T } from 'gt-next';
+
+export function generateStaticParams() {
+  return getLocales().map((locale) => ({ locale }));
+}
+
+export default function HomePage() {
+  return <T>Welcome to our site</T>;
+}
+```
+
+Next.js now pre-renders `app/[locale]/page.tsx` once for each locale.

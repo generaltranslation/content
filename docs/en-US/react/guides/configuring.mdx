@@ -8,10 +8,9 @@ related:
     - /docs/react/guides/translating-strings
     - /docs/react/guides/managing-locales
     - /docs/react/guides/storing-translations
-
 ---
 
-Every framework needs two things: configuration (locales, credentials, and how translations load) and a `GTProvider` that exposes translations to your components. This guide covers both, plus credentials and delivery. The exact setup differs per framework.
+Server-rendered React and each framework integration need configuration plus a `GTProvider` that exposes translations to your components. React SPAs initialize directly with `initializeGTSPA`; follow the [React SPA Quickstart](/docs/react/guides/react-spa-quickstart) for that setup.
 
 *Note: `gt-react`, `gt-tanstack-start`, and `gt-react-native` do not read `gt.config.json` automatically — import it and pass its fields into the initialization call. In Next.js, the `withGTConfig` plugin reads `gt.config.json` for you.*
 
@@ -21,16 +20,16 @@ Configure General Translation once, before your first render.
 
 <Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
   <Tab value="React">
-    Call an initialization function once. Use `initializeGTSPA` for client-rendered apps such as Vite — it detects the locale from cookies and the browser and preloads translations. Use [`initializeGT`](/docs/node/reference/functions/initialize-gt) when a server or framework layer provides translations instead.
+    Call [`initializeGT`](/docs/react/reference/config#initialize) once in a module that loads on both the server and client. Your framework resolves the request locale and provides the matching translations during server rendering.
 
-    ```tsx title="src/main.tsx"
-    import { initializeGTSPA } from 'gt-react';
-    import gtConfig from '../gt.config.json';
+    ```tsx title="src/routes/root.tsx"
+    import { initializeGT } from 'gt-react';
+    import gtConfig from '../../gt.config.json';
 
     const loadTranslations = (locale: string) =>
-      import(`./_gt/${locale}.json`).then((m) => m.default);
+      import(`../_gt/${locale}.json`).then((m) => m.default);
 
-    await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+    initializeGT({ ...gtConfig, loadTranslations });
     ```
 
     The [`loadTranslations`](/docs/react/reference/functions/load-translations) and [`loadDictionary`](/docs/react/reference/functions/load-dictionary) callbacks, credentials, and locale configuration all go on the initialization call — not on `GTProvider`.
@@ -87,17 +86,26 @@ Wrap your app in `GTProvider` so components can read translations.
 
 <Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
   <Tab value="React">
-    Pass the active `locale` and the `translations` for it. Both are required.
+    Load the active locale's translations on the server, then pass both values to the provider. The exact loader API depends on your framework.
 
-    ```tsx title="src/main.tsx"
-    import { GTProvider, getTranslationsSnapshot } from 'gt-react';
+    ```tsx title="src/routes/root.tsx"
+    import { GTProvider, getTranslationsSnapshot, parseLocale } from 'gt-react';
 
-    const locale = gtConfig.defaultLocale;
-    const translations = await getTranslationsSnapshot(locale);
+    export async function loadRoot(request: Request) {
+      const locale = parseLocale(request);
+      return {
+        locale,
+        translations: await getTranslationsSnapshot(locale),
+      };
+    }
 
-    <GTProvider locale={locale} translations={translations}>
-      <App />
-    </GTProvider>;
+    export function Root({ locale, translations, children }) {
+      return (
+        <GTProvider locale={locale} translations={translations}>
+          {children}
+        </GTProvider>
+      );
+    }
     ```
 
     The provider also accepts `region` and `enableI18n` (default `true`). When `enableI18n` is `false` or the active locale equals the default locale, content renders in the source language.
@@ -107,11 +115,12 @@ Wrap your app in `GTProvider` so components can read translations.
     Wrap your root layout in [`<GTProvider>`](/docs/react/reference/components/gt-provider). It reads the request locale and translations from the plugin, so it needs no `locale` or `translations` props.
 
     ```tsx title="app/layout.tsx"
-    import { GTProvider } from 'gt-next';
+    import { GTProvider, useLocale } from 'gt-next';
 
     export default function RootLayout({ children }: { children: React.ReactNode }) {
+      const locale = useLocale();
       return (
-        <html>
+        <html lang={locale}>
           <body>
             <GTProvider>{children}</GTProvider>
           </body>
@@ -149,7 +158,7 @@ Wrap your app in `GTProvider` so components can read translations.
 </Tabs>
 
 <Callout type="info">
-  **Changed in v11 (React):** the `gt-react` provider no longer takes `config`, `loadTranslations`, or credentials as props. That setup now lives on the `initializeGTSPA` call; the provider only receives the resolved `locale` and `translations`.
+  **Changed in v11 (React):** the `gt-react` provider no longer takes `config`, `loadTranslations`, or credentials as props. That setup now lives on the initialization call; the provider only receives the resolved `locale` and `translations`.
 </Callout>
 
 See the [Configuration reference](/docs/react/reference/config) for all provider and initialization options.
@@ -160,12 +169,7 @@ Translation delivery and development features use a Project ID and API key, set 
 
 <Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
   <Tab value="React">
-    Set them through your bundler's public env and pass them into the initialization call.
-
-    ```bash title=".env (Vite)"
-    VITE_GT_PROJECT_ID="..."
-    VITE_GT_DEV_API_KEY="gtx-dev-..."
-    ```
+    Expose the Project ID and development API key through your framework's client environment-variable convention, then pass them to `initializeGT`. Never expose a production API key.
   </Tab>
 
   <Tab value="Next.js">

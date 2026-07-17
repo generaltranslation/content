@@ -7,30 +7,34 @@ description: Configure General Translation across the React ecosystem with the s
 
 General Translation is configured in two places: a `gt.config.json` file that holds the locale and file settings you share with the [CLI](/docs/cli/reference/config), and a runtime setup step that loads that config before your first render. The `gt.config.json` file is the same across the whole React ecosystem; the runtime setup differs by framework.
 
-*The `gt.config.json` reference on this page is shared by `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. The initialization functions ([`initializeGTSPA`](#initialize-spa), [`initializeGT`](#initialize)) are for `gt-react`; `gt-tanstack-start` and `gt-react-native` also use `initializeGT`.*
+*The `gt.config.json` reference on this page is shared by `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. The initialization functions ([`initializeGT`](#initialize), [`initializeGTSPA`](#initialize-spa)) are for `gt-react`; `gt-tanstack-start` and `gt-react-native` also use `initializeGT`.*
 
 *Note: `gt-next` does not use these initialization functions — it reads the config through the `withGTConfig` plugin, documented in the Next.js section.*
 
 ## Overview [#overview]
 
-A `gt-react` app is set up in three steps: initialize the library, load the active locale's translations, and wrap the tree in [`<GTProvider>`](/docs/react/reference/components/gt-provider).
+A server-rendered `gt-react` app is set up in three steps: initialize the library, load the active locale's translations, and wrap the tree in [`<GTProvider>`](/docs/react/reference/components/gt-provider).
 
-- **Initialize** with [`initializeGTSPA`](#initialize-spa) (single-page apps) or [`initializeGT`](#initialize) (server-rendered setups). Initialization creates the translation cache and, for SPAs, resolves the active locale from cookies and the browser.
+- **Initialize** with [`initializeGT`](#initialize) for server-rendered setups. Single-page apps use [`initializeGTSPA`](#initialize-spa), which also resolves the active locale from cookies and the browser.
 - **Load translations** for the active locale with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot).
 - **Provide** the locale and translations to your components with [`<GTProvider>`](/docs/react/reference/components/gt-provider).
 
-```tsx title="src/main.tsx"
-import { GTProvider, initializeGTSPA, getTranslationsSnapshot } from 'gt-react';
-import gtConfig from '../gt.config.json';
+```tsx title="src/routes/root.tsx"
+import { initializeGT, getTranslationsSnapshot, parseLocale } from 'gt-react';
+import gtConfig from '../../gt.config.json';
 
 const loadTranslations = (locale: string) =>
-  import(`./_gt/${locale}.json`).then((m) => m.default);
+  import(`../_gt/${locale}.json`).then((m) => m.default);
 
-// Initialize before the first render
-await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+initializeGT({ ...gtConfig, loadTranslations });
 
-const locale = gtConfig.defaultLocale;
-const translations = await getTranslationsSnapshot(locale);
+export async function loadRoot(request: Request) {
+  const locale = parseLocale(request);
+  return {
+    locale,
+    translations: await getTranslationsSnapshot(locale),
+  };
+}
 ```
 
 The `gt.config.json` file holds the shared locale and file settings. Both the initialization call and the CLI read the same values, so keep them in one place.
@@ -39,8 +43,8 @@ The `gt.config.json` file holds the shared locale and file settings. Both the in
 
 | Function | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| [`initializeGTSPA`](#initialize-spa) | Initialize a single-page app, including browser locale detection. | `function` | No | — |
 | [`initializeGT`](#initialize) | Initialize without browser locale detection, for server-rendered apps. | `function` | No | — |
+| [`initializeGTSPA`](#initialize-spa) | Initialize a single-page app, including browser locale detection. | `function` | No | — |
 
 Both functions accept the fields below. They share the same options, except that only `initializeGTSPA` performs browser locale detection.
 
@@ -61,6 +65,19 @@ Both functions accept the fields below. They share the same options, except that
 | `region` | Initial region code for region-aware formatting. | `string` | Yes | — |
 | `enableI18n` | Translate content. When `false`, renders the source locale. | `boolean` | Yes | `true` |
 | `htmlTagOptions` | Whether to sync the `<html>` `lang` and `dir` attributes on locale change. | `object` | Yes | — |
+
+### `initializeGT` [#initialize]
+
+**Type** `(config) => void` · **Required**
+
+Initializes the configuration and translation cache without browser locale detection. Use it in server-rendered setups where your framework supplies the request locale and translations.
+
+```tsx
+initializeGT({
+  ...gtConfig,
+  loadTranslations,
+});
+```
 
 ### `initializeGTSPA` [#initialize-spa]
 
@@ -88,12 +105,6 @@ await initializeGTSPA({
   },
 });
 ```
-
-### `initializeGT` [#initialize]
-
-**Type** `(config) => void` · **Required**
-
-Initializes the configuration and translation cache without browser locale detection, for server-rendered setups where a framework layer supplies the locale and translations. It accepts the same configuration and loader options as [`initializeGTSPA`](#initialize-spa), minus the browser locale-detection options.
 
 ## `gt.config.json` [#config-file]
 
@@ -194,25 +205,33 @@ Internal identifier the CLI uses to track the translation version, which allows 
 }
 ```
 
-```tsx title="src/main.tsx"
-import { createRoot } from 'react-dom/client';
-import { GTProvider, initializeGTSPA, getTranslationsSnapshot } from 'gt-react';
-import gtConfig from '../gt.config.json';
-import App from './App';
+```tsx title="src/routes/root.tsx"
+import {
+  GTProvider,
+  initializeGT,
+  getTranslationsSnapshot,
+  parseLocale,
+} from 'gt-react';
+import gtConfig from '../../gt.config.json';
 
-// Load a locale's translations from the local bundle
 const loadTranslations = (locale: string) =>
-  import(`./_gt/${locale}.json`).then((m) => m.default);
+  import(`../_gt/${locale}.json`).then((m) => m.default);
 
-// Initialize before the first render
-await initializeGTSPA({ ...gtConfig, loadTranslations, locale: gtConfig.defaultLocale });
+initializeGT({ ...gtConfig, loadTranslations });
 
-const locale = gtConfig.defaultLocale;
-const translations = await getTranslationsSnapshot(locale);
+export async function loadRoot(request: Request) {
+  const locale = parseLocale(request);
+  return {
+    locale,
+    translations: await getTranslationsSnapshot(locale),
+  };
+}
 
-createRoot(document.getElementById('root')!).render(
-  <GTProvider locale={locale} translations={translations}>
-    <App />
-  </GTProvider>
-);
+export function Root({ locale, translations, children }) {
+  return (
+    <GTProvider locale={locale} translations={translations}>
+      {children}
+    </GTProvider>
+  );
+}
 ```
