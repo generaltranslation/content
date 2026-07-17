@@ -230,7 +230,7 @@ A `meta.json` supports these keys:
 - `title` — the folder's sidebar display name (lowercase for structural folders; see File and folder naming).
 - `description` — the meaning depends on the folder:
   - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
-  - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder (these folders have no landing page, so it is not rendered as page content — no trailing period, like every description).
+  - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
 - `pages` — the ordered list of entries; **this array is the source of truth for page order**.
 - `icon` — a named icon token (e.g. `Terminal`, `React`, `Python`, `Globe`) shown next to the section in the nav. Set it only on the top-level section roots.
 - `root` — set `"root": true` on the seven top-level sections only; it marks the folder as a navigable section root.
@@ -383,16 +383,16 @@ description: How to use labels, notes, and comments to coordinate translation re
 ```
 
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The `title` must match the page H1 exactly.
-- `description`: no backticks and **no trailing period** — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters and a trailing period reads as noise. (Internal sentence periods on a two-sentence reference description are fine; only the final period is dropped.) Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
-  - **Guides** lead with **"How to…"** for SEO, naming the task the guide accomplishes and the relevant tool. When the guide walks through several steps, add a `: this guide covers …` clause listing them. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to translate files with the generaltranslation library: this guide covers uploading a source file, enqueuing translation, checking status, and downloading the translated file" / "What are locale codes, and how are they used in the General Translation stack?"
-  - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence, with no trailing period ("Configure…", "Review…", "Learn…").
+- `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
+  - **Guides** lead with **"How to…"** for SEO, naming the task the guide accomplishes and the relevant tool. When the guide walks through several steps, add a `: this guide covers …` clause listing them. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to translate files with the generaltranslation library: this guide covers uploading a source file, enqueuing translation, checking status, and downloading the translated file." / "What are locale codes, and how are they used in the General Translation stack?"
+  - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
-  - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField"*
-  - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic]` — do not start the sentence with "API reference". *Example: "…across every locale. Reference for supported file formats"*
+  - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
+  - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic]` — do not start the sentence with "API reference". *Example: "…across every locale. Reference for supported file formats."*
 
 A few optional fields appear on specific page types:
 
-- `related.links` (optional): a YAML list of root-relative `/docs/...` paths that feed the global related-pages template rendered at the bottom of the page (see No next-steps sections). This is the **only** way to author related links — never write a manual roundup section. List logical page paths (no `.md`/`.mdx`), most relevant first, and verify each target exists. For how many links and which ones by page type, see [Choosing](#choosing-relatedlinks) `related.links`.
+- `related.links` (optional): a YAML list of root-relative `/docs/...` paths that feed the global related-pages template rendered at the bottom of the page (see No next-steps sections). This is the **only** way to author related links — never write a manual roundup section. List logical page paths (no `.md`/`.mdx`), most relevant first, and verify each target exists. For how many links and which ones by page type, see [Choosing `related.links`](#choosing-relatedlinks).
   ```yaml
   related:
     links:
@@ -569,9 +569,9 @@ Do not add "Next steps", "What to read next", "See also", "Learn more", "Related
 
 Populate `related.links` by page type, ordered by **what the reader most likely wants to do next**:
 
-- **Quickstart and section-entry pages** (`quickstart`, the Dashboard/Locadex entry page, and each React per-framework quickstart) link to the **four most relevant guides for that section** — what someone who has just set up their app would do next. **Never link another quickstart or a reference page.**
-- **Guide pages** link to the **four most relevant *other* guides in the same section** — what someone who has just finished this guide would do next. **Never** link the guide to itself, to another section's guides, to quickstarts, or to reference pages.
-- **If a section has fewer than four guides**, link all of them (excluding the current page); do not pad the list with reference or cross-section links to reach four.
+- **Quickstart and section-entry pages** (`quickstart`, the Dashboard/Locadex entry page, and each React per-framework quickstart) link to **four guides for that section** — the ones someone who has just set up their app is most likely to want next. If the section has fewer than four guides, link all of them. **Never link another quickstart or a reference page.**
+- **Guide pages** link to the **other guides in the same section** — what someone who has just finished this guide would do next. Link **all** the section's other guides; only when there are **more than four** others do you use relevance to choose the four most useful. **Never** link the guide to itself, to another section's guides, to quickstarts, or to reference pages. (Example: a four-guide section like Dashboard means every guide links the other three.)
+- **Relevance only decides *which* to drop, never *whether* to link.** Do not pad a short list with reference or cross-section links to reach four, and do not trim a list below four unless the section genuinely has fewer eligible guides.
 - **Exception — a section with no guides** (currently OpenAPI): link the most relevant reference pages instead, since there are no guides to point to.
 
 
@@ -655,7 +655,7 @@ How to write it:
 
 ### Card grids
 
-Use `<Cards>` wrapping child `<Card title="…" href="…">` elements for the navigational grids on **hub and landing pages** (hub pages such as `platform/index.mdx` and `integrations/index.mdx`, and the Overview landing) — **not** on `guides`/`reference` folders, which have no landing page. Each card's `title` is the target page's display name in its natural casing (`useGT`, `gt translate`, `GTProvider`) and its body is a single short fragment describing the page, matching the target page's `description` (no trailing period; escape component tags as `<T>`). Group cards under `##` headings that mirror the section's subsections. Cards are for hub and landing pages only — do not scatter them mid-page in place of prose or inline links.
+Use `<Cards>` wrapping child `<Card title="…" href="…">` elements for the navigational grids on **hub and landing pages** (hub pages such as `platform/index.mdx` and `integrations/index.mdx`, and the Overview landing) — **not** on `guides`/`reference` folders, which have no landing page. Each card's `title` is the target page's display name in its natural casing (`useGT`, `gt translate`, `GTProvider`) and its body is a single short fragment describing the page, matching the target page's `description` (ending with a period, like the description; escape component tags as `<T>`). Group cards under `##` headings that mirror the section's subsections. Cards are for hub and landing pages only — do not scatter them mid-page in place of prose or inline links.
 
 ```mdx
 <Cards>
@@ -701,7 +701,7 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Guides answer "how do I…?" with ordered steps; Reference answers "what exactly does this do?" comprehensively and opens with an overview table linking to each item's section.
 - Guide titles use the gerund (-ing) form, and each guide's file name and link slug match its title.
 - Guide descriptions lead with "How to…" (or a question for concept-only guides) and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
-- Descriptions (frontmatter and `meta.json`) have no trailing period; `<Card>` bodies that mirror a description match it (also with no trailing period).
+- Descriptions (frontmatter and `meta.json`) end with a period (a question ends with `?`); `<Card>` bodies that mirror a description match it (also ending with a period). The only exception is the short tab subtitle on a section root (`"root": true`), which is not a sentence and takes no period.
 - Structural/navigational folders (`overview`, `get started`, `quickstart`, `guides`, `reference`, and reference subsections) display in lowercase; only proper-noun and product folders keep their casing.
 - Every component, function, hook, class, or method is linked to its reference page on its first mention on the page.
 - No reviewer directives, TODO/FIXME/placeholder text, or "to confirm"/"to verify" draft sections remain in the page.
@@ -712,9 +712,9 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - `.md` link suffix usage is consistent within the file.
 - Notes and examples are italicized.
 - Product/term casing matches the canonical list (Dashboard, Locadex, Core, Project, Context Group, Glossary, Directives, Organization, Enterprise, GitHub).
-- Reference descriptions end with a second sentence: `API reference for X` for API/library pages, or `Reference for X` for non-API reference pages (no trailing period).
+- Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
-- `related.links` follow the page-type rule: quickstart/entry pages point to that section's guides (four, or all if the section has fewer), guide pages to the most relevant other guides in the same section; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
+- `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
 - **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
-- No typos; body prose sentences end with periods (descriptions do not).
+- No typos; body prose sentences end with periods, and so do descriptions (a description that is a question ends with `?`; section-root tab subtitles take no period).
 
