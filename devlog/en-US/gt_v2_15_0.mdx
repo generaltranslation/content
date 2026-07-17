@@ -1,0 +1,117 @@
+---
+title: gt@2.15.0
+date: 2026-07-16
+authors: [josh]
+tags: ['gt-cli', 'migrate', 'next-intl', 'gt-next', 'nextjs', 'codemod']
+---
+
+## Overview
+
+`gt migrate` converts a [`next-intl`](https://next-intl.dev) Next.js App Router project to [`gt-next`](/docs/next) in a single pass, and it keeps every translation you already have.
+
+```bash
+npx gt@latest migrate
+```
+
+It swaps your imports, rewrites your provider and middleware, converts your `next.config`, generates a loader for your existing catalogs, installs `gt-next` with your package manager, and writes a report of everything it touched and everything it deliberately skipped. Run it with `--dry-run` first and it prints the full report without writing anything.
+
+## Why
+
+Almost nobody switches i18n libraries. The switching cost is brutal: internationalization touches every component with a visible string, plus your middleware, routing, and `next.config`. A mid-sized app has hundreds of `t()` calls spread across dozens of files, and every one of them is a place a rewrite can go wrong.
+
+The translation catalogs are a bigger problem than the code. Twelve locales at four hundred strings each is close to five thousand translated entries that someone paid for and a reviewer signed off on. No team approves a migration that throws those away and starts over.
+
+So teams stay put, and "we should look at our i18n setup" lives in the backlog forever.
+
+## The import swap is most of the trick
+
+This works in one pass because we built `gt-next`'s [`useTranslations`](/docs/next/api/dictionary/use-translations) and `getTranslations` as a compatibility surface: they share `next-intl`'s names, namespace resolution, and ICU interpolation. A typical component goes in looking like this:
+
+```tsx
+import { useTranslations } from 'next-intl';
+
+export default function HomePage() {
+  const t = useTranslations('HomePage');
+
+  return (
+    <main>
+      <h1>{t('title')}</h1>
+      <p>{t('greeting', { name: 'Ada' })}</p>
+      <p>{t('items', { count: 3 })}</p>
+    </main>
+  );
+}
+```
+
+and comes out looking like this:
+
+```tsx
+import { useTranslations } from 'gt-next';
+
+export default function HomePage() {
+  const t = useTranslations('HomePage');
+
+  return (
+    <main>
+      <h1>{t('title')}</h1>
+      <p>{t('greeting', { name: 'Ada' })}</p>
+      <p>{t('items', { count: 3 })}</p>
+    </main>
+  );
+}
+```
+
+The diff on most of your components is one line. Namespaces resolve the same way, and `{name}` interpolation and `{count, plural, ...}` ICU messages behave the same way. The parts that actually differ between the two libraries are the ones the codemod rewrites for you: the provider, the middleware, the plugin in `next.config`, and the locale-validation boilerplate in your `[locale]` layout.
+
+## Your translations come with you
+
+`gt migrate` doesn't re-translate anything. Your `messages/en.json`, `messages/fr.json`, and friends stay exactly where they are, byte for byte. The command generates a [`loadDictionary`](/docs/next/api/config/load-dictionary) that serves them per locale:
+
+```ts title="src/loadDictionary.ts"
+const loadDictionary = async (locale: string) => {
+  try {
+    return (await import(`../messages/${locale}.json`)).default;
+  } catch {
+    return {};
+  }
+};
+
+export default loadDictionary;
+```
+
+Every string keeps rendering, in every locale, from the first build after the migration. When you're ready to add locales, `npx gt translate` generates the new ones and leaves the old ones alone.
+
+## When it won't touch a file
+
+Some `next-intl` APIs have no `gt-next` equivalent yet: `useFormatter`, `t.raw`, and the more elaborate `t.rich` patterns. Converting 95% of a file and breaking the other 5% would leave you with pages you can't ship, so `gt migrate` skips those files entirely.
+
+As long as a skipped file remains, `next-intl` stays installed and `NextIntlClientProvider` keeps rendering, nested inside [`<GTProvider>`](/docs/next/api/components/gtprovider) and pinned to the same resolved locale. Unconverted components keep working in the right language while everything around them runs on `gt-next`. Convert them at your own pace, then re-run `gt migrate` to finish the teardown.
+
+Every skip and every judgment call lands in a generated `gt-migrate-report.md`:
+
+```md title="gt-migrate-report.md"
+## Needs manual migration (files left untouched)
+
+- src/components/PriceTag.tsx
+  - unsupported next-intl API: useFormatter (from 'next-intl')
+
+## TODOs
+
+- src/app/[locale]/layout.tsx:18 - locale validation removed. gt-next
+  middleware owns locale resolution; re-add a guard only if this route
+  must 404 on unknown locales
+```
+
+Nothing is dropped silently. The write path is just as careful: the command refuses to run on a dirty git tree, and every edit is buffered until the whole run succeeds. Either the entire migration lands or none of it does.
+
+## From compat mode to `<T>`
+
+Dictionary compatibility is there to get you through the transition. Longer term, we think [your code should be the source of truth](/blog/nextjs-i18n-code-is-the-source-of-truth), with content living inline where it's used instead of behind keys in [translation files](/blog/i18n-without-translation-files).
+
+`gt migrate --inline` starts that conversion for you: `t('key')` calls that resolve to pure static text in JSX-child position become inline [`<T>`](/docs/next/api/components/t) content, so the English moves back into the component where it's used. Anything with interpolation, plurals, or attribute usage stays on the dictionary path. You can run it whenever you like, or never; compat mode is fully supported.
+
+`react-i18next` is detected but not converted yet; that adapter is next. If `gt migrate` makes a judgment call you disagree with, the report shows you exactly where, and we'd like to hear about it on [GitHub](https://github.com/generaltranslation/gt).
+
+## Links
+
+- [PR #1910](https://github.com/generaltranslation/gt/pull/1910)
