@@ -250,12 +250,12 @@ The **overview** section doubles as a **landing hub**: its `meta.json` lists the
 
 ### Machine-readable outputs
 
-The docs are written to be consumed by LLMs and agents, not only humans. Alongside the filetree, publish two machine-readable maps at the repo root, both **generated from the** `meta.json` **filetree** (never hand-edited):
+The docs are written to be consumed by LLMs and agents, not only humans. Alongside the filetree, maintain two machine-readable maps at the repo root, both mirroring the `meta.json` filetree:
 
 - `llms.txt` — an [llmstxt.org](https://llmstxt.org/)-style index for LLMs and agents: an H1, a one-line blockquote summary, then per-section lists of `- [Title](url): description` links.
 - `sitemap.md` — a linked, hierarchical map of every published page in navigation order.
 
-Regenerate both whenever you add, rename, remove, or reorder pages, so they stay in sync with the `meta.json` filetree. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
+**Whenever you add, rename, remove, or reorder any page, update `llms.txt` and `sitemap.md` in the same change** so they stay in sync with the `meta.json` filetree — a page addition is not complete until both maps reflect it. Match the existing order, titles, and descriptions (use each page's frontmatter `title` and `description`), skip `meta.json` separators and cross-section link entries (they duplicate real pages), and drop the `(route-group)` segment from URLs. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
 
 ### Agent-navigable by default
 
@@ -715,6 +715,6 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
-- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
+- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been updated in the same change so they list only existing pages, in filetree order.
 - No typos; body prose sentences end with periods, and so do descriptions (a description that is a question ends with `?`; section-root tab subtitles take no period).
 
