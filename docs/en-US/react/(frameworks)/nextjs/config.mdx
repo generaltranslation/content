@@ -243,6 +243,28 @@ Override the header and cookie names `gt-next` uses to carry the locale and rela
 
 A JavaScript regular expression source string. When set, the i18n middleware and client locale-routing boundary only run on pathnames that match it — for example, `^/(?!uk(?:/|$)).*` to skip everything under `/uk`. An invalid expression throws at build time. This is set here, on `withGTConfig`, not on [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware); the plugin forwards it to the middleware at build time.
 
+<Callout type="warn">
+  **Handle locale aliases manually:** Filtered paths bypass locale normalization. If your configured locales are `en`, `en-GB`, and `fr`, the path segment `uk` is not recognized as `en-GB`. A custom `getLocale()` function must return `en-GB` for `uk`:
+
+  ```ts title="getLocale.ts"
+  import { locale } from 'next/root-params';
+
+  export default async function getLocale() {
+    const pathnameLocale = await locale();
+    if (pathnameLocale === 'uk') return 'en-GB';
+    return pathnameLocale;
+  }
+  ```
+
+  Apply the same mapping before calling `registerLocale()`:
+
+  ```ts
+  registerLocale(locale === 'uk' ? 'en-GB' : locale);
+  ```
+
+  If `getLocale()` or `registerLocale()` receives an unknown locale, `gt-next` warns and falls back to `defaultLocale`.
+</Callout>
+
 ### ESLint options [#eslint-options]
 
 - `eslint` (`boolean`, default `true`) — generate the General Translation ESLint config during setup.
