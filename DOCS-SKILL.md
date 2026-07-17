@@ -407,7 +407,7 @@ A few optional fields appear on specific page types:
 ## Page structure
 
 1. **Frontmatter title:** the docs layout renders the `title` as the page H1. Do not add a `#` heading to the body.
-2. **Intro:** 1–3 short sentences with no heading, stating what the page is and when to use it. Optionally one more italicized short line for constraints or scope. The docs layout already renders the `description` beneath the title, so the intro must not restate it: open with substantive detail (behavior, inputs, when to use it), not a paraphrase of the one-line summary. On reference pages especially, do not reopen with the description's summary sentence.
+2. **Intro:** 1–3 short sentences with no heading that add substance beyond the `description`: behavior, inputs, or when to use it. The docs layout already renders the `description` beneath the title, so the intro must not restate or paraphrase it. On reference pages especially, do not open with the description's summary sentence. Optionally one more italicized short line for constraints or scope.
 3. **Sections:** use `##` for top-level body sections.
 
 
