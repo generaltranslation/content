@@ -9,6 +9,7 @@
 
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
+import { normalizeInternalLink } from './validate-links.ts';
 
 // ─── Test Harness ───────────────────────────────────────────────────────────
 
@@ -323,15 +324,33 @@ description: A test
     'Strips fr'
   );
 
-  // Test 6: Integration test against fixtures
-  console.log('\n📋 Test: Integration — fixture validation');
+  // Test 6: Same-origin absolute link normalization
+  console.log('\n📋 Test: Same-origin absolute links');
+  assertEqual(
+    normalizeInternalLink(
+      'https://generaltranslation.com/docs/next/introduction#install'
+    ),
+    '/docs/next/introduction#install',
+    'Normalizes a same-origin docs URL'
+  );
+  assertEqual(
+    normalizeInternalLink(
+      'https://generaltranslation.com/docs/next/introduction?source=blog#install'
+    ),
+    '/docs/next/introduction#install',
+    'Removes a query string and preserves the anchor'
+  );
+  assertEqual(
+    normalizeInternalLink('https://example.com/docs/next/introduction'),
+    null,
+    'Ignores external docs URLs'
+  );
+
+  // Test 7: Fixture setup
+  console.log('\n📋 Test: Fixture setup');
   setupTestFixtures();
 
   try {
-    // We can't easily run the validator against a custom root without refactoring,
-    // so we test the key behaviors verified above and trust the integration via
-    // the real run against the content repo.
-
     // Verify fixture files exist
     assert(
       existsSync(join(TEST_DIR, 'docs', 'en-US', 'next', 'introduction.mdx')),
@@ -349,7 +368,7 @@ description: A test
     );
 
     console.log(
-      '\n  ℹ️  Full integration test runs via: npx tsx validate-links.ts'
+      '\n  ℹ️  Full repository validation runs via: npx tsx validate-links.ts'
     );
   } finally {
     cleanupTestFixtures();
