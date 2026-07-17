@@ -1,0 +1,392 @@
+# General Translation docs
+
+> General Translation is a full-stack localization platform: open-source i18n libraries, a CLI, and a translation API, Dashboard, and AI agent for translating apps and content into any language.
+
+## Overview
+
+- [Introduction](https://generaltranslation.com/docs/overview/get-started)
+- [Key concepts](https://generaltranslation.com/docs/overview/key-concepts)
+- [Using coding agents](https://generaltranslation.com/docs/overview/for-coding-agents)
+
+## [Platform](https://generaltranslation.com/docs/platform)
+
+- **Dashboard**
+  - [Get started with the Dashboard](https://generaltranslation.com/docs/platform/dashboard/get-started)
+  - **Guides**
+    - [Adding translation context](https://generaltranslation.com/docs/platform/dashboard/guides/adding-translation-context)
+    - [Reviewing and editing translations](https://generaltranslation.com/docs/platform/dashboard/guides/reviewing-translations)
+    - [Adding annotations](https://generaltranslation.com/docs/platform/dashboard/guides/adding-annotations)
+    - [Managing billing](https://generaltranslation.com/docs/platform/dashboard/guides/managing-billing)
+  - **Reference**
+    - [API keys](https://generaltranslation.com/docs/platform/dashboard/reference/api-keys)
+    - [API reference](https://generaltranslation.com/docs/platform/dashboard/reference/api-reference)
+    - [Webhooks](https://generaltranslation.com/docs/platform/dashboard/reference/webhooks)
+    - [Organization settings](https://generaltranslation.com/docs/platform/dashboard/reference/organization-settings)
+    - [Roles and permissions](https://generaltranslation.com/docs/platform/dashboard/reference/roles-and-permissions)
+    - [Project settings](https://generaltranslation.com/docs/platform/dashboard/reference/project-settings)
+    - [Supported locales](https://generaltranslation.com/docs/platform/dashboard/reference/supported-locales)
+- **Locadex**
+  - [Quickstart](https://generaltranslation.com/docs/platform/locadex/quickstart)
+  - **Guides**
+    - [Configuring Locadex workflows](https://generaltranslation.com/docs/platform/locadex/guides/configuring-workflows)
+    - [Using Locadex in a monorepo](https://generaltranslation.com/docs/platform/locadex/guides/using-in-monorepos)
+    - [Auto-merging Locadex PRs](https://generaltranslation.com/docs/platform/locadex/guides/auto-merging-prs)
+    - [Managing languages](https://generaltranslation.com/docs/platform/locadex/guides/managing-languages)
+    - [Adding environment variables](https://generaltranslation.com/docs/platform/locadex/guides/adding-environment-variables)
+    - [Viewing workflow history](https://generaltranslation.com/docs/platform/locadex/guides/viewing-workflow-history)
+  - **Reference**
+    - [Agent page](https://generaltranslation.com/docs/platform/locadex/reference/agent)
+    - [Configuration](https://generaltranslation.com/docs/platform/locadex/reference/config)
+    - [VM image](https://generaltranslation.com/docs/platform/locadex/reference/vm-image)
+- **Core**
+  - [Quickstart](https://generaltranslation.com/docs/platform/core/quickstart)
+  - **Guides**
+    - [Understanding locale codes](https://generaltranslation.com/docs/platform/core/guides/locale-codes)
+    - [Translating strings](https://generaltranslation.com/docs/platform/core/guides/translating-strings)
+    - [Translating files](https://generaltranslation.com/docs/platform/core/guides/translating-files)
+  - **Reference**
+    - **GT Class**
+      - [Constructor](https://generaltranslation.com/docs/platform/core/reference/gt-class/constructor)
+      - [setConfig](https://generaltranslation.com/docs/platform/core/reference/gt-class/set-config)
+    - **GT Class Methods**
+      - **Translation**
+        - [translate](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/translate)
+        - [translateMany](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/translate-many)
+        - [uploadSourceFiles](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/upload-source-files)
+        - [uploadTranslations](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/upload-translations)
+        - [enqueueFiles](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/enqueue-files)
+        - [awaitJobs](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/await-jobs)
+        - [checkJobStatus](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/check-job-status)
+        - [queryFileData](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/query-file-data)
+        - [querySourceFile](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/query-source-file)
+        - [downloadFile](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/download-file)
+        - [downloadFileBatch](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/download-file-batch)
+        - [setupProject](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/setup-project)
+        - [getProjectData](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/get-project-data)
+        - [createTag](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/translation/create-tag)
+      - **Project**
+        - [Project and file management](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/project/project-management)
+      - **Formatting**
+        - [formatNum](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-num)
+        - [formatCurrency](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-currency)
+        - [formatDateTime](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-date-time)
+        - [formatRelativeTime](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-relative-time)
+        - [formatRelativeTimeFromDate](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-relative-time-from-date)
+        - [formatMessage](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-message)
+        - [formatList](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-list)
+        - [formatListToParts](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-list-to-parts)
+        - [formatCutoff](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/formatting/format-cutoff)
+      - **Locales**
+        - [determineLocale](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/determine-locale)
+        - [getLocaleDirection](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/get-locale-direction)
+        - [getLocaleEmoji](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/get-locale-emoji)
+        - [getLocaleName](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/get-locale-name)
+        - [getLocaleProperties](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/get-locale-properties)
+        - [getRegionProperties](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/get-region-properties)
+        - [isValidLocale](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/is-valid-locale)
+        - [isSameLanguage](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/is-same-language)
+        - [isSameDialect](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/is-same-dialect)
+        - [isSupersetLocale](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/is-superset-locale)
+        - [requiresTranslation](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/requires-translation)
+        - [standardizeLocale](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/standardize-locale)
+        - [resolveAliasLocale](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/resolve-alias-locale)
+        - [resolveCanonicalLocale](https://generaltranslation.com/docs/platform/core/reference/gt-class-methods/locales/resolve-canonical-locale)
+    - **Utility functions**
+      - **Formatting**
+        - [formatNum](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-num)
+        - [formatCurrency](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-currency)
+        - [formatDateTime](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-date-time)
+        - [formatRelativeTime](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-relative-time)
+        - [formatRelativeTimeFromDate](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-relative-time-from-date)
+        - [formatMessage](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-message)
+        - [formatList](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-list)
+        - [formatListToParts](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-list-to-parts)
+        - [formatCutoff](https://generaltranslation.com/docs/platform/core/reference/utility-functions/formatting/format-cutoff)
+      - **Locales**
+        - [determineLocale](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/determine-locale)
+        - [getLocaleDirection](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/get-locale-direction)
+        - [getLocaleEmoji](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/get-locale-emoji)
+        - [getLocaleName](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/get-locale-name)
+        - [getLocaleProperties](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/get-locale-properties)
+        - [getRegionProperties](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/get-region-properties)
+        - [isValidLocale](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/is-valid-locale)
+        - [isSameLanguage](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/is-same-language)
+        - [isSameDialect](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/is-same-dialect)
+        - [isSupersetLocale](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/is-superset-locale)
+        - [requiresTranslation](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/requires-translation)
+        - [standardizeLocale](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/standardize-locale)
+        - [resolveAliasLocale](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/resolve-alias-locale)
+        - [resolveCanonicalLocale](https://generaltranslation.com/docs/platform/core/reference/utility-functions/locales/resolve-canonical-locale)
+    - **Types**
+      - [Content](https://generaltranslation.com/docs/platform/core/reference/types/content)
+      - [CustomMapping](https://generaltranslation.com/docs/platform/core/reference/types/custom-mapping)
+      - [DataFormat](https://generaltranslation.com/docs/platform/core/reference/types/data-format)
+      - [EnqueueFilesOptions](https://generaltranslation.com/docs/platform/core/reference/types/enqueue-files-options)
+      - [EntryMetadata](https://generaltranslation.com/docs/platform/core/reference/types/entry-metadata)
+      - [TranslateManyEntry](https://generaltranslation.com/docs/platform/core/reference/types/translate-many-entry)
+      - [FileToTranslate](https://generaltranslation.com/docs/platform/core/reference/types/file-to-translate)
+      - [GTConstructorParams](https://generaltranslation.com/docs/platform/core/reference/types/gt-constructor-params)
+      - [JsxChildren](https://generaltranslation.com/docs/platform/core/reference/types/jsx-children)
+      - [JsxElement](https://generaltranslation.com/docs/platform/core/reference/types/jsx-element)
+      - [LocaleProperties](https://generaltranslation.com/docs/platform/core/reference/types/locale-properties)
+      - [TranslateManyResult](https://generaltranslation.com/docs/platform/core/reference/types/translate-many-result)
+      - [TranslationResult](https://generaltranslation.com/docs/platform/core/reference/types/translation-result)
+      - [Variable](https://generaltranslation.com/docs/platform/core/reference/types/variable)
+- **OpenAPI**
+  - [Overview](https://generaltranslation.com/docs/platform/openapi/overview)
+  - **Reference**
+    - **Files**
+      - [Upload source files](https://generaltranslation.com/docs/platform/openapi/reference/files/upload-source)
+      - [Upload translations](https://generaltranslation.com/docs/platform/openapi/reference/files/upload-translations)
+      - [Submit file diffs](https://generaltranslation.com/docs/platform/openapi/reference/files/submit-diffs)
+      - [Download files](https://generaltranslation.com/docs/platform/openapi/reference/files/download-many)
+      - [Download file](https://generaltranslation.com/docs/platform/openapi/reference/files/download)
+      - [Publish files](https://generaltranslation.com/docs/platform/openapi/reference/files/publish-files)
+      - [Get file information](https://generaltranslation.com/docs/platform/openapi/reference/files/file-info)
+      - [Get translation status](https://generaltranslation.com/docs/platform/openapi/reference/files/translation-status)
+      - [Move files](https://generaltranslation.com/docs/platform/openapi/reference/files/move-files)
+      - [Get orphaned files](https://generaltranslation.com/docs/platform/openapi/reference/files/orphaned-files)
+    - **Context**
+      - [Generate context](https://generaltranslation.com/docs/platform/openapi/reference/context/generate-context)
+      - [Check context freshness](https://generaltranslation.com/docs/platform/openapi/reference/context/check-freshness)
+      - [Get context generation status](https://generaltranslation.com/docs/platform/openapi/reference/context/context-status)
+    - **Translation**
+      - [Translate at runtime](https://generaltranslation.com/docs/platform/openapi/reference/translation/translate-runtime)
+      - [Queue translations](https://generaltranslation.com/docs/platform/openapi/reference/translation/queue)
+      - [Get translation job status](https://generaltranslation.com/docs/platform/openapi/reference/translation/job-status)
+    - **Project**
+      - [Get Project info](https://generaltranslation.com/docs/platform/openapi/reference/project/project-info)
+      - [Update Project info](https://generaltranslation.com/docs/platform/openapi/reference/project/update-project)
+      - [Get branch info](https://generaltranslation.com/docs/platform/openapi/reference/project/branch-info)
+      - [Create a branch](https://generaltranslation.com/docs/platform/openapi/reference/project/create-branch)
+      - [Create or update tag](https://generaltranslation.com/docs/platform/openapi/reference/project/upsert-tag)
+
+## CLI
+
+- [Quickstart](https://generaltranslation.com/docs/cli/quickstart)
+- **Guides**
+  - [Configuring the CLI](https://generaltranslation.com/docs/cli/guides/configuring)
+  - [Generating translations](https://generaltranslation.com/docs/cli/guides/generating-translations)
+  - [Managing translations](https://generaltranslation.com/docs/cli/guides/managing-translations)
+  - [Tracking translations by branch](https://generaltranslation.com/docs/cli/guides/branching)
+  - [Using auto-derived translations](https://generaltranslation.com/docs/cli/guides/using-autoderive)
+  - [Using automatic JSX injection](https://generaltranslation.com/docs/cli/guides/using-auto-jsx)
+- **Reference**
+  - [Configuration](https://generaltranslation.com/docs/cli/reference/config)
+  - [Keyed metadata](https://generaltranslation.com/docs/cli/reference/keyed-metadata)
+  - **Commands**
+    - [gt init](https://generaltranslation.com/docs/cli/reference/commands/init)
+    - [gt setup](https://generaltranslation.com/docs/cli/reference/commands/setup)
+    - [gt configure](https://generaltranslation.com/docs/cli/reference/commands/configure)
+    - [gt auth](https://generaltranslation.com/docs/cli/reference/commands/auth)
+    - [gt translate](https://generaltranslation.com/docs/cli/reference/commands/translate)
+    - [gt stage](https://generaltranslation.com/docs/cli/reference/commands/stage)
+    - [gt enqueue](https://generaltranslation.com/docs/cli/reference/commands/enqueue)
+    - [gt download](https://generaltranslation.com/docs/cli/reference/commands/download)
+    - [gt upload](https://generaltranslation.com/docs/cli/reference/commands/upload)
+    - [gt save-local](https://generaltranslation.com/docs/cli/reference/commands/save-local)
+    - [gt generate](https://generaltranslation.com/docs/cli/reference/commands/generate)
+    - [gt validate](https://generaltranslation.com/docs/cli/reference/commands/validate)
+  - **File formats**
+    - [GT](https://generaltranslation.com/docs/cli/reference/formats/gt-jsx-files)
+    - [JSON](https://generaltranslation.com/docs/cli/reference/formats/json-files)
+    - [PO / POT](https://generaltranslation.com/docs/cli/reference/formats/po-pot-files)
+    - [MDX and Markdown](https://generaltranslation.com/docs/cli/reference/formats/mdx-md-files)
+    - [TypeScript and JavaScript](https://generaltranslation.com/docs/cli/reference/formats/ts-js-files)
+    - [YAML](https://generaltranslation.com/docs/cli/reference/formats/yaml-files)
+    - [HTML](https://generaltranslation.com/docs/cli/reference/formats/html-files)
+    - [Plain text](https://generaltranslation.com/docs/cli/reference/formats/plain-text-files)
+
+## React
+
+- [Overview](https://generaltranslation.com/docs/react/overview)
+- [React Quickstart](https://generaltranslation.com/docs/react/react-quickstart)
+- [React SPA Quickstart](https://generaltranslation.com/docs/react/react-spa-quickstart)
+- [Next.js App Router Quickstart](https://generaltranslation.com/docs/react/nextjs-quickstart)
+- [Next.js Pages Router Quickstart](https://generaltranslation.com/docs/react/nextjs-pages-router-quickstart)
+- [TanStack Start Quickstart](https://generaltranslation.com/docs/react/tanstack-start-quickstart)
+- [React Native Quickstart](https://generaltranslation.com/docs/react/react-native-quickstart)
+- **Guides**
+  - [Configuring General Translation](https://generaltranslation.com/docs/react/guides/configuring)
+  - [Developing with SPA translations](https://generaltranslation.com/docs/react/guides/developing-spa-translations)
+  - [Translating JSX](https://generaltranslation.com/docs/react/guides/translating-jsx)
+  - [Translating strings](https://generaltranslation.com/docs/react/guides/translating-strings)
+  - [Formatting numbers and dates](https://generaltranslation.com/docs/react/guides/formatting-variables)
+  - [Handling plurals and branches](https://generaltranslation.com/docs/react/guides/handling-plurals-and-branches)
+  - [Managing locales](https://generaltranslation.com/docs/react/guides/managing-locales)
+  - [Translating with dictionaries](https://generaltranslation.com/docs/react/guides/translating-with-dictionaries)
+  - [Storing translations locally](https://generaltranslation.com/docs/react/guides/storing-translations)
+  - [Linting your code](https://generaltranslation.com/docs/react/guides/linting-your-code)
+- **Reference**
+  - [Configuration](https://generaltranslation.com/docs/react/reference/config)
+  - **Components**
+    - [GTProvider](https://generaltranslation.com/docs/react/reference/components/gt-provider)
+    - [T](https://generaltranslation.com/docs/react/reference/components/t)
+    - [Var](https://generaltranslation.com/docs/react/reference/components/var)
+    - [Num](https://generaltranslation.com/docs/react/reference/components/num)
+    - [Currency](https://generaltranslation.com/docs/react/reference/components/currency)
+    - [DateTime](https://generaltranslation.com/docs/react/reference/components/datetime)
+    - [RelativeTime](https://generaltranslation.com/docs/react/reference/components/relative-time)
+    - [Plural](https://generaltranslation.com/docs/react/reference/components/plural)
+    - [Branch](https://generaltranslation.com/docs/react/reference/components/branch)
+    - [Derive](https://generaltranslation.com/docs/react/reference/components/derive)
+    - [LocaleSelector](https://generaltranslation.com/docs/react/reference/components/locale-selector)
+    - [RegionSelector](https://generaltranslation.com/docs/react/reference/components/region-selector)
+  - **Hooks**
+    - [useGT](https://generaltranslation.com/docs/react/reference/hooks/use-gt)
+    - [useTranslations](https://generaltranslation.com/docs/react/reference/hooks/use-translations)
+    - [useMessages](https://generaltranslation.com/docs/react/reference/hooks/use-messages)
+    - [useLocale](https://generaltranslation.com/docs/react/reference/hooks/use-locale)
+    - [useSetLocale](https://generaltranslation.com/docs/react/reference/hooks/use-set-locale)
+    - [useDefaultLocale](https://generaltranslation.com/docs/react/reference/hooks/use-default-locale)
+    - [useLocales](https://generaltranslation.com/docs/react/reference/hooks/use-locales)
+    - [useLocaleProperties](https://generaltranslation.com/docs/react/reference/hooks/use-locale-properties)
+    - [useLocaleDirection](https://generaltranslation.com/docs/react/reference/hooks/use-locale-direction)
+    - [useLocaleSelector](https://generaltranslation.com/docs/react/reference/hooks/use-locale-selector)
+    - [useRegion](https://generaltranslation.com/docs/react/reference/hooks/use-region)
+    - [useSetRegion](https://generaltranslation.com/docs/react/reference/hooks/use-set-region)
+    - [useRegionSelector](https://generaltranslation.com/docs/react/reference/hooks/use-region-selector)
+  - **Functions**
+    - [msg](https://generaltranslation.com/docs/react/reference/functions/msg)
+    - [t](https://generaltranslation.com/docs/react/reference/functions/t-function)
+    - [declareVar](https://generaltranslation.com/docs/react/reference/functions/declare-var)
+    - [decodeVars](https://generaltranslation.com/docs/react/reference/functions/decode-vars)
+    - [derive](https://generaltranslation.com/docs/react/reference/functions/derive)
+    - [getTranslationsSnapshot](https://generaltranslation.com/docs/react/reference/functions/get-translations-snapshot)
+    - [loadTranslations](https://generaltranslation.com/docs/react/reference/functions/load-translations)
+    - [loadDictionary](https://generaltranslation.com/docs/react/reference/functions/load-dictionary)
+  - **Types**
+    - [InlineTranslationOptions](https://generaltranslation.com/docs/react/reference/types/inline-translation-options)
+    - [DictionaryTranslationOptions](https://generaltranslation.com/docs/react/reference/types/dictionary-translation-options)
+  - [Lint rules](https://generaltranslation.com/docs/react/reference/lint-rules)
+- **Frameworks**
+  - [Next.js](https://generaltranslation.com/docs/react/nextjs)
+    - [Server components](https://generaltranslation.com/docs/react/nextjs/server-components)
+    - [Configuration](https://generaltranslation.com/docs/react/nextjs/config)
+    - [App Router middleware](https://generaltranslation.com/docs/react/nextjs/app-router-middleware)
+    - [Registering request locales](https://generaltranslation.com/docs/react/nextjs/registering-request-locales)
+    - [Pages Router middleware](https://generaltranslation.com/docs/react/nextjs/pages-router-middleware)
+    - [App Router static site generation](https://generaltranslation.com/docs/react/nextjs/app-router-static-site-generation)
+    - [Pages Router static site generation](https://generaltranslation.com/docs/react/nextjs/pages-router-static-site-generation)
+    - [Localized navigation](https://generaltranslation.com/docs/react/nextjs/link)
+    - **reference**
+      - **functions**
+        - [getGT](https://generaltranslation.com/docs/react/nextjs/reference/functions/get-gt)
+        - [getTranslations](https://generaltranslation.com/docs/react/nextjs/reference/functions/get-translations)
+        - [getMessages](https://generaltranslation.com/docs/react/nextjs/reference/functions/get-messages)
+        - [getLocale](https://generaltranslation.com/docs/react/nextjs/reference/functions/get-locale)
+        - [getLocaleDirection](https://generaltranslation.com/docs/react/nextjs/reference/functions/get-locale-direction)
+        - [getRegion](https://generaltranslation.com/docs/react/nextjs/reference/functions/get-region)
+        - [registerLocale](https://generaltranslation.com/docs/react/nextjs/reference/functions/register-locale)
+        - [resolveCanonicalLocale](https://generaltranslation.com/docs/react/nextjs/reference/functions/resolve-canonical-locale)
+        - [tx](https://generaltranslation.com/docs/react/nextjs/reference/functions/tx)
+        - [createNextMiddleware](https://generaltranslation.com/docs/react/nextjs/reference/functions/create-next-middleware)
+      - **components**
+        - [Tx](https://generaltranslation.com/docs/react/nextjs/reference/components/tx)
+  - [React Native](https://generaltranslation.com/docs/react/react-native)
+    - [Set up React Native](https://generaltranslation.com/docs/react/react-native/setup)
+    - [Plugin](https://generaltranslation.com/docs/react/react-native/plugin)
+  - [TanStack Start](https://generaltranslation.com/docs/react/tanstack-start)
+    - [Set up TanStack Start](https://generaltranslation.com/docs/react/tanstack-start/setup)
+
+## Node
+
+- [Quickstart](https://generaltranslation.com/docs/node/quickstart)
+- **Guides**
+  - [Configuring gt-node](https://generaltranslation.com/docs/node/guides/configuring)
+  - [Translating strings](https://generaltranslation.com/docs/node/guides/translating-strings)
+  - [Detecting the request locale](https://generaltranslation.com/docs/node/guides/detecting-locale)
+  - [Storing translations locally](https://generaltranslation.com/docs/node/guides/storing-translations)
+- **Reference**
+  - [Configuration](https://generaltranslation.com/docs/node/reference/config)
+  - **Functions**
+    - [initializeGT](https://generaltranslation.com/docs/node/reference/functions/initialize-gt)
+    - [withGT](https://generaltranslation.com/docs/node/reference/functions/with-gt)
+    - [getRequestLocale](https://generaltranslation.com/docs/node/reference/functions/get-request-locale)
+    - [getGT](https://generaltranslation.com/docs/node/reference/functions/get-gt)
+    - [getMessages](https://generaltranslation.com/docs/node/reference/functions/get-messages)
+    - [getTranslations](https://generaltranslation.com/docs/node/reference/functions/get-translations)
+    - [tx](https://generaltranslation.com/docs/node/reference/functions/tx)
+    - [msg](https://generaltranslation.com/docs/node/reference/functions/msg)
+    - [derive](https://generaltranslation.com/docs/node/reference/functions/derive)
+    - [declareVar](https://generaltranslation.com/docs/node/reference/functions/declare-var)
+    - [decodeMsg](https://generaltranslation.com/docs/node/reference/functions/decode-msg)
+    - [decodeOptions](https://generaltranslation.com/docs/node/reference/functions/decode-options)
+    - [decodeVars](https://generaltranslation.com/docs/node/reference/functions/decode-vars)
+    - [getLocale](https://generaltranslation.com/docs/node/reference/functions/get-locale)
+    - [getDefaultLocale](https://generaltranslation.com/docs/node/reference/functions/get-default-locale)
+    - [getLocales](https://generaltranslation.com/docs/node/reference/functions/get-locales)
+    - [getLocaleProperties](https://generaltranslation.com/docs/node/reference/functions/get-locale-properties)
+    - [getVersionId](https://generaltranslation.com/docs/node/reference/functions/get-version-id)
+
+## Python
+
+- [Quickstart](https://generaltranslation.com/docs/python/quickstart)
+- **Guides**
+  - [Configuring General Translation](https://generaltranslation.com/docs/python/guides/configuring)
+  - [Translating strings](https://generaltranslation.com/docs/python/guides/translating-strings)
+  - [Detecting the request locale](https://generaltranslation.com/docs/python/guides/detecting-locale)
+  - [Storing translations locally](https://generaltranslation.com/docs/python/guides/storing-translations)
+  - [Declaring variables and variants](https://generaltranslation.com/docs/python/guides/declaring-variables)
+- **Reference**
+  - [Configuration](https://generaltranslation.com/docs/python/reference/config)
+  - **Functions**
+    - [initialize_gt](https://generaltranslation.com/docs/python/reference/functions/initialize-gt)
+    - [t](https://generaltranslation.com/docs/python/reference/functions/t)
+    - [t_fallback](https://generaltranslation.com/docs/python/reference/functions/t-fallback)
+    - [msg](https://generaltranslation.com/docs/python/reference/functions/msg)
+    - [m_fallback](https://generaltranslation.com/docs/python/reference/functions/m-fallback)
+    - [interpolate_message](https://generaltranslation.com/docs/python/reference/functions/interpolate-message)
+    - [hash_message](https://generaltranslation.com/docs/python/reference/functions/hash-message)
+    - [extract_variables](https://generaltranslation.com/docs/python/reference/functions/extract-variables)
+    - [decode_msg](https://generaltranslation.com/docs/python/reference/functions/decode-msg)
+    - [decode_options](https://generaltranslation.com/docs/python/reference/functions/decode-options)
+    - [declare_var](https://generaltranslation.com/docs/python/reference/functions/declare-var)
+    - [derive](https://generaltranslation.com/docs/python/reference/functions/derive)
+    - [declare_static](https://generaltranslation.com/docs/python/reference/functions/declare-static)
+    - [decode_vars](https://generaltranslation.com/docs/python/reference/functions/decode-vars)
+    - [get_locale](https://generaltranslation.com/docs/python/reference/functions/get-locale)
+    - [get_locales](https://generaltranslation.com/docs/python/reference/functions/get-locales)
+    - [get_default_locale](https://generaltranslation.com/docs/python/reference/functions/get-default-locale)
+    - [get_version_id](https://generaltranslation.com/docs/python/reference/functions/get-version-id)
+    - [get_i18n_manager](https://generaltranslation.com/docs/python/reference/functions/get-i18n-manager)
+    - [set_i18n_manager](https://generaltranslation.com/docs/python/reference/functions/set-i18n-manager)
+  - **Classes**
+    - [I18nManager](https://generaltranslation.com/docs/python/reference/classes/i18n-manager)
+    - [StorageAdapter](https://generaltranslation.com/docs/python/reference/classes/storage-adapter)
+    - [ContextVarStorageAdapter](https://generaltranslation.com/docs/python/reference/classes/context-var-storage-adapter)
+    - [TranslationsLoader](https://generaltranslation.com/docs/python/reference/classes/translations-loader)
+
+## [Integrations](https://generaltranslation.com/docs/integrations)
+
+- **Mintlify**
+  - [Quickstart](https://generaltranslation.com/docs/integrations/mintlify/quickstart)
+  - **Guides**
+    - [Configuring Mintlify](https://generaltranslation.com/docs/integrations/mintlify/guides/configuring-mintlify)
+    - [Translating content](https://generaltranslation.com/docs/integrations/mintlify/guides/translating-content)
+    - [Using translated content](https://generaltranslation.com/docs/integrations/mintlify/guides/using-translated-content)
+    - [Managing translations](https://generaltranslation.com/docs/integrations/mintlify/guides/managing-translations)
+  - **Reference**
+    - [Configuration](https://generaltranslation.com/docs/integrations/mintlify/reference/config)
+    - [Locales](https://generaltranslation.com/docs/integrations/mintlify/reference/locales)
+    - [Supported content](https://generaltranslation.com/docs/integrations/mintlify/reference/supported-content)
+- **Sanity**
+  - [Quickstart](https://generaltranslation.com/docs/integrations/sanity/quickstart)
+  - **Guides**
+    - [Configuring Sanity](https://generaltranslation.com/docs/integrations/sanity/guides/configuring-sanity)
+    - [Translating content](https://generaltranslation.com/docs/integrations/sanity/guides/translating-content)
+    - [Managing translations](https://generaltranslation.com/docs/integrations/sanity/guides/managing-translations)
+    - [Querying translations](https://generaltranslation.com/docs/integrations/sanity/guides/querying-translations)
+  - **Reference**
+    - [Sanity plugin configuration](https://generaltranslation.com/docs/integrations/sanity/reference/plugin-configuration)
+- **Storyblok**
+  - [Quickstart](https://generaltranslation.com/docs/integrations/storyblok/quickstart)
+  - **Guides**
+    - [Configuring Storyblok](https://generaltranslation.com/docs/integrations/storyblok/guides/configuring-storyblok)
+    - [Translating content](https://generaltranslation.com/docs/integrations/storyblok/guides/translating-content)
+    - [Managing translations](https://generaltranslation.com/docs/integrations/storyblok/guides/managing-translations)
+    - [Using translated content](https://generaltranslation.com/docs/integrations/storyblok/guides/using-translated-content)
+  - **Reference**
+    - [Connection settings](https://generaltranslation.com/docs/integrations/storyblok/reference/connection)
+    - [Supported content](https://generaltranslation.com/docs/integrations/storyblok/reference/supported-content)
+    - [Locales](https://generaltranslation.com/docs/integrations/storyblok/reference/locales)
