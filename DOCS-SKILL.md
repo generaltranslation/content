@@ -457,7 +457,7 @@ Only document capabilities that actually exist, and resolve anything uncertain a
 A "common workflow" section is a bulleted roundup that points readers to the main tasks or settings from a landing page (as in the Dashboard get-started **Key workflows** and **Configuration** lists). Each bullet starts with the action, then a short description, then a link:
 
 ```text
-- **Define context and key terms for translation:** use Context Groups to guide terminology and style across Projects. See [Define translation context](/docs/platform/dashboard/guides/translation-context).
+- **Define context and key terms for translation:** use Context Groups to guide terminology and style across Projects. See [Define translation context](/docs/platform/dashboard/guides/adding-translation-context).
 ```
 
 Use common workflow sections on **Get Started pages and other overview/landing pages** to surface the primary tasks, instead of duplicating full how-tos inline. Do not use them mid-guide, where ordered steps belong.
