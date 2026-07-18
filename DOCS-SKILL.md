@@ -250,11 +250,12 @@ The **overview** section doubles as a **landing hub**: its `meta.json` lists the
 
 ### Machine-readable outputs
 
-The docs are written to be consumed by LLMs and agents, not only humans. Publish `llms.txt` at the site root, generated from the `meta.json` filetree and never hand-edited:
+The docs are written to be consumed by LLMs and agents, not only humans. Alongside the filetree, publish two machine-readable maps at the repo root, both **generated from the** `meta.json` **filetree** (never hand-edited):
 
 - `llms.txt` — an [llmstxt.org](https://llmstxt.org/)-style index for LLMs and agents: an H1, a one-line blockquote summary, then per-section lists of `- [Title](url): description` links.
+- `sitemap.md` — a linked, hierarchical map of every published page in navigation order.
 
-Regenerate it whenever you add, rename, remove, or reorder pages, so it stays in sync with the `meta.json` filetree. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
+Regenerate both whenever you add, rename, remove, or reorder pages, so they stay in sync with the `meta.json` filetree. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
 
 ### Agent-navigable by default
 
@@ -275,7 +276,7 @@ Structure it in this order:
 3. **Core usage** — the canonical patterns the agent should follow (for example, wrap user-facing strings in `<T>`, use `useGT()` for dynamic strings, keep locale configuration in one place). Show minimal, commented code.
 4. **Commands** — a short cheat-sheet of the CLI commands the agent will run (`npx gt configure`, `npx gt translate`, and so on) and when to run each.
 5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, hand-edit generated translation files).
-6. **Links** — point to `llms.txt` and the most useful pages for deeper detail.
+6. **Links** — point to `llms.txt`, the sitemap, and the most useful pages for deeper detail.
 
 Document only capabilities that exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement). This file is written by an agent connected to the product codebase; this guide defines its **shape**, not its exact contents.
 
@@ -714,5 +715,5 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
-- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` has been regenerated so it lists only existing pages.
+- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
 - No typos; body prose sentences end with periods, and so do descriptions (a description that is a question ends with `?`; section-root tab subtitles take no period).
