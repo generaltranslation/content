@@ -265,9 +265,9 @@ Beyond the two maps above, the docs follow these agent best practices so an agen
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 
-### AGENTS.md (for product users' agents)
+### Drop-in AGENTS.md guide
 
-Publish a root `AGENTS.md` aimed at the **coding agents of developers who use General Translation** — *not* at agents editing this docs repo. A developer drops it (or its contents) into their own project so their agent knows how to add and run General Translation correctly. Keep it self-contained, imperative, and short enough to fit an agent's context window.
+Embed a copyable `AGENTS.md` guide on the **For coding agents** page, aimed at the **coding agents of developers who use General Translation** — *not* at agents editing this docs repo. A developer drops its contents into their own project so their agent knows how to add and run General Translation correctly. Keep it self-contained, imperative, and short enough to fit an agent's context window.
 
 Structure it in this order:
 
