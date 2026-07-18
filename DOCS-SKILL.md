@@ -407,7 +407,7 @@ A few optional fields appear on specific page types:
 ## Page structure
 
 1. **Frontmatter title:** the docs layout renders the `title` as the page H1. Do not add a `#` heading to the body.
-2. **Intro:** 1–3 short sentences with no heading, stating what the page is and when to use it. Optionally one more italicized short line for constraints or scope.
+2. **Intro:** 1–3 short sentences with no heading that add substance beyond the `description`: behavior, inputs, or when to use it. The docs layout already renders the `description` beneath the title, so the intro must not restate or paraphrase it. On reference pages especially, do not open with the description's summary sentence. Optionally one more italicized short line for constraints or scope.
 3. **Sections:** use `##` for top-level body sections.
 
 
@@ -695,6 +695,7 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 ## Consistency checks before finishing
 
 - The page reflects real system behavior (verified against code and existing docs), not just restated formatting.
+- The intro does not restate the frontmatter `description` (the layout renders the description under the title); the body opens with new detail.
 - Depth and vocabulary match the page audience.
 - Sections are grouped into a few meaningful H2s with H3 subsections, not many small one-off H2s. Consolidate or restructure if there are more than 6 H2 subsections.
 - First mention of the product on the page (and in the description) uses **General Translation**, not GT.
