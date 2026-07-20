@@ -625,6 +625,8 @@ How to write it:
 - Use `title="src/index.ts"` for file snippets and `title="Output"` for response examples.
 - Keep runnable examples minimal and consistent (e.g. `gt.translate('Hello, world!', 'es')`).
 - Highlight specific lines with the Fumadocs syntax `// [!code highlight]`.
+- Show edits to a file the reader already has (quickstart-style changes) with the diff notation `// [!code ++]` and `// [!code --]`: added lines render green, removed lines red. Ranges apply to the following lines (`[!code ++:3]`).
+- Notation markers only convert where the marker is a real comment token. Inline `// [!code ...]` works in JS statements and JSX attribute positions. In JSX children positions, put the marker on its own line as `{/* [!code ++] */}`; the marker line is removed from output and the notation applies to the next line.
 - **Use tabs whenever possible.** This follows the conciseness rule: when the shape of the instructions is the same and only the specific code differs (package managers, language variants, query examples), do not duplicate the instructions — capture the variants in tabs. List all four package managers in this exact order: `<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>`. Use this exact shape, with a `<Tab value="...">` per item wrapping a fenced code block:
 
 ```mdx
