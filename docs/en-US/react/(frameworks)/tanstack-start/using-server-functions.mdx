@@ -1,0 +1,73 @@
+---
+
+title: Using server functions
+description: How to translate strings and read request state with General Translation in TanStack Start server functions.
+
+---
+
+The `gt-tanstack-start/server` entry provides request-scoped translation helpers for loaders, server functions, and server-rendered metadata.
+
+## Before you start [#before-start]
+
+Complete the [TanStack Start setup](/docs/react/tanstack-start/setup). You must register [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) globally and call [`initializeGT`](/docs/react/reference/config#initialize) before the middleware handles a request.
+
+The server helpers throw when called outside an active middleware request scope.
+
+## Translate in a server function [#translate]
+
+Create a TanStack Start server function, then call [`getGT`](/docs/react/tanstack-start/reference/functions/get-gt) inside its handler. Use [`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale) and [`getEnableI18n`](/docs/react/tanstack-start/reference/functions/get-enable-i18n) when the response also needs request state.
+
+```tsx title="src/routes/account.tsx"
+import { createFileRoute } from '@tanstack/react-router';
+import { createServerFn } from '@tanstack/react-start';
+import {
+  getEnableI18n,
+  getGT,
+  getLocale,
+} from 'gt-tanstack-start/server';
+
+const loadAccount = createServerFn({ method: 'GET' }).handler(async () => {
+  const gt = await getGT();
+
+  return {
+    locale: getLocale(),
+    enableI18n: getEnableI18n(),
+    title: gt('Account'),
+  };
+});
+
+export const Route = createFileRoute('/account')({
+  loader: () => loadAccount(),
+  head: ({ loaderData }) => ({
+    meta: [{ title: loaderData?.title }],
+  }),
+  component: Account,
+});
+
+function Account() {
+  const data = Route.useLoaderData();
+  return <h1>{data.title}</h1>;
+}
+```
+
+TanStack Start runs the handler inside the request middleware scope. Each request receives its own locale and internationalization setting, including during concurrent server rendering.
+
+## Translate registered messages and dictionaries [#messages]
+
+Use [`getMessages`](/docs/react/tanstack-start/reference/functions/get-messages) for strings registered with [`msg`](/docs/react/reference/functions/msg). Use [`getTranslations`](/docs/react/tanstack-start/reference/functions/get-translations) for dictionary entries.
+
+```ts
+import { msg } from 'gt-tanstack-start';
+import {
+  getMessages,
+  getTranslations,
+} from 'gt-tanstack-start/server';
+
+const status = msg('Ready');
+
+const m = await getMessages();
+const t = await getTranslations('account');
+
+m(status);
+t('heading');
+```

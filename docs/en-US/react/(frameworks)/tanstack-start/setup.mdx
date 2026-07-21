@@ -1,15 +1,17 @@
 ---
 
 title: Set up TanStack Start
-description: Initialize General Translation in a TanStack Start app, resolve the locale, and hydrate the provider from the root route.
+description: Register General Translation request middleware, initialize a TanStack Start app, resolve the locale, and hydrate the provider.
 
 ---
 
-`gt-tanstack-start` is set up entirely in the root route. You call [`initializeGT`](/docs/node/reference/functions/initialize-gt) at the module level, resolve the request locale with `parseLocale`, load a translations snapshot in the route loader, and pass both to [`<GTProvider>`](/docs/react/reference/components/gt-provider). Because TanStack Start renders on the server, the provider needs the locale and translations up front, so this pattern hydrates them from the loader.
+`gt-tanstack-start` uses global request middleware and root-route initialization. The middleware creates request-local state for server code, while the root loader hydrates [`<GTProvider>`](/docs/react/reference/components/gt-provider) with the locale and translations.
 
 This page covers the TanStack Start-specific setup. For the full path including installation and the CLI, follow the [TanStack Start Quickstart](/docs/react/tanstack-start-quickstart).
 
 *Warning: `gt-tanstack-start` is experimental and may have breaking changes.*
+
+*Note: `gt-tanstack-start` is ESM-only. Use `import` syntax rather than CommonJS `require()`.*
 
 ## Load translations [#load-translations]
 
@@ -24,9 +26,28 @@ export default async function loadTranslations(locale: string) {
 
 The CLI generates these files when you run `npx gt translate`.
 
+## Register request middleware [#middleware]
+
+Create `src/start.ts` and register [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) as global request middleware. Keep TanStack Start's Cross-Site Request Forgery (CSRF) middleware when defining a custom start instance.
+
+```ts title="src/start.ts"
+import { createCsrfMiddleware, createStart } from '@tanstack/react-start';
+import { gtMiddleware } from 'gt-tanstack-start/server';
+
+const csrfMiddleware = createCsrfMiddleware({
+  filter: ({ handlerType }) => handlerType === 'serverFn',
+});
+
+export const startInstance = createStart(() => ({
+  requestMiddleware: [csrfMiddleware, gtMiddleware],
+}));
+```
+
+The middleware resolves the locale, region, and internationalization setting once per request. It makes the locale and internationalization setting available to the [server-only functions](/docs/react/tanstack-start/using-server-functions).
+
 ## Initialize and resolve the locale [#initialize]
 
-`initializeGT`, `parseLocale`, and [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) are all imported from `gt-tanstack-start`:
+[`initializeGT`](/docs/react/reference/config#initialize), `parseLocale`, and [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) are all imported from `gt-tanstack-start`:
 
 - **`initializeGT`** — call once at the module level of the root route. Spread in your `gt.config.json` and pass `loadTranslations`.
 - **`parseLocale`** — reads the locale from the request cookie and `Accept-Language` header on the server, and from the cookie in the browser. It persists the resolved locale back to the cookie.
@@ -86,6 +107,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 ```
 
 `<GTProvider>` requires both `locale` and `translations` here — unlike Next.js, where the server resolves them, or React Native, where the provider loads them itself.
+
+`initializeGT` must run before `gtMiddleware` handles a request. Finish this root-route setup before starting the development server.
 
 ## Mark content for translation [#content]
 
