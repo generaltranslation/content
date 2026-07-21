@@ -34,7 +34,7 @@ Use the CLI when you want to:
 - Keep translations in version control alongside your source content.
 
 ## Quickstart [#quickstart]
-Install `gt`, configure your project, and run your first translation.
+Install `gt`, configure your project, and run your first translation. You need an existing project with a `package.json` and Node.js installed.
 
 ### 1. Install `gt`
 
@@ -74,13 +74,19 @@ Run the setup wizard to detect your framework, create a `gt.config.json`, and ge
 npx gt init
 ```
 
+<Callout type="warning">
+  **Warning:** `gt init` is an interactive wizard and needs a terminal. In CI or any non-interactive shell it cannot prompt, so it may exit without creating `gt.config.json` or writing credentials, sometimes with a success exit code. For those environments, use [Non-interactive setup for CI](#ci-setup).
+</Callout>
+
 The wizard sets your default locale and target locales, chooses where translations are stored, and writes your API key and Project ID to `.env.local`. See [Configuring the CLI](/docs/cli/guides/configuring) to set this up in detail, or [`gt init`](/docs/cli/reference/commands/init) for the full command.
+
+*Note: You should now have a `gt.config.json` at your project root and a `.env.local` file containing `GT_API_KEY` and `GT_PROJECT_ID`.*
 
 ### 3. Add your production API key
 
 The [`translate`](/docs/cli/reference/commands/translate) command requires a production API key and Project ID. The wizard can generate these for you, or create them on the [API Keys page](https://generaltranslation.com/dashboard). Set them as environment variables so the CLI can read them.
 
-```bash title=".env"
+```bash title=".env.local"
 GT_API_KEY=your-api-key
 GT_PROJECT_ID=your-project-id
 ```
@@ -96,3 +102,43 @@ npx gt translate
 ```
 
 Translations are saved to your codebase, ready to commit. Run this in your CI pipeline before you build for production. See [Generating translations](/docs/cli/guides/generating-translations) for the full workflow.
+
+## Non-interactive setup for CI [#ci-setup]
+
+The setup wizard needs an interactive terminal, so it cannot run in CI or other non-interactive environments. Set those up by hand: commit a `gt.config.json`, provide your credentials as environment variables, and run `translate` against that config.
+
+### 1. Add a `gt.config.json`
+
+Write the file yourself and commit it so the CLI knows what to translate. A minimal config sets the source and target locales and a `files` entry so `translate` has something to work on. The `gt` entry below stores framework translations (from `gt-next`, `gt-react`, or `gt-react-native`) locally at the given path.
+
+```json title="gt.config.json"
+{
+  "$schema": "https://assets.gtx.dev/config-schema.json",
+  "defaultLocale": "en",
+  "locales": ["fr", "es"],
+  "files": {
+    "gt": {
+      "output": "public/i18n/[locale].json"
+    }
+  }
+}
+```
+
+To translate standalone files instead, add a file type such as `json` or `mdx` with an `include` glob in place of (or alongside) the `gt` entry. See [Configuring the CLI](/docs/cli/guides/configuring) for the file and storage options, and the [configuration reference](/docs/cli/reference/config) for every field.
+
+### 2. Set your credentials
+
+Set your production API key and Project ID as environment variables in your CI provider's secret settings, not in a committed file. Create them on the [API Keys page](https://generaltranslation.com/dashboard).
+
+```bash
+GT_API_KEY=your-api-key
+GT_PROJECT_ID=your-project-id
+```
+
+### 3. Run the translate command
+
+Run `translate` before you build for production. Pass `--config` to point at your config file.
+
+```bash
+npx gt translate --config gt.config.json
+```

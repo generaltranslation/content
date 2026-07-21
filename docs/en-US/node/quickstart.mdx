@@ -31,33 +31,35 @@ Install the library, initialize it, bind a locale per request, and translate a s
 
 ### 1. Install `gt-node`
 
-Install `gt-node` as a dependency and the [`gt` CLI](/docs/cli/quickstart) as a dev dependency.
+Install `gt-node` and Express as dependencies and the [`gt` CLI](/docs/cli/quickstart) as a dev dependency.
 
 <Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
   <Tab value="npm">
     ```bash
-    npm install gt-node && npm install gt --save-dev
+    npm install gt-node express && npm install gt --save-dev
     ```
   </Tab>
 
   <Tab value="yarn">
     ```bash
-    yarn add gt-node && yarn add --dev gt
+    yarn add gt-node express && yarn add --dev gt
     ```
   </Tab>
 
   <Tab value="bun">
     ```bash
-    bun add gt-node && bun add --dev gt
+    bun add gt-node express && bun add --dev gt
     ```
   </Tab>
 
   <Tab value="pnpm">
     ```bash
-    pnpm add gt-node && pnpm add --save-dev gt
+    pnpm add gt-node express && pnpm add --save-dev gt
     ```
   </Tab>
 </Tabs>
+
+*Note: The server code below uses ES module `import` syntax. Set `"type": "module"` in your `package.json` so Node.js can run it.*
 
 ### 2. Initialize the library
 
@@ -77,7 +79,7 @@ initializeGT({
 
 Wrap each request in `withGT` so translation functions know the target locale. Use [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) to detect it from the `Accept-Language` header.
 
-```ts title="server.js"
+```js title="server.js"
 import express from 'express';
 import { withGT, getRequestLocale } from 'gt-node';
 
@@ -89,21 +91,43 @@ app.use((req, res, next) => withGT(getRequestLocale(req), () => next()));
 
 Inside a handler, await `getGT` to get a translation function for the request's locale, then translate strings. Interpolate values with ICU placeholders.
 
-```ts title="server.js"
+```js title="server.js"
 import { getGT } from 'gt-node';
 
 app.get('/api/greeting', async (req, res) => {
   const gt = await getGT();
   res.json({ message: gt('Hello, {name}!', { name: 'Alice' }) });
 });
+
+app.listen(3000, () => console.log('Listening on http://localhost:3000'));
 ```
 
-### 5. Generate translations
+### 5. Run and verify
+
+Start the server and request the endpoint. Before you generate translations, the handler returns your source string, which confirms the service is wired up correctly.
+
+```bash
+node server.js
+```
+
+In another terminal, send a request:
+
+```bash
+curl http://localhost:3000/api/greeting
+```
+
+```json title="Output"
+{"message":"Hello, Alice!"}
+```
+
+### 6. Generate translations
 
 Run the CLI before you deploy to production so translations are available at runtime.
 
 ```bash
 npx gt translate
 ```
+
+*Note: `gt translate` reads a `gt.config.json` and requires a Project ID and API key. Run [`npx gt init`](/docs/cli/quickstart) first to create them.*
 
 See [Translating strings](/docs/node/guides/translating-strings) for when to use `getGT`, `msg`, and `tx`, and [Configuring gt-node](/docs/node/guides/configuring) for credentials and delivery.

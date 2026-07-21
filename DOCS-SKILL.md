@@ -250,12 +250,12 @@ The **overview** section doubles as a **landing hub**: its `meta.json` lists the
 
 ### Machine-readable outputs
 
-The docs are written to be consumed by LLMs and agents, not only humans. Alongside the filetree, publish two machine-readable maps at the repo root, both **generated from the** `meta.json` **filetree** (never hand-edited):
+The publishing app generates two machine-readable maps from the docs source:
 
-- `llms.txt` — an [llmstxt.org](https://llmstxt.org/)-style index for LLMs and agents: an H1, a one-line blockquote summary, then per-section lists of `- [Title](url): description` links.
-- `sitemap.md` — a linked, hierarchical map of every published page in navigation order.
+- `llms.txt` — an [llmstxt.org](https://llmstxt.org/)-style index for LLMs and agents, grouped by section.
+- `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
-Regenerate both whenever you add, rename, remove, or reorder pages, so they stay in sync with the `meta.json` filetree. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
+Do not add hand-written copies to this repository. When you add, rename, remove, or reorder pages, keep the `meta.json` filetree valid so the publishing app generates current output. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
 
 ### Agent-navigable by default
 
@@ -276,7 +276,7 @@ Structure it in this order:
 3. **Core usage** — the canonical patterns the agent should follow (for example, wrap user-facing strings in `<T>`, use `useGT()` for dynamic strings, keep locale configuration in one place). Show minimal, commented code.
 4. **Commands** — a short cheat-sheet of the CLI commands the agent will run (`npx gt configure`, `npx gt translate`, and so on) and when to run each.
 5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, hand-edit generated translation files).
-6. **Links** — point to `llms.txt`, the sitemap, and the most useful pages for deeper detail.
+6. **Links** — point to `llms.txt`, `sitemap.xml`, and the most useful pages for deeper detail.
 
 Document only capabilities that exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement). This file is written by an agent connected to the product codebase; this guide defines its **shape**, not its exact contents.
 
@@ -407,7 +407,7 @@ A few optional fields appear on specific page types:
 ## Page structure
 
 1. **Frontmatter title:** the docs layout renders the `title` as the page H1. Do not add a `#` heading to the body.
-2. **Intro:** 1–3 short sentences with no heading, stating what the page is and when to use it. Optionally one more italicized short line for constraints or scope.
+2. **Intro:** 1–3 short sentences with no heading that add substance beyond the `description`: behavior, inputs, or when to use it. The docs layout already renders the `description` beneath the title, so the intro must not restate or paraphrase it. On reference pages especially, do not open with the description's summary sentence. Optionally one more italicized short line for constraints or scope.
 3. **Sections:** use `##` for top-level body sections.
 
 
@@ -445,7 +445,7 @@ Cover, in this order (drop any part that does not yet exist rather than inventin
 
 1. **Intro** — one or two sentences on why General Translation is built to be agent- and LLM-friendly (open-source libraries, predictable configuration, machine-readable docs).
 2. **Drop-in agent guide** — the full agent guide (what to use, setup, core usage, commands, do/don't, links) embedded in a **single copyable code block** so a developer can paste it straight into their project's `AGENTS.md`, `CLAUDE.md`, or tool instructions. Use a fenced block with a `title="AGENTS.md"` and a wider outer fence (four backticks) so the guide's own inner code fences render as literal text.
-3. **Point agents at the docs** — link the machine-readable entry points (`llms.txt` and the sitemap) and show how to add the docs as context in an agent.
+3. **Point agents at the docs** — link the machine-readable entry points (`llms.txt` and `sitemap.xml`) and show how to add the docs as context in an agent.
 4. **MCP server and agent skills** — if a General Translation MCP server or agent skill exists, show how to install and use it; otherwise omit this part.
 5. **Editor-specific tips** — short, parallel bullets for the common agents (Cursor, Claude Code, Copilot), only where the guidance genuinely differs. Use tabs when the shape is identical (see Code blocks).
 6. **Best practices** — a short decision list of what to hand an agent versus what to verify by hand (for example, let it wire up `<T>` components, but always review generated translation context and locale configuration).
@@ -457,7 +457,7 @@ Only document capabilities that actually exist, and resolve anything uncertain a
 A "common workflow" section is a bulleted roundup that points readers to the main tasks or settings from a landing page (as in the Dashboard get-started **Key workflows** and **Configuration** lists). Each bullet starts with the action, then a short description, then a link:
 
 ```text
-- **Define context and key terms for translation:** use Context Groups to guide terminology and style across Projects. See [Define translation context](/docs/platform/dashboard/guides/translation-context).
+- **Define context and key terms for translation:** use Context Groups to guide terminology and style across Projects. See [Define translation context](/docs/platform/dashboard/guides/adding-translation-context).
 ```
 
 Use common workflow sections on **Get Started pages and other overview/landing pages** to surface the primary tasks, instead of duplicating full how-tos inline. Do not use them mid-guide, where ordered steps belong.
@@ -695,6 +695,7 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 ## Consistency checks before finishing
 
 - The page reflects real system behavior (verified against code and existing docs), not just restated formatting.
+- The intro does not restate the frontmatter `description` (the layout renders the description under the title); the body opens with new detail.
 - Depth and vocabulary match the page audience.
 - Sections are grouped into a few meaningful H2s with H3 subsections, not many small one-off H2s. Consolidate or restructure if there are more than 6 H2 subsections.
 - First mention of the product on the page (and in the description) uses **General Translation**, not GT.
@@ -715,5 +716,5 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
-- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, and `llms.txt` and `sitemap.md` have been regenerated so they list only existing pages.
+- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, so the publishing app can generate current `llms.txt` and `sitemap.xml` output.
 - No typos; body prose sentences end with periods, and so do descriptions (a description that is a question ends with `?`; section-root tab subtitles take no period).
