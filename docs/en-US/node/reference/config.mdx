@@ -5,7 +5,7 @@ description: Configure the General Translation gt-node library with initializeGT
 
 ---
 
-The `gt-node` library is configured through a single [`initializeGT`](/docs/node/reference/functions/initialize-gt) call at startup. `gt-node` does not read `gt.config.json` or environment variables automatically — every value is read from the object you pass to `initializeGT`. This page documents the keys that call accepts.
+The `gt-node` library is configured through a single [`initializeGT`](/docs/node/reference/functions/initialize-gt) call at startup. It does not read `gt.config.json` automatically, but it does use environment variables as fallbacks for credentials. This page documents the keys that call accepts.
 
 ## Overview [#overview]
 
@@ -17,7 +17,6 @@ import { initializeGT } from 'gt-node';
 initializeGT({
   defaultLocale: 'en',
   locales: ['en', 'es', 'fr'],
-  projectId: process.env.GT_PROJECT_ID,
 });
 ```
 
@@ -38,9 +37,9 @@ The configuration type is `InitializeGTParams`, the combination of the locale-re
 | --- | --- | --- | --- | --- |
 | [`defaultLocale`](#default-locale) | Source and fallback locale. | `string` | Yes | `'en'` |
 | [`locales`](#locales) | Supported target locales. | `string[]` | Yes | `[defaultLocale]` |
-| [`projectId`](#project-id) | Project ID; enables the General Translation CDN loader when set. | `string` | Yes | — |
-| [`devApiKey`](#dev-api-key) | Development API key for on-demand translation. | `string` | Yes | — |
-| [`apiKey`](#api-key) | Production API key. | `string` | Yes | — |
+| [`projectId`](#project-id) | Project ID; enables the General Translation CDN loader when set. | `string` | Yes | `GT_PROJECT_ID` if set |
+| [`devApiKey`](#dev-api-key) | Development API key for on-demand translation. | `string` | Yes | `GT_DEV_API_KEY` if set |
+| [`apiKey`](#api-key) | Production API key. | `string` | Yes | `GT_API_KEY` if set |
 | [`cacheUrl`](#cache-url) | Translation cache host. `null` disables remote loading. | `string \| null` | Yes | GT CDN |
 | [`runtimeUrl`](#runtime-url) | Runtime translation host. `null` disables it. | `string \| null` | Yes | GT runtime |
 | [`loadTranslations`](#load-translations) | Custom loader returning translations for a locale. | `TranslationsLoader` | Yes | — |
@@ -53,6 +52,18 @@ The configuration type is `InitializeGTParams`, the combination of the locale-re
 | [`modelProvider`](#model-provider) | Model provider key mirrored from `gt.config.json`. Not consumed by the runtime. | `string` | Yes | — |
 
 *Note: `initializeGT` also accepts internal, underscore-prefixed keys (`_versionId`, `_branchId`, `_disableDevHotReload`) and a `files` object used by the CLI compiler. These are not part of the stable public surface and are omitted here.*
+
+## Credentials from the environment [#environment]
+
+When a credential is omitted from the configuration object, `initializeGT` reads its matching environment variable:
+
+| Option | Environment variable | Precedence |
+| --- | --- | --- |
+| `projectId` | `GT_PROJECT_ID` | Explicit nonempty option, then environment |
+| `devApiKey` | `GT_DEV_API_KEY` | Explicit nonempty option, then environment |
+| `apiKey` | `GT_API_KEY` | Explicit nonempty option, then environment |
+
+An empty explicit string is treated as missing and falls back to the environment value. Other configuration fields, including locales and translation loaders, are not read from the environment.
 
 ## `defaultLocale` [#default-locale]
 
@@ -76,19 +87,19 @@ initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'fr', 'ja'] });
 
 ## `projectId` [#project-id]
 
-**Type** `string` · **Optional**
+**Type** `string` · **Optional** · **Default** `GT_PROJECT_ID` if set
 
 Your General Translation Project ID, required for General Translation cloud services. When set (without a custom `loadTranslations`), it enables the CDN loader that fetches translations at runtime.
 
 ## `devApiKey` [#dev-api-key]
 
-**Type** `string` · **Optional**
+**Type** `string` · **Optional** · **Default** `GT_DEV_API_KEY` if set
 
 A development API key. Together with a `projectId`, it enables on-demand runtime translation and development hot reload, so [`getGT`](/docs/node/reference/functions/get-gt), [`getMessages`](/docs/node/reference/functions/get-messages), and [`tx`](/docs/node/reference/functions/tx) can translate new content while you develop. Hot reload only runs when `NODE_ENV` is not `'production'`.
 
 ## `apiKey` [#api-key]
 
-**Type** `string` · **Optional**
+**Type** `string` · **Optional** · **Default** `GT_API_KEY` if set
 
 A production API key. Set it when you need runtime translation in production. For most deployments you generate translations ahead of time with the [`gt` CLI](/docs/cli/quickstart) instead.
 
@@ -186,6 +197,5 @@ import { initializeGT } from 'gt-node';
 initializeGT({
   defaultLocale: 'en',
   locales: ['en', 'es', 'fr', 'ja'],
-  projectId: process.env.GT_PROJECT_ID,
 });
 ```
