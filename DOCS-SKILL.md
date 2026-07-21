@@ -376,13 +376,13 @@ Use this exact structure (blank line after the opening `---`, blank line before 
 ```text
 ---
 
-title: Adding annotations
+title: Adding Annotations
 description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard
 
 ---
 ```
 
-- `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
+- `title`: **title case** — capitalize major words and proper/product names. Keep articles, coordinating conjunctions, and short prepositions lowercase unless they are the first or last word (`Useful Links`, `Terms of Service`; not `Useful links` or `Terms Of Service`). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO, naming the task the guide accomplishes and the relevant tool. When the guide walks through several steps, add a `: this guide covers …` clause listing them. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to translate files with the generaltranslation library: this guide covers uploading a source file, enqueuing translation, checking status, and downloading the translated file." / "What are locale codes, and how are they used in the General Translation stack?"
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
@@ -417,7 +417,7 @@ A few optional fields appear on specific page types:
 - **H2 (**`##`**)** for top-level sections, **H3 (**`###`**)** for subsections, **H4 (**`####`**)** only when a third level is genuinely needed.
 - **Prefer a few larger sections over many small ones.** Group related material under a small number of meaningful H2s, using H3 (and sparingly H4) subsections. If several candidate H2s are all facets of one topic, make them H3s under a single H2 instead of a long flat list of H2s.
 - **Do not skip heading levels** (do not jump from `##` to `####`).
-- Headings are **sentence case** (see Voice and formatting).
+- Subtitles and section headings are **sentence case**: capitalize only the first word and proper/product names (see Voice and formatting).
 - **Step-by-step sections** use numbered H3 headings (`### 1. Install`) nested under a single H2 for that section — on a Quickstart page the steps live under a `## Quickstart [#quickstart]` H2 (our Get Started convention). Do not use numbered H2s for steps.
 - **Custom anchors** for stable linking: append `[#anchor]` to **every H2 heading only** (not H3 or H4) so links do not break when the title changes. Use a **concise, meaningful slug** (lowercase, hyphenated, **3 words maximum**) — a short form of the heading rather than its full kebab-case.
 
