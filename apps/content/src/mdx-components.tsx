@@ -8,7 +8,6 @@ import { TypeTable } from 'fumadocs-ui/components/type-table';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 
 import { APIPage } from '@/lib/api-page';
-import Asciinema from '@/components/Asciinema';
 import Video from '@/components/Video';
 
 import type { MDXComponents } from 'mdx/types';
@@ -46,7 +45,7 @@ const customComponents = {
   CardHeader: StubComponent,
   CardTitle: StubComponent,
   SupportedLocales: StubComponent,
-  Asciinema,
+  Asciinema: StubComponent,
   Video,
 } satisfies MDXComponents;
 
