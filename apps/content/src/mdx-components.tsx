@@ -9,7 +9,6 @@ import defaultMdxComponents from 'fumadocs-ui/mdx';
 
 import { APIPage } from '@/lib/api-page';
 import Asciinema from '@/components/Asciinema';
-import Lottie from '@/components/Lottie';
 import Video from '@/components/Video';
 
 import type { MDXComponents } from 'mdx/types';
@@ -48,7 +47,6 @@ const customComponents = {
   CardTitle: StubComponent,
   SupportedLocales: StubComponent,
   Asciinema,
-  Lottie,
   Video,
 } satisfies MDXComponents;
 
