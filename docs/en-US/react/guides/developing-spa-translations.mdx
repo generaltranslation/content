@@ -61,30 +61,61 @@ Install `@generaltranslation/compiler` as a development dependency:
 
 ### 2. Add the compiler plugin
 
-Add the plugin for your bundler. For Vite:
+Add the plugin for your bundler.
 
-```ts title="vite.config.ts"
-import react from '@vitejs/plugin-react';
-import { vite as gtCompiler } from '@generaltranslation/compiler'; // [!code highlight]
-import { defineConfig } from 'vite';
-import gtConfig from './gt.config.json'; // [!code highlight]
+<Tabs items={['Vite', 'webpack']}>
+  <Tab value="Vite">
 
-export default defineConfig({
-  plugins: [react(), gtCompiler({ ...gtConfig })], // [!code highlight]
-});
-```
+    ```ts title="vite.config.ts"
+    import react from '@vitejs/plugin-react';
+    import { vite as gtCompiler } from '@generaltranslation/compiler'; // [!code highlight]
+    import { defineConfig } from 'vite';
+    import gtConfig from './gt.config.json'; // [!code highlight]
 
-<Accordions>
-  <Accordion title="Not using Vite?">
+    export default defineConfig({
+      plugins: [react(), gtCompiler({ ...gtConfig })], // [!code highlight]
+    });
+    ```
 
-  `@generaltranslation/compiler` also exports `webpack`, `rollup`, and `esbuild` plugins. Import the plugin that matches your bundler.
+  </Tab>
+  <Tab value="webpack">
 
-  ```ts
-  import { webpack as gtCompiler } from '@generaltranslation/compiler';
-  ```
+    Install `dotenv` as a development dependency so webpack can read `.env.local`, then add the compiler before the rest of your plugins. Use `DefinePlugin` to expose only development credentials to browser code:
 
-  </Accordion>
-</Accordions>
+    ```js title="webpack.config.mjs"
+    import { webpack as gtCompiler } from '@generaltranslation/compiler';
+    import dotenv from 'dotenv';
+    import webpack from 'webpack';
+    import gtConfig from './gt.config.json' with { type: 'json' };
+
+    dotenv.config({ path: '.env.local' });
+
+    export default (_env, argv) => {
+      const isProduction = (argv.mode ?? 'production') === 'production';
+
+      return {
+        // Keep your existing webpack settings.
+        plugins: [
+          gtCompiler({ ...gtConfig }),
+          new webpack.DefinePlugin({
+            'process.env.GT_PROJECT_ID': JSON.stringify(
+              isProduction ? '' : (process.env.GT_PROJECT_ID ?? '')
+            ),
+            'process.env.GT_DEV_API_KEY': JSON.stringify(
+              isProduction ? '' : (process.env.GT_DEV_API_KEY ?? '')
+            ),
+          }),
+        ],
+      };
+    };
+    ```
+
+    See the complete [`gt-react` webpack example](https://github.com/generaltranslation/gt/tree/main/examples/webpack-spa) for loaders, local translation files, and development server settings.
+
+  </Tab>
+</Tabs>
+
+`@generaltranslation/compiler` also exports `rollup` and `esbuild` plugins.
 
 ### 3. Add development credentials
 
@@ -94,23 +125,46 @@ Get a development API key at [dash.generaltranslation.com](https://dash.generalt
 npx gt auth
 ```
 
-Then add your project ID and development API key to `.env.local`:
+Then add your project ID and development API key to `.env.local` and pass them to your initialization function:
 
-```bash title=".env.local"
-VITE_GT_PROJECT_ID="your-project-id"
-VITE_GT_DEV_API_KEY="your-dev-api-key"
-```
+<Tabs items={['Vite', 'webpack']}>
+  <Tab value="Vite">
 
-And, pass these to your initialization function:
+    ```bash title=".env.local"
+    VITE_GT_PROJECT_ID="your-project-id"
+    VITE_GT_DEV_API_KEY="your-dev-api-key"
+    ```
 
-```ts
-await initializeGTSPA({
-  ...gtConfig,
-  projectId: import.meta.env.VITE_GT_PROJECT_ID,
-  devApiKey: import.meta.env.VITE_GT_DEV_API_KEY,
-  loadTranslations,
-});
-```
+    ```ts
+    await initializeGTSPA({
+      ...gtConfig,
+      projectId: import.meta.env.VITE_GT_PROJECT_ID,
+      devApiKey: import.meta.env.VITE_GT_DEV_API_KEY,
+      loadTranslations,
+    });
+    ```
+
+  </Tab>
+  <Tab value="webpack">
+
+    ```bash title=".env.local"
+    GT_PROJECT_ID="your-project-id"
+    GT_DEV_API_KEY="your-dev-api-key"
+    ```
+
+    ```ts
+    await initializeGTSPA({
+      ...gtConfig,
+      projectId: process.env.GT_PROJECT_ID,
+      devApiKey: process.env.GT_DEV_API_KEY,
+      loadTranslations,
+    });
+    ```
+
+    The webpack config above replaces both values with empty strings in production builds, so development credentials are not included in the production bundle.
+
+  </Tab>
+</Tabs>
 
 <Callout type="warn">
 
