@@ -1,7 +1,7 @@
 ---
 
 title: Configuring Sanity
-description: "How to configure the General Translation gt-sanity plugin: this guide covers locales, document filters, field-level localization, credentials, language fields, and singletons."
+description: "How to configure the General Translation gt-sanity plugin: this guide covers locales, document filters, field-level localization, field exclusion, credentials, language fields, and singletons."
 related:
   links:
     - /docs/integrations/sanity/guides/translating-content
@@ -137,7 +137,7 @@ gtPlugin({
 });
 ```
 
-The plugin generates `internationalizedArray*` schema types from `sourceLocale` and `locales`, together with an inline per-locale editing UI. Use the generated types in your schemas.
+Field-level localization is powered by [`sanity-plugin-internationalized-array`](https://github.com/sanity-io/sanity-plugin-internationalized-array), the reference Sanity plugin. `gtPlugin` configures it from `sourceLocale` and `locales`, and the native plugin registers the `internationalizedArray*` schema types and the Studio editing UI — per-language add buttons, language labels, and field actions all behave exactly as they do with the standalone plugin. Use the registered types in your schemas.
 
 ```ts
 defineField({
@@ -146,13 +146,35 @@ defineField({
 });
 ```
 
-By default, the plugin generates `string` and `text` types. Use `fieldTypes` to add `block` (Portable Text) or custom object definitions.
+By default, the plugin registers `string` and `text` types. Use `fieldTypes` to add `block` (Portable Text) or custom object definitions.
 
 ```ts
 internationalizedArray: {
   enabled: true,
   fieldTypes: ['string', 'text', 'block', { name: 'seo', type: 'seoFields' }],
 },
+```
+
+If you already register `sanity-plugin-internationalized-array` in your Studio yourself, keep your setup and leave `internationalizedArray` unset so the schema types are only registered once. Translation reads and writes the stored `{ _key, _type, language, value }` data regardless of which plugin instance registered the types, so setting `translationLevel` (and `translateDocuments`) is all GT needs.
+
+```ts
+import { internationalizedArray } from 'sanity-plugin-internationalized-array';
+
+plugins: [
+  internationalizedArray({
+    languages: [
+      { id: 'en', title: 'English' },
+      { id: 'es', title: 'Spanish' },
+    ],
+    fieldTypes: ['string'],
+  }),
+  gtPlugin({
+    sourceLocale: 'en',
+    locales: ['es'],
+    translateDocuments: [{ type: 'post' }],
+    translationLevel: 'internationalizedArray',
+  }),
+],
 ```
 
 To mix both strategies, set `translationLevel` to `'mixed'` and list the field-level document types in `fieldLevelDocuments`.
@@ -171,6 +193,42 @@ gtPlugin({
 Document types localized in place are excluded automatically from `@sanity/document-internationalization`, so they do not receive language badges or per-locale document templates. During import, the plugin updates only the target locale in the source document and preserves every other language.
 
 See the [plugin configuration reference](/docs/integrations/sanity/reference/plugin-configuration#field-level) for every field-level option.
+
+## Exclude fields from translation [#exclude-fields]
+
+Mark a field in your schema to keep its content out of translation. Set `options.gt.exclude` on the field definition.
+
+```ts title="schema/article.ts"
+defineField({
+  name: 'internalNotes',
+  type: 'string',
+  options: { gt: { exclude: true } },
+});
+```
+
+Excluded fields are never sent for translation, so translated documents keep the source value unchanged. Exclusion applies at any nesting depth.
+
+The plugin also honors the exclusion options of the standard Sanity localization plugins, so if your schema already uses them you do not need to add a second mark:
+
+- `options.documentInternationalization.exclude` from `@sanity/document-internationalization`
+- `options.aiAssist.exclude` from `@sanity/assist`
+
+To exclude every occurrence of a custom type, set the option on the type definition itself.
+
+```ts title="schema/objects/legalDisclaimer.ts"
+export const legalDisclaimer = defineType({
+  name: 'legalDisclaimer',
+  type: 'object',
+  // Excludes this type everywhere it is used
+  options: { gt: { exclude: true } },
+  fields: [
+    defineField({ name: 'jurisdiction', type: 'string' }),
+    defineField({ name: 'text', type: 'text' }),
+  ],
+});
+```
+
+For rules that target documents by ID or transform values per locale — such as slug deduplication — use the plugin-level [`ignoreFields`, `skipFields`, and `dedupeFields`](/docs/integrations/sanity/reference/plugin-configuration#field-matchers) options instead.
 
 ## Configure singleton documents [#singletons]
 

@@ -176,15 +176,21 @@ gtPlugin({
 
 When `true`, the plugin adds the `@sanity/document-internationalization` plugin with language badges, a translation menu, and per-language document templates. It uses the `type` entries in [`translateDocuments`](#translate-documents) as the schema types and `[sourceLocale, ...locales]` as the supported languages, so it only takes effect when `translateDocuments` includes document types. Document types localized in place with internationalized arrays are excluded automatically. Set to `false` to manage internationalization yourself.
 
+If you already register `@sanity/document-internationalization` in your Studio, keep your setup and set this option to `false` so the plugin (and its `translation.metadata` document type) is only registered once — two registrations produce a duplicate schema type error. Translation works with your instance unchanged: the plugin reads and writes documents through the [`languageField`](#language-field) and `translation.metadata` documents, regardless of which registration added them. Use the same language IDs and language field in both configurations.
+
 ## Field-level localization [#field-level]
 
-Field-level localization stores every locale's value in one document as an internationalized array. The stored data uses the same `{ _key, _type, language, value }` item shape as `sanity-plugin-internationalized-array`, so existing internationalized-array content does not need a migration.
+Field-level localization stores every locale's value in one document as an internationalized array. It is powered by [`sanity-plugin-internationalized-array`](https://github.com/sanity-io/sanity-plugin-internationalized-array): `gtPlugin` configures the native plugin, which registers the `internationalizedArray*` schema types and the Studio editing UI. The stored data uses the `{ _key, _type, language, value }` item shape, so existing internationalized-array content does not need a migration — and translation works the same whether the types were registered by `gtPlugin` or by your own `internationalizedArray()` registration.
+
+<Callout type="info">
+  **Changed in v3:** field-level localization is provided by `sanity-plugin-internationalized-array` instead of GT-generated types and components. `createInternationalizedArrayTypes`, `FieldLevelUIComponents`, and the `typePrefix`, `includeCompatibilityTypes`, and `components` options were removed; passing a removed option logs a warning and it is ignored.
+</Callout>
 
 ### `internationalizedArray` [#internationalized-array]
 
 **Type** `GTFieldLevelLocalizationConfig` · **Optional**
 
-Configures the schema types and Studio input components used for field-level localization. Locale identity always comes from `sourceLocale` and `locales`.
+Configures `sanity-plugin-internationalized-array` for field-level localization. Locale identity always comes from `sourceLocale` and `locales`; leave this option unset if you register the native plugin yourself, so the schema types are only registered once.
 
 ```ts
 type GTFieldLevelLocalizationConfig = {
@@ -192,19 +198,16 @@ type GTFieldLevelLocalizationConfig = {
   fieldTypes?: FieldLevelFieldType[]; // default: ['string', 'text']
   languageTitles?: Record<string, string>;
   getLanguageTitle?: (locale: string) => string;
-  typePrefix?: string; // default: 'internationalizedArray'
-  includeCompatibilityTypes?: boolean; // default: true
-  components?: {
-    input?: ComponentType<ArrayOfObjectsInputProps> | false;
-    item?: ComponentType<ObjectItemProps> | false;
-    field?: ComponentType<FieldProps> | false;
-  };
+  defaultLanguages?: string[]; // default: [sourceLocale]
+  // Passed through to sanity-plugin-internationalized-array
+  apiVersion?: string;
+  buttonLocations?: ('field' | 'unstable__fieldAction' | 'document')[];
+  buttonAddAll?: boolean;
+  languageDisplay?: 'titleOnly' | 'codeOnly' | 'titleAndCode';
 };
 
 type FieldLevelFieldType =
-  | 'string'
-  | 'text'
-  | 'block'
+  | string
   | {
       name: string;
       type: string;
@@ -215,7 +218,7 @@ type FieldLevelFieldType =
     };
 ```
 
-The built-in `fieldTypes` shortcuts are `string`, `text`, and `block` (Portable Text). An object entry defines a custom generated type. `getLanguageTitle` overrides `languageTitles` when both are set. Each `components` slot accepts a Studio component or `false` to use Sanity's default rendering.
+The `fieldTypes` entries accept a Sanity type name (`'string'`, `'text'`), the `'block'` shortcut (a Portable Text array), or an object entry defining a custom wrapped field; an object entry named `seo` registers `internationalizedArraySeo`. `getLanguageTitle` overrides `languageTitles` when both are set. `defaultLanguages` controls which locales are pre-populated on empty localized fields and defaults to the source locale. `apiVersion`, `buttonLocations`, `buttonAddAll`, and `languageDisplay` are passed through to the native plugin unchanged.
 
 ### `fieldLevelLocalization` [#field-level-localization]
 
@@ -265,7 +268,7 @@ defineField({
 
 ## Field matchers [#field-matchers]
 
-`ignoreFields`, `dedupeFields`, and `skipFields` each take an array of `FieldMatcher` objects. A matcher targets fields by a JSONPath `property` expression and, optionally, restricts to one source document by `documentId`.
+`ignoreFields`, `dedupeFields`, and `skipFields` each take an array of `FieldMatcher` objects. A matcher targets fields by a JSONPath `property` expression and, optionally, restricts to one source document by `documentId`. To exclude a field everywhere it appears, prefer marking it in the schema with the [schema exclusion options](#schema-exclusion).
 
 ```ts
 type FieldMatcher = {
@@ -329,6 +332,32 @@ gtPlugin({
   ],
 });
 ```
+
+## Schema exclusion options [#schema-exclusion]
+
+Fields and types can be excluded from translation directly in the schema, without a plugin-config entry. During serialization, the plugin checks each schema definition's `options` for these namespaces and drops matches from the content sent for translation:
+
+| Option | Source plugin |
+| --- | --- |
+| `options.gt.exclude` | `gt-sanity` |
+| `options.documentInternationalization.exclude` | `@sanity/document-internationalization` |
+| `options.aiAssist.exclude` | `@sanity/assist` |
+
+Each accepts `boolean`; only an explicit `true` excludes. Exclusion applies at any nesting depth. Excluded content is never sent for translation, so translated documents keep the source value unchanged.
+
+```ts
+defineField({
+  name: 'internalNotes',
+  type: 'string',
+  options: { gt: { exclude: true } },
+});
+```
+
+Setting an exclusion option on a custom type definition's `options` excludes every occurrence of that type, matching the native plugins' "field or type" semantics. The legacy `localize: false` field property is also still honored.
+
+`gt-sanity` augments Sanity's schema option types (the `GTSchemaFieldOptions` interface) so `options.gt` type-checks on any field definition.
+
+*Note: schema exclusion marks a field by name and type; for rules that target a specific document by ID or transform values per locale, use [`ignoreFields`, `skipFields`, and `dedupeFields`](#field-matchers).*
 
 ## Serialization [#serialization]
 
@@ -437,6 +466,8 @@ Slug fields are *not* stopped by default, so a slug's `current` string is transl
 - `BaseDocumentSerializer`, `BaseDocumentDeserializer`, `BaseDocumentMerger` — the default serialize, deserialize, and merge implementations.
 - `defaultStopTypes`, `customSerializers` — the default stop types and serializer set.
 - `documentInternationalization` and its types (`DocumentInternationalizationConfig`, `Language`, `Metadata`, `TranslationReference`) — re-exported from `@sanity/document-internationalization`.
+- `internationalizedArray`, `internationalizedArrayLanguageFilter`, and `isInternationalizedArrayItemType`, plus the `InternationalizedArrayPluginConfig` and `InternationalizedArrayLanguage` types — re-exported from `sanity-plugin-internationalized-array`.
+- `GTSchemaFieldOptions` — the schema options interface behind `options.gt`. See [Schema exclusion options](#schema-exclusion).
 
 ## Complete example [#complete-example]
 

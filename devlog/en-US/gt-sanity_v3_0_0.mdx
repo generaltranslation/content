@@ -1,0 +1,96 @@
+---
+title: gt-sanity@3.0.0
+date: 2026-07-22
+authors: [brian]
+tags: ['gt-sanity', 'v3.0.0', 'sanity', 'cms', 'translation', 'major']
+---
+
+## Overview
+
+`gt-sanity` v3 doubles down on native Sanity behavior. Field-level localization is now powered by [`sanity-plugin-internationalized-array`](https://github.com/sanity-io/sanity-plugin-internationalized-array) — the reference Sanity plugin — instead of a GT-built Studio UI, and fields can now be excluded from translation directly in your schema with the same `options`-based pattern the standard Sanity localization plugins use.
+
+The goal: `gt-sanity` orchestrates the plugins the Sanity ecosystem already maintains (`@sanity/document-internationalization` for document-level, `sanity-plugin-internationalized-array` for field-level) and adds the translation workflow on top. Your Studio never behaves differently because GT is installed.
+
+---
+
+## What's new
+
+### Field-level localization runs on the reference plugin
+
+Enabling `fieldLevelLocalization` (or its `internationalizedArray` alias) now auto-configures `sanity-plugin-internationalized-array` from your `sourceLocale` and `locales`. The native plugin owns the `internationalizedArray*` schema types and the Studio editing UI — per-language add buttons, language labels, field actions — so Studio behavior always matches what Sanity users already know, and plugin updates arrive as fast as the upstream ships them.
+
+```typescript title="sanity.config.ts"
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr', 'ja'],
+  translateDocuments: [{ type: 'post' }],
+  fieldLevelLocalization: { enabled: true },
+  translationLevel: 'internationalizedArray',
+});
+```
+
+Nothing about the stored data changed: items are still `{ _key, _type, language, value }`, so existing content needs no migration. The config also gained native passthrough options: `defaultLanguages`, `buttonLocations`, `buttonAddAll`, `languageDisplay`, and `apiVersion`.
+
+### Bring your own plugin instance
+
+If you already register `sanity-plugin-internationalized-array` yourself, keep your setup. Translation detection is shape-based — it reads and writes the stored data, no matter who registered the schema types. Leave `fieldLevelLocalization` disabled so the types are only registered once, and opt documents into field-level translation with `translationLevel`:
+
+```typescript title="sanity.config.ts"
+plugins: [
+  internationalizedArray({
+    languages: [
+      { id: 'en', title: 'English' },
+      { id: 'es', title: 'Spanish' },
+    ],
+    fieldTypes: ['string'],
+  }),
+  gtPlugin({
+    sourceLocale: 'en',
+    locales: ['es'],
+    translateDocuments: [{ type: 'post' }],
+    translationLevel: 'internationalizedArray',
+  }),
+],
+```
+
+`gt-sanity` re-exports `internationalizedArray`, `internationalizedArrayLanguageFilter`, and `isInternationalizedArrayItemType` for direct use.
+
+### Exclude fields from translation in your schema
+
+Mark a field — or a whole type — instead of maintaining a parallel list in the plugin config:
+
+```typescript
+defineField({
+  name: 'internalNotes',
+  type: 'string',
+  options: { gt: { exclude: true } },
+});
+```
+
+The serializer also honors the exclusion options of the standard Sanity localization plugins, so one pattern covers everything:
+
+- `options.gt.exclude` — GT's own namespace
+- `options.documentInternationalization.exclude` — `@sanity/document-internationalization`
+- `options.aiAssist.exclude` — `@sanity/assist`
+
+Exclusion applies at any nesting depth, and setting it on a custom type definition's `options` excludes every occurrence of that type — matching the native plugins' "field or type" semantics. `options.gt` is fully typed via declaration merging, and the id-based `ignoreFields` / `skipFields` / `dedupeFields` plugin options remain for cross-document rules like slug deduplication.
+
+---
+
+## Breaking changes
+
+### GT's field-level Studio UI is removed
+
+The `createInternationalizedArrayTypes` export and the `FieldLevelUIComponents` type are gone, along with the `typePrefix`, `includeCompatibilityTypes`, and `components` options on `GTFieldLevelLocalizationConfig` — none have a native equivalent. Passing a removed option logs a warning and it is ignored. Data created with a custom `typePrefix` is no longer detected; standard `internationalizedArray*` data is unaffected.
+
+### Deeper `localize: false` enforcement
+
+Exclusion (schema options and the legacy `localize: false`) now also applies to fields of top-level object fields, which were previously not filtered. Content that was incorrectly sent for translation before stops being sent — if a field seems to "go missing" from translations after upgrading, check it for an exclusion mark.
+
+---
+
+## Links
+
+- [Quickstart](/docs/integrations/sanity/quickstart)
+- [Configuration guide](/docs/integrations/sanity/guides/configuring-sanity)
+- [API reference](/docs/integrations/sanity/reference/plugin-configuration)
