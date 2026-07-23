@@ -1,0 +1,84 @@
+---
+
+title: Compiler
+description: Understand how the General Translation compiler transforms React source during a build.
+
+---
+
+`@generaltranslation/compiler` is a build plugin for translation metadata, validation, development hot reload, macros, and automatic JSX injection. Keep its settings aligned with the `gt` CLI by using the same `gt.config.json`.
+
+## Configure the compiler [#configure]
+
+Create `gt.config.json` in the directory where the build runs. Pass that config to the adapter, or let the compiler load it from the current working directory:
+
+```ts
+import gtConfig from './gt.config.json';
+import { vite as gtCompiler } from '@generaltranslation/compiler';
+
+gtCompiler({ ...gtConfig });
+```
+
+The compiler warns when the file is missing or invalid because automatic JSX injection and parsing flags depend on it. See the [`gt.config.json` reference](/docs/react/reference/config#config-file) for shared options.
+
+## Bundler adapters [#adapters]
+
+The package exports adapters named `vite`, `webpack`, `rollup`, `rspack`, and `esbuild`. Follow your bundler's plugin ordering: Vite runs the compiler after its React transform, while the canonical Rollup setup puts the compiler first.
+
+See [Developing with SPA translations](/docs/react/guides/developing-spa-translations#setup) for complete Vite and webpack development setups.
+
+### Rollup
+
+Register the Rollup adapter first:
+
+```js title="rollup.config.mjs"
+import { rollup as gtCompiler } from '@generaltranslation/compiler';
+
+export default {
+  input: 'src/index.ts',
+  plugins: [
+    gtCompiler(),
+    // Your other Rollup plugins
+  ],
+};
+```
+
+Rollup cannot analyze a fully dynamic import such as ``import(`./_gt/${locale}.json`)``. List each locale with a static import specifier:
+
+```ts title="src/loadTranslations.ts"
+const translationLoaders = {
+  es: () => import('./_gt/es.json'),
+  fr: () => import('./_gt/fr.json'),
+};
+
+export default async function loadTranslations(locale: string) {
+  const loader =
+    translationLoaders[locale as keyof typeof translationLoaders];
+  return loader ? (await loader()).default : {};
+}
+```
+
+Plain Rollup does not provide the Vite or webpack development credential integration shown in the SPA development guide. Regenerate local translation files when source content changes. See the complete [`gt-react` Rollup example](https://github.com/generaltranslation/gt/tree/main/examples/rollup-spa).
+
+### Rspack
+
+Use the Rspack adapter anywhere a Rspack configuration accepts plugins:
+
+```js title="rspack.config.mjs"
+import { rspack as gtCompiler } from '@generaltranslation/compiler';
+
+export default {
+  plugins: [gtCompiler()],
+};
+```
+
+Development translation also requires exposing `GT_PROJECT_ID` and `GT_DEV_API_KEY` to browser code without including either value in production bundles.
+
+## Parsing flags [#parsing-flags]
+
+Set build behavior under `files.gt.parsingFlags` in `gt.config.json`:
+
+- `enableAutoJsxInjection` wraps eligible JSX text at build time.
+- `autoderive` treats interpolated values as derived variables.
+- `devHotReload` enables runtime translation updates during development.
+
+The compiler also validates dynamic translation usage and computes translation hashes. See [Using automatic JSX injection](/docs/cli/guides/using-auto-jsx) and [Using Autoderive](/docs/cli/guides/using-autoderive) for the corresponding workflows.
