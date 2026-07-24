@@ -34,7 +34,7 @@ Create `src/start.ts` and register [`gtMiddleware`](/docs/react/tanstack-start/r
 
 ```ts title="src/start.ts"
 import { createCsrfMiddleware, createStart } from '@tanstack/react-start';
-import { gtMiddleware } from 'gt-tanstack-start/server';
+import { gtMiddleware } from 'gt-tanstack-start';
 
 const csrfMiddleware = createCsrfMiddleware({
   filter: ({ handlerType }) => handlerType === 'serverFn',
@@ -45,15 +45,33 @@ export const startInstance = createStart(() => ({
 }));
 ```
 
-The middleware resolves the locale, region, and internationalization setting once per request. It makes the locale and internationalization setting available to the [server-only functions](/docs/react/tanstack-start/using-server-functions).
+The middleware resolves the locale, region, and internationalization setting once per request. It persists the resolved locale in the locale cookie and makes request state available to the [isomorphic runtime functions](/docs/react/tanstack-start/using-server-functions) on the server.
 
 ## Initialize and resolve the locale [#initialize]
 
-[`initializeGT`](/docs/react/reference/config#initialize), `parseLocale`, and [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) are all imported from `gt-tanstack-start`:
+[`initializeGT`](/docs/react/reference/config#initialize), [`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale), and [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) are all imported from `gt-tanstack-start`:
 
 - **`initializeGT`** — call once at the module level of the root route. Spread in your `gt.config.json` and pass `loadTranslations`.
-- **`parseLocale`** — reads the locale from the request cookie and `Accept-Language` header on the server, and from the cookie in the browser. It persists the resolved locale back to the cookie.
+- **`getLocale`** — returns the locale from the active middleware scope on the server and from the initialized browser condition store on the client.
 - **`getTranslationsSnapshot`** — loads a locale's translations in the shape `<GTProvider>` expects, so content renders without a loading flash. See the [reference](/docs/react/reference/functions/get-translations-snapshot).
+
+## Enable locale routing [#locale-routing]
+
+First configure your TanStack Router route tree to accept locale-prefixed paths. Then set `localeRouting` to `true` in `gt.config.json` to keep the locale in the pathname:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja"],
+  "localeRouting": true
+}
+```
+
+The default locale remains unprefixed, such as `/about`. Other locales use a prefix, such as `/es/about`. The package resolves and changes the pathname but does not define your application routes, so both URL shapes must match your route tree.
+
+On the server, `gtMiddleware` resolves the locale from the path, then the locale cookie, the `Accept-Language` header, and `defaultLocale`. On the client, locale changes reload at the corresponding pathname and preserve its query string and hash.
+
+TanStack Router's base path is respected through `TSS_ROUTER_BASEPATH`.
 
 ## Wire up the root route [#root-route]
 
@@ -68,7 +86,7 @@ import {
 import {
   initializeGT,
   GTProvider,
-  parseLocale,
+  getLocale,
   getTranslationsSnapshot,
   LocaleSelector,
 } from 'gt-tanstack-start';
@@ -80,7 +98,7 @@ initializeGT({ ...gtConfig, loadTranslations });
 
 export const Route = createRootRoute({
   loader: async () => {
-    const locale = parseLocale();
+    const locale = getLocale();
     return {
       locale,
       translations: await getTranslationsSnapshot(locale),
