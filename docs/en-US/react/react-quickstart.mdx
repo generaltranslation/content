@@ -14,8 +14,10 @@ related:
 By the end of this guide, your server-rendered React app will display content in multiple languages, with a language switcher your users can interact with.
 
 **Prerequisites:**
-- A server-rendered React app (React Router or a custom SSR setup)
-- Node.js 18+
+- A server-rendered React app (React Router or a custom SSR setup). To start fresh, run `npx create-react-router@latest my-app`.
+- Node.js 22.22+ (the floor the current React Router packages declare)
+
+This guide uses the `app/` directory that `create-react-router` scaffolds. If your SSR setup keeps code somewhere else, such as `src/`, adjust the paths as you go.
 
 <Callout type='info'>
   **Note:** If your app renders entirely in the browser with Vite, follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) instead. It skips the provider entirely.
@@ -66,7 +68,7 @@ Create a **`gt.config.json`** file in your project root. This tells the library 
   "locales": ["es", "fr", "ja"],
   "files": {
     "gt": {
-      "output": "src/_gt/[locale].json"
+      "output": "app/_gt/[locale].json"
     }
   }
 }
@@ -81,7 +83,7 @@ Create a **`gt.config.json`** file in your project root. This tells the library 
 
 Create a `loadTranslations` function that loads a locale's translation file. On the server this runs during rendering; the CLI generates the files when you run `npx gt translate`:
 
-```ts title="src/loadTranslations.ts"
+```ts title="app/loadTranslations.ts"
 export default async function loadTranslations(locale: string) {
   try {
     const translations = await import(`./_gt/${locale}.json`);
@@ -95,12 +97,12 @@ export default async function loadTranslations(locale: string) {
 
 ### 4. Initialize the library
 
-Call **`initializeGT`** at module scope in a file that loads on both the server and the client — your root route or layout is the natural place. It registers your config and translation loader once; the configuration is immutable for the lifetime of the app:
+Call **`initializeGT`** at module scope in a file that loads on both the server and the client. In a React Router app that file is `app/root.tsx`. It registers your config and translation loader once; the configuration is immutable for the lifetime of the app:
 
-```tsx title="src/routes/root.tsx"
+```tsx title="app/root.tsx"
 import { initializeGT } from 'gt-react';
-import gtConfig from '../../gt.config.json';
-import loadTranslations from '../loadTranslations';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
 
 initializeGT({
   defaultLocale: gtConfig.defaultLocale,
@@ -112,17 +114,37 @@ initializeGT({
 
 ### 5. Load translations on the server
 
-In your root route's loader (or equivalent server handler), resolve the request locale and fetch a translations snapshot with **`getTranslationsSnapshot`**, then pass both to **`<GTProvider>`**:
+In the same `app/root.tsx`, add a loader that resolves the request locale and fetches a translations snapshot with **`getTranslationsSnapshot`**, then pass both to **`<GTProvider>`**. Keep the `initializeGT` call from Step 4, and keep the scaffold's `links` and `ErrorBoundary` exports as generated; the block below shows the rest of the file:
 
-```tsx title="src/routes/root.tsx"
+```tsx title="app/root.tsx"
+import {
+  isRouteErrorResponse,
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useLoaderData,
+  useRouteLoaderData,
+} from 'react-router';
 import {
   GTProvider,
   getTranslationsSnapshot,
+  initializeGT,
   parseLocale,
 } from 'gt-react';
+import type { Route } from './+types/root';
+import './app.css';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
 
-// In your route loader (exact API depends on your framework)
-export async function loader({ request }) {
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: gtConfig.locales,
+  loadTranslations,
+});
+
+export async function loader({ request }: Route.LoaderArgs) {
   const locale = parseLocale(request); // [!code highlight]
   return {
     locale,
@@ -130,22 +152,44 @@ export async function loader({ request }) {
   };
 }
 
-export default function Root({ children }) {
-  const { locale, translations } = useLoaderData();
+export function Layout({ children }: { children: React.ReactNode }) {
+  const locale =
+    useRouteLoaderData<typeof loader>('root')?.locale ?? gtConfig.defaultLocale;
+  return (
+    <html lang={locale}>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        {children}
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+export default function App() {
+  const { locale, translations } = useLoaderData<typeof loader>();
   return (
     <GTProvider locale={locale} translations={translations}>
-      {children}
+      <Outlet />
     </GTProvider>
   );
 }
 ```
+
+The `Layout` change makes `<html lang>` follow the resolved locale instead of the scaffold's hardcoded `"en"`, so screen readers and search engines see the language your users actually get. The `./+types/root` import and `Route.LoaderArgs` come from React Router's typegen, which runs on the first `react-router dev`, `build`, or `npm run typecheck`; run one of those before type-checking a fresh scaffold. In a custom SSR setup, do the same work in whatever code runs per request: resolve the locale with `parseLocale`, fetch the snapshot, and wrap your app in the provider, typing the loader argument yourself.
 
 
 ### 6. Mark content for translation
 
 Wrap any text you want translated with the **`<T>`** component. `<T>` stands for "translate":
 
-```tsx title="src/components/Welcome.tsx"
+```tsx title="app/components/Welcome.tsx"
 import { T } from 'gt-react';
 
 export default function Welcome() {
@@ -162,7 +206,7 @@ export default function Welcome() {
 
 For plain strings — like `placeholder` attributes or `aria-label` values — use the **`useGT`** hook:
 
-```tsx title="src/components/ContactForm.tsx"
+```tsx title="app/components/ContactForm.tsx"
 import { useGT } from 'gt-react';
 
 export default function ContactForm() {
@@ -176,7 +220,7 @@ export default function ContactForm() {
 
 Drop in a **`<LocaleSelector>`** so users can change languages:
 
-```tsx title="src/components/Header.tsx"
+```tsx title="app/components/Header.tsx"
 import { LocaleSelector } from 'gt-react';
 
 export default function Header() {
@@ -185,6 +229,22 @@ export default function Header() {
 ```
 
 When the user picks a language, `gt-react` persists the choice in the `generaltranslation.locale` cookie and reloads the page, so the server re-renders everything in the new locale.
+
+The components from Steps 6 and 7 render only once a route uses them. Update your home route to mount them:
+
+```tsx title="app/routes/home.tsx"
+import Welcome from '../components/Welcome';
+import Header from '../components/Header';
+
+export default function Home() {
+  return (
+    <>
+      <Header />
+      <Welcome />
+    </>
+  );
+}
+```
 
 
 ### 8. Set up environment variables (optional)

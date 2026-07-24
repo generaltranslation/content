@@ -18,8 +18,8 @@ In the Pages Router, `gt-next` works through `getServerSideProps`: on each reque
 The `gt-next/server` entry is App Router-only and does not work with the Pages Router.
 
 **Prerequisites:**
-- A Next.js app using the **Pages Router**
-- Node.js 18+
+- A Next.js app using the **Pages Router**. To start fresh, run `npx create-next-app@latest my-app --no-app`. Without the `--no-app` flag, `create-next-app` scaffolds the App Router.
+- Node.js 20.9+ (the floor the current Next.js release declares)
 
 <Callout type='info'>
   **Note:** If you use the App Router, follow the [Next.js App Router Quickstart](/docs/react/nextjs-quickstart) instead. It uses server components and needs no `getServerSideProps` wiring.
@@ -163,6 +163,7 @@ export const getServerSideProps = withGTServerSideProps();
 The **`GTProvider`** component gives your entire app access to translations. In `_app.tsx`, pull the injected props out of `pageProps` and pass them to the provider. The **`WithGTServerSideProps`** type describes the injected shape:
 
 ```tsx title="pages/_app.tsx"
+import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import { GTProvider, WithGTServerSideProps } from 'gt-next';
 
@@ -185,10 +186,13 @@ Because the locale and translations arrive with the server response, the first r
 
 ### 7. Mark content for translation
 
-Now, wrap any text you want translated with the **`<T>`** component. `<T>` stands for "translate":
+Now, wrap any text you want translated with the **`<T>`** component. `<T>` stands for "translate". The block below shows the complete file; the wrapped `getServerSideProps` from Step 5 stays in place:
 
 ```tsx title="pages/index.tsx"
-import { T } from 'gt-next';
+import type { GetServerSideProps } from 'next';
+import { T, withGTServerSideProps } from 'gt-next';
+
+export const getServerSideProps: GetServerSideProps = withGTServerSideProps();
 
 export default function Home() {
   return (
@@ -210,7 +214,10 @@ You can wrap as much or as little JSX as you want inside `<T>`. Everything insid
 Drop in a **`<LocaleSelector>`** so users can change languages:
 
 ```tsx title="pages/index.tsx"
-import { T, LocaleSelector } from 'gt-next';
+import type { GetServerSideProps } from 'next';
+import { T, LocaleSelector, withGTServerSideProps } from 'gt-next';
+
+export const getServerSideProps: GetServerSideProps = withGTServerSideProps();
 
 export default function Home() {
   return (
@@ -291,7 +298,9 @@ Open [http://localhost:3000](http://localhost:3000) and use the language dropdow
 For plain strings — like `placeholder` attributes, `aria-label` values, or `alt` text — use the **`useGT`** hook:
 
 ```tsx title="pages/contact.tsx"
-import { useGT } from 'gt-next';
+import { useGT, withGTServerSideProps } from 'gt-next';
+
+export const getServerSideProps = withGTServerSideProps();
 
 export default function ContactPage() {
   const gt = useGT();
@@ -344,6 +353,45 @@ That's it — your app is now multilingual. 🎉
     ```tsx
     export const getServerSideProps = withGTServerSideProps();
     ```
+  </Accordion>
+  <Accordion title="Why doesn't <html lang> follow the locale?">
+    The Pages Router scaffold hardcodes `<Html lang="en">` in `pages/_document.tsx`, so the document language never follows the locale `withGTServerSideProps` resolves. Screen readers and search engines then see English on translated pages. Resolve the same locale in `_document.tsx`:
+
+    ```tsx title="pages/_document.tsx"
+    import Document, {
+      Html,
+      Head,
+      Main,
+      NextScript,
+      DocumentContext,
+      DocumentInitialProps,
+    } from 'next/document';
+    import { parseLocale } from 'gt-next';
+
+    type Props = DocumentInitialProps & { locale: string };
+
+    export default function MyDocument({ locale }: Props) {
+      return (
+        <Html lang={locale}>
+          <Head />
+          <body className="antialiased">
+            <Main />
+            <NextScript />
+          </body>
+        </Html>
+      );
+    }
+
+    MyDocument.getInitialProps = async (ctx: DocumentContext): Promise<Props> => {
+      const initialProps = await Document.getInitialProps(ctx);
+      const locale = ctx.req ? parseLocale(ctx as any) : 'en';
+      return { ...initialProps, locale };
+    };
+    ```
+
+    `parseLocale` is typed for `getServerSideProps` contexts but only reads `req`, which `DocumentContext` also provides, hence the cast. It applies the same cookie-then-`Accept-Language` resolution as `withGTServerSideProps`, so the `lang` attribute and the rendered content stay consistent.
+
+    This applies to server-rendered pages. Statically generated pages (`withGTStaticProps`) render at build time, when there is no user request to read a cookie or `Accept-Language` header from, so `parseLocale` returns the default and the `lang` attribute stays the fallback.
   </Accordion>
   <Accordion title="Can I use getStaticProps instead?">
     Yes. Wrap the page with `withGTStaticProps` and keep passing the generated props to `GTProvider` in `_app.tsx`. See the [Pages Router static site generation guide](/docs/react/nextjs/pages-router-static-site-generation) for the complete setup.
