@@ -1,7 +1,7 @@
 ---
 
 title: Using Locadex in a monorepo
-description: "How to use Locadex within a monorepo: this guide covers configuring the app root directory and commands."
+description: "How to configure Locadex for a monorepo: this guide covers setting the app root directory, how file selection is scoped, and running commands from the right package."
 related:
   links:
     - /docs/platform/locadex/guides/configuring-workflows
@@ -11,23 +11,73 @@ related:
 
 ---
 
-If your Project uses a monorepo, tell Locadex which folder contains the app you want to localize. You can set this app directory in the Locadex settings on the Dashboard.
+When your repository holds more than one app or package, point Locadex at the single app you want to localize. You do this in the Dashboard — there is nothing to install or run yourself.
 
-## Set the app root directory [#set-app-root]
+## Set the app root directory [#app-root]
 
-Use the app root directory when your GitHub repository contains multiple apps or packages. Configure at Locadex setup or in Settings. Open **Locadex > Configuration > General**.
+The **App Root Directory** tells Locadex which folder holds the app to localize. Set it during Locadex setup, or later in **Locadex > Configuration > General**.
 
-Set **App Root Directory** to the path from the repository root to your app. Use `.` or leave the field empty only when the app is at the repository root.
+Set it to the path from the repository root to your app, such as `apps/web`. Use `.` or leave the field empty only when the app is at the repository root.
 
-## Configure commands [#configure-commands]
+For a repository laid out like this, set **App Root Directory** to `apps/web`:
 
-Workflow commands run from the repository root.
+<Files>
+  <Folder name="apps">
+    <Folder name="web">
+      <File name="package.json" />
+    </Folder>
+    <Folder name="admin">
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages">
+    <Folder name="ui">
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+  <File name="package.json" />
+</Files>
 
-If a command needs to run inside the app directory, include the directory change in the command or use your package manager workspace command.
+## How file selection is scoped [#file-scope]
 
-For example:
+Setting the **App Root Directory** does more than point Locadex at a folder: it scopes which files Locadex reads and translates to that directory. With **App Root Directory** set to `apps/web`, Locadex works within `apps/web` and leaves the rest of the repository alone, so a shared `packages/ui` or a sibling `apps/admin` stays untouched.
+
+Within that directory, Locadex scans the source files it can internationalize — `.ts`, `.tsx`, `.js`, and `.jsx`. You do not edit a config file to change this. When you trigger a Codegen run with **Run Agent**, the **Select Files** step lets you narrow that run to specific files from a file tree.
+
+## Configure commands [#commands]
+
+Locadex runs your workflow commands from the repository root, not from the app root directory. Configure your **Package Manager**, **Linter**, and the per-workflow pre-process and post-process commands in the [Locadex configuration](/docs/platform/locadex/reference/config).
+
+To run a command inside your app, change into the directory first:
 
 ```bash
-cd locadex-lab && npm run build
+cd apps/web && npm run build
 ```
 
+Or use your package manager's workspace filter, where `web` is the app's `name` in its `package.json`:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm run build --workspace web
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn workspace web build
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun run --filter web build
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm --filter web build
+    ```
+  </Tab>
+</Tabs>
