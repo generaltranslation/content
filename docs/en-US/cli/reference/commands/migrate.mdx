@@ -1,0 +1,66 @@
+---
+
+title: gt migrate
+description: Convert an existing internationalized Next.js app to gt-next in one command. API reference for the gt migrate command.
+
+---
+
+Converts an existing internationalized Next.js App Router project to [`gt-next`](/docs/react/overview) in one command. It reads your current i18n setup, sets up gt-next, and rewrites your code and message catalogs. Your existing translations are preserved.
+
+`--from` is required. The supported values today are `next-intl`, `react-intl`, and `react-i18next`. For a new project with no existing i18n library, use [`gt init`](/docs/cli/reference/commands/init) instead.
+
+*Note: `migrate` requires a clean git working tree. Commit or stash your changes first, so every edit the command makes is easy to review and revert. Pass `--allow-dirty` to skip this check.*
+
+```bash
+npx gt migrate --from next-intl
+```
+
+## How it works [#how-it-works]
+
+1. **Surveys the project.** Detects which i18n library you use, your locales and default locale, where your message catalogs live, and your package manager.
+2. **Sets up gt-next.** Creates `gt.config.json`, wires up dictionary loading, adds the provider and config, adds middleware when the project needs it, and installs `gt-next`.
+3. **Migrates the code and catalogs.** Rewrites call sites and components, converts message catalogs (including ICU plural and context forms), and removes the old library where it is safe to do so.
+
+## Flags [#flags]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--from <library>` | Library to migrate from: `next-intl`, `react-intl`, or `react-i18next`. | `string` | No | None |
+| `--src <paths...>` | Glob patterns for the source files to migrate. | `string[]` | Yes | `src`, `app`, `pages`, `components`, and `i18n` globs, plus the directories your i18n config files sit in |
+| `-c, --config <path>` | Path to the config file. | `string` | Yes | `gt.config.json` |
+| `--dry-run` | Print the migration report without writing files. | `boolean` | Yes | `false` |
+| `--allow-dirty` | Skip the clean-git-tree safety check. | `boolean` | Yes | `false` |
+| `-y, --yes` | Skip the confirmation prompt. | `boolean` | Yes | `false` |
+
+## Example [#example]
+
+```bash
+# Migrate a next-intl project to gt-next
+npx gt migrate --from next-intl
+
+# Preview the changes without writing anything
+npx gt migrate --from next-intl --dry-run
+
+# Migrate from react-i18next
+npx gt migrate --from react-i18next
+```
+
+## What to expect [#what-to-expect]
+
+- **Report:** the command writes `gt-migrate-report.md` to your project root. It lists everything that changed, every file it skipped and why, and the TODOs that need a human decision.
+- **Partial migrations:** migrations can be partial by design. Anything the tool cannot convert safely is skipped, and the old library stays wired up for those files, so your app keeps working.
+- **On-demand engine:** the migration engine ships as a separate package, `@generaltranslation/migrate`, so the `gt` CLI stays small. The first `gt migrate` run downloads it automatically. This is a one-time step and needs network access. In an offline or restricted environment, add `@generaltranslation/migrate` as a devDependency with your package manager and run the command again.
+
+## Manual follow-ups [#manual-follow-ups]
+
+Some patterns need a human, and the report flags each one so you can finish it by hand:
+
+- Rich-text render-prop translations, such as next-intl's `t.rich`.
+- Dynamic translation keys or namespaces that the tool cannot resolve at build time.
+- Custom wrapper hooks around the old library.
+
+## Next steps [#next-steps]
+
+1. Review `gt-migrate-report.md` and resolve any TODOs it lists.
+2. Run your app to confirm the migrated pages render in the right locale.
+3. Translate new strings with [`gt translate`](/docs/cli/reference/commands/translate). See [Generating translations](/docs/cli/guides/generating-translations) for the full workflow.
