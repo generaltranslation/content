@@ -356,7 +356,7 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 ### File and folder naming
 
 - **General principle:** name a file for its topic using the **fewest words that stay clear and self-explanatory** when read on their own (in a URL or the sidebar), together with the folder for context. Lowercase, hyphenated, **usually three words or fewer** — never padded, and never truncated to a cryptic stub (`edit-translations.md`, `configure-workflows.md`, `vm-image.md`).
-- **Keep a single word only when it is standard or unambiguous in its folder** (`config.md`, `quickstart.md`, `webhooks.md`; `agent.md` under Locadex Reference clearly reads as the Locadex Agent). **Expand a vague single word** into two or three words that say what the page actually covers (`translation-context.md`, not `context.md`; `locale-codes.md`, not `locales.md`).
+- **Keep a single word only when it is standard or unambiguous in its folder** (`config.md`, `quickstart.md`, `webhooks.md`; `automations.md` under Locadex Reference clearly reads as Locadex Automations). **Expand a vague single word** into two or three words that say what the page actually covers (`translation-context.md`, not `context.md`; `locale-codes.md`, not `locales.md`).
 - Name reference and conceptual pages by topic, not verb phrase (`monorepos.md`, `annotations.md`). **Guides are the exception:** their file name and link slug use the **gerund (-ing) form** matching the guide title (`using-translations.md`, `configuring-workflows.md`, `translating-content.md`).
 - **The entry page is** `quickstart.md` **for technical capabilities and** `get-started.md` **for product/nontechnical ones** (see Get Started vs. Quickstart). Core, CLI, React, Node, Python, Locadex, and integration plugins use `quickstart.md`; OpenAPI uses `overview.md`; Dashboard and Overview use `get-started.md` (Overview displays as **Introduction**).
 - **Configuration reference pages are named and linked simply** `config.md` in most cases (not `configuration.md` or `config-reference.md`).
@@ -464,7 +464,7 @@ Use common workflow sections on **Get Started pages and other overview/landing p
 
 ### Guide page
 
-Guides are **actionable**: they walk the reader through completing one task, in order. Give them **gerund (-ing) titles** that are easy to understand (*Configuring Locadex workflows*, *Translating content*), and name the file and link slug to match the title (`configuring-workflows.md`, `translating-content.md`).
+Guides are **actionable**: they walk the reader through completing one task, in order. Give them **gerund (-ing) titles** that are easy to understand (*Configuring Locadex automations*, *Translating content*), and name the file and link slug to match the title (`configuring-automations.md`, `translating-content.md`).
 
 Anatomy:
 
