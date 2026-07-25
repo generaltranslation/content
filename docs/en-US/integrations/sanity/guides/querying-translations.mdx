@@ -1,7 +1,7 @@
 ---
 
 title: Querying translations
-description: How to query translated Sanity documents with GROQ using the General Translation document-level localization model.
+description: How to query document-level and field-level Sanity translations with GROQ using General Translation.
 related:
   links:
     - /docs/integrations/sanity/guides/translating-content
@@ -10,23 +10,25 @@ related:
 
 ---
 
-General Translation stores Sanity translations as separate documents, each tagged with a language field (default `language`).
+General Translation supports two Sanity storage models. Document-level localization creates a document for each locale, while field-level localization stores locale values in internationalized arrays on one document.
 
-Query the version you need by filtering on that field. Your existing source-language queries keep working.
+## Query document-level translations [#documents]
 
-## Query source content [#query-source]
+Document-level translations are tagged with a language field, which defaults to `language`. Query the version you need by filtering on that field.
 
-Source documents do not set the language field by default, so existing source queries need no changes.
+### Query source content
+
+Source documents do not set the language field by default. Exclude translated documents by filtering for an undefined language field.
 
 ```text
-*[_type == "article"]{
+*[_type == "article" && !defined(language)]{
   title,
   slug,
   body
 }
 ```
 
-## Query a target locale [#query-locale]
+### Query a target locale
 
 Filter by the language field.
 
@@ -38,7 +40,7 @@ Filter by the language field.
 }
 ```
 
-## Query one translated document [#query-one]
+### Query one translated document
 
 ```text
 *[_type == "article" && slug.current == "hello-world" && language == "es"][0]{
@@ -49,7 +51,7 @@ Filter by the language field.
 
 If you dedupe translated slugs, the slug includes the locale suffix, such as `hello-world-es`.
 
-## Query all language versions [#query-all]
+### Query all language versions
 
 ```text
 *[_type == "article"]{
@@ -60,9 +62,9 @@ If you dedupe translated slugs, the slug includes the locale suffix, such as `he
 }
 ```
 
-## Query source and translations together [#query-both]
+### Query source content with or without a language field
 
-Because source documents may not define the language field, include both the source locale and undefined values.
+Some source documents explicitly set the source locale while others leave the language field undefined. Include both representations when you need all source content.
 
 ```text
 *[_type == "article" && (language == "en" || !defined(language))]{
@@ -72,7 +74,7 @@ Because source documents may not define the language field, include both the sou
 }
 ```
 
-## Use a custom language field [#custom-field]
+### Use a custom language field
 
 If your plugin config sets `languageField: 'locale'`, query `locale` instead of `language`. The schema field and the query field must match the configured value.
 
@@ -84,7 +86,7 @@ If your plugin config sets `languageField: 'locale'`, query `locale` instead of 
 }
 ```
 
-## Query translated references [#query-references]
+### Query translated references
 
 After references are patched, translated documents point to the translated versions of referenced documents. Query them as you normally would.
 
@@ -99,3 +101,16 @@ After references are patched, translated documents point to the translated versi
 ```
 
 See [Patch references](/docs/integrations/sanity/guides/managing-translations#patch-references) for how references are rewritten.
+
+## Query field-level translations [#fields]
+
+Field-level localization stores each locale in an `internationalizedArray*` field. Filter the array by its `language` property and project the matching `value`:
+
+```text
+*[_type == "article"][0]{
+  "titleEs": title[language == "es"][0].value,
+  "bodyEs": body[language == "es"][0].value
+}
+```
+
+The document itself does not receive the document-level `language` field or a `translation.metadata` link. Query other nonlocalized fields from the same document as usual.
