@@ -90,7 +90,7 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 - Address the reader as "you"; use active voice and imperatives.
 - **Fragment vs. sentence in lists**: use fragments when simply listing pieces or labels (no period needed); use full sentences (including standalone imperatives like "Revoke unused keys.") when describing steps or actions, and end those with a period. Be consistent within a single list. List items that complete a lead-in stem ("From the page, you can:") are fragments and take no period.
 - **Italicize notes and examples**: write them as *Note: …* and *Example: …*.
-- **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **App Root Directory**).
+- **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **Target directory**).
 - **Inline code** for code identifiers, file names, locale codes, environment variables, key prefixes, and headers (`en-US`, `GT_API_KEY`, `gtx-api-`, `x-gt-api-key`).
 - **Summarize runtime wording; do not quote it verbatim.** Paraphrase interactive prompts, success and log messages, and console output rather than copying exact strings, so the docs stay correct when that wording changes. Reproduce a string exactly only when the value is part of the contract — environment variable names, flags, config keys, file names, commands, and error codes/identifiers. *Example: write "the wizard asks which API key type to generate" rather than quoting the full prompt sentence.*
 
@@ -98,7 +98,7 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 
 #### Referring to Dashboard locations
 
-Use a bolded breadcrumb with `>`: **Locadex > Configuration > General**, **Project > Context**. Standardize on `>` (never `->`).
+Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context**. Standardize on `>` (never `->`).
 
 ### Lists vs. tables
 
@@ -309,7 +309,7 @@ Use **Reference** for complete, standardized descriptions of how something works
 
 In short:
 
-- **Guides answer "How do I do this?"** They are practical and customer-sendable. Titles use the **gerund (-ing) form** (*Configuring Locadex workflows*, *Reviewing and editing translations*, *Translating content*, *Querying translations*), and steps run in order toward a goal. The file name and link slug follow the gerund title (*Using translations* → `using-translations.md`).
+- **Guides answer "How do I do this?"** They are practical and customer-sendable. Titles use the **gerund (-ing) form** (*Configuring Locadex automations*, *Reviewing and editing translations*, *Translating content*, *Querying translations*), and steps run in order toward a goal. The file name and link slug follow the gerund title (*Using translations* → `using-translations.md`).
 - **Reference answers "What exactly does this setting / command / API / page do?"** Reference pages are exact, standardized, and comprehensive within a consistent structure; they can read more "robotic" than guides.
 
 Scope guides by outcome, not by surface area:
@@ -355,9 +355,9 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 
 ### File and folder naming
 
-- **General principle:** name a file for its topic using the **fewest words that stay clear and self-explanatory** when read on their own (in a URL or the sidebar), together with the folder for context. Lowercase, hyphenated, **usually three words or fewer** — never padded, and never truncated to a cryptic stub (`edit-translations.md`, `configure-workflows.md`, `vm-image.md`).
-- **Keep a single word only when it is standard or unambiguous in its folder** (`config.md`, `quickstart.md`, `webhooks.md`; `agent.md` under Locadex Reference clearly reads as the Locadex Agent). **Expand a vague single word** into two or three words that say what the page actually covers (`translation-context.md`, not `context.md`; `locale-codes.md`, not `locales.md`).
-- Name reference and conceptual pages by topic, not verb phrase (`monorepos.md`, `annotations.md`). **Guides are the exception:** their file name and link slug use the **gerund (-ing) form** matching the guide title (`using-translations.md`, `configuring-workflows.md`, `translating-content.md`).
+- **General principle:** name a file for its topic using the **fewest words that stay clear and self-explanatory** when read on their own (in a URL or the sidebar), together with the folder for context. Lowercase, hyphenated, **usually three words or fewer** — never padded, and never truncated to a cryptic stub (`edit-translations.md`, `configure-automations.md`, `vm-image.md`).
+- **Keep a single word only when it is standard or unambiguous in its folder** (`config.md`, `quickstart.md`, `webhooks.md`; `automations.md` under Locadex Reference clearly reads as Locadex Automations). **Expand a vague single word** into two or three words that say what the page actually covers (`translation-context.md`, not `context.md`; `locale-codes.md`, not `locales.md`).
+- Name reference and conceptual pages by topic, not verb phrase (`monorepos.md`, `annotations.md`). **Guides are the exception:** their file name and link slug use the **gerund (-ing) form** matching the guide title (`using-translations.md`, `configuring-automations.md`, `translating-content.md`).
 - **The entry page is** `quickstart.md` **for technical capabilities and** `get-started.md` **for product/nontechnical ones** (see Get Started vs. Quickstart). Core, CLI, React, Node, Python, Locadex, and integration plugins use `quickstart.md`; OpenAPI uses `overview.md`; Dashboard and Overview use `get-started.md` (Overview displays as **Introduction**).
 - **Configuration reference pages are named and linked simply** `config.md` in most cases (not `configuration.md` or `config-reference.md`).
 - **Command reference pages are named by the command**, lowercase-hyphenated, matching the invoked subcommand (`translate.md`, `save-local.md`, `keyed-metadata.md`).
@@ -464,7 +464,7 @@ Use common workflow sections on **Get Started pages and other overview/landing p
 
 ### Guide page
 
-Guides are **actionable**: they walk the reader through completing one task, in order. Give them **gerund (-ing) titles** that are easy to understand (*Configuring Locadex workflows*, *Translating content*), and name the file and link slug to match the title (`configuring-workflows.md`, `translating-content.md`).
+Guides are **actionable**: they walk the reader through completing one task, in order. Give them **gerund (-ing) titles** that are easy to understand (*Configuring Locadex automations*, *Translating content*), and name the file and link slug to match the title (`configuring-automations.md`, `translating-content.md`).
 
 Anatomy:
 
@@ -625,6 +625,8 @@ How to write it:
 - Use `title="src/index.ts"` for file snippets and `title="Output"` for response examples.
 - Keep runnable examples minimal and consistent (e.g. `gt.translate('Hello, world!', 'es')`).
 - Highlight specific lines with the Fumadocs syntax `// [!code highlight]`.
+- Show edits to a file the reader already has (quickstart-style changes) with the diff notation `// [!code ++]` and `// [!code --]`: added lines render green, removed lines red. Ranges apply to the following lines (`[!code ++:3]`).
+- Notation markers only convert where the marker is a real comment token. Inline `// [!code ...]` works in JS statements and JSX attribute positions. In JSX children positions, put the marker on its own line as `{/* [!code ++] */}`; the marker line is removed from output and the notation applies to the next line.
 - **Use tabs whenever possible.** This follows the conciseness rule: when the shape of the instructions is the same and only the specific code differs (package managers, language variants, query examples), do not duplicate the instructions — capture the variants in tabs. List all four package managers in this exact order: `<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>`. Use this exact shape, with a `<Tab value="...">` per item wrapping a fenced code block:
 
 ```mdx
