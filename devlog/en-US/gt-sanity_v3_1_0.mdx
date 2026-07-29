@@ -1,0 +1,71 @@
+---
+title: gt-sanity@3.1.0
+date: 2026-07-28
+authors: [fernando]
+tags: ['gt-sanity', 'v3.1.0', 'sanity', 'cms', 'translation', 'minor']
+---
+
+## Overview
+
+Translated content rarely stays exactly as it arrives. Editors fix a term, tighten a headline, adjust tone for a market — and until now, the next translation run regenerated all of it.
+
+`gt-sanity` v3.1 adds **Save local edits**: the translations Sanity already holds are uploaded to General Translation before a translation run, so content whose source text has not changed keeps its existing wording. It is off by default and opt-in per Studio session.
+
+The release also adds a **Save Local Edits** action for uploading existing translations without starting a run, and a **Retranslate from scratch** option for deliberately regenerating everything.
+
+---
+
+## What's new
+
+### Save local edits
+
+Turn on the **Save local edits** toggle in the Translations tool or the **General Translation** document tab. With it on, every translation run starts by sending the translations currently in Sanity to General Translation. Those become the stored translation for the source version, so the next run reuses them instead of translating that content again.
+
+Both localization strategies are covered: document-level translations are read through `translation.metadata` (preferring drafts over published documents, so unpublished edits count), and internationalized-array locale values are read from the source document. Locales with no existing content are skipped rather than uploaded as empty translations.
+
+Set the toggle's initial state from your plugin config:
+
+```ts title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { gtPlugin } from 'gt-sanity';
+
+export default defineConfig({
+  plugins: [
+    gtPlugin({
+      sourceLocale: 'en',
+      locales: ['es', 'fr', 'ja'],
+      translateDocuments: [{ type: 'post' }],
+      preserveExistingTranslations: true,
+    }),
+  ],
+});
+```
+
+`preserveExistingTranslations` seeds the toggle when the Studio loads. Editors can flip it for their session from the UI.
+
+### Sanity becomes the source of truth
+
+Turning the toggle on shows an explanation first, because the trade-off is real: what is in Sanity replaces whatever General Translation holds for that version of the document — including a translation that has finished but has not been imported yet. Import any pending translations before turning it on.
+
+The capture step runs before the source upload and is best-effort. If it fails, the translation run still proceeds and the Studio warns that edits may be overwritten.
+
+### Save Local Edits
+
+The **Save Local Edits** action uploads the translations already in Sanity without enqueueing a translation, seeding source files as needed. Use it when adopting the plugin on a project that was translated elsewhere, so General Translation starts from the content you already have.
+
+It is available in the Translations tool and on the document tab.
+
+### Retranslate from scratch
+
+**Translate All** now includes a **Retranslate from scratch** checkbox. Checking it discards existing translations and regenerates them, including edits made to translated documents in the Studio. Leave it unchecked to reuse existing translations.
+
+The plugin previously had no way to force a retranslation.
+
+---
+
+## Links
+
+- [Translating content](/docs/integrations/sanity/guides/translating-content)
+- [Managing translations](/docs/integrations/sanity/guides/managing-translations)
+- [Plugin configuration](/docs/integrations/sanity/reference/plugin-configuration)
+- [PR #1997](https://github.com/generaltranslation/gt/pull/1997)
