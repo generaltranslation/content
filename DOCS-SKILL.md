@@ -584,6 +584,8 @@ Populate `related.links` by page type, ordered by **what the reader most likely 
 - **Backticks go inside the link text, never around the whole link.** For API/code references, code-format the identifier inside the link text — `[useTranslations](…)` — which renders correctly. Do not wrap the entire link in backticks (`[GT](…)` renders literally).
 - **Link every occurrence of a component, function, hook, class, or method in prose** to its reference page (`[useTranslations](/docs/react/reference/hooks/use-translations)`). Do not link occurrences inside headings. Skip self-links on the symbol's own reference page.
 - **Verify the target exists before linking.** If a page does not exist yet, omit the link or note it as "coming soon".
+- **Validate inline-code API links with the reference index.** Run `npm run validate:reference-links` from `scripts/`; use `npm run validate:reference-links -- --fix` to wrap deterministic matches without reformatting the source. The index uses dedicated API reference page titles plus the `initializeGT` and `initializeGTSPA` sections on the React configuration page. It normalizes component brackets, call parentheses, Python snake_case, and `gt` commands, then uses package, framework, and section context when a symbol has multiple targets.
+- **The validator checks prose only.** It excludes frontmatter, headings, fenced code, existing links, same-page symbols, local config/field headings, and symbols that belong to another package unless the surrounding text names that package. Its narrow source exclusions cover fields returned by `useLocaleSelector`, the `gt-i18n` `getTranslations` export without a package-specific page, and release-note mentions that intentionally refer to both a class method and standalone function.
 
 
 
@@ -710,6 +712,7 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Descriptions (frontmatter and `meta.json`) end with a period (a question ends with `?`); `<Card>` bodies that mirror a description match it (also ending with a period). The only exception is the short tab subtitle on a section root (`"root": true`), which is not a sentence and takes no period.
 - Sidebar labels preserve their established casing; **Get Started**, **Quickstart**, **Guides**, and **Reference** are title-cased, and product names such as **Google Drive** keep their official casing.
 - Every occurrence of a component, function, hook, class, or method in prose links to its reference page, except occurrences inside headings and self-references on the symbol's own page.
+- `npm run validate:reference-links` passes with no unresolved relevant inline-code API symbols.
 - No reviewer directives, TODO/FIXME/placeholder text, or "to confirm"/"to verify" draft sections remain in the page.
 - Setup-first pages (Quickstart, Get Started, guide happy paths) show only the current version, with no legacy code or "in older versions" asides; breaking changes are noted only on maintenance-facing pages (Reference, guide detail) with a `Changed in vN:` note.
 - Page order in the filetree (and the sidebar navigation it drives) is logical (workflow order), not alphabetical.
