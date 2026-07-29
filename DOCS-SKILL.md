@@ -80,6 +80,7 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 - Keep intros to **1–3 short sentences**; prefer clarity over completeness up front and let details come later.
 - Keep headings clear and action-oriented.
 - **Prioritize clarity and conciseness throughout.** Use **fewer words** whenever possible and cut anything that does not add meaning.
+- **Guide descriptions are one concise sentence under the page title.** Summarize the outcome in plain language; leave step lists and subsection inventories to the body.
 - **Do not use jargon when you do not need to.** When a plain word works, use it; when a technical term is genuinely necessary, define or link it on first use.
 - Favor practical, runnable examples over exhaustive prose.
 
@@ -375,14 +376,14 @@ Use this exact structure (blank line after the opening `---`, blank line before 
 ---
 
 title: Adding annotations
-description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard
+description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard.
 
 ---
 ```
 
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
-  - **Guides** lead with **"How to…"** for SEO, naming the task the guide accomplishes and the relevant tool. When the guide walks through several steps, add a `: this guide covers …` clause listing them. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to translate files with the generaltranslation library: this guide covers uploading a source file, enqueuing translation, checking status, and downloading the translated file." / "What are locale codes, and how are they used in the General Translation stack?"
+  - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant product or tool. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the General Translation Dashboard." / "What are locale codes, and how are they used in the General Translation stack?"
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
@@ -664,7 +665,7 @@ Use `<Cards>` wrapping child `<Card title="…" href="…">` elements for the na
 ```mdx
 <Cards>
   <Card title="Configuring the CLI" href="/docs/cli/guides/configuring">
-    Set up a General Translation gt.config.json with your locales, files, and storage options.
+    How to set up a General Translation gt.config.json with your locales, files, and storage options.
   </Card>
 </Cards>
 ```
@@ -705,7 +706,7 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - First mention of the product on the page (and in the description) uses **General Translation**, not GT.
 - Guides answer "how do I…?" with ordered steps; Reference answers "what exactly does this do?" comprehensively and opens with an overview table linking to each item's section.
 - Guide titles use the gerund (-ing) form, and each guide's file name and link slug match its title.
-- Guide descriptions lead with "How to…" (or a question for concept-only guides) and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
+- Guide descriptions lead with "How to…" (or a question for concept-only guides), are one concise sentence with no `: this guide covers …` checklist, and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
 - Descriptions (frontmatter and `meta.json`) end with a period (a question ends with `?`); `<Card>` bodies that mirror a description match it (also ending with a period). The only exception is the short tab subtitle on a section root (`"root": true`), which is not a sentence and takes no period.
 - Sidebar labels preserve their established casing; **Get Started**, **Quickstart**, **Guides**, and **Reference** are title-cased, and product names such as **Google Drive** keep their official casing.
 - Every occurrence of a component, function, hook, class, or method in prose links to its reference page, except occurrences inside headings and self-references on the symbol's own page.
