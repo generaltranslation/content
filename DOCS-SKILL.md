@@ -227,7 +227,7 @@ The filetree is defined by **per-folder** `meta.json` **files** (the Fumadocs co
 
 A `meta.json` supports these keys:
 
-- `title` — the folder's sidebar display name (see File and folder naming).
+- `title` — the folder's sidebar display name using its established casing (see File and folder naming).
 - `description` — the meaning depends on the folder:
   - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
   - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
@@ -241,6 +241,8 @@ Entries in `pages` take three forms:
 - **A child page or folder** — a relative reference: `"./quickstart"`, `"./guides"`, `"./(frameworks)"`.
 - **A section separator** — a label wrapped in triple dashes: `"---Frameworks---"`, `"---Platform---"`. This renders a labeled divider in the sidebar; use it to group entries within one section.
 - **A cross-section link** — a Markdown link to another page: `"[Dashboard](/docs/platform/dashboard/get-started)"`. Use these to point out of the current section (see Overview hub).
+
+Every immediate child folder listed by a top-level section root becomes a visible sidebar section. The allowed section names and order are pinned by CI. Do not add, remove, or reorder one unless the task explicitly calls for an information-architecture change.
 
 
 
@@ -362,9 +364,9 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 - **Configuration reference pages are named and linked simply** `config.md` in most cases (not `configuration.md` or `config-reference.md`).
 - **Command reference pages are named by the command**, lowercase-hyphenated, matching the invoked subcommand (`translate.md`, `save-local.md`, `keyed-metadata.md`).
 - **Consolidate near-identical formats or variants onto one page** (MDX + Markdown → `mdx.md`; TypeScript + JavaScript → `ts.md`). Name the page after the primary variant and cover the sibling on the same page.
-- **Sidebar display names follow the established casing in their section.** Always title-case the spine folders **Get Started**, **Quickstart**, **Guides**, and **Reference**. Reference subsection labels such as **Commands**, **Formats**, **Functions**, **Components**, **Hooks**, and **Types** follow the casing of their sibling groups. Automated style passes and linters must preserve these display labels instead of deriving them by lowercasing the folder name.
-- **Proper nouns and product/brand names keep their official casing** as folder names: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `Google Drive`, `React Native`, `TanStack Start`, and the `GT Class` reference group.
-- **Links and URL slugs are always lowercase and hyphenated**, regardless of display-name casing. *Example: the Get Started section is linked as* `/docs/platform/dashboard/get-started`*.*
+- **Sidebar display names follow the established casing in their section.** Standard spine labels include **Overview**, **Get Started**, **Quickstart**, **Guides**, **Reference**, and **Frameworks**. Reference subsection labels display as **Commands**, **File formats**, **Functions**, **Components**, **Hooks**, and **Types**. Automated style passes must preserve these labels instead of deriving them by lowercasing the folder name.
+- **Proper nouns and product/brand names keep their official casing** as display titles: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `Google Drive`, `React Native`, `TanStack Start`, and the `GT Class` reference group.
+- **Links, filesystem folder names, and URL slugs remain lowercase and hyphenated**, regardless of display-name casing. *Example: the Get Started section is linked as* `/docs/platform/dashboard/get-started`*.*
 
 
 
@@ -697,6 +699,8 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - `on*=` event handler attributes.
 - `javascript:` URLs.
 
+CI validates every `meta.json`: entries must resolve, every navigable child must be listed exactly once, standard folder titles must use canonical sentence case, and top-level sidebar sections must match the approved information architecture.
+
 
 
 ## Consistency checks before finishing
@@ -711,6 +715,7 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - Guide descriptions lead with "How to…" (or a question for concept-only guides), are one concise sentence with no `: this guide covers …` checklist, and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
 - Descriptions (frontmatter and `meta.json`) end with a period (a question ends with `?`); `<Card>` bodies that mirror a description match it (also ending with a period). The only exception is the short tab subtitle on a section root (`"root": true`), which is not a sentence and takes no period.
 - Sidebar labels preserve their established casing; **Get Started**, **Quickstart**, **Guides**, and **Reference** are title-cased, and product names such as **Google Drive** keep their official casing.
+- Top-level sidebar sections match the approved names and order; no unrequested section folder has been added.
 - Every occurrence of a component, function, hook, class, or method in prose links to its reference page, except occurrences inside headings and self-references on the symbol's own page.
 - `npm run validate:reference-links` passes with no unresolved relevant inline-code API symbols.
 - No reviewer directives, TODO/FIXME/placeholder text, or "to confirm"/"to verify" draft sections remain in the page.
