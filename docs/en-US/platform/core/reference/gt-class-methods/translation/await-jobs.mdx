@@ -9,7 +9,7 @@ Polls the status of translation jobs and resolves once every job reaches a termi
 
 ## Overview [#overview]
 
-Pass the result of [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) to `awaitJobs`, optionally with polling settings. It resolves with the final status of each job.
+Pass the result of [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) or an array of job IDs to `awaitJobs`, optionally with polling settings. It resolves with the final status of each job.
 
 ```typescript
 const gt = new GT({ projectId: 'your-project-id', apiKey: 'your-api-key' });
@@ -32,7 +32,7 @@ Signature:
 
 ```typescript
 awaitJobs(
-  enqueueResult: EnqueueFilesResult,
+  jobs: EnqueueFilesResult | string[],
   options?: AwaitJobsOptions
 ): Promise<AwaitJobsResult>
 ```
@@ -44,20 +44,20 @@ awaitJobs(
 - **Automatic polling.** Replaces manual polling loops — you do not need to call `checkJobStatus` in a `while` loop yourself.
 - **Terminal states.** Resolves when every job is `completed`, `failed`, or `unknown`. Jobs the API cannot find are treated as `'unknown'`.
 - **Best-effort timeout.** The timeout is a best-effort limit — the method finishes the current poll before resolving.
-- **Empty input.** If `enqueueResult` contains no jobs, the method resolves immediately with `{ complete: true, jobs: [] }`.
+- **Empty input.** If the enqueue result contains no jobs or the job ID array is empty, the method resolves immediately with `{ complete: true, jobs: [] }`.
 
 ## Parameters [#parameters]
 
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| [`enqueueResult`](#enqueue-result) | The result object returned by `enqueueFiles`. | [`EnqueueFilesResult`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) | No | — |
+| [`jobs`](#jobs) | The result returned by `enqueueFiles` or an array of job IDs. | [`EnqueueFilesResult`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) \| `string[]` | No | — |
 | [`options`](#options) | Polling configuration. | `AwaitJobsOptions` | Yes | — |
 
-### `enqueueResult` [#enqueue-result]
+### `jobs` [#jobs]
 
-**Type** [`EnqueueFilesResult`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) · **Required**
+**Type** [`EnqueueFilesResult`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) | `string[]` · **Required**
 
-The result returned by [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files). Its `jobData` identifies the jobs to poll.
+The result returned by [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files), or job IDs returned by another workflow such as [`setupProject`](/docs/platform/core/reference/gt-class-methods/translation/setup-project). When you pass an enqueue result, its `jobData` identifies the jobs to poll.
 
 ### `options` [#options]
 
@@ -100,6 +100,14 @@ type JobResult = {
 
 ## Examples [#examples]
 
+Poll job IDs directly:
+
+```typescript
+const result = await gt.awaitJobs(['job-123', 'job-456']);
+```
+
+Poll the result of `enqueueFiles`:
+
 ```typescript title="index.ts"
 import { GT } from 'generaltranslation';
 
@@ -141,5 +149,5 @@ for (const job of result.jobs) {
 ## Notes [#notes]
 
 - Jobs that are not found by the API are treated as `'unknown'` status.
-- If `enqueueResult` contains no jobs, the method resolves immediately with `{ complete: true, jobs: [] }`.
+- An empty enqueue result or job ID array resolves immediately with `{ complete: true, jobs: [] }`.
 - The timeout is a best-effort limit — the method finishes the current poll before resolving.
