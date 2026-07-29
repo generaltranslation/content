@@ -80,6 +80,7 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 - Keep intros to **1–3 short sentences**; prefer clarity over completeness up front and let details come later.
 - Keep headings clear and action-oriented.
 - **Prioritize clarity and conciseness throughout.** Use **fewer words** whenever possible and cut anything that does not add meaning.
+- **Guide descriptions are one concise sentence under the page title.** Summarize the outcome in plain language; leave step lists and subsection inventories to the body.
 - **Do not use jargon when you do not need to.** When a plain word works, use it; when a technical term is genuinely necessary, define or link it on first use.
 - Favor practical, runnable examples over exhaustive prose.
 
@@ -89,7 +90,6 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 
 - Address the reader as "you"; use active voice and imperatives.
 - **Fragment vs. sentence in lists**: use fragments when simply listing pieces or labels (no period needed); use full sentences (including standalone imperatives like "Revoke unused keys.") when describing steps or actions, and end those with a period. Be consistent within a single list. List items that complete a lead-in stem ("From the page, you can:") are fragments and take no period.
-- **Italicize notes and examples**: write them as *Note: …* and *Example: …*.
 - **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **Target directory**).
 - **Inline code** for code identifiers, file names, locale codes, environment variables, key prefixes, and headers (`en-US`, `GT_API_KEY`, `gtx-api-`, `x-gt-api-key`).
 - **Summarize runtime wording; do not quote it verbatim.** Paraphrase interactive prompts, success and log messages, and console output rather than copying exact strings, so the docs stay correct when that wording changes. Reproduce a string exactly only when the value is part of the contract — environment variable names, flags, config keys, file names, commands, and error codes/identifiers. *Example: write "the wizard asks which API key type to generate" rather than quoting the full prompt sentence.*
@@ -136,7 +136,7 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 
 ### Product and term casing
 
-Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Directive** (and **Directives**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Directive** (and **Directives**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
 
 *Note: capitalize **Autoderive** only when referring to the feature in prose; the* `gt.config.json` *key stays lowercase in code as* `autoderive`*. Do not write "General Translation Autoderive" — the feature name stands on its own.*
 
@@ -227,7 +227,7 @@ The filetree is defined by **per-folder** `meta.json` **files** (the Fumadocs co
 
 A `meta.json` supports these keys:
 
-- `title` — the folder's sidebar display name (lowercase for structural folders; see File and folder naming).
+- `title` — the folder's sidebar display name (see File and folder naming).
 - `description` — the meaning depends on the folder:
   - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
   - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
@@ -295,7 +295,7 @@ Shape the entry page itself:
 - **The React section is the exception:** it is multi-framework, so its landing page is **Get Started → Overview**, followed by one **[Framework] Quickstart** per framework (see React section (multi-framework)).
 - **Split into a Get Started section with separate Overview and Quickstart pages only when** the capability needs substantial conceptual grounding before a reader can act — concepts, architecture, or a mental model that would overwhelm a single page (typical of larger frameworks). Small libraries, single APIs, and the current Platform capabilities do not need a split.
   - When split: **Overview** covers what it is, why, when to use it, and the core concepts; **Quickstart** is the numbered path to first success.
-  - The folder then displays as **get started** (lowercase, like every structural folder) and its link/URL slug is `get-started` (see File and folder naming).
+  - The folder then displays as **Get Started** and its link/URL slug is `get-started` (see File and folder naming).
 
 
 
@@ -362,10 +362,9 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 - **Configuration reference pages are named and linked simply** `config.md` in most cases (not `configuration.md` or `config-reference.md`).
 - **Command reference pages are named by the command**, lowercase-hyphenated, matching the invoked subcommand (`translate.md`, `save-local.md`, `keyed-metadata.md`).
 - **Consolidate near-identical formats or variants onto one page** (MDX + Markdown → `mdx.md`; TypeScript + JavaScript → `ts.md`). Name the page after the primary variant and cover the sibling on the same page.
-- **Structural and navigational folder display names are lowercase — the rule is all lowercase.** This covers the spine and grouping folders: `overview`, `get started`, `quickstart`, `guides`, and `reference`. There is no capitalized exception among them (get started and quickstart are lowercase too). Multi-word names keep the space but stay lowercase (`get started`).
-- **Reference subsection folders are lowercase as well** — generic groupings display as `commands`, `formats`, `functions`, `components`, `hooks`, and `types`. Never use dashes in the display name; the build derives the URL/`path` slug by lowercasing and hyphenating.
-- **Only proper nouns and product/brand names keep their official casing** as folder names: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `React Native`, `TanStack Start`, and the `GT Class` reference group. Everything structural around them is lowercase.
-- **Links and URL slugs are always lowercase and hyphenated**, matching the lowercased display name. *Example: the get started section is linked as* `/docs/platform/dashboard/get-started`*.*
+- **Sidebar display names follow the established casing in their section.** Always title-case the spine folders **Get Started**, **Quickstart**, **Guides**, and **Reference**. Reference subsection labels such as **Commands**, **Formats**, **Functions**, **Components**, **Hooks**, and **Types** follow the casing of their sibling groups. Automated style passes and linters must preserve these display labels instead of deriving them by lowercasing the folder name.
+- **Proper nouns and product/brand names keep their official casing** as folder names: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `Google Drive`, `React Native`, `TanStack Start`, and the `GT Class` reference group.
+- **Links and URL slugs are always lowercase and hyphenated**, regardless of display-name casing. *Example: the Get Started section is linked as* `/docs/platform/dashboard/get-started`*.*
 
 
 
@@ -377,14 +376,14 @@ Use this exact structure (blank line after the opening `---`, blank line before 
 ---
 
 title: Adding annotations
-description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard
+description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard.
 
 ---
 ```
 
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
-  - **Guides** lead with **"How to…"** for SEO, naming the task the guide accomplishes and the relevant tool. When the guide walks through several steps, add a `: this guide covers …` clause listing them. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to translate files with the generaltranslation library: this guide covers uploading a source file, enqueuing translation, checking status, and downloading the translated file." / "What are locale codes, and how are they used in the General Translation stack?"
+  - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant product or tool. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the General Translation Dashboard." / "What are locale codes, and how are they used in the General Translation stack?"
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
@@ -583,8 +582,10 @@ Populate `related.links` by page type, ordered by **what the reader most likely 
 - Link to the **logical page path, not the file path**: omit any `en-US/` locale segment and the file extension (`.md`/`.mdx`) in Markdown links. Note that `meta.json` `pages` entries use extensionless relative references (`"./quickstart"`), since those are structural file locations.
 - Link punctuation goes **outside** the brackets: `[Annotations](…).`, not `[Annotations.](…)`.
 - **Backticks go inside the link text, never around the whole link.** For API/code references, code-format the identifier inside the link text — `[useTranslations](…)` — which renders correctly. Do not wrap the entire link in backticks (`[GT](…)` renders literally).
-- **Link every component, function, hook, class, or method the first time it appears on a page** to its reference page (`[useTranslations](/docs/react/reference/hooks/use-translations)`). Link only the first mention on that page; leave later mentions as plain inline code. Skip the link when the first mention is the page's own subject (do not self-link a reference page to itself).
+- **Link every occurrence of a component, function, hook, class, or method in prose** to its reference page (`[useTranslations](/docs/react/reference/hooks/use-translations)`). Do not link occurrences inside headings. Skip self-links on the symbol's own reference page.
 - **Verify the target exists before linking.** If a page does not exist yet, omit the link or note it as "coming soon".
+- **Validate inline-code API links with the reference index.** Run `npm run validate:reference-links` from `scripts/`; use `npm run validate:reference-links -- --fix` to wrap deterministic matches without reformatting the source. The index uses dedicated API reference page titles plus the `initializeGT` and `initializeGTSPA` sections on the React configuration page. It normalizes component brackets, call parentheses, Python snake_case, and `gt` commands, then uses package, framework, and section context when a symbol has multiple targets.
+- **The validator checks prose only.** It excludes frontmatter, headings, fenced code, existing links, same-page symbols, local config/field headings, and symbols that belong to another package unless the surrounding text names that package. Its narrow source exclusions cover fields returned by `useLocaleSelector`, the `gt-i18n` `getTranslations` export without a package-specific page, and release-note mentions that intentionally refer to both a class method and standalone function.
 
 
 
@@ -596,7 +597,11 @@ Callouts are MDX components for a short, important aside. **Use them rarely and 
 - **Tip** — an optional best practice or shortcut.
 - **Warning** — something that can cause data loss, breakage, or a hard-to-reverse mistake.
 
+When using a Callout, use `type="info"` for Notes and Tips so the default icon is blue, and `type="warn"` for Warnings so the warning icon remains orange.
+
 Keep each callout to one or two sentences. Do not stack callouts or use them in place of normal steps.
+
+Notes and tips do not have one required format across the entire documentation set. Follow the established pattern for the page type and keep sibling pages consistent: use a Callout when the aside should interrupt the flow, and italicized prose when it should remain lightweight.
 
 ### Version and change notes
 
@@ -662,7 +667,7 @@ Use `<Cards>` wrapping child `<Card title="…" href="…">` elements for the na
 ```mdx
 <Cards>
   <Card title="Configuring the CLI" href="/docs/cli/guides/configuring">
-    Set up a General Translation gt.config.json with your locales, files, and storage options.
+    How to set up a General Translation gt.config.json with your locales, files, and storage options.
   </Card>
 </Cards>
 ```
@@ -703,18 +708,19 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - First mention of the product on the page (and in the description) uses **General Translation**, not GT.
 - Guides answer "how do I…?" with ordered steps; Reference answers "what exactly does this do?" comprehensively and opens with an overview table linking to each item's section.
 - Guide titles use the gerund (-ing) form, and each guide's file name and link slug match its title.
-- Guide descriptions lead with "How to…" (or a question for concept-only guides) and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
+- Guide descriptions lead with "How to…" (or a question for concept-only guides), are one concise sentence with no `: this guide covers …` checklist, and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
 - Descriptions (frontmatter and `meta.json`) end with a period (a question ends with `?`); `<Card>` bodies that mirror a description match it (also ending with a period). The only exception is the short tab subtitle on a section root (`"root": true`), which is not a sentence and takes no period.
-- Structural/navigational folders (`overview`, `get started`, `quickstart`, `guides`, `reference`, and reference subsections) display in lowercase; only proper-noun and product folders keep their casing.
-- Every component, function, hook, class, or method is linked to its reference page on its first mention on the page.
+- Sidebar labels preserve their established casing; **Get Started**, **Quickstart**, **Guides**, and **Reference** are title-cased, and product names such as **Google Drive** keep their official casing.
+- Every occurrence of a component, function, hook, class, or method in prose links to its reference page, except occurrences inside headings and self-references on the symbol's own page.
+- `npm run validate:reference-links` passes with no unresolved relevant inline-code API symbols.
 - No reviewer directives, TODO/FIXME/placeholder text, or "to confirm"/"to verify" draft sections remain in the page.
 - Setup-first pages (Quickstart, Get Started, guide happy paths) show only the current version, with no legacy code or "in older versions" asides; breaking changes are noted only on maintenance-facing pages (Reference, guide detail) with a `Changed in vN:` note.
 - Page order in the filetree (and the sidebar navigation it drives) is logical (workflow order), not alphabetical.
 - Uncertain items are resolved against the codebase; anything that genuinely cannot be verified is omitted rather than guessed.
 - Navigation separators use `>`, not `->`.
 - `.md` link suffix usage is consistent within the file.
-- Notes and examples are italicized.
-- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Project, Context Group, Glossary, Directives, Organization, Enterprise, GitHub).
+- Notes and tips use the established format for their page type and are consistent across sibling pages.
+- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Project, Context Group, Glossary, Directives, Organization, Enterprise, GitHub).
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
