@@ -13,7 +13,7 @@ related:
 
 By the end of this guide, your Next.js Pages Router app will display content in multiple languages, with a language switcher your users can interact with.
 
-In the Pages Router, `gt-next` works through `getServerSideProps`: on each request, the server resolves the user's locale, loads a translations snapshot, and passes both to a [`<GTProvider>`](/docs/react/reference/components/gt-provider) in `_app.tsx` so the first render is already translated.
+In the Pages Router, Next.js internationalized routing resolves the active locale and `gt-next` works through `getServerSideProps`: on each request, the server loads a translations snapshot for that locale and passes both to a [`<GTProvider>`](/docs/react/reference/components/gt-provider) in `_app.tsx` so the first render is already translated.
 
 The `gt-next/server` entry is App Router-only and does not work with the Pages Router.
 
@@ -60,29 +60,14 @@ The `gt-next/server` entry is App Router-only and does not work with the Pages R
 </Tabs>
 
 
-### 2. Configure your Next.js config
-
-`gt-next` uses a Next.js plugin called **`withGTConfig`** to set up internationalization at build time. Wrap your existing Next.js config with it:
-
-```ts title="next.config.ts"
-import { withGTConfig } from 'gt-next/config';
-
-const nextConfig = {};
-
-export default withGTConfig(nextConfig);
-```
-
-This plugin reads your translation settings and wires everything together behind the scenes. For locale-prefixed URLs, follow the [Pages Router middleware guide](/docs/react/nextjs/pages-router-middleware).
-
-
-### 3. Create a translation config file
+### 2. Create a translation config file
 
 Create a **`gt.config.json`** file in your project root. This tells the library which languages you support:
 
 ```json title="gt.config.json"
 {
   "defaultLocale": "en",
-  "locales": ["es", "fr", "ja"],
+  "locales": ["en", "es", "fr", "ja"],
   "files": {
     "gt": {
       "output": "public/_gt/[locale].json"
@@ -92,7 +77,9 @@ Create a **`gt.config.json`** file in your project root. This tells the library 
 ```
 
 - **`defaultLocale`** — the language your app is written in (your source language).
-- **`locales`** — the languages you want to translate into. Pick any from the [supported locales list](/docs/platform/dashboard/reference/supported-locales).
+- **`locales`** — every language your app serves, including `defaultLocale`. Pick any from the [supported locales list](/docs/platform/dashboard/reference/supported-locales).
+
+*Note: list `defaultLocale` in `locales` as well. The next step passes `locales` straight to Next.js internationalized routing, which fails to build when `defaultLocale` is missing from the array.*
 - **`files.gt.output`** — where the CLI saves translation files. `[locale]` is replaced with each language code (e.g., `public/_gt/es.json`).
 
 Add `public/_gt/` to your **`.gitignore`** — these files are generated, not hand-written:
@@ -100,6 +87,32 @@ Add `public/_gt/` to your **`.gitignore`** — these files are generated, not ha
 ```txt title=".gitignore"
 public/_gt/
 ```
+
+
+### 3. Configure your Next.js config
+
+`gt-next` uses a Next.js plugin called **`withGTConfig`** to set up internationalization at build time. Add Next.js [internationalized routing](https://nextjs.org/docs/pages/guides/internationalization) with the locales from `gt.config.json`, then wrap the config with the plugin:
+
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+import gtConfig from './gt.config.json';
+
+const nextConfig: NextConfig = {
+  i18n: {
+    locales: gtConfig.locales,
+    defaultLocale: gtConfig.defaultLocale,
+    // Locale detection is enabled by default. Set localeDetection: false to disable it.
+  },
+  reactStrictMode: true,
+};
+
+export default withGTConfig(nextConfig);
+```
+
+With `i18n` set, Next.js owns locale-prefixed URLs, the active locale on each request, the `<html lang>` attribute, and client navigation between locales. The plugin reads your translation settings and wires the rest together behind the scenes.
+
+Because Next.js internationalized routing reads only its own preference cookie, `withGTConfig` points GT's client-side locale persistence at the standard `NEXT_LOCALE` cookie whenever `i18n` is present and `localeDetection` is not `false`. Your `i18n` config is left untouched.
 
 
 ### 4. Add a load function for local translations
@@ -130,7 +143,7 @@ export default async function loadTranslations(locale: string) {
 
 ### 5. Wrap getServerSideProps on your pages
 
-Wrap each page's `getServerSideProps` with **`withGTServerSideProps`**. On every request, it resolves the user's locale — from the `generaltranslation.locale` cookie if set, otherwise from the `Accept-Language` header — loads a translations snapshot for that locale, and injects both into your page props:
+Wrap each page's `getServerSideProps` with **`withGTServerSideProps`**. On every request, it reads the locale Next.js resolved for the route, loads a translations snapshot for that locale, and injects both into your page props:
 
 ```tsx title="pages/index.tsx"
 import type { GetServerSideProps } from 'next';
@@ -164,6 +177,7 @@ The **[`GTProvider`](/docs/react/reference/components/gt-provider)** component g
 
 ```tsx title="pages/_app.tsx"
 import type { AppProps } from 'next/app';
+import Router from 'next/router';
 import { GTProvider, WithGTServerSideProps } from 'gt-next';
 
 export default function App({
@@ -173,14 +187,22 @@ export default function App({
   const { locale, translations, ...restPageProps } = pageProps;
 
   return (
-    <GTProvider locale={locale} translations={translations}>
+    <GTProvider
+      locale={locale}
+      translations={translations}
+      _reload={({ locale: nextLocale }) => {
+        void Router.push(Router.asPath, Router.asPath, {
+          locale: nextLocale,
+        });
+      }}
+    >
       <Component {...restPageProps} />
     </GTProvider>
   );
 }
 ```
 
-Because the locale and translations arrive with the server response, the first render is already in the user's language — no client-side loading state.
+Because the locale and translations arrive with the server response, the first render is already in the user's language — no client-side loading state. The `_reload` callback routes locale changes through Next.js navigation, which keeps [`GTProvider`](/docs/react/reference/components/gt-provider) itself framework-agnostic.
 
 
 ### 7. Mark content for translation
@@ -225,7 +247,7 @@ export default function Home() {
 }
 ```
 
-[`LocaleSelector`](/docs/react/reference/components/locale-selector) renders a dropdown populated with the languages from your `gt.config.json`. When the user picks a language, `gt-next` saves the choice to the `generaltranslation.locale` cookie and reloads the page, so the server re-renders everything in the new locale.
+[`LocaleSelector`](/docs/react/reference/components/locale-selector) renders a dropdown populated with the languages from your `gt.config.json`. When the user picks a language, `gt-next` saves the choice to the `NEXT_LOCALE` cookie and the `_reload` callback navigates to the locale-prefixed URL, so the server re-renders everything in the new locale.
 
 
 ### 9. Set up environment variables (optional)
@@ -348,8 +370,11 @@ That's it — your app is now multilingual. 🎉
   <Accordion title="Can I use getStaticProps instead?">
     Yes. Wrap the page with `withGTStaticProps` and keep passing the generated props to [`GTProvider`](/docs/react/reference/components/gt-provider) in `_app.tsx`. See the [Pages Router static site generation guide](/docs/react/nextjs/pages-router-static-site-generation) for the complete setup.
   </Accordion>
+  <Accordion title="Do I still need the GT middleware?">
+    No. Next.js internationalized routing is the recommended path, and the `i18n` block in step 3 replaces the middleware setup. [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) remains available for apps that need custom locale routing — see the [Pages Router middleware guide](/docs/react/nextjs/pages-router-middleware).
+  </Accordion>
   <Accordion title="The language isn't changing when I use the dropdown">
-    `gt-next` stores the user's language preference in a cookie called `generaltranslation.locale`. If you previously tested with a different language, this cookie may override your selection. Clear your cookies and try again.
+    With `i18n` configured, `gt-next` stores the user's language preference in the `NEXT_LOCALE` cookie that Next.js reads. If you previously tested with a different language, this cookie may override your selection. Clear your cookies and try again.
 
     - [Chrome](https://support.google.com/chrome/answer/95647)
     - [Firefox](https://support.mozilla.org/en-US/kb/delete-cookies-remove-info-websites-stored)

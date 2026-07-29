@@ -12,28 +12,36 @@ related:
 
 Pre-render localized Pages Router pages with `withGTStaticProps`. The setup mirrors `withGTServerSideProps`, but Next.js generates the props at build time.
 
-## Keep your Next.js config [#config]
+## Configure locale routing [#routing]
 
-Static generation does not change your `withGTConfig` setup:
+Static generation needs Pages Router locale routing so Next.js builds one version of each page per locale. Set `i18n` in your Next.js config with the locales from `gt.config.json`:
 
 ```ts title="next.config.ts"
 import type { NextConfig } from 'next';
 import { withGTConfig } from 'gt-next/config';
+import gtConfig from './gt.config.json';
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  i18n: {
+    locales: gtConfig.locales,
+    defaultLocale: gtConfig.defaultLocale,
+  },
+};
 
 export default withGTConfig(nextConfig);
 ```
 
-## Configure locale routing [#routing]
+*Note: `locales` in `gt.config.json` must include `defaultLocale`. Next.js rejects an `i18n` config whose `locales` array omits the default locale, and the build fails before `withGTStaticProps` runs.*
 
-Follow the [Pages Router middleware guide](/docs/react/nextjs/pages-router-middleware) to create `proxy.ts` and move your routes under `pages/[locale]`.
+Without locale routing, Next.js generates a single version of the page and `withGTStaticProps` cannot tell which locale it is building. `gt-next` throws a build-time error in that case, pointing you at the missing `locales` and `defaultLocale` settings. At runtime, a page that renders without an active Pages Router locale logs a warning with the same fix.
+
+If you need routing that the built-in `i18n` option does not cover, follow the [Pages Router middleware guide](/docs/react/nextjs/pages-router-middleware) to create `proxy.ts` and move your routes under `pages/[locale]` instead.
 
 ## Add static props [#static-props]
 
 Wrap each page's `getStaticProps` function with `withGTStaticProps`:
 
-```tsx title="pages/[locale]/about.tsx"
+```tsx title="pages/about.tsx"
 import type { GetStaticProps } from 'next';
 import { T, Var, withGTStaticProps } from 'gt-next';
 
@@ -55,10 +63,37 @@ export default function AboutPage({ generatedAt }: AboutPageProps) {
 
 `withGTStaticProps` adds the locale and translation snapshot to the returned page props. If the page has no other props, use the no-argument form:
 
-```tsx title="pages/[locale]/index.tsx"
+```tsx title="pages/index.tsx"
 import { withGTStaticProps } from 'gt-next';
 
 export const getStaticProps = withGTStaticProps();
 ```
 
-Pass those values to [`GTProvider`](/docs/react/reference/components/gt-provider) and [connect locale changes](/docs/react/nextjs/pages-router-middleware#locale-changes) in `_app.tsx`.
+Pass those values to [`GTProvider`](/docs/react/reference/components/gt-provider) in `_app.tsx`, using `WithGTStaticProps` as the `pageProps` type. Give the provider a `_reload` callback so locale changes route through Next.js navigation:
+
+```tsx title="pages/_app.tsx"
+import type { AppProps } from 'next/app';
+import Router from 'next/router';
+import { GTProvider, type WithGTStaticProps } from 'gt-next';
+
+export default function App({
+  Component,
+  pageProps,
+}: AppProps<WithGTStaticProps>) {
+  const { locale, translations, ...restPageProps } = pageProps;
+
+  return (
+    <GTProvider
+      locale={locale}
+      translations={translations}
+      _reload={({ locale: nextLocale }) => {
+        void Router.push(Router.asPath, Router.asPath, {
+          locale: nextLocale,
+        });
+      }}
+    >
+      <Component {...restPageProps} />
+    </GTProvider>
+  );
+}
+```
