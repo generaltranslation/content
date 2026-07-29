@@ -1,0 +1,100 @@
+---
+
+title: Upload Project assets
+description: Upload font assets for General Translation Lottie workflows in an Organization. API reference for Upload Project assets.
+
+method: POST
+
+---
+
+Uploads OpenType or TrueType fonts through a Project and makes them available to Lottie translation workflows across its Organization.
+
+## Overview [#overview]
+
+```http
+POST https://api2.gtx.dev/v2/project/assets
+```
+
+**Permission** `project:files:write` · **Rate limit** Medium (120/min)
+
+## How it works [#how-it-works]
+
+- Each request accepts one to 50 fonts.
+- Each font must be valid base64, use a `.ttf` or `.otf` file name, and decode to no more than 20MB.
+- The Project determines which Organization owns the assets. Uploaded fonts persist across that Organization's translation jobs.
+- Storage is content-addressed. Re-uploading the same font with the same file name is idempotent.
+- If any asset cannot be stored, the request fails. You can safely retry the complete request.
+
+## Request [#request]
+
+### Headers
+
+| Header | Description | Required |
+| --- | --- | --- |
+| `x-gt-api-key` | Project or Organization API key. | Yes |
+| `x-gt-project-id` | Project ID. Required when using an Organization key. | No |
+
+### Body
+
+**Content type** `application/json`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`assets`](#assets) | Font assets to upload (1–50). | `object[]` | No | — |
+
+#### `assets`
+
+**Type** `object[]` · **Required**
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `assetType` | Asset type. Only `FONT` is supported. | `'FONT'` | No | — |
+| `content` | Base64-encoded font content, up to 20MB after decoding. | `string` | No | — |
+| `fileName` | Font file name ending in `.ttf` or `.otf` (1–255 characters). | `string` | No | — |
+
+## Response [#response]
+
+**Status** `201 Created`
+
+```json title="Response"
+{
+  "assets": [
+    {
+      "id": "asset_...",
+      "assetKey": "gt/orgs/org_.../fonts/...",
+      "fileName": "BrandSans.ttf"
+    }
+  ],
+  "count": 1
+}
+```
+
+## Errors [#errors]
+
+| Status | Cause |
+| --- | --- |
+| `400` | Invalid request body, invalid base64, an empty asset, an unsupported file extension, or an asset larger than 20MB. |
+| `401` | Missing or invalid API key. |
+| `403` | API key lacks `project:files:write`. |
+| `404` | Project not found. |
+| `429` | Rate limit exceeded. |
+| `500` | An asset could not be stored. Retry the complete request. |
+
+## Example [#example]
+
+```bash
+FONT_BASE64=$(base64 < ./BrandSans.ttf | tr -d '\n')
+
+curl -X POST https://api2.gtx.dev/v2/project/assets \
+  -H "x-gt-api-key: gtx-api-..." \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"assets\": [
+      {
+        \"assetType\": \"FONT\",
+        \"content\": \"$FONT_BASE64\",
+        \"fileName\": \"BrandSans.ttf\"
+      }
+    ]
+  }"
+```
