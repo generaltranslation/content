@@ -165,8 +165,10 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 ### General Translation vs. GT
 
 - Always write **General Translation** (singular) — never "General Translations". The API is the **General Translation API**, not "General Translations API".
-- Write out **General Translation** on the **first mention of a page, and in every** `description`. Do not open a page or a description with the abbreviation.
-- After the first mention, you may use **GT** later on the same page where it is clear from context and reads better, such as long sentences or possessives (**GT's**). When in doubt, keep writing General Translation.
+- Use **General Translation** when the page needs to identify the overall product, distinguish it from another service, or name an official term such as the **General Translation API**. Do not force the name into every page or `description`; the section title, sidebar, package name, or feature name often supplies enough context.
+- Do not prefix every product-owned feature with the brand. Prefer **the CLI**, **the Dashboard**, **the integration**, **Ask AI**, **Context Groups**, or the package name over "the General Translation CLI/tool/integration/Ask AI" once the subject is clear.
+- Treat the `description` and opening paragraph as one rendered introduction. If one names General Translation, the other should normally use the capability name or a pronoun instead of naming it again.
+- If you use **GT** as an abbreviation, first write **General Translation** on that page. Never use **GT** only to avoid a repeated product name; rewrite the sentence around the capability instead.
 
 
 
@@ -414,15 +416,15 @@ Use this exact structure (blank line after the opening `---`, blank line before 
 ---
 
 title: Adding annotations
-description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard.
+description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the Dashboard.
 
 ---
 ```
 
 - **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
-- `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
-  - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant product or tool. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the General Translation Dashboard." / "What are locale codes, and how are they used in the General Translation stack?"
+- `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:
+  - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant capability or tool without automatically branding it. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the Dashboard." / "What are locale codes, and how are they used across the translation stack?"
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
@@ -445,7 +447,7 @@ A few optional fields appear on specific page types:
 ## Page structure
 
 1. **Frontmatter title:** the docs layout renders the `title` as the page H1. Do not add a `#` heading to the body.
-2. **Intro:** 1–3 short sentences with no heading that add substance beyond the `description`: behavior, inputs, or when to use it. The docs layout already renders the `description` beneath the title, so the intro must not restate or paraphrase it. On reference pages especially, do not open with the description's summary sentence. Optionally one more italicized short line for constraints or scope.
+2. **Intro:** 1–3 short sentences with no heading that add substance beyond the `description`: behavior, inputs, or when to use it. The docs layout already renders the `description` beneath the title, so the intro must not restate or paraphrase it. Read the title, description, and intro together and remove repeated branding as well as repeated meaning; after the capability is established, use its short name, "the integration," "the CLI," or another natural subject. On reference pages especially, do not open with the description's summary sentence. Optionally one more italicized short line for constraints or scope.
 3. **Sections:** use `##` for top-level body sections.
 
 
@@ -783,10 +785,10 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 - The intro does not restate the frontmatter `description` (the layout renders the description under the title); the body opens with new detail.
 - Depth and vocabulary match the page audience.
 - Sections are grouped into a few meaningful H2s with H3 subsections, not many small one-off H2s. Consolidate or restructure if there are more than 6 H2 subsections.
-- First mention of the product on the page (and in the description) uses **General Translation**, not GT.
+- The product name appears only where it adds context; the title, description, and intro do not repeat **General Translation**, and product-owned capabilities are not needlessly brand-prefixed. If **GT** is used, an earlier necessary mention spells out **General Translation**.
 - Guides answer "how do I…?" with ordered steps; Reference answers "what exactly does this do?" comprehensively and opens with an overview table linking to each item's section.
 - Guide titles use the gerund (-ing) form, and each guide's file name and link slug match its title.
-- Guide descriptions lead with "How to…" (or a question for concept-only guides), are one concise sentence with no `: this guide covers …` checklist, and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
+- Guide descriptions lead with "How to…" (or a question for concept-only guides), are one concise sentence with no `: this guide covers …` checklist, contain no unnecessary brand prefix, and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
 - Descriptions (frontmatter and `meta.json`) end with a period (a question ends with `?`); `<Card>` bodies that mirror a description match it (also ending with a period). The only exception is the short tab subtitle on a section root (`"root": true`), which is not a sentence and takes no period.
 - Sidebar labels preserve their established casing; **Get Started**, **Quickstart**, **Guides**, and **Reference** are title-cased, and product names such as **Google Drive** keep their official casing.
 - Top-level sidebar sections match the approved names and order; no unrequested section folder has been added.
