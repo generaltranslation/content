@@ -5,7 +5,7 @@ description: Register General Translation request middleware, initialize a TanSt
 
 ---
 
-`gt-tanstack-start` uses global request middleware and root-route initialization. The middleware creates request-local state for server code, while the root loader hydrates [`<GTProvider>`](/docs/react/reference/components/gt-provider) with the locale and translations.
+`gt-tanstack-start` uses global request middleware, module-level router initialization, and a root route loader. The middleware creates request-local state for server code, while the root loader hydrates [`<GTProvider>`](/docs/react/reference/components/gt-provider) with the locale and translations.
 
 This page covers the TanStack Start-specific setup. For the full path including installation and the CLI, follow the [TanStack Start Quickstart](/docs/react/tanstack-start-quickstart).
 
@@ -51,7 +51,7 @@ The middleware resolves the locale, region, and internationalization setting onc
 
 [`initializeGT`](/docs/react/reference/config#initialize), [`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale), and [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) are all imported from `gt-tanstack-start`:
 
-- **[`initializeGT`](/docs/react/reference/config#initialize)** — call once at the module level of the root route. Spread in your `gt.config.json` and pass [`loadTranslations`](/docs/react/reference/functions/load-translations).
+- **[`initializeGT`](/docs/react/reference/config#initialize)** — call once at module scope in `src/router.tsx`. Spread in your `gt.config.json` and pass [`loadTranslations`](/docs/react/reference/functions/load-translations).
 - **[`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale)** — returns the locale from the active middleware scope on the server and from the initialized browser condition store on the client.
 - **[`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot)** — loads a locale's translations in the shape [`<GTProvider>`](/docs/react/reference/components/gt-provider) expects, so content renders without a loading flash. See the [reference](/docs/react/reference/functions/get-translations-snapshot).
 
@@ -77,9 +77,19 @@ On the server, [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/g
 
 TanStack Router's base path is respected through `TSS_ROUTER_BASEPATH`.
 
-## Wire up the root route [#root-route]
+## Initialize the router and wire up the root route [#root-route]
 
-In `src/routes/__root.tsx`, initialize at the module level, resolve the locale and load the snapshot in the loader, then pass `locale` and `translations` to [`<GTProvider>`](/docs/react/reference/components/gt-provider) in the shell component.
+Add the [`initializeGT`](/docs/react/reference/config#initialize) imports and initializer to your existing `src/router.tsx` file:
+
+```tsx title="src/router.tsx"
+import { initializeGT } from 'gt-tanstack-start';
+import gtConfig from '../gt.config.json';
+import loadTranslations from '../loadTranslations';
+
+initializeGT({ ...gtConfig, loadTranslations });
+```
+
+Then resolve the locale and load the snapshot in the `src/routes/__root.tsx` loader. Pass `locale` and `translations` to [`<GTProvider>`](/docs/react/reference/components/gt-provider) in the shell component.
 
 ```tsx title="src/routes/__root.tsx"
 import {
@@ -88,17 +98,11 @@ import {
   createRootRoute,
 } from '@tanstack/react-router';
 import {
-  initializeGT,
   GTProvider,
   getLocale,
   getTranslationsSnapshot,
   LocaleSelector,
 } from 'gt-tanstack-start';
-import gtConfig from '../../gt.config.json';
-import loadTranslations from '../../loadTranslations';
-
-// Initialize General Translation once, at the module level
-initializeGT({ ...gtConfig, loadTranslations });
 
 export const Route = createRootRoute({
   loader: async () => {
@@ -132,7 +136,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 
 [`<GTProvider>`](/docs/react/reference/components/gt-provider) requires both `locale` and `translations` here — unlike Next.js, where the server resolves them, or React Native, where the provider loads them itself.
 
-[`initializeGT`](/docs/react/reference/config#initialize) must run before [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) handles a request. Finish this root-route setup before starting the development server.
+[`initializeGT`](/docs/react/reference/config#initialize) must run before [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) handles a request. Finish the router and root-route setup before starting the development server.
 
 ## Mark content for translation [#content]
 
