@@ -26,9 +26,45 @@ Good docs come from understanding, not paraphrasing. Before applying any formatt
 The codebase is always the source of truth. Resolve questions by reading the code, and use your best judgement to make a decision rather than deferring to a reviewer or leaving the choice open. Do not add review checklists, "flag for human review" notes, or lists of open questions to the docs or the change.
 
 - **Verify against the code, then decide.** When the code and the existing docs disagree, follow the code and correct the docs. When something is unclear, dig into the code until it is clear; when it genuinely cannot be verified from the code, use your best judgement from the existing docs and the live product, document the current known state plainly, and prefer omission over invention.
+- **Verify what is shipped, not merely merged.** For a versioned library or CLI, the published artifact for the version the page targets is the source of truth for availability. Install and probe that exact release for exports, signatures, defaults, runtime requirements, and package versions; repository source may contain unreleased behavior.
 - **Close calls:** when two options for structuring, displaying, or describing information are similarly good, pick the stronger one and move on — do not stall or leave both in the page.
 - **UI-only surfaces (Dashboard, Locadex).** These describe screens, labels, and navigation that are not verifiable against this codebase and drift as the product UI changes. Confirm UI names and flows against the live product and use your best judgement; if a UI detail is unconfirmed, omit it rather than guessing. Never ship a "Details to confirm" section.
 - **Experimental Python SDK.** The 0.x Python SDK (`generaltranslation`, `gt-i18n`, `gt-flask`, `gt-fastapi`, from the `generaltranslation/gt-python` repo) may not be verifiable against this repo. Verify every signature, return type, and default against the published package; when you cannot, prefer omission over invention. State the experimental status and version floor once (in the section intro or Reference index `_Note:_`), and add `Changed in vN` notes cautiously given the fast-moving 0.x surface.
+
+
+
+### Safeguards for audits and rewrites
+
+Automated audits and broad rewrites have repeatedly passed builds, link checks, and approval while still containing incorrect behavior or silently dropping important details. Apply these safeguards to every material rewrite, simplification, content audit, or product-sync pass.
+
+#### Establish the shipped behavior
+
+- **Triangulate API contracts.** Do not infer an endpoint from one type or handler. Cross-check the public request schema, normalization and derivation logic, persistence or upsert behavior, response serializer, tests, and published client types. Verify identity keys, defaults, overwrite versus idempotency behavior, partial failures, retry safety, size limits, and every status code separately.
+- **Inventory UI behavior before rewriting it.** For Dashboard and Locadex pages, record the current controls, defaults, role and permission requirements, plan gates, button states, disconnect behavior, and failure states from the live product. A reorganized page must not make a still-active control disappear. Use exact role names such as **Admin**; do not substitute an informal role label such as "owner."
+- **Scope claims to the mode that implements them.** When a capability supports multiple modes, state which mode an example uses. Audit broad wording around storage, fields, imports, defaults, permissions, and lifecycle behavior so one mode is not presented as universal.
+
+#### Preserve semantics while simplifying
+
+Before rewriting, inventory the facts in the existing page. Account for every prerequisite, permission, role, plan requirement, setup mode, default, side effect, authorization scope, billing effect, limit, fallback, update or replacement behavior, retry rule, and failure mode.
+
+- Keep each verified fact, move it to the relevant Guide or Reference page, or correct it from the source of truth. Delete it only when it is obsolete, duplicative, or cannot be verified.
+- Review deletions as carefully as additions. A shorter diff is not automatically a clearer or more accurate page; concision applies to wording, not coverage.
+- Shorten the happy path by moving secondary detail into a nearby Note or a linked Reference section. Never make the main path simpler by hiding a consequence the reader must plan for.
+- Link volatile values such as pricing and quotas to their canonical source. Explain how usage is measured, but do not copy a rate table, worked cost calculation, or exact price unless the value is contractual and maintained on that page.
+
+#### Validate the user journey
+
+- **Walk every new or materially changed Quickstart in a clean project.** Start with only the requirements stated on the page and perform every step in order. Verify dependency installation, module format, file-creation order, credentials, interactive behavior, start commands, expected output, and the first language switch or translated result.
+- **Test the documented environment.** An interactive wizard working locally does not prove the CI path works; a development key returning source text does not prove production credentials are configured; a pre-existing generated file does not prove the Quickstart creates it. Test fresh local, non-interactive, and framework-specific paths when the page claims to support them.
+- A Quickstart is complete only when the reader reaches an observable success state. A docs build, valid code fence, or type-correct snippet does not establish that the sequence runs.
+
+#### Treat information architecture as a route migration
+
+Before moving or splitting pages, make an old-to-new route map. Update references in docs, blog, devlog, templates, `meta.json`, `related.links`, cards, and redirects; remember that route-group folder names do not appear in URLs. Validate every new target and preserve compatibility for established entry routes where redirects are supported.
+
+#### Separate mechanical and semantic validation
+
+Validators are necessary but cannot prove product accuracy. Run all structural checks, then separately verify removed facts, examples, version availability, UI workflows, option shapes, defaults, and error behavior against the shipped product. A green build must never be treated as evidence that a behavioral claim is true.
 
 
 
@@ -383,6 +419,7 @@ description: How to use labels, notes, and comments to coordinate translation re
 ---
 ```
 
+- **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant product or tool. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the General Translation Dashboard." / "What are locale codes, and how are they used in the General Translation stack?"
@@ -494,7 +531,7 @@ Use the `a)` `b)` `c)` sub-section pattern for parallel alternative paths (see N
 
 Keep an integration Quickstart focused on the shortest successful path, usually three to five numbered steps. Make the primary flow easy to scan without deleting details that affect access, cost, or results:
 
-- Keep role-specific and one-time setup out of the main sequence. Put Organization owner/admin provisioning, connection setup, and similar secondary prerequisites in a short `Note` callout immediately after the relevant step. Start with the role in bold, then state the exact actions that person must take.
+- Keep role-specific and one-time setup out of the main sequence. Put provisioning, connection setup, and secondary prerequisites for any role in a `Note` callout immediately after the relevant step. Start with the exact current role in bold — for example, **Organization admins:**, **Developers:**, or **Editors:** — then state only the actions that role must take.
 - Preserve critical granularity when simplifying. Required permissions and plan features, authorization scope, billing effects, update and replacement behavior, limits, and failure modes must remain in the relevant Guide or Reference page. Move them into a concise callout or a clearly named section instead of dropping them.
 - Keep Guides task-oriented and written for the person using the integration. Explain secondary button states and edge behavior next to the step where readers encounter them, without interrupting the happy path.
 - Keep Reference pages complete. Concise wording does not justify removing permissions, supported content, access behavior, defaults, limits, or failure behavior.
@@ -602,17 +639,39 @@ Populate `related.links` by page type, ordered by **what the reader most likely 
 
 ### Callouts
 
-Callouts are MDX components for a short, important aside. **Use them rarely and never by default** — prefer plain prose, and reach for a callout only when an aside is genuinely important enough to break the flow. Use only these three titles:
+Callouts are MDX components that keep secondary but important information next to the step or concept it affects. Use them based on purpose, not a page-level quota: a page can have several when each one helps a different role, mode, or decision. Do not add them only for visual variety.
 
-- **Note** — a neutral clarification or aside, including version/requirement notes. For a breaking change across releases, lead the Note with `Changed in vN:` instead of `Note:` (see Version and change notes).
-- **Tip** — an optional best practice or shortcut.
-- **Warning** — something that can cause data loss, breakage, or a hard-to-reverse mistake.
+Use a callout when the information should stay adjacent but should not interrupt the main path:
 
-When using a Callout, use `type="info"` for Notes and Tips so the default icon is blue, and `type="warn"` for Warnings so the warning icon remains orange.
+- **Role-specific actions.** In integration and Dashboard flows, use a Note for setup or decisions that belong to a particular role rather than every reader. Start with the exact role in bold, such as **Organization admins:**, **Developers:**, or **Editors:**. Different roles may have separate Notes when their actions occur at different steps.
+- **Path- or mode-specific context.** Use a Note for an alternate connection mode, a non-interactive path, a plan or permission requirement, a fallback, or behavior that applies only in one framework or localization mode.
+- **Consequences near an action.** Use a Note for billing or metering behavior, generated files, background processing, replacement behavior, or another result readers should understand before continuing.
+- **Optional improvements.** Use a Tip for a shortcut, best practice, or optimization that is helpful but not required.
+- **Risk.** Use a Warning when an action can overwrite work, delete or expose data, incur an unexpected cost, break a build, or be difficult to reverse.
+- **Version changes.** Use a Note led by `Changed in vN:` for breaking or behavior-changing updates on maintenance-facing pages (see Version and change notes).
 
-Keep each callout to one or two sentences. Do not stack callouts or use them in place of normal steps.
+Use `type="info"` for Notes and Tips so the default icon is blue. Use `type="warn"` for Warnings so the warning icon remains orange.
 
-Notes and tips do not have one required format across the entire documentation set. Follow the established pattern for the page type and keep sibling pages consistent: use a Callout when the aside should interrupt the flow, and italicized prose when it should remain lightweight.
+Keep each callout focused on one audience, condition, or consequence. One to three short sentences is typical; a short list is acceptable when one role must complete several related actions. Place the callout immediately after the step or paragraph it qualifies.
+
+Do not use a callout:
+
+- In place of a required step in the primary workflow. Make that a numbered step.
+- To hold a long reference explanation, full option list, or troubleshooting procedure. Give that content a clearly named section.
+- To repeat the same note on every nearby page. Put the complete detail in the canonical page and link to it where needed.
+- For ordinary prose that reads clearly in the main flow.
+
+Avoid stacking callouts with no prose between them. Combine callouts that address the same audience and condition; keep separate ones only when the reader needs to make distinct decisions.
+
+Example for role-specific integration setup:
+
+```mdx
+<Callout type="info">
+  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before Project members continue.
+</Callout>
+```
+
+Follow the established pattern for the page type and keep sibling pages consistent. Use italicized prose instead when the aside is lightweight and does not need to interrupt the flow.
 
 ### Version and change notes
 
@@ -715,6 +774,12 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 ## Consistency checks before finishing
 
 - The page reflects real system behavior (verified against code and existing docs), not just restated formatting.
+- Every material rewrite accounts for removed prerequisites, permissions, roles, plan gates, modes, defaults, billing effects, limits, fallbacks, side effects, update behavior, and failure modes; each fact was kept, moved, corrected, or deliberately removed with evidence.
+- Every changed Quickstart was completed in order from a clean project using only its stated requirements, including its start command and observable success state.
+- Claims about a versioned package were verified against the published artifact for the documented version, not only repository source.
+- Examples and broad behavior statements are scoped correctly when a capability has multiple modes.
+- Every information-architecture change has an old-to-new route map covering content, metadata, related links, cards, and redirects.
+- Frontmatter on every touched page parses as YAML, including descriptions with colons, hashes, or other significant punctuation.
 - The intro does not restate the frontmatter `description` (the layout renders the description under the title); the body opens with new detail.
 - Depth and vocabulary match the page audience.
 - Sections are grouped into a few meaningful H2s with H3 subsections, not many small one-off H2s. Consolidate or restructure if there are more than 6 H2 subsections.
