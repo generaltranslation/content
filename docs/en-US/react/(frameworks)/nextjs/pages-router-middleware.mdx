@@ -1,82 +1,102 @@
 ---
 
-title: Pages Router middleware
-description: How to configure General Translation locale routing for the Next.js Pages Router.
+title: Pages Router locale routing
+description: How to configure Next.js internationalized routing with General Translation in the Pages Router.
 related:
   links:
     - /docs/react/nextjs-pages-router-quickstart
     - /docs/react/nextjs/pages-router-static-site-generation
-    - /docs/react/nextjs/reference/functions/create-next-middleware
+    - /docs/react/nextjs/config
 
 ---
 
-Configure middleware and a `[locale]` root segment so Pages Router requests resolve to the correct localized route.
+The Pages Router uses Next.js internationalized routing to resolve localized URLs and pass the active locale to `gt-next`. Routes stay in their normal locations under `pages`.
 
-## Configure the middleware [#middleware]
+## Configure locale routing [#configure-routing]
 
-Create `proxy.ts` in your project root (`middleware.ts` on Next.js 15 and earlier):
+Import the locale settings from `gt.config.json` into `next.config.ts`. The `locales` array must include `defaultLocale`:
 
-```ts title="proxy.ts"
-import { createNextMiddleware } from 'gt-next/middleware';
-
-export default createNextMiddleware();
-
-export const config = {
-  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
-};
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["en", "es", "fr"]
+}
 ```
 
-The middleware detects the locale from the URL, cookie, browser headers, or default locale. It then redirects or rewrites the request to the matching localized route.
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+import gtConfig from './gt.config.json';
 
-## Add the locale route [#locale-route]
+const nextConfig: NextConfig = {
+  i18n: {
+    locales: gtConfig.locales,
+    defaultLocale: gtConfig.defaultLocale,
+  },
+};
 
-Move your Pages Router pages under `pages/[locale]`. Keep `_app.tsx` at the root of `pages`:
+export default withGTConfig(nextConfig);
+```
+
+Next.js serves the default locale without a prefix and prefixes the others. For example, English uses `/about` and French uses `/fr/about`.
+
+Keep each page at the root of `pages`; do not add a `[locale]` segment:
 
 <Files>
   <Folder name="pages">
     <File name="_app.tsx" />
-    <Folder name="[locale]">
-      <File name="index.tsx" />
-      <File name="about.tsx" />
-    </Folder>
+    <File name="index.tsx" />
+    <File name="about.tsx" />
   </Folder>
-  <File name="proxy.ts" />
+  <File name="next.config.ts" />
 </Files>
 
-The route segment receives the locale selected by the middleware. See [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) for routing options and localized path configuration.
+`withGTServerSideProps` and `withGTStaticProps` read the locale from the Next.js data-function context. No `gt-next` middleware, `proxy.ts`, or `middleware.ts` is required for Pages Router locale routing.
 
 ## Connect locale changes [#locale-changes]
 
-Override `_reload` on [`GTProvider`](/docs/react/reference/components/gt-provider) so locale changes use Pages Router navigation and load the selected locale's page props:
+Pass a locale-aware `_reload` callback to [`GTProvider`](/docs/react/reference/components/gt-provider) so locale changes use Pages Router navigation and load the selected locale's page props:
 
 ```tsx title="pages/_app.tsx"
 import type { AppProps } from 'next/app';
-import { useRouter } from 'next/router';
+import Router from 'next/router';
 import { GTProvider, type WithGTStaticProps } from 'gt-next';
 
 export default function App({
   Component,
   pageProps,
 }: AppProps<WithGTStaticProps>) {
-  const router = useRouter();
-  const { locale, translations, ...restPageProps } = pageProps;
+  const { locale, translations } = pageProps;
 
   return (
     <GTProvider
       locale={locale}
       translations={translations}
       _reload={({ locale: nextLocale }) => {
-        void router.push(
-          { pathname: router.pathname, query: router.query },
-          router.asPath,
-          { locale: nextLocale }
-        );
+        void Router.push(Router.pathname, Router.asPath, {
+          locale: nextLocale,
+        });
       }}
     >
-      <Component {...restPageProps} />
+      <Component {...pageProps} />
     </GTProvider>
   );
 }
 ```
 
 For server-rendered pages, use `WithGTServerSideProps` instead. The callback replaces the provider's default full-page reload with a Pages Router navigation.
+
+## How locale detection works [#locale-detection]
+
+Next.js resolves the request locale before `getServerSideProps` or `getStaticProps` runs:
+
+- A locale prefix such as `/fr/about` sets `context.locale` to `fr`.
+- The `NEXT_LOCALE` cookie stores the user's preference and can redirect an unprefixed request.
+- Browser language preferences can select a locale when no preference is stored.
+- `defaultLocale` is used when no other configured locale matches.
+
+Set `localeDetection: false` inside `nextConfig.i18n` to disable automatic browser and cookie redirects. Locale-prefixed routes and locale-aware router navigation continue to work.
+
+<Callout type="info">
+  **Changed in v11.1.3:** Pages Router setup now uses Next.js internationalized routing instead of `gt-next` middleware and a `pages/[locale]` segment. Existing request detection remains as a compatibility fallback when Next.js does not provide `context.locale`.
+</Callout>
