@@ -490,7 +490,16 @@ Anatomy:
 
 Use the `a)` `b)` `c)` sub-section pattern for parallel alternative paths (see Numbered vs. bulleted lists).
 
-**Integrations and plugins:** use a consistent set of Guides where possible, in this order:
+**Integrations and plugins:** match the depth to the setup surface. Developer plugins can use technical commands and configuration; Dashboard-managed integrations such as Google Drive use plain-language UI actions for nontechnical readers.
+
+Keep an integration Quickstart focused on the shortest successful path, usually three to five numbered steps. Make the primary flow easy to scan without deleting details that affect access, cost, or results:
+
+- Keep role-specific and one-time setup out of the main sequence. Put Organization owner/admin provisioning, connection setup, and similar secondary prerequisites in a short `Note` callout immediately after the relevant step. Start with the role in bold, then state the exact actions that person must take.
+- Preserve critical granularity when simplifying. Required permissions and plan features, authorization scope, billing effects, update and replacement behavior, limits, and failure modes must remain in the relevant Guide or Reference page. Move them into a concise callout or a clearly named section instead of dropping them.
+- Keep Guides task-oriented and written for the person using the integration. Explain secondary button states and edge behavior next to the step where readers encounter them, without interrupting the happy path.
+- Keep Reference pages complete. Concise wording does not justify removing permissions, supported content, access behavior, defaults, limits, or failure behavior.
+
+Use a consistent set of Guides where possible, in this order:
 
 - Configuring [integration]
 - Translating content
