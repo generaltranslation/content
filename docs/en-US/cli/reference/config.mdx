@@ -7,7 +7,7 @@ description: Configure the General Translation CLI with the gt.config.json file.
 
 The `gt.config.json` file configures what the CLI translates and where results are saved. Place it at the root of your project. Create it with [`gt init`](/docs/cli/reference/commands/init) or [`gt configure`](/docs/cli/reference/commands/configure), or write it by hand.
 
-*Note: Add the [JSON Schema](https://assets.gtx.dev/config-schema.json) with a `$schema` key for editor validation and autocompletion.*
+*Note: Add the [JSON Schema](https://assets.gtx.dev/config-schema.json) with a `$schema` key for editor validation and autocompletion. The published schema does not yet include the `lottie` and `fonts` keys added in `gt` 2.16.0, so editors may flag those valid settings until the schema is refreshed.*
 
 ## Options [#options]
 
@@ -16,8 +16,9 @@ The `gt.config.json` file configures what the CLI translates and where results a
 | [`defaultLocale`](#default-locale) | Locale your source content is written in. | `string` | Yes | `en` |
 | [`locales`](#locales) | Target locales to translate into. | `string[]` | Yes | — |
 | [`files`](#files) | Which files to translate and where to save them. | `object` | Yes | — |
+| [`fonts`](#fonts) | Font files to make available to Lottie translation jobs. | `object` | Yes | — |
 | [`publish`](#publish) | Publish translated files to the CDN. | `boolean` | Yes | `false` |
-| [`stageTranslations`](#stage) | Require human review before translations are served. | `boolean` | Yes | `false` |
+| [`stageTranslations`](#stage) | Use the staged workflow before downloading translations. | `boolean` | Yes | `false` |
 | [`requiresReview`](#requires-review) | Default review-gating policy for all translated files. | `boolean` | Yes | `false` |
 | [`src`](#src) | Glob patterns for source files scanned for inline content. | `string[]` | Yes | See [`src`](#src) |
 | [`dictionary`](#dictionary) | Path to a dictionary file. | `string` | Yes | — |
@@ -69,6 +70,7 @@ An object with one key per file type to translate. Each type maps to an object o
 | `html` | HTML files. | [HTML](/docs/cli/reference/formats/html-files) |
 | `txt` | Plain text files. | [Plain text](/docs/cli/reference/formats/plain-text-files) |
 | `twilioContentJson` | Twilio Content JSON templates. | — |
+| `lottie` | dotLottie animation files (`.lottie`). | [Lottie](/docs/cli/reference/formats/lottie-files) |
 
 ### File type keys
 
@@ -100,6 +102,28 @@ Each file type accepts the following keys.
 }
 ```
 
+## `fonts` [#fonts]
+
+**Type** `object` · **Optional** · **Default** —
+
+Font files to upload before translation jobs run. Use `include` and optional `exclude` globs that resolve from the project root. Match `.ttf` and `.otf` files; the CLI reads them as binary data and uploads them as persistent Organization assets for Lottie layout processing.
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `include` | Glob patterns for fonts to upload. | `string[]` | No | — |
+| `exclude` | Glob patterns to omit from the matches. | `string[]` | Yes | `[]` |
+
+```json title="gt.config.json"
+{
+  "fonts": {
+    "include": ["public/fonts/**/*.{ttf,otf}"],
+    "exclude": ["public/fonts/legacy/**"]
+  }
+}
+```
+
+The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt translate`](/docs/cli/reference/commands/translate) runs that enqueue new work. When `stageTranslations` is enabled, [`gt translate`](/docs/cli/reference/commands/translate) only downloads the staged version and does not sync fonts. A failed font sync emits a warning but does not stop translation; Lottie processing continues with fallback fonts. See [Upload Project assets](/docs/platform/openapi/reference/project/upload-assets) for font validation and storage behavior.
+
 ## `publish` [#publish]
 
 **Type** `boolean` · **Optional** · **Default** `false`
@@ -116,7 +140,7 @@ When `true`, translated files are published to the General Translation CDN after
 
 **Type** `boolean` · **Optional** · **Default** `false`
 
-When `true`, translations require human review before they are served. The CLI sets this automatically the first time you run [`gt stage`](/docs/cli/reference/commands/stage). Once enabled, [`translate`](/docs/cli/reference/commands/translate) only downloads translations for versions you have staged with [`gt stage`](/docs/cli/reference/commands/stage); if nothing has been staged, there is nothing to download.
+When `true`, the CLI downloads only versions submitted with [`gt stage`](/docs/cli/reference/commands/stage). The CLI sets this automatically the first time you run [`gt stage`](/docs/cli/reference/commands/stage). Use the staged workflow for human review and for asynchronous formats such as [Lottie](/docs/cli/reference/formats/lottie-files); the Project's review settings determine whether completed translations also require approval.
 
 ## `requiresReview` [#requires-review]
 

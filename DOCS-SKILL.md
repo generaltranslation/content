@@ -26,9 +26,45 @@ Good docs come from understanding, not paraphrasing. Before applying any formatt
 The codebase is always the source of truth. Resolve questions by reading the code, and use your best judgement to make a decision rather than deferring to a reviewer or leaving the choice open. Do not add review checklists, "flag for human review" notes, or lists of open questions to the docs or the change.
 
 - **Verify against the code, then decide.** When the code and the existing docs disagree, follow the code and correct the docs. When something is unclear, dig into the code until it is clear; when it genuinely cannot be verified from the code, use your best judgement from the existing docs and the live product, document the current known state plainly, and prefer omission over invention.
+- **Verify what is shipped, not merely merged.** For a versioned library or CLI, the published artifact for the version the page targets is the source of truth for availability. Install and probe that exact release for exports, signatures, defaults, runtime requirements, and package versions; repository source may contain unreleased behavior.
 - **Close calls:** when two options for structuring, displaying, or describing information are similarly good, pick the stronger one and move on — do not stall or leave both in the page.
 - **UI-only surfaces (Dashboard, Locadex).** These describe screens, labels, and navigation that are not verifiable against this codebase and drift as the product UI changes. Confirm UI names and flows against the live product and use your best judgement; if a UI detail is unconfirmed, omit it rather than guessing. Never ship a "Details to confirm" section.
 - **Experimental Python SDK.** The 0.x Python SDK (`generaltranslation`, `gt-i18n`, `gt-flask`, `gt-fastapi`, from the `generaltranslation/gt-python` repo) may not be verifiable against this repo. Verify every signature, return type, and default against the published package; when you cannot, prefer omission over invention. State the experimental status and version floor once (in the section intro or Reference index `_Note:_`), and add `Changed in vN` notes cautiously given the fast-moving 0.x surface.
+
+
+
+### Safeguards for audits and rewrites
+
+Automated audits and broad rewrites have repeatedly passed builds, link checks, and approval while still containing incorrect behavior or silently dropping important details. Apply these safeguards to every material rewrite, simplification, content audit, or product-sync pass.
+
+#### Establish the shipped behavior
+
+- **Triangulate API contracts.** Do not infer an endpoint from one type or handler. Cross-check the public request schema, normalization and derivation logic, persistence or upsert behavior, response serializer, tests, and published client types. Verify identity keys, defaults, overwrite versus idempotency behavior, partial failures, retry safety, size limits, and every status code separately.
+- **Inventory UI behavior before rewriting it.** For Dashboard and Locadex pages, record the current controls, defaults, role and permission requirements, plan gates, button states, disconnect behavior, and failure states from the live product. A reorganized page must not make a still-active control disappear. Use exact role names such as **Admin**; do not substitute an informal role label such as "owner."
+- **Scope claims to the mode that implements them.** When a capability supports multiple modes, state which mode an example uses. Audit broad wording around storage, fields, imports, defaults, permissions, and lifecycle behavior so one mode is not presented as universal.
+
+#### Preserve semantics while simplifying
+
+Before rewriting, inventory the facts in the existing page. Account for every prerequisite, permission, role, plan requirement, setup mode, default, side effect, authorization scope, billing effect, limit, fallback, update or replacement behavior, retry rule, and failure mode.
+
+- Keep each verified fact, move it to the relevant Guide or Reference page, or correct it from the source of truth. Delete it only when it is obsolete, duplicative, or cannot be verified.
+- Review deletions as carefully as additions. A shorter diff is not automatically a clearer or more accurate page; concision applies to wording, not coverage.
+- Shorten the happy path by moving secondary detail into a nearby Note or a linked Reference section. Never make the main path simpler by hiding a consequence the reader must plan for.
+- Link volatile values such as pricing and quotas to their canonical source. Explain how usage is measured, but do not copy a rate table, worked cost calculation, or exact price unless the value is contractual and maintained on that page.
+
+#### Validate the user journey
+
+- **Walk every new or materially changed Quickstart in a clean project.** Start with only the requirements stated on the page and perform every step in order. Verify dependency installation, module format, file-creation order, credentials, interactive behavior, start commands, expected output, and the first language switch or translated result.
+- **Test the documented environment.** An interactive wizard working locally does not prove the CI path works; a development key returning source text does not prove production credentials are configured; a pre-existing generated file does not prove the Quickstart creates it. Test fresh local, non-interactive, and framework-specific paths when the page claims to support them.
+- A Quickstart is complete only when the reader reaches an observable success state. A docs build, valid code fence, or type-correct snippet does not establish that the sequence runs.
+
+#### Treat information architecture as a route migration
+
+Before moving or splitting pages, make an old-to-new route map. Update references in docs, blog, devlog, templates, `meta.json`, `related.links`, cards, and redirects; remember that route-group folder names do not appear in URLs. Validate every new target and preserve compatibility for established entry routes where redirects are supported.
+
+#### Separate mechanical and semantic validation
+
+Validators are necessary but cannot prove product accuracy. Run all structural checks, then separately verify removed facts, examples, version availability, UI workflows, option shapes, defaults, and error behavior against the shipped product. A green build must never be treated as evidence that a behavioral claim is true.
 
 
 
@@ -129,8 +165,13 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 ### General Translation vs. GT
 
 - Always write **General Translation** (singular) — never "General Translations". The API is the **General Translation API**, not "General Translations API".
-- Write out **General Translation** on the **first mention of a page, and in every** `description`. Do not open a page or a description with the abbreviation.
-- After the first mention, you may use **GT** later on the same page where it is clear from context and reads better, such as long sentences or possessives (**GT's**). When in doubt, keep writing General Translation.
+- Use **General Translation** when the page needs to identify the overall product, distinguish it from another service, or name an official term such as the **General Translation API**. Do not force the name into every page or `description`; the section title, sidebar, package name, or feature name often supplies enough context.
+- Do not prefix every product-owned feature with the brand. Prefer **the CLI**, **the Dashboard**, **the integration**, **Ask AI**, **Context Groups**, or the package name over "the General Translation CLI/tool/integration/Ask AI" once the subject is clear.
+- Remove redundant branding, not meaning. Keep ordinary words such as "translation," "translations," "translate," and "translation workflow" when they explain what the reader is doing.
+- Configuration pages should name the thing being configured. Keep **General Translation**, `gt`, or the relevant package name when it distinguishes the configuration from the third-party platform's own settings.
+- Do not mechanically remove the product name from `meta.json` descriptions, section overviews, hubs, or card grids. These standalone navigation surfaces may need ownership context that a Guide page already gets from its title and surrounding section.
+- Treat the `description` and opening paragraph as one rendered introduction. If one names General Translation, the other should normally use the capability name or a pronoun instead of naming it again.
+- If you use **GT** as an abbreviation, first write **General Translation** on that page. Never use **GT** only to avoid a repeated product name; rewrite the sentence around the capability instead.
 
 
 
@@ -227,7 +268,7 @@ The filetree is defined by **per-folder** `meta.json` **files** (the Fumadocs co
 
 A `meta.json` supports these keys:
 
-- `title` — the folder's sidebar display name (see File and folder naming).
+- `title` — the folder's sidebar display name using its established casing (see File and folder naming).
 - `description` — the meaning depends on the folder:
   - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
   - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
@@ -241,6 +282,8 @@ Entries in `pages` take three forms:
 - **A child page or folder** — a relative reference: `"./quickstart"`, `"./guides"`, `"./(frameworks)"`.
 - **A section separator** — a label wrapped in triple dashes: `"---Frameworks---"`, `"---Platform---"`. This renders a labeled divider in the sidebar; use it to group entries within one section.
 - **A cross-section link** — a Markdown link to another page: `"[Dashboard](/docs/platform/dashboard/get-started)"`. Use these to point out of the current section (see Overview hub).
+
+Every immediate child folder listed by a top-level section root becomes a visible sidebar section. The allowed section names and order are pinned by CI. Do not add, remove, or reorder one unless the task explicitly calls for an information-architecture change.
 
 
 
@@ -362,9 +405,9 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 - **Configuration reference pages are named and linked simply** `config.md` in most cases (not `configuration.md` or `config-reference.md`).
 - **Command reference pages are named by the command**, lowercase-hyphenated, matching the invoked subcommand (`translate.md`, `save-local.md`, `keyed-metadata.md`).
 - **Consolidate near-identical formats or variants onto one page** (MDX + Markdown → `mdx.md`; TypeScript + JavaScript → `ts.md`). Name the page after the primary variant and cover the sibling on the same page.
-- **Sidebar display names follow the established casing in their section.** Always title-case the spine folders **Get Started**, **Quickstart**, **Guides**, and **Reference**. Reference subsection labels such as **Commands**, **Formats**, **Functions**, **Components**, **Hooks**, and **Types** follow the casing of their sibling groups. Automated style passes and linters must preserve these display labels instead of deriving them by lowercasing the folder name.
-- **Proper nouns and product/brand names keep their official casing** as folder names: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `Google Drive`, `React Native`, `TanStack Start`, and the `GT Class` reference group.
-- **Links and URL slugs are always lowercase and hyphenated**, regardless of display-name casing. *Example: the Get Started section is linked as* `/docs/platform/dashboard/get-started`*.*
+- **Sidebar display names follow the established casing in their section.** Standard spine labels include **Overview**, **Get Started**, **Quickstart**, **Guides**, **Reference**, and **Frameworks**. Reference subsection labels display as **Commands**, **File formats**, **Functions**, **Components**, **Hooks**, and **Types**. Automated style passes must preserve these labels instead of deriving them by lowercasing the folder name.
+- **Proper nouns and product/brand names keep their official casing** as display titles: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `Google Drive`, `React Native`, `TanStack Start`, and the `GT Class` reference group.
+- **Links, filesystem folder names, and URL slugs remain lowercase and hyphenated**, regardless of display-name casing. *Example: the Get Started section is linked as* `/docs/platform/dashboard/get-started`*.*
 
 
 
@@ -376,14 +419,16 @@ Use this exact structure (blank line after the opening `---`, blank line before 
 ---
 
 title: Adding annotations
-description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the General Translation Dashboard.
+description: How to use labels, notes, and comments to coordinate translation review by entry and locale in the Dashboard.
 
 ---
 ```
 
+- **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
-- `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Spell out **General Translation** here (never open with "GT"). Phrasing depends on page type:
-  - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant product or tool. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the General Translation Dashboard." / "What are locale codes, and how are they used in the General Translation stack?"
+- `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:
+  - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant capability or tool without automatically branding it. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the Dashboard." / "What are locale codes, and how are they used across the translation stack?"
+    - **Configuration Guides:** retain `gt`, the package name, or **General Translation** when it identifies which system's configuration the reader is changing. *Example:* "How to configure the General Translation gt-sanity plugin for locales, document filters, and credentials."
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
@@ -406,7 +451,7 @@ A few optional fields appear on specific page types:
 ## Page structure
 
 1. **Frontmatter title:** the docs layout renders the `title` as the page H1. Do not add a `#` heading to the body.
-2. **Intro:** 1–3 short sentences with no heading that add substance beyond the `description`: behavior, inputs, or when to use it. The docs layout already renders the `description` beneath the title, so the intro must not restate or paraphrase it. On reference pages especially, do not open with the description's summary sentence. Optionally one more italicized short line for constraints or scope.
+2. **Intro:** 1–3 short sentences with no heading that add substance beyond the `description`: behavior, inputs, or when to use it. The docs layout already renders the `description` beneath the title, so the intro must not restate or paraphrase it. Read the title, description, and intro together and remove repeated branding as well as repeated meaning; after the capability is established, use its short name, "the integration," "the CLI," or another natural subject. On reference pages especially, do not open with the description's summary sentence. Optionally one more italicized short line for constraints or scope.
 3. **Sections:** use `##` for top-level body sections.
 
 
@@ -488,7 +533,16 @@ Anatomy:
 
 Use the `a)` `b)` `c)` sub-section pattern for parallel alternative paths (see Numbered vs. bulleted lists).
 
-**Integrations and plugins:** use a consistent set of Guides where possible, in this order:
+**Integrations and plugins:** match the depth to the setup surface. Developer plugins can use technical commands and configuration; Dashboard-managed integrations such as Google Drive use plain-language UI actions for nontechnical readers.
+
+Keep an integration Quickstart focused on the shortest successful path, usually three to five numbered steps. Make the primary flow easy to scan without deleting details that affect access, cost, or results:
+
+- Keep role-specific and one-time setup out of the main sequence. Put provisioning, connection setup, and secondary prerequisites for any role in a `Note` callout immediately after the relevant step. Start with the exact current role in bold — for example, **Organization admins:**, **Developers:**, or **Editors:** — then state only the actions that role must take.
+- Preserve critical granularity when simplifying. Required permissions and plan features, authorization scope, billing effects, update and replacement behavior, limits, and failure modes must remain in the relevant Guide or Reference page. Move them into a concise callout or a clearly named section instead of dropping them.
+- Keep Guides task-oriented and written for the person using the integration. Explain secondary button states and edge behavior next to the step where readers encounter them, without interrupting the happy path.
+- Keep Reference pages complete. Concise wording does not justify removing permissions, supported content, access behavior, defaults, limits, or failure behavior.
+
+Use a consistent set of Guides where possible, in this order:
 
 - Configuring [integration]
 - Translating content
@@ -591,17 +645,39 @@ Populate `related.links` by page type, ordered by **what the reader most likely 
 
 ### Callouts
 
-Callouts are MDX components for a short, important aside. **Use them rarely and never by default** — prefer plain prose, and reach for a callout only when an aside is genuinely important enough to break the flow. Use only these three titles:
+Callouts are MDX components that keep secondary but important information next to the step or concept it affects. Use them based on purpose, not a page-level quota: a page can have several when each one helps a different role, mode, or decision. Do not add them only for visual variety.
 
-- **Note** — a neutral clarification or aside, including version/requirement notes. For a breaking change across releases, lead the Note with `Changed in vN:` instead of `Note:` (see Version and change notes).
-- **Tip** — an optional best practice or shortcut.
-- **Warning** — something that can cause data loss, breakage, or a hard-to-reverse mistake.
+Use a callout when the information should stay adjacent but should not interrupt the main path:
 
-When using a Callout, use `type="info"` for Notes and Tips so the default icon is blue, and `type="warn"` for Warnings so the warning icon remains orange.
+- **Role-specific actions.** In integration and Dashboard flows, use a Note for setup or decisions that belong to a particular role rather than every reader. Start with the exact role in bold, such as **Organization admins:**, **Developers:**, or **Editors:**. Different roles may have separate Notes when their actions occur at different steps.
+- **Path- or mode-specific context.** Use a Note for an alternate connection mode, a non-interactive path, a plan or permission requirement, a fallback, or behavior that applies only in one framework or localization mode.
+- **Consequences near an action.** Use a Note for billing or metering behavior, generated files, background processing, replacement behavior, or another result readers should understand before continuing.
+- **Optional improvements.** Use a Tip for a shortcut, best practice, or optimization that is helpful but not required.
+- **Risk.** Use a Warning when an action can overwrite work, delete or expose data, incur an unexpected cost, break a build, or be difficult to reverse.
+- **Version changes.** Use a Note led by `Changed in vN:` for breaking or behavior-changing updates on maintenance-facing pages (see Version and change notes).
 
-Keep each callout to one or two sentences. Do not stack callouts or use them in place of normal steps.
+Use `type="info"` for Notes and Tips so the default icon is blue. Use `type="warn"` for Warnings so the warning icon remains orange.
 
-Notes and tips do not have one required format across the entire documentation set. Follow the established pattern for the page type and keep sibling pages consistent: use a Callout when the aside should interrupt the flow, and italicized prose when it should remain lightweight.
+Keep each callout focused on one audience, condition, or consequence. One to three short sentences is typical; a short list is acceptable when one role must complete several related actions. Place the callout immediately after the step or paragraph it qualifies.
+
+Do not use a callout:
+
+- In place of a required step in the primary workflow. Make that a numbered step.
+- To hold a long reference explanation, full option list, or troubleshooting procedure. Give that content a clearly named section.
+- To repeat the same note on every nearby page. Put the complete detail in the canonical page and link to it where needed.
+- For ordinary prose that reads clearly in the main flow.
+
+Avoid stacking callouts with no prose between them. Combine callouts that address the same audience and condition; keep separate ones only when the reader needs to make distinct decisions.
+
+Example for role-specific integration setup:
+
+```mdx
+<Callout type="info">
+  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before Project members continue.
+</Callout>
+```
+
+Follow the established pattern for the page type and keep sibling pages consistent. Use italicized prose instead when the aside is lightweight and does not need to interrupt the flow.
 
 ### Version and change notes
 
@@ -697,20 +773,30 @@ These patterns are **blocked by CI** and will fail the build, so never use them 
 - `on*=` event handler attributes.
 - `javascript:` URLs.
 
+CI validates every `meta.json`: entries must resolve, every navigable child must be listed exactly once, standard folder titles must use canonical sentence case, and top-level sidebar sections must match the approved information architecture.
+
 
 
 ## Consistency checks before finishing
 
 - The page reflects real system behavior (verified against code and existing docs), not just restated formatting.
+- Every material rewrite accounts for removed prerequisites, permissions, roles, plan gates, modes, defaults, billing effects, limits, fallbacks, side effects, update behavior, and failure modes; each fact was kept, moved, corrected, or deliberately removed with evidence.
+- Every changed Quickstart was completed in order from a clean project using only its stated requirements, including its start command and observable success state.
+- Claims about a versioned package were verified against the published artifact for the documented version, not only repository source.
+- Examples and broad behavior statements are scoped correctly when a capability has multiple modes.
+- Every information-architecture change has an old-to-new route map covering content, metadata, related links, cards, and redirects.
+- Frontmatter on every touched page parses as YAML, including descriptions with colons, hashes, or other significant punctuation.
 - The intro does not restate the frontmatter `description` (the layout renders the description under the title); the body opens with new detail.
 - Depth and vocabulary match the page audience.
 - Sections are grouped into a few meaningful H2s with H3 subsections, not many small one-off H2s. Consolidate or restructure if there are more than 6 H2 subsections.
-- First mention of the product on the page (and in the description) uses **General Translation**, not GT.
+- The product name appears only where it adds context; the title, description, and intro do not repeat **General Translation**, and product-owned capabilities are not needlessly brand-prefixed. If **GT** is used, an earlier necessary mention spells out **General Translation**.
+- Brand cleanup preserves useful "translation" language and identifiers such as `gt` or package names, and does not mechanically rewrite `meta.json`, overviews, hubs, cards, or configuration descriptions.
 - Guides answer "how do I…?" with ordered steps; Reference answers "what exactly does this do?" comprehensively and opens with an overview table linking to each item's section.
 - Guide titles use the gerund (-ing) form, and each guide's file name and link slug match its title.
-- Guide descriptions lead with "How to…" (or a question for concept-only guides), are one concise sentence with no `: this guide covers …` checklist, and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
+- Guide descriptions lead with "How to…" (or a question for concept-only guides), are one concise sentence with no `: this guide covers …` checklist, contain no unnecessary brand prefix, and contain no backticks; component names use angle-bracket tags (`<T>`, `<Plural>`), which any matching `<Card>` body on a hub page escapes as `<T>` so the MDX still parses.
 - Descriptions (frontmatter and `meta.json`) end with a period (a question ends with `?`); `<Card>` bodies that mirror a description match it (also ending with a period). The only exception is the short tab subtitle on a section root (`"root": true`), which is not a sentence and takes no period.
 - Sidebar labels preserve their established casing; **Get Started**, **Quickstart**, **Guides**, and **Reference** are title-cased, and product names such as **Google Drive** keep their official casing.
+- Top-level sidebar sections match the approved names and order; no unrequested section folder has been added.
 - Every occurrence of a component, function, hook, class, or method in prose links to its reference page, except occurrences inside headings and self-references on the symbol's own page.
 - `npm run validate:reference-links` passes with no unresolved relevant inline-code API symbols.
 - No reviewer directives, TODO/FIXME/placeholder text, or "to confirm"/"to verify" draft sections remain in the page.
