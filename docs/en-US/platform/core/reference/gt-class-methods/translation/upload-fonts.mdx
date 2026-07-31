@@ -1,0 +1,108 @@
+---
+
+title: uploadFonts
+description: Upload persistent font assets for Lottie translation workflows. API reference for uploadFonts.
+
+---
+
+Uploads TrueType or OpenType fonts through a Project so Lottie translation jobs in the same Organization can use them during layout processing.
+
+## Overview [#overview]
+
+Call `uploadFonts` with base64-encoded font assets. The method divides large inputs into batches of 50 and returns the stored asset identifiers.
+
+```typescript
+const result = await gt.uploadFonts(fonts, {
+  timeout: 30000,
+});
+```
+
+Signature:
+
+```typescript
+uploadFonts(
+  fonts: AssetUpload[],
+  options?: UploadAssetsOptions
+): Promise<UploadAssetsResponse>
+```
+
+*Note: `uploadFonts` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+
+## How it works [#how-it-works]
+
+- Font content is already base64-encoded when passed to the method.
+- Each font must have a `.ttf` or `.otf` file name and decode to no more than 20MB.
+- The Project determines which Organization owns the font. Uploaded fonts persist across that Organization's translation jobs.
+- The service derives font family, weight, and italic style from font metadata, then falls back to the file name. Uploading the same derived identity again replaces the stored asset.
+- Inputs longer than 50 fonts are uploaded in multiple requests.
+
+See [Upload Project assets](/docs/platform/openapi/reference/project/upload-assets) for validation, identity, and retry behavior.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`fonts`](#fonts) | Base64-encoded fonts to upload. | `AssetUpload[]` | No | — |
+| [`options`](#options) | Request settings. | `UploadAssetsOptions` | Yes | `{}` |
+
+### `fonts` [#fonts]
+
+**Type** `AssetUpload[]` · **Required**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `assetType` | Asset type. Only `FONT` is supported. | `'FONT'` | No |
+| `content` | Base64-encoded font bytes. | `string` | No |
+| `fileName` | File name ending in `.ttf` or `.otf`. | `string` | No |
+
+### `options` [#options]
+
+**Type** `UploadAssetsOptions` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<UploadAssetsResponse>`
+
+Resolves with the stored asset identifiers and the number of fonts processed:
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `assets` | Stored font assets. | `UploadedAsset[]` |
+| `assets[].id` | Stored Organization asset ID. | `string` |
+| `assets[].assetKey` | Derived font identity in the form `<family>-<weight>[-i]`. | `string` |
+| `assets[].fileName` | File name supplied in the upload. | `string` |
+| `count` | Number of fonts processed. | `number` |
+
+<Callout type="warn">
+  **Current v9.1.0 type mismatch:** `UploadedAsset` declares a `deduped` boolean, but the service response does not include it. Do not use that field to detect whether an existing font was replaced.
+</Callout>
+
+## Example [#example]
+
+```typescript title="upload-fonts.ts"
+import { readFile } from 'node:fs/promises';
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const content = (await readFile('./public/fonts/BrandSans.ttf')).toString(
+  'base64'
+);
+
+const result = await gt.uploadFonts([
+  {
+    assetType: 'FONT',
+    content,
+    fileName: 'BrandSans.ttf',
+  },
+]);
+
+console.log(result.assets[0].assetKey);
+```
