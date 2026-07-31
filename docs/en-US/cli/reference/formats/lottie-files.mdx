@@ -1,0 +1,62 @@
+---
+
+title: Lottie
+description: Translate dotLottie animation files with the General Translation CLI. API reference for the Lottie file format.
+
+---
+
+The CLI translates text in binary dotLottie (`.lottie`) animation files and writes each result as a complete `.lottie` file. Lottie jobs include an asynchronous layout-processing phase, so they use the split stage-and-download workflow.
+
+## Configuration [#config]
+
+Add a `lottie` entry under `files` with an `include` array of glob patterns. Use the `[locale]` placeholder so the CLI can find source animations and save translated files under each target locale.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": {
+    "lottie": {
+      "include": ["animations/[locale]/**/*.lottie"],
+      "exclude": ["animations/[locale]/drafts/**"]
+    }
+  }
+}
+```
+
+With this config, source animations come from `animations/en/`, and translated animations are saved under `animations/es/` and `animations/fr/`. See the [configuration reference](/docs/cli/reference/config#files) for the shared file keys.
+
+## Translation workflow [#workflow]
+
+Run [`gt stage`](/docs/cli/reference/commands/stage) to submit the animations, then run [`gt download`](/docs/cli/reference/commands/download) until every locale has finished:
+
+```bash
+npx gt stage
+npx gt download
+```
+
+Translations that are still processing are skipped. Re-run [`gt download`](/docs/cli/reference/commands/download) later to fetch them; the staged entry remains in `gt-lock.json` until every configured locale is downloaded.
+
+[`gt translate`](/docs/cli/reference/commands/translate) cannot complete an unstaged Lottie job in one run. When `stageTranslations` is `false` and the config includes Lottie files, it exits with guidance to use [`gt stage`](/docs/cli/reference/commands/stage) and [`gt download`](/docs/cli/reference/commands/download).
+
+## Expressions [#expressions]
+
+Lottie files with After Effects expressions are rejected because expressions contain executable JavaScript. Re-export the animation with expressions removed or baked into keyframes, then stage it again.
+
+## Fonts [#fonts]
+
+Add a top-level [`fonts`](/docs/cli/reference/config#fonts) configuration when an animation uses fonts that may not be available during layout processing:
+
+```json title="gt.config.json"
+{
+  "fonts": {
+    "include": ["public/fonts/**/*.{ttf,otf}"]
+  }
+}
+```
+
+The CLI uploads matching fonts before it queues translation jobs. If a font cannot be synced, translation continues with fallback fonts and emits a warning.
+
+## Binary output [#binary]
+
+The CLI carries `.lottie` files as base64 internally, then decodes downloaded results back to binary files. Do not treat the downloaded content as UTF-8 text or hand-edit the intermediate base64 data.

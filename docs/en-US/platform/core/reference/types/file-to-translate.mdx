@@ -1,17 +1,19 @@
 ---
 
-title: FileToTranslate
-description: File input structure for file translation workflows. API reference for FileToTranslate type.
+title: FileToTranslate (legacy)
+description: Review the legacy file input removed from Core v9 and its current replacement. API reference for FileToTranslate.
 
 ---
 
-`FileToTranslate` represents a file object for batch file translation workflows in General Translation.
+`FileToTranslate` represented a file object in Core 8.x batch translation workflows. It is not exported by `generaltranslation` 9.x.
 
-*Note:* this type is deprecated. The current API uses `FileToUpload` for uploading files (via [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files)) and file reference IDs for queueing translations (via [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files)).
+<Callout type="info">
+  **Changed in v9:** `FileToTranslate` was removed. Use `FileToUpload` for [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files), then pass the returned file references to [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files).
+</Callout>
 
 ## Overview [#overview]
 
-`FileToTranslate` bundles a file's raw content, name, and format so it can be submitted for translation.
+The legacy type bundled a file's raw content, name, and format:
 
 ```typescript
 type FileToTranslate = {
@@ -23,20 +25,13 @@ type FileToTranslate = {
 };
 ```
 
-The related format types:
-
-```typescript
-type FileFormat = 'JSON' | 'PO' | 'POT' | 'MDX' | 'MD' | 'HTML' | 'TXT' | string;
-type DataFormat = 'JSX' | 'ICU' | 'I18NEXT';
-```
-
 ## Properties [#properties]
 
 | Property | Description | Type | Optional |
 | --- | --- | --- | --- |
 | [`content`](#content) | Raw file content. | `string` | No |
 | [`fileName`](#file-name) | File identifier. | `string` | No |
-| [`fileFormat`](#file-format) | File format. | `FileFormat` | No |
+| [`fileFormat`](#file-format) | Legacy file-format identifier. | string union | No |
 | [`formatMetadata`](#format-metadata) | Format-specific metadata. | `Record<string, any>` | Yes |
 | [`dataFormat`](#data-format) | Data format within the file. | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
 
@@ -54,9 +49,9 @@ File identifier, such as `common.json` or `docs/start.mdx`.
 
 ### `fileFormat` [#file-format]
 
-**Type** `FileFormat` · **Required**
+**Type** string union · **Required**
 
-The file format: `'JSON'`, `'PO'`, `'POT'`, `'MDX'`, `'MD'`, `'HTML'`, `'TXT'`, or another format string.
+A legacy file-format identifier, such as `'JSON'`, `'PO'`, `'MDX'`, or `'HTML'`.
 
 ### `formatMetadata` [#format-metadata]
 
@@ -70,10 +65,11 @@ Format-specific metadata.
 
 Data format within the file: `'JSX'`, `'ICU'`, or `'I18NEXT'`.
 
-## Example [#example]
+## Legacy example [#legacy-example]
 
 ```typescript
-import { FileToTranslate } from 'generaltranslation';
+// generaltranslation 8.x only
+import type { FileToTranslate } from 'generaltranslation';
 
 // JSON file
 const jsonFile: FileToTranslate = {
@@ -95,4 +91,30 @@ const mdxFile: FileToTranslate = {
   fileFormat: 'MDX',
   dataFormat: 'JSX'
 };
+```
+
+## Current replacement [#replacement]
+
+In 9.x, import `FileToUpload` from `generaltranslation/types`, upload the source, and use the returned reference for later operations:
+
+```typescript
+import { GT } from 'generaltranslation';
+import type { FileToUpload } from 'generaltranslation/types';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const source = {
+  content: JSON.stringify({ welcome: 'Welcome' }),
+  fileName: 'common.json',
+  fileFormat: 'JSON',
+  locale: 'en',
+} satisfies FileToUpload;
+
+const { uploadedFiles } = await gt.uploadSourceFiles(
+  [{ source }],
+  { sourceLocale: 'en' }
+);
 ```
