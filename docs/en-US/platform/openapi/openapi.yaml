@@ -4,8 +4,8 @@ info:
   version: '2026-03-06.v1'
   description: >
     The public General Translation API. Use it to upload source content and
-    translated files, download translations, queue and translate content, manage
-    branches and tags, and read project and job status.
+    translated files, download translations, queue and translate content, create
+    projects, manage branches and tags, and read project and job status.
 
 
     Most endpoints operate on a single project and live under
@@ -17,7 +17,9 @@ info:
     `Authorization: Bearer <key>` header.
     Project keys (`gtx-api-`, `gtx-dev-`) are bound to one project. Organization
     keys (`gtx-org-`) work across projects but must include the target project in
-    the `gt-project-id` header for project-scoped routes.
+    the `gt-project-id` header for project-scoped routes. Organization-scoped
+    routes, such as `POST /v2/projects`, derive the organization from the key and
+    do not use a `gt-project-id` header.
   contact:
     name: General Translation Support
     email: support@generaltranslation.com
@@ -41,7 +43,7 @@ tags:
   - name: Tags
     description: Tag file versions.
   - name: Project
-    description: Read and update project information.
+    description: Create projects and read or update project information.
   - name: Jobs
     description: Read background job status.
 
@@ -701,6 +703,84 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /v2/projects:
+    post:
+      tags: [Project]
+      summary: Create a project
+      description: >
+        Create a project in the organization associated with an organization API
+        key. The key must have the `org:projects:create` permission. Project keys
+        cannot use this endpoint.
+      operationId: createProject
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, defaultLocale]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                  description: >
+                    Project name. Supports letters, numbers, spaces, dashes,
+                    underscores, apostrophes, parentheses, and periods.
+                  example: Customer Portal
+                defaultLocale:
+                  type: string
+                  description: Source locale for the project.
+                  example: en-US
+      responses:
+        '201':
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project]
+                properties:
+                  project:
+                    type: object
+                    required: [id, name, orgId, defaultLocale]
+                    properties:
+                      id: { type: string, example: prj_abc123 }
+                      name: { type: string, example: Customer Portal }
+                      orgId: { type: string, example: org_abc123 }
+                      defaultLocale: { type: string, example: en-US }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Missing, invalid, or non-organization API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: >
+            The API key lacks `org:projects:create` or is blocked by an access
+            policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The organization has reached its project limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500':
+          description: The project could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /v2/project/info/{projectId}:
     get:
       tags: [Project]
@@ -1186,7 +1266,8 @@ components:
         API key sent as a bearer token in the standard `Authorization: Bearer
         <key>` header. Use a project key (`gtx-api-`, `gtx-dev-`) or an
         organization key (`gtx-org-`). Organization keys must also send
-        `gt-project-id` on project-scoped routes.
+        `gt-project-id` on project-scoped routes. Organization-scoped routes
+        derive the organization from the key and do not use `gt-project-id`.
 
   parameters:
     GtApiVersion:
