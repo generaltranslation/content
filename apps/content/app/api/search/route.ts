@@ -6,7 +6,11 @@ import {
 } from '@/search-results';
 import { source } from '@/source';
 
-const search = createFromSource(source);
+const search = createFromSource(source, {
+  localeMap: {
+    'en-US': 'english',
+  },
+});
 
 export async function GET(request: Request): Promise<Response> {
   const response = await search.GET(request);
