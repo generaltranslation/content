@@ -15,7 +15,7 @@ Creates a Project in the Organization associated with an Organization API key. R
 POST https://api2.gtx.dev/v2/projects
 ```
 
-**Permission** `org:projects:create` · **Rate limit** Default (200/min)
+**Permission** `org:projects:create`; `project:write` to enable CDN delivery · **Rate limit** Default (200/min)
 
 Use this endpoint to provision Projects from your own automation. Project API keys cannot create other Projects.
 
@@ -24,6 +24,7 @@ Use this endpoint to provision Projects from your own automation. Project API ke
 - Authentication requires an [Organization API key](/docs/platform/dashboard/reference/api-keys#create-organization-keys) (`gtx-org-`) with `org:projects:create` permission.
 - The Organization is derived from the API key. Do not send an Organization or Project ID in the request.
 - The Project name is trimmed and validated. The default locale is validated and normalized, such as `en-us` to `en-US`.
+- Set `cdnEnabled` to `true` to enable CDN delivery when the Project is created. This requires the key's `project:write` permission. Omitting the field leaves CDN delivery disabled.
 - The new Project copies the Organization's AI provider settings. Its locale allowlist copies the Organization allowlist except for locales in the same dialect as the default locale; it starts empty when the Organization has no allowlist.
 - Existing Organization members are linked to the new Project.
 - The request returns `409` without creating a Project when the Organization has reached its Project limit.
@@ -34,7 +35,7 @@ Use this endpoint to provision Projects from your own automation. Project API ke
 
 | Header | Description | Required |
 | --- | --- | --- |
-| `x-gt-api-key` | Organization API key with `org:projects:create`. | Yes |
+| `x-gt-api-key` | Organization API key with `org:projects:create`, plus `project:write` when enabling CDN delivery. | Yes |
 | `gt-api-version` | API version. | No |
 
 Do not send `x-gt-project-id`. This endpoint derives the Organization from the API key and creates a new Project within it.
@@ -47,6 +48,7 @@ Do not send `x-gt-project-id`. This endpoint derives the Organization from the A
 | --- | --- | --- | --- | --- |
 | `name` | Project name (1–64 characters). Supports letters, numbers, spaces, dashes, underscores, apostrophes, parentheses, and periods. | `string` | No | — |
 | `defaultLocale` | Source locale for the Project. | `string` | No | — |
+| `cdnEnabled` | Whether to enable CDN delivery for the new Project. | `boolean` | Yes | `false` |
 
 Unknown fields are rejected.
 
@@ -78,7 +80,7 @@ Unknown fields are rejected.
 | --- | --- |
 | `400` | Invalid API version, request body, Project name, or default locale. |
 | `401` | Missing, invalid, or non-Organization API key. |
-| `403` | The key lacks `org:projects:create` or is blocked by an access policy. |
+| `403` | The key lacks `org:projects:create`, lacks `project:write` when `cdnEnabled` is `true`, or is blocked by an access policy. |
 | `409` | The Organization has reached its Project limit. |
 | `429` | Rate limit exceeded. |
 | `500` | The Project could not be created. |
@@ -92,6 +94,7 @@ curl -X POST https://api2.gtx.dev/v2/projects \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Customer Portal",
-    "defaultLocale": "en-US"
+    "defaultLocale": "en-US",
+    "cdnEnabled": true
   }'
 ```
