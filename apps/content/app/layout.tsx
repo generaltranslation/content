@@ -10,7 +10,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className='flex min-h-screen flex-col'>
         <RootProvider
           search={{
-            enabled: true,
+            enabled: false,
           }}
           theme={{
             enabled: false,

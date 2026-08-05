@@ -130,7 +130,7 @@ const incompleteComponentDescription = new Map(repositoryFiles);
 incompleteComponentDescription.set(
   componentPath,
   (incompleteComponentDescription.get(componentPath) ?? '').replace(
-    'API reference for the <T> component.',
+    'API reference for the T component (<T>).',
     'API reference for T.'
   )
 );
@@ -138,7 +138,7 @@ assertEqual(
   hasFinding(
     validateDocsStructure(incompleteComponentDescription),
     componentPath,
-    'description must include "API reference for the <T> component."'
+    'description must include "API reference for the T component (<T>)."'
   ),
   true,
   'rejects incomplete React component search metadata'
