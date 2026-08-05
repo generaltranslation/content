@@ -121,6 +121,27 @@ assertEqual(
   'rejects reordered top-level sections'
 );
 
+const missingOverviewSection = replaceMeta(
+  repositoryFiles,
+  'overview/meta.json',
+  (meta) => {
+    const pages = meta.pages as string[];
+    const googleDriveIndex = pages.findIndex((page) =>
+      page.startsWith('[Google Drive]')
+    );
+    pages.splice(googleDriveIndex, 1);
+  }
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(missingOverviewSection),
+    'overview/meta.json',
+    'must link to the "Google Drive" section from integrations/meta.json'
+  ),
+  true,
+  'rejects an integration section omitted from Overview'
+);
+
 const staleEntry = replaceMeta(
   repositoryFiles,
   'node/guides/meta.json',

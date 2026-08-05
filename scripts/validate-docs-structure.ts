@@ -50,6 +50,11 @@ export type StructureFinding = Readonly<{
   message: string;
 }>;
 
+type CrossSectionLink = Readonly<{
+  title: string;
+  path: string;
+}>;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -77,6 +82,12 @@ function getPages(meta: Record<string, unknown>): readonly string[] | undefined 
     return undefined;
   }
   return meta.pages;
+}
+
+function parseCrossSectionLink(entry: string): CrossSectionLink | undefined {
+  const match = /^\[([^\]]+)\]\((\/docs\/[^)]+)\)$/.exec(entry);
+  if (!match?.[1] || !match[2]) return undefined;
+  return { title: match[1], path: match[2] };
 }
 
 function findEntryCandidates(
@@ -312,6 +323,43 @@ export function validateDocsStructure(
         rootMetaPath,
         `Sidebar sections must be ${expectedSections.join(', ')}; received ${sectionTitles.join(', ') || 'none'}.`
       );
+    }
+  }
+
+  const overviewMetaPath = 'overview/meta.json';
+  const overviewMeta = metaByPath.get(overviewMetaPath);
+  const overviewPages = overviewMeta && getPages(overviewMeta);
+  if (overviewPages) {
+    const overviewLinks = overviewPages
+      .map(parseCrossSectionLink)
+      .filter((link): link is CrossSectionLink => link !== undefined);
+
+    for (const root of ['platform', 'integrations'] as const) {
+      const rootMetaPath = `${root}/meta.json`;
+      const rootMeta = metaByPath.get(rootMetaPath);
+      const rootPages = rootMeta && getPages(rootMeta);
+      if (!rootPages) continue;
+
+      for (const page of rootPages) {
+        if (!page.startsWith('./')) continue;
+        const childBase = resolveEntryBase(rootMetaPath, page);
+        const childMetaPath = `${childBase}/meta.json`;
+        const childMeta = metaByPath.get(childMetaPath);
+        if (!childMeta || typeof childMeta.title !== 'string') continue;
+
+        const expectedPathPrefix = `/docs/${childBase}/`;
+        const hasLink = overviewLinks.some(
+          (link) =>
+            link.title === childMeta.title &&
+            link.path.startsWith(expectedPathPrefix)
+        );
+        if (!hasLink) {
+          addFinding(
+            overviewMetaPath,
+            `Overview sidebar must link to the "${childMeta.title}" section from ${rootMetaPath}.`
+          );
+        }
+      }
     }
   }
 

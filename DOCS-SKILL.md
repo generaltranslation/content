@@ -290,7 +290,7 @@ Every immediate child folder listed by a top-level section root becomes a visibl
 
 ### Overview hub
 
-The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Keep those curated links in sync with the sections they point to, and only link pages that exist.
+The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Include every published Platform capability and integration section, keep those links in sync with the sections they point to, and only link pages that exist. The structure validator enforces this coverage.
 
 ### Machine-readable outputs
 
