@@ -21,7 +21,7 @@ export function baseOptions(): BaseLayoutProps {
       url: '/docs',
     },
     searchToggle: {
-      enabled: false,
+      enabled: true,
     },
     themeSwitch: {
       enabled: false,
