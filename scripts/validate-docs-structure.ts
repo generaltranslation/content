@@ -90,6 +90,26 @@ function parseCrossSectionLink(entry: string): CrossSectionLink | undefined {
   return { title: match[1], path: match[2] };
 }
 
+function getFrontmatterValue(
+  content: string,
+  key: string
+): string | undefined {
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1];
+  if (!frontmatter) return undefined;
+
+  const match = new RegExp(`^${key}:\\s*(.+?)\\s*$`, 'm').exec(frontmatter);
+  const value = match?.[1];
+  if (!value) return undefined;
+
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
 function findEntryCandidates(
   files: ReadonlyMap<string, string>,
   metaPath: string,
@@ -242,6 +262,34 @@ export function validateDocsStructure(
     }
   }
 
+  for (const [path, content] of files) {
+    if (
+      !/^react\/(?:.+\/)?reference\/components\/[^/]+\.(?:md|mdx)$/.test(
+        path
+      )
+    ) {
+      continue;
+    }
+
+    const title = getFrontmatterValue(content, 'title');
+    if (!title || !/^<[A-Za-z_$][A-Za-z0-9_$]*>$/.test(title)) {
+      addFinding(
+        path,
+        'React component reference title must use a quoted JSX tag such as "<T>".'
+      );
+      continue;
+    }
+
+    const description = getFrontmatterValue(content, 'description');
+    const expectedReference = `API reference for the ${title} component.`;
+    if (!description?.includes(expectedReference)) {
+      addFinding(
+        path,
+        `React component description must include "${expectedReference}"`
+      );
+    }
+  }
+
   for (const path of files.keys()) {
     if (!/\.(md|mdx)$/.test(path)) continue;
     const parentDirectory = posix.dirname(path);
@@ -389,7 +437,7 @@ export function collectDocsFiles(root: string): Map<string, string> {
         const relativePath = relative(root, absolutePath).split(sep).join('/');
         files.set(
           relativePath,
-          entry.name === 'meta.json' ? readFileSync(absolutePath, 'utf8') : ''
+          readFileSync(absolutePath, 'utf8')
         );
       }
     }

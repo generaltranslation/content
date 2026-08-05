@@ -107,6 +107,43 @@ assertEqual(
   'rejects a lowercase navigation title'
 );
 
+const componentPath = 'react/reference/components/t.mdx';
+const bareComponentTitle = new Map(repositoryFiles);
+bareComponentTitle.set(
+  componentPath,
+  (bareComponentTitle.get(componentPath) ?? '').replace(
+    'title: "<T>"',
+    'title: T'
+  )
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(bareComponentTitle),
+    componentPath,
+    'title must use a quoted JSX tag'
+  ),
+  true,
+  'rejects a bare React component title'
+);
+
+const incompleteComponentDescription = new Map(repositoryFiles);
+incompleteComponentDescription.set(
+  componentPath,
+  (incompleteComponentDescription.get(componentPath) ?? '').replace(
+    'API reference for the <T> component.',
+    'API reference for T.'
+  )
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(incompleteComponentDescription),
+    componentPath,
+    'description must include "API reference for the <T> component."'
+  ),
+  true,
+  'rejects incomplete React component search metadata'
+);
+
 const reorderedRoots = replaceMeta(repositoryFiles, 'meta.json', (meta) => {
   const pages = meta.pages as string[];
   [pages[0], pages[1]] = [pages[1]!, pages[0]!];
