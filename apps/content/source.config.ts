@@ -5,6 +5,7 @@ import {
   frontmatterSchema,
   metaSchema,
 } from 'fumadocs-mdx/config';
+import { remarkStructure } from 'fumadocs-core/mdx-plugins';
 import { z } from 'zod';
 
 const contentFrontmatterSchema = frontmatterSchema.extend({
@@ -46,5 +47,6 @@ export const devlog = defineCollections({
 export default defineConfig({
   mdxOptions: {
     preset: 'minimal',
+    remarkPlugins: [remarkStructure],
   },
 });
