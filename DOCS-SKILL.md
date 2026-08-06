@@ -166,6 +166,7 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 
 - Always write **General Translation** (singular) — never "General Translations". The API is the **General Translation API**, not "General Translations API".
 - Use **General Translation** when the page needs to identify the overall product, distinguish it from another service, or name an official term such as the **General Translation API**. Do not force the name into every page or `description`; the section title, sidebar, package name, or feature name often supplies enough context.
+- **Do not repeat the product or package name when the surrounding section already establishes it.** In page descriptions and opening sentences, omit **General Translation**, `gt-react`, `gt-next`, and similar ownership labels when the section, page title, sidebar, or reference grouping already supplies that context. Start with the reader action or API behavior instead.
 - Do not prefix every product-owned feature with the brand. Prefer **the CLI**, **the Dashboard**, **the integration**, **Ask AI**, **Context Groups**, or the package name over "the General Translation CLI/tool/integration/Ask AI" once the subject is clear.
 - Remove redundant branding, not meaning. Keep ordinary words such as "translation," "translations," "translate," and "translation workflow" when they explain what the reader is doing.
 - Configuration pages should name the thing being configured. Keep **General Translation**, `gt`, or the relevant package name when it distinguishes the configuration from the third-party platform's own settings.
@@ -289,7 +290,7 @@ Every immediate child folder listed by a top-level section root becomes a visibl
 
 ### Overview hub
 
-The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Keep those curated links in sync with the sections they point to, and only link pages that exist.
+The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Include every published Platform capability and integration section, keep those links in sync with the sections they point to, and only link pages that exist. The structure validator enforces this coverage.
 
 ### Machine-readable outputs
 
@@ -426,12 +427,14 @@ description: How to use labels, notes, and comments to coordinate translation re
 
 - **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
+- **React component reference titles use JSX syntax.** Quote the complete tag in frontmatter (`title: "<T>"`) so the page title and sidebar display `<T>`, not `T`.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant capability or tool without automatically branding it. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the Dashboard." / "What are locale codes, and how are they used across the translation stack?"
     - **Configuration Guides:** retain `gt`, the package name, or **General Translation** when it identifies which system's configuration the reader is changing. *Example:* "How to configure the General Translation gt-sanity plugin for locales, document filters, and credentials."
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
+    - **React components:** name the JSX tag directly (`API reference for the <T> component.`).
   - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic]` — do not start the sentence with "API reference". *Example: "…across every locale. Reference for supported file formats."*
 
 A few optional fields appear on specific page types:
