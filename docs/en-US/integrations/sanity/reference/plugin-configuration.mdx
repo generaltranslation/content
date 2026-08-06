@@ -37,6 +37,10 @@ gtPlugin({
 | [`fieldLevelLocalization`](#field-level-localization) | Alias for `internationalizedArray`. | `GTFieldLevelLocalizationConfig` | Yes | — |
 | [`translationLevel`](#translation-level) | Choose document-level, field-level, or mixed translation. | `'document' \| 'internationalizedArray' \| 'mixed'` | Yes | `'document'` |
 | [`fieldLevelDocuments`](#field-level-documents) | Document types that use field-level localization in mixed mode. | `TranslateDocumentFilter[] \| string[]` | Yes | `[]` |
+| [`autoRefresh`](#auto-refresh) | Initial state of automatic translation-status polling. | `boolean` | Yes | `true` |
+| [`autoImport`](#auto-import) | Initial state of automatic import when a translation completes. | `boolean` | Yes | `true` |
+| [`autoPatchReferences`](#auto-patch-references) | Initial state of reference patching after import. | `boolean` | Yes | `false` |
+| [`autoPublish`](#auto-publish) | Initial state of publishing after import. | `boolean` | Yes | `false` |
 | [`preserveExistingTranslations`](#preserve-existing-translations) | Initial state of the **Save local edits** toggle. | `boolean` | Yes | `false` |
 | [`ignoreFields`](#ignore-fields) | Fields copied from the source without translating. | `FieldMatcher[]` | Yes | `[]` |
 | [`dedupeFields`](#dedupe-fields) | Fields copied from the source and made unique per locale. | `FieldMatcher[]` | Yes | `[]` |
@@ -273,6 +277,32 @@ defineField({
 
 ## Translation workflow options [#workflow-options]
 
+These options set the switches' initial values. When an editor changes a switch in the Studio, the plugin saves all five preferences to `localStorage`, keyed by Sanity project and dataset. Stored values take precedence over plugin configuration on later visits. If browser storage is unavailable, a change applies until the Studio reloads.
+
+### `autoRefresh` [#auto-refresh]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+Sets the initial state of **Auto-refresh**. When enabled, the document dialog polls for translation status every 10 seconds. A manual **Refresh** checks once regardless of this setting.
+
+### `autoImport` [#auto-import]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+Sets the initial state of **Auto-import when complete**. When enabled, the document dialog imports translations that complete while it is open. It does not automatically re-import translations that were already complete when the dialog opened, which prevents existing Sanity edits from being overwritten. Starting a new translation run resets that baseline.
+
+### `autoPatchReferences` [#auto-patch-references]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+Sets the initial state of **Auto-patch after import** for document-level translations. When enabled, an imported document's references are repointed to translated documents for the same locale. If the translated document is already published and has no draft, the plugin creates a draft from the published state and patches the draft instead of changing published content.
+
+### `autoPublish` [#auto-publish]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+Sets the initial state of **Auto-publish after import** for document-level translations. Imports always create or update drafts. Enable this option to publish each imported translation automatically when its source document is published.
+
 ### `preserveExistingTranslations` [#preserve-existing-translations]
 
 **Type** `boolean` · **Optional** · **Default** `false`
@@ -288,13 +318,52 @@ gtPlugin({
 });
 ```
 
-This option seeds the toggle when the Studio loads. Editors can turn it on or off for their session from the **Translations** tool or the document tab, and that choice takes precedence for the rest of the session.
+Editors can change this preference from the **Translations** tool or document dialog. Like the other workflow preferences, their stored choice takes precedence over the configured initial value on later visits.
 
 <Callout type="warn">
   With the toggle on, what is in Sanity replaces whatever General Translation holds for that version of the document, including a translation that has finished but has not been imported yet. Import any pending translations before enabling it.
 </Callout>
 
 See [Keep edits to translations](/docs/integrations/sanity/guides/translating-content#preserve-edits).
+
+### Version history
+
+| Version | Changes |
+| --- | --- |
+| `3.1.4` | Added all five plugin options and per-project, per-dataset persistence. Changed the `autoPatchReferences` and `autoPublish` defaults to `false`; `autoRefresh` and `autoImport` remain `true`. |
+
+## Studio structure helpers [#structure-helpers]
+
+`gt-sanity` exports two opt-in helpers for grouping document-level translations by locale in Sanity's structure tool.
+
+| Helper | Description | Returns |
+| --- | --- | --- |
+| `gtStructureItems` | Build locale-grouped list items to compose into a custom structure. | `ListItemBuilder[]` |
+| `gtStructure` | Build a complete **Content** structure containing the locale-grouped items. | `StructureResolver` |
+
+```ts
+type GTStructureOptions = {
+  types?: string[];
+  sourceTitle?: string;
+  localeTitle?: (typeTitle: string, locale: string, label: string) => string;
+};
+
+function gtStructureItems(
+  S: StructureBuilder,
+  context?: StructureResolverContext,
+  options?: GTStructureOptions
+): ListItemBuilder[];
+
+function gtStructure(options?: GTStructureOptions): StructureResolver;
+```
+
+By default, the helpers group the document types in `translateDocuments`. Types localized in place through internationalized arrays are excluded. The source pane includes documents whose language field is missing or matches `sourceLocale`; each target pane includes documents whose language field matches that locale.
+
+- `types` overrides the document types selected from plugin configuration.
+- `sourceTitle` replaces the source pane's locale label.
+- `localeTitle` receives the schema type title, locale code, and formatted locale label, then returns each target pane title.
+
+When no document types can be resolved, the helper logs a warning and returns no list items. See [Browse translations by locale](/docs/integrations/sanity/guides/configuring-sanity#browse-locales) for configuration examples.
 
 ## Field matchers [#field-matchers]
 
@@ -489,9 +558,10 @@ Slug fields are *not* stopped by default, so a slug's `current` string is transl
 
 ## Exported helpers [#helpers]
 
-`gt-sanity` also exports building blocks for advanced serialization and custom document nodes. Most projects do not need them.
+`gt-sanity` also exports building blocks for Studio structure, advanced serialization, and custom document nodes. Most projects do not need them.
 
 - `TranslationsTab` — the document tab component for `structureTool`. See [Configure Sanity](/docs/integrations/sanity/guides/configuring-sanity#translations-tab).
+- `gtStructure` / `gtStructureItems` and `GTStructureOptions` — locale-grouped Studio structure helpers. See [Studio structure helpers](#structure-helpers).
 - `attachGTData` / `detachGTData` — attach and read the encoded mark data used by custom serializers.
 - `BaseDocumentSerializer`, `BaseDocumentDeserializer`, `BaseDocumentMerger` — the default serialize, deserialize, and merge implementations.
 - `defaultStopTypes`, `customSerializers` — the default stop types and serializer set.
