@@ -281,8 +281,7 @@ export function validateDocsStructure(
     }
 
     const description = getFrontmatterValue(content, 'description');
-    const symbol = title.slice(1, -1);
-    const expectedReference = `API reference for the ${symbol} component (${title}).`;
+    const expectedReference = `API reference for the ${title} component.`;
     if (!description?.includes(expectedReference)) {
       addFinding(
         path,
