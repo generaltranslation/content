@@ -1,7 +1,7 @@
 ---
 
 title: Formatting numbers and dates
-description: How to insert locale-aware numbers, currencies, dates, and variables into General Translation content.
+description: How to format numbers, currency, dates, relative time, and dynamic values for each locale in React.
 related:
   links:
     - /docs/react/guides/handling-plurals-and-branches
@@ -11,11 +11,23 @@ related:
 
 ---
 
-Dynamic values inside translated content need to be marked so they are not sent for translation, and formatted values need to respect the reader's locale. General Translation provides variable components for both. These components come from the same core across every framework — only the import package differs.
+Different locales have different conventions for formatting variables such as numbers, dates, times, and currency.
+
+Use the matching component for values that should adapt to the active locale, and use [`<Var>`](/docs/react/reference/components/var) for dynamic values that should render unchanged.
+
+## Choose the right component [#choose]
+
+- [`<Var>`](/docs/react/reference/components/var) renders a dynamic value without translating or formatting it.
+- [`<Num>`](/docs/react/reference/components/num) formats numbers, percentages, and units for the active locale.
+- [`<Currency>`](/docs/react/reference/components/currency) formats an amount and currency code without converting its value.
+- [`<DateTime>`](/docs/react/reference/components/datetime) formats an absolute date, time, or both for the active locale.
+- [`<RelativeTime>`](/docs/react/reference/components/relative-time) formats relative wording such as "yesterday" or "in 3 days."
+
+These components share the same behavior across React, Next.js, TanStack Start, and React Native. Import them from your framework's package.
 
 ## Insert a raw value with `<Var>` [#var]
 
-Use [`<Var>`](/docs/react/reference/components/var) for dynamic content that should render as-is, such as a user name. It marks the value as a variable so the surrounding text stays translatable.
+Use [`<Var>`](/docs/react/reference/components/var) for dynamic content that should render exactly as provided: such as a username, email address, or identifier. Inside [`<T>`](/docs/react/reference/components/t), it keeps the value out of the translation while allowing the surrounding sentence to remain translatable.
 
 <Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
   <Tab value="React">
@@ -61,26 +73,91 @@ Use [`<Var>`](/docs/react/reference/components/var) for dynamic content that sho
 
 ## Format numbers and currency [#numbers]
 
-Use [`<Num>`](/docs/react/reference/components/num) and [`<Currency>`](/docs/react/reference/components/currency) for locale-aware number and money formatting. Both accept `Intl` options, and both are imported from your framework's package alongside [`<T>`](/docs/react/reference/components/t).
+Use [`<Num>`](/docs/react/reference/components/num) and [`<Currency>`](/docs/react/reference/components/currency) for locale-aware number and money formatting. Import both from your framework's package alongside [`<T>`](/docs/react/reference/components/t).
+
+### Format a number
+
+Use [`<Num>`](/docs/react/reference/components/num) for decimal grouping, percentages, and units. Pass [`options`](/docs/react/reference/components/num#options) to customize the output.
 
 ```tsx
 <T>
-  <p>You have <Num>{count}</Num> items totaling <Currency currency="USD">{total}</Currency>.</p>
+  <p>
+    <Num>{count}</Num> downloads are complete.
+  </p>
 </T>;
 ```
 
-[`<Currency>`](/docs/react/reference/components/currency) defaults to `USD`; pass `currency` for another code. It formats the value for the locale but does not convert between currencies.
+```tsx
+<Num options={{ style: 'percent', maximumFractionDigits: 0 }}>
+  {completionRate}
+</Num>
+```
+
+### Format currency
+
+Use [`<Currency>`](/docs/react/reference/components/currency) with an ISO 4217 [`currency`](/docs/react/reference/components/currency#currency) code such as `USD` or `EUR`.
+
+```tsx
+<T>
+  <p>
+    Your total is <Currency currency="EUR">{total}</Currency>.
+  </p>
+</T>;
+```
+
+[`<Currency>`](/docs/react/reference/components/currency) defaults to `USD`, but passing [`currency`](/docs/react/reference/components/currency#currency) makes the intended unit explicit. It localizes the symbol, grouping, and decimal display; it does not convert exchange rates.
+
+Pass [`options`](/docs/react/reference/components/currency#options) to control details such as currency display, rounding, and notation.
 
 ## Format dates and times [#dates]
 
-Use [`<DateTime>`](/docs/react/reference/components/datetime) for absolute dates and times, and [`<RelativeTime>`](/docs/react/reference/components/relative-time) for relative values such as "3 days ago". Both accept `Intl` formatting options and an optional `locales` override.
+Use [`<DateTime>`](/docs/react/reference/components/datetime) for absolute dates and times, and [`<RelativeTime>`](/docs/react/reference/components/relative-time) for relative values such as "3 days ago."
+
+### Format an absolute date or time
+
+Use [`<DateTime>`](/docs/react/reference/components/datetime) for calendar dates and clock times. Pass [`options`](/docs/react/reference/components/datetime#options) to control the date style, time style, and time zone.
 
 ```tsx
 <T>
-  <p>Published <DateTime>{publishedAt}</DateTime> (<RelativeTime>{publishedAt}</RelativeTime>).</p>
+  <p>
+    Published{' '}
+    <DateTime
+      options={{
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'UTC',
+      }}
+    >
+      {publishedAt}
+    </DateTime>
+    .
+  </p>
 </T>;
 ```
 
-[`<RelativeTime>`](/docs/react/reference/components/relative-time) can also take an explicit `value` and `unit` (for example `value={-3}` with `unit="day"`) instead of a date.
+### Format relative time
 
-See the [Components reference](/docs/react/reference/components/num) for every prop these components accept.
+Use [`<RelativeTime>`](/docs/react/reference/components/relative-time) with a `Date` to select an appropriate unit automatically:
+
+```tsx
+<T>
+  <p>
+    Published <RelativeTime>{publishedAt}</RelativeTime>.
+  </p>
+</T>;
+```
+
+For a known offset, pass [`value`](/docs/react/reference/components/relative-time#value) and [`unit`](/docs/react/reference/components/relative-time#unit) instead:
+
+```tsx
+<RelativeTime value={-3} unit="day" />
+```
+
+Pass [`options`](/docs/react/reference/components/relative-time#options) to choose numeric or natural wording and a long, short, or narrow style.
+
+To override the active locale, choose the component you are formatting:
+
+- [`<Num>` `locales`](/docs/react/reference/components/num#locales)
+- [`<Currency>` `locales`](/docs/react/reference/components/currency#locales)
+- [`<DateTime>` `locales`](/docs/react/reference/components/datetime#locales)
+- [`<RelativeTime>` `locales`](/docs/react/reference/components/relative-time#locales)

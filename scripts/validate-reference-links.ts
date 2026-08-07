@@ -64,19 +64,15 @@ type NarrowExclusion = {
 };
 
 // Each entry suppresses one source symbol whose inline-code formatting is not
-// an API reference. Add a line when the same symbol has API uses elsewhere.
+// an API reference. Scope by path and symbol when every occurrence on that page
+// has the same non-API meaning; add a line only when API and non-API uses share
+// a page.
 const NARROW_EXCLUSIONS: NarrowExclusion[] = [
   {
     path: 'docs/en-US/react/reference/hooks/use-locale-selector.mdx',
     symbol: 'getLocaleProperties',
-    line: 39,
-    reason: 'This is a field returned by useLocaleSelector.',
-  },
-  {
-    path: 'docs/en-US/react/reference/hooks/use-locale-selector.mdx',
-    symbol: 'getLocaleProperties',
-    line: 62,
-    reason: 'This is a field returned by useLocaleSelector.',
+    reason:
+      'This is a callback returned by useLocaleSelector, not the standalone utility.',
   },
   {
     path: 'devlog/en-US/generaltranslation_v7_8_0.mdx',
