@@ -1,125 +1,207 @@
 ---
 
-title: GTProvider
-description: Provide the active locale and translations to a General Translation gt-react component tree. API reference for GTProvider.
+title: "<GTProvider>"
+description: Provide translation and locale context to a React component tree. API reference for the <GTProvider> component.
 
 ---
 
-The `<GTProvider>` component supplies the active locale and its translations to a server-rendered `gt-react` component tree. Use it when your server loads translations and passes them to the client.
+The `<GTProvider>` contract depends on the framework and router. Some providers receive locale data as props, while others resolve and load it for you.
 
 *Note: React SPAs initialized with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) use the global translation cache and do not need a provider.*
 
-*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`. Examples import from `gt-react`; import from your framework's package instead.*
-
-*Note: how the locale and translations reach `<GTProvider>` differs by framework. In `gt-react` you pass them as props (below); `gt-next`, `gt-tanstack-start`, and `gt-react-native` resolve them through their own setup, documented in each framework's section.*
+*Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`.*
 
 ## Overview [#overview]
 
-Wrap your app in `<GTProvider>` after [initialization](/docs/react/reference/config#initialization). Pass the active `locale` and the `translations` for that locale, loaded with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot).
+| Runtime | Required props | Locale and translation source |
+| --- | --- | --- |
+| React server rendering | `locale`, `translations` | Your server loader |
+| Next.js App Router | None | The request and `gt-next` cache |
+| Next.js Pages Router | `locale`, `translations` | Pages Router data wrappers |
+| TanStack Start | `locale`, `translations` | Your request loader |
+| React Native | None | Native locale detection and the configured translation loader |
 
-```tsx
-import { GTProvider } from 'gt-react';
+The [Props](#props) section identifies exactly which provider variants accept each prop.
 
-<GTProvider locale={locale} translations={translations}>
-  <App />
-</GTProvider>
-```
+## Framework contracts [#contracts]
 
-*Note: [`loadTranslations`](/docs/react/reference/functions/load-translations), [`loadDictionary`](/docs/react/reference/functions/load-dictionary), and credentials go on the [initialization call](/docs/react/reference/config#initialization), not on `<GTProvider>`. The provider consumes the resolved locale and translations synchronously.*
+<Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
+  <Tab value="React">
+    Server-rendered `gt-react` apps pass the active locale and a translation snapshot. Load the snapshot after [`initializeGT`](/docs/react/reference/config#initialize).
 
-<Callout type="info">
-  **Changed in v11:** the `gt-react` `<GTProvider>` no longer accepts `config`, [`loadTranslations`](/docs/react/reference/functions/load-translations), [`loadDictionary`](/docs/react/reference/functions/load-dictionary), or credentials. Move those to the [initialization call](/docs/react/reference/config#initialization) and pass the resolved `locale` and `translations` (from [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot)) to the provider instead.
-</Callout>
+    ```tsx
+    import { GTProvider } from 'gt-react';
+
+    <GTProvider locale={locale} translations={translations}>
+      <App />
+    </GTProvider>
+    ```
+
+    [`loadTranslations`](/docs/react/reference/functions/load-translations), [`loadDictionary`](/docs/react/reference/functions/load-dictionary), and credentials belong on the [initialization call](/docs/react/reference/config#initialization), not the provider.
+
+    <Callout type="info">
+      **Changed in v11:** the `gt-react` `<GTProvider>` no longer accepts `config`, [`loadTranslations`](/docs/react/reference/functions/load-translations), [`loadDictionary`](/docs/react/reference/functions/load-dictionary), or credentials. Move them to [`initializeGT`](/docs/react/reference/config#initialize), then pass the resolved `locale` and `translations` to the provider.
+    </Callout>
+  </Tab>
+
+  <Tab value="Next.js">
+    ### App Router
+
+    The App Router provider is an async server component with only a `children` prop. It resolves the locale, region, translation state, translations, and dictionaries from the request and the `gt-next` cache.
+
+    ```tsx title="app/layout.tsx"
+    import { GTProvider } from 'gt-next';
+
+    export default function RootLayout({ children }) {
+      return <GTProvider>{children}</GTProvider>;
+    }
+    ```
+
+    Do not pass `locale`, `translations`, `dictionaries`, `region`, or `enableI18n` to the App Router provider.
+
+    ### Pages Router
+
+    The Pages Router re-exports the shared `gt-react` provider. Pass the values injected through [server-side rendering](/docs/react/nextjs-pages-router-quickstart#quickstart) or [static generation](/docs/react/nextjs/pages-router-static-site-generation), and provide `_reload` when locale changes should use Next.js routing.
+
+    ```tsx title="pages/_app.tsx"
+    import Router from 'next/router';
+    import { GTProvider } from 'gt-next';
+
+    <GTProvider
+      locale={pageProps.locale}
+      translations={pageProps.translations}
+      _reload={({ locale }) => {
+        void Router.push(Router.pathname, Router.asPath, { locale });
+      }}
+    >
+      <Component {...pageProps} />
+    </GTProvider>
+    ```
+  </Tab>
+
+  <Tab value="TanStack Start">
+    `gt-tanstack-start` re-exports the shared provider. Pass the active locale and its translation snapshot after registering [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware).
+
+    ```tsx
+    import { GTProvider } from 'gt-tanstack-start';
+
+    <GTProvider locale={locale} translations={translations}>
+      <App />
+    </GTProvider>
+    ```
+  </Tab>
+
+  <Tab value="React Native">
+    The React Native provider detects the initial locale, loads its translations, and rerenders when the locale changes. `locale` is optional, and `translations` is not a public prop.
+
+    ```tsx
+    import { GTProvider } from 'gt-react-native';
+
+    <GTProvider>
+      <App />
+    </GTProvider>
+    ```
+
+    Pass `fallback` to replace the built-in loading indicator while translations load.
+  </Tab>
+</Tabs>
 
 ## How it works [#how-it-works]
 
-- **Synchronous translations.** The provider requires `translations` up front so translated content renders synchronously, without a loading flash. Produce this object with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) after initialization.
-- **Context for the tree.** In a provider-based setup, components below the provider read the active locale, translations, dictionaries, and region from it.
-- **Toggling translation.** When `enableI18n` is `false`, the provider renders source-locale content and skips translation, which is useful for previewing the untranslated app.
+- **React, TanStack Start, and Next.js Pages Router.** The provider receives a translation snapshot up front, so translated content renders synchronously.
+- **Next.js App Router.** The server provider reads request state and loads translations and dictionaries before rendering its client boundary.
+- **React Native.** The provider loads translations for the resolved locale through Suspense. It renders `fallback` until they are available.
+- **Context for the tree.** Descendants read the active locale, translations, dictionaries, region, and translation state from provider context.
+- **Locale changes.** Web providers persist the locale in a cookie and call their reload behavior. React Native persists it in native storage and updates provider state.
 
 ## Props [#props]
 
 | Prop | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| [`locale`](#locale) | Active locale for the tree. | `string` | No | — |
-| [`translations`](#translations) | Translations for the active locale. | `object` | No | — |
-| [`dictionaries`](#dictionaries) | Per-locale dictionaries for [`useTranslations`](/docs/react/reference/hooks/use-translations). | `object` | Yes | — |
-| [`region`](#region) | Active region code. | `string` | Yes | — |
-| [`enableI18n`](#enable-i18n) | Translate content. When `false`, renders the source locale. | `boolean` | Yes | `true` |
-| [`children`](#children) | The app tree. | `ReactNode` | Yes | — |
-
-### `locale` [#locale]
-
-**Type** `string` · **Required**
-
-The active locale for the tree, as a BCP 47 code such as `es`. Read it downstream with [`useLocale`](/docs/react/reference/hooks/use-locale).
-
-### `translations` [#translations]
-
-**Type** `object` · **Required**
-
-The translations for the active locale, in the shape the provider consumes synchronously. Produce it with [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot) after initialization.
-
-### `dictionaries` [#dictionaries]
-
-**Type** `object` · **Optional**
-
-Per-locale dictionaries used by [`useTranslations`](/docs/react/reference/hooks/use-translations) for id-based lookups. Omit this when you only use [`<T>`](/docs/react/reference/components/t) and [`useGT`](/docs/react/reference/hooks/use-gt).
-
-### `region` [#region]
-
-**Type** `string` · **Optional**
-
-The active region code (for example, `US` or `GB`), used for region-specific formatting and by the region hooks and selectors.
-
-### `enableI18n` [#enable-i18n]
-
-**Type** `boolean` · **Optional** · **Default** `true`
-
-Whether to translate content. When `false`, the provider renders source-locale content and skips translation.
+| [`children`](#children) | Component tree. Accepted by every provider. | `ReactNode` | Yes | — |
+| [`locale`](#locale) | Active locale. Required by React, TanStack Start, and Next.js Pages Router; optional in React Native; not accepted in Next.js App Router. | `string \| LocaleCandidates` | Framework-specific | Device or stored locale in React Native |
+| [`translations`](#translations) | Translation snapshot. Required by React, TanStack Start, and Next.js Pages Router; not accepted in Next.js App Router or React Native. | `object` | Framework-specific | — |
+| [`dictionaries`](#dictionaries) | Per-locale dictionaries. Accepted by React, TanStack Start, Next.js Pages Router, and React Native; loaded internally in Next.js App Router. | `object` | Yes | — |
+| [`region`](#region) | Active region. Accepted by React, TanStack Start, Next.js Pages Router, and React Native; resolved internally in Next.js App Router. | `string` | Yes | Stored region or `undefined` |
+| [`enableI18n`](#enable-i18n) | Whether to translate. Accepted by React, TanStack Start, Next.js Pages Router, and React Native; resolved internally in Next.js App Router. | `boolean` | Yes | `true` |
+| [`fallback`](#fallback) | Loading content while React Native fetches translations. React Native only. | `ReactNode` | Yes | Loading indicator |
+| [`_reload`](#reload) | Framework reload callback. Accepted by React, TanStack Start, and Next.js Pages Router; not accepted by Next.js App Router or React Native. | `(state) => void` | Yes | Framework-specific |
+| [`onMissingTranslation`](#missing-translation) | Handle a missing inline or JSX translation. Not accepted by Next.js App Router. | `OnMissingTranslation` | Yes | — |
+| [`onMissingDictionaryEntry`](#missing-dictionary-entry) | Handle a missing dictionary entry. Not accepted by Next.js App Router. | `OnMissingDictionaryEntry` | Yes | — |
+| [`onMissingDictionaryObj`](#missing-dictionary-object) | Handle a missing dictionary object. Not accepted by Next.js App Router. | `OnMissingDictionaryObj` | Yes | — |
 
 ### `children` [#children]
 
 **Type** `ReactNode` · **Optional**
 
-Your application tree. In a provider-based setup, every component that translates or reads locale state must be a descendant of the provider.
+The component tree that receives translation context. Every provider variant accepts `children`.
 
-## Examples [#examples]
+### `locale` [#locale]
 
-```tsx title="src/routes/root.tsx"
-import {
-  GTProvider,
-  initializeGT,
-  getTranslationsSnapshot,
-  parseLocale,
-} from 'gt-react';
-import gtConfig from '../../gt.config.json';
+**Type** `string | LocaleCandidates` · **Framework-specific**
 
-const loadTranslations = (locale: string) =>
-  import(`../_gt/${locale}.json`).then((m) => m.default);
+The active locale for the tree:
 
-initializeGT({ ...gtConfig, loadTranslations });
+- Required as a resolved `string` in React, TanStack Start, and Next.js Pages Router.
+- Optional in React Native, where it accepts locale candidates and defaults to the stored or device locale.
+- Not accepted by the Next.js App Router provider, which resolves the request locale internally.
 
-export async function loadRoot(request: Request) {
-  const locale = parseLocale(request);
-  return {
-    locale,
-    translations: await getTranslationsSnapshot(locale),
-  };
-}
+Read the result downstream with [`useLocale`](/docs/react/reference/hooks/use-locale).
 
-export function Root({ locale, translations, children }) {
-  return (
-    <GTProvider locale={locale} translations={translations}>
-      {children}
-    </GTProvider>
-  );
-}
-```
+### `translations` [#translations]
 
-```tsx
-// Preview the untranslated (source-locale) app
-<GTProvider locale={locale} translations={translations} enableI18n={false}>
-  <App />
-</GTProvider>
-```
+**Type** `Record<Locale, Record<Hash, Translation>>` · **Framework-specific**
+
+A translation snapshot produced by [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot). It is required in React, TanStack Start, and Next.js Pages Router so those providers can resolve content synchronously.
+
+The Next.js App Router provider loads the snapshot internally. The React Native provider accepts no `translations` prop and loads translations for the active locale itself.
+
+### `dictionaries` [#dictionaries]
+
+**Type** `Record<Locale, Dictionary>` · **Optional**
+
+Per-locale dictionaries used by [`useTranslations`](/docs/react/reference/hooks/use-translations) for id-based lookups. React, TanStack Start, Next.js Pages Router, and React Native accept this prop. The Next.js App Router provider loads dictionaries internally.
+
+### `region` [#region]
+
+**Type** `string` · **Optional**
+
+The active region code, such as `US` or `GB`. React, TanStack Start, Next.js Pages Router, and React Native accept this prop. Next.js App Router resolves the region from the request.
+
+### `enableI18n` [#enable-i18n]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+Whether to translate content. When `false`, the provider renders source-locale content. React, TanStack Start, Next.js Pages Router, and React Native accept this prop. Next.js App Router resolves the value from request state.
+
+### `fallback` [#fallback]
+
+**Type** `ReactNode` · **Optional**
+
+React Native-only content shown while translations load. The default is a centered React Native `ActivityIndicator`.
+
+### `_reload` [#reload]
+
+**Type** `(state: { locale: string; region: string | undefined; enableI18n: boolean }) => void` · **Optional** · **Default** Framework-specific
+
+Callback after a web locale, region, or translation-state change. React and TanStack Start accept it through the shared provider. Next.js Pages Router uses it to replace a full-page reload with `Router.push`.
+
+Plain `gt-react` and Next.js Pages Router fall back to `window.location.reload`. TanStack Start supplies pathname navigation when locale routing is enabled. The Next.js App Router provider supplies its own `router.refresh` callback and does not accept this prop. React Native updates provider state instead.
+
+### `onMissingTranslation` [#missing-translation]
+
+**Type** `OnMissingTranslation` · **Optional**
+
+Advanced callback for a missing inline or JSX translation. Browser and React Native providers can use a supplied callback. Server-rendered providers install their own handler.
+
+### `onMissingDictionaryEntry` [#missing-dictionary-entry]
+
+**Type** `OnMissingDictionaryEntry` · **Optional**
+
+Advanced callback for a missing dictionary entry. Browser and React Native providers can use a supplied callback. Server-rendered providers install their own handler.
+
+### `onMissingDictionaryObj` [#missing-dictionary-object]
+
+**Type** `OnMissingDictionaryObj` · **Optional**
+
+Advanced callback for a missing dictionary object. Browser and React Native providers can use a supplied callback. Server-rendered providers install their own handler.
