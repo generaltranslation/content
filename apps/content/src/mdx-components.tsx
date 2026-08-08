@@ -45,6 +45,7 @@ const customComponents = {
   CardHeader: StubComponent,
   CardTitle: StubComponent,
   SupportedLocales: StubComponent,
+  Asciinema: StubComponent,
   Video,
 } satisfies MDXComponents;
 
