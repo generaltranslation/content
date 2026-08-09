@@ -178,7 +178,7 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 
 ### Product and term casing
 
-Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Directive** (and **Directives**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Custom Prompt** (and **Custom Prompts**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
 
 *Note: capitalize **Autoderive** only when referring to the feature in prose; the* `gt.config.json` *key stays lowercase in code as* `autoderive`*. Do not write "General Translation Autoderive" — the feature name stands on its own.*
 
@@ -426,7 +426,7 @@ description: How to use labels, notes, and comments to coordinate translation re
 ```
 
 - **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
-- `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Directives, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
+- `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Custom Prompts, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - **React component reference titles use JSX syntax.** Quote the complete tag in frontmatter (`title: "<T>"`) so the page title and sidebar display `<T>`, not `T`.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant capability or tool without automatically branding it. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the Dashboard." / "What are locale codes, and how are they used across the translation stack?"
@@ -531,7 +531,7 @@ Anatomy:
 1. Open your Organization in the Dashboard.
 2. Go to the **Context** page.
 3. Create a **Context Group**.
-4. Add a **Glossary** (for terminology) and/or **Directives** (for style and tone).
+4. Add a **Glossary** (for terminology) and/or **Custom Prompts** (for style and tone).
 5. **Assign** your Context Group to relevant Project(s).
 6. Generate translations or apply updates to existing translations.
 ```
@@ -813,7 +813,7 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 - Navigation separators use `>`, not `->`.
 - `.md` link suffix usage is consistent within the file.
 - Notes and tips use the established format for their page type and are consistent across sibling pages.
-- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Project, Context Group, Glossary, Directives, Organization, Enterprise, GitHub).
+- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Project, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub).
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
