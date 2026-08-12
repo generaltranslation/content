@@ -4,9 +4,10 @@ title: App Router middleware
 description: How to configure General Translation locale routing for the Next.js App Router.
 related:
   links:
-    - /docs/react/nextjs-quickstart
     - /docs/react/nextjs/app-router-static-site-generation
-    - /docs/react/nextjs/reference/functions/create-next-middleware
+    - /docs/react/nextjs/registering-request-locales
+    - /docs/react/nextjs/cache-components
+    - /docs/react/nextjs/locale-alias-seo
 
 ---
 
@@ -58,3 +59,34 @@ export default async function getLocale() {
 ```
 
 The root parameter supplies the locale without reading request headers or cookies.
+
+## Reject unsupported locales [#validate-locales]
+
+By default, an unsupported request locale produces a warning and falls back to `defaultLocale`. For strict locale-prefixed routes, validate the route parameter in `app/[locale]/layout.tsx` and call `notFound()`:
+
+```tsx title="app/[locale]/layout.tsx"
+import { isLocaleSupported } from 'gt-next';
+import { notFound } from 'next/navigation';
+
+export default async function LocaleLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+
+  if (!isLocaleSupported(locale)) {
+    notFound();
+  }
+
+  return (
+    <html lang={locale}>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+[`isLocaleSupported`](/docs/react/nextjs/reference/functions/is-locale-supported) accepts configured locale aliases and narrows the value to `string`. The middleware does not automatically turn an unknown route segment into a 404.
