@@ -466,7 +466,7 @@ A few optional fields appear on specific page types:
 - **Do not skip heading levels** (do not jump from `##` to `####`).
 - Headings are **sentence case** (see Voice and formatting).
 - **Step-by-step sections** use numbered H3 headings (`### 1. Install`) nested under a single H2 for that section — on a Quickstart page the steps live under a `## Quickstart [#quickstart]` H2 (our Get Started convention). Do not use numbered H2s for steps.
-- **Custom anchors** for stable linking: append `[#anchor]` to **every H2 heading only** (not H3 or H4) so links do not break when the title changes. Use a **concise, meaningful slug** (lowercase, hyphenated, **3 words maximum**) — a short form of the heading rather than its full kebab-case.
+- **Custom anchors** for stable linking apply only to files under `docs/`: append `[#anchor]` to **every H2 heading only** (not H3 or H4) so links do not break when the title changes. Use a **concise, meaningful slug** (lowercase, hyphenated, **3 words maximum**) — a short form of the heading rather than its full kebab-case. Use normal Markdown headings without `[#anchor]` suffixes in `blog/` and `devlog/`.
 
 ```text
 ## Using variables [#variables]
