@@ -1,0 +1,85 @@
+---
+
+title: msg
+description: Register static strings at module scope for later resolution. API reference for msg.
+
+---
+
+`msg` marks source strings for extraction without reading locale state or translating them. Resolve registered values inside a component with [`useMessages()`](/docs/vue/reference/composables/use-messages).
+
+## Overview [#overview]
+
+```ts
+function msg<T extends string | readonly string[]>(message: T): T;
+function msg<T extends string | readonly string[]>(
+  message: T,
+  options?: GTStringOptions
+): T extends string ? string : string[];
+```
+
+Declare registered strings at module scope:
+
+```ts title="src/messages.ts"
+import { msg } from 'gt-vue';
+
+export const saved = msg('Your preferences are saved.', {
+  $context: 'status message',
+});
+```
+
+The call is safe in client and server modules because it does not use a plugin or browser-global runtime.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `message` | Static source string or readonly array of static source strings. | `string \| readonly string[]` | No | — |
+| `options` | Context encoded with each source string. | [`GTStringOptions`](/docs/vue/reference/types/gt-string-options) | Yes | None |
+
+`$context` is the only supported option. Each call and every array entry must be statically discoverable by the CLI.
+
+## How it works [#how-it-works]
+
+Without `options`, `msg` returns the original string or array unchanged. The extractor still registers a static call, and [`useMessages()`](/docs/vue/reference/composables/use-messages) can resolve the returned source string.
+
+When an options object is supplied, `msg` calculates a plain `STRING` hash and appends opaque metadata containing the source and `$context`. [`useMessages()`](/docs/vue/reference/composables/use-messages) decodes this metadata and gives it precedence over options passed at the resolution site.
+
+For an array with options, each entry is encoded independently and a new `string[]` is returned. `msg` does not perform a catalog lookup, interpolation, or ICU processing. Braces remain literal text.
+
+## Return value [#returns]
+
+| Input | Return type | Behavior |
+| --- | --- | --- |
+| String without options | Inferred input type | Returns the same source string. |
+| Array without options | Inferred input type | Returns the same readonly array. |
+| String with options | `string` | Returns the source plus opaque lookup metadata. |
+| Array with options | `string[]` | Returns a new array of encoded strings. |
+
+Do not render an encoded value directly. Pass it to the [`MessagesFunction`](/docs/vue/reference/types/messages-function) returned by [`useMessages()`](/docs/vue/reference/composables/use-messages).
+
+## Examples [#examples]
+
+Resolve a registered message in a Vue template:
+
+```vue title="src/StatusMessage.vue"
+<script setup lang="ts">
+import { msg, useMessages } from 'gt-vue';
+
+const saved = msg('Your preferences are saved.', {
+  $context: 'status message',
+});
+const m = useMessages();
+</script>
+
+<template>
+  <p>{{ m(saved) }}</p>
+</template>
+```
+
+Register several independent messages together:
+
+```ts
+const labels = msg(['Save', 'Cancel', 'Delete'] as const);
+```
+
+No interpolation is applied in either case. For runtime values inside rich content, use [`<T>`](/docs/vue/reference/components/t) and [`<Var>`](/docs/vue/reference/components/var).

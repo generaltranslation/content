@@ -1,0 +1,81 @@
+---
+
+title: GTPlugin
+description: Install Vue translation state and control its locale and catalog cache imperatively. API reference for GTPlugin.
+
+---
+
+[`createGT()`](/docs/vue/reference/functions/create-gt) and [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) return this Vue plugin. Its state and behavior belong to the function that created it.
+
+## Overview [#overview]
+
+```ts
+type GTPlugin = {
+  getLocale(): string;
+  install(app: App): void;
+  loadTranslations(locale: string): Promise<TranslationCatalog>;
+  setLocale(locale: string): Promise<void>;
+};
+```
+
+| Method | Description | Return type |
+| --- | --- | --- |
+| [`getLocale()`](#get-locale) | Return the locale currently owned by the plugin. | `string` |
+| [`install(app)`](#install) | Provide the plugin's state to a Vue application. | `void` |
+| [`loadTranslations(locale)`](#load-translations) | Preload and cache a locale without changing the active locale. | `Promise<TranslationCatalog>` |
+| [`setLocale(locale)`](#set-locale) | Change or persist the active locale according to the plugin's runtime mode. | `Promise<void>` |
+
+## `getLocale()` [#get-locale]
+
+**Type** `() => string` · **Required**
+
+For a [`createGT()`](/docs/vue/reference/functions/create-gt) plugin in the browser, this method reads the current configured locale cookie and falls back to the plugin's explicit or default locale. On the server it returns the instance-local value.
+
+For an [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) plugin, it returns the locale pinned during page initialization. Direct cookie changes do not change the mounted SPA until the next reload and bootstrap.
+
+## `install(app)` [#install]
+
+**Type** `(app: App) => void` · **Required**
+
+Provides translation state to components, formatters, and composables through Vue dependency injection. Calling `app.use(plugin)` calls this method.
+
+Installation starts loading the active locale. A [`createGT()`](/docs/vue/reference/functions/create-gt) plugin can mount immediately with source content and rerender when loading succeeds. An [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) plugin is already preloaded when returned.
+
+Install the exact SPA plugin returned by initialization. Creating and installing a second plugin separates component lookups from module-level [`t()`](/docs/vue/reference/functions/t) lookups. A composable used without any installed plugin throws a diagnostic.
+
+## `loadTranslations()` [#load-translations]
+
+**Type** `(locale: string) => Promise<`[`TranslationCatalog`](/docs/vue/reference/types/translation-catalog)`>` · **Required**
+
+Loads and caches a target catalog without changing the active locale. The default locale returns its existing empty catalog without calling the configured loader.
+
+Successful results remain cached for this plugin, and concurrent calls for the same resolved locale share a promise. On an SPA plugin, locale aliases and supported-locale fallback are applied before loading.
+
+A loader rejection is logged and rethrown. The failure is not cached, so a later call can retry.
+
+## `setLocale()` [#set-locale]
+
+**Type** `(locale: string) => Promise<void>` · **Required**
+
+The transition depends on how the plugin was created:
+
+- **[`createGT()`](/docs/vue/reference/functions/create-gt) plugin:** loads an uncached catalog, then updates the cookie and reactive consumers. A rejected load leaves the existing locale and cookie unchanged. If calls overlap, only the latest request is applied.
+- **[`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) plugin:** resolves the requested locale, writes the cookie, and reloads the document. It does not load the target catalog or change the pinned locale on the current page before reloading.
+
+[`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) returns this behavior through the installed plugin.
+
+## Example [#example]
+
+```ts
+import { createApp } from 'vue';
+import { createGT } from 'gt-vue';
+import App from './App.vue';
+
+const gt = createGT({ defaultLocale: 'en', loadTranslations });
+
+await gt.loadTranslations('fr');
+createApp(App).use(gt).mount('#app');
+
+await gt.setLocale('fr');
+console.log(gt.getLocale()); // "fr"
+```

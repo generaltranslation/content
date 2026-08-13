@@ -9,6 +9,7 @@ const EXPECTED_ROOTS = [
   'platform',
   'cli',
   'react',
+  'vue',
   'node',
   'python',
   'integrations',
@@ -19,6 +20,7 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
   cli: ['Guides', 'Reference'],
   react: ['Guides', 'Reference', 'Frameworks'],
+  vue: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
   integrations: ['Mintlify', 'Sanity', 'Storyblok', 'Google Drive'],
@@ -32,6 +34,7 @@ const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
   functions: 'Functions',
   guides: 'Guides',
   hooks: 'Hooks',
+  composables: 'Composables',
   reference: 'Reference',
   types: 'Types',
 };
@@ -264,7 +267,7 @@ export function validateDocsStructure(
 
   for (const [path, content] of files) {
     if (
-      !/^react\/(?:.+\/)?reference\/components\/[^/]+\.(?:md|mdx)$/.test(
+      !/^(?:react|vue)\/(?:.+\/)?reference\/components\/[^/]+\.(?:md|mdx)$/.test(
         path
       )
     ) {
@@ -275,7 +278,7 @@ export function validateDocsStructure(
     if (!title || !/^<[A-Za-z_$][A-Za-z0-9_$]*>$/.test(title)) {
       addFinding(
         path,
-        'React component reference title must use a quoted JSX tag such as "<T>".'
+        'Component reference title must use a quoted component tag such as "<T>".'
       );
       continue;
     }
@@ -285,7 +288,7 @@ export function validateDocsStructure(
     if (!description?.includes(expectedReference)) {
       addFinding(
         path,
-        `React component description must include "${expectedReference}"`
+        `Component description must include "${expectedReference}"`
       );
     }
   }

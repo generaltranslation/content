@@ -1,0 +1,113 @@
+---
+
+title: useGT
+description: Get a function to translate strings inline. API reference for useGT.
+
+---
+
+The `useGT` composable returns a synchronous plain-string catalog lookup. Use it for labels, placeholders, and other standalone strings inside a Vue component.
+
+## Overview [#overview]
+
+Call `useGT` during component setup, then call the returned function from the template or another reactive effect:
+
+```vue
+<script setup lang="ts">
+import { useGT } from 'gt-vue';
+
+const gt = useGT();
+</script>
+
+<template>
+  <input :placeholder="gt('Search products')" />
+</template>
+```
+
+Use [`<T>`](/docs/vue/reference/components/t) instead when text and nested markup should form one rich translation. Use [`t()`](/docs/vue/reference/functions/t) for module-level strings in a browser-only SPA.
+
+## How it works [#how-it-works]
+
+- **Synchronous lookup.** The returned function hashes the source string and optional context, then reads the active plugin's loaded catalog.
+- **Source fallback.** A missing entry or an entry with the wrong catalog shape returns the original string.
+- **Plain strings only.** Braces remain literal. The function does not support ICU syntax, interpolation variables, `$id`, `$maxChars`, or `$format`.
+- **Plugin scope.** Call the composable from a component under the plugin returned by [`createGT()`](/docs/vue/reference/functions/create-gt) or [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa). Calling it without an installed plugin throws an error. A request-scoped [`createGT()`](/docs/vue/reference/functions/create-gt) plugin also supports server-rendered components.
+
+The extractor requires a string literal or a template literal without expressions. Context must also be static so the generated catalog and runtime hash agree.
+
+## Parameters [#parameters]
+
+`useGT` takes no parameters.
+
+## Returns [#returns]
+
+**Type** `(message: string, options?: GTStringOptions) => string`
+
+A synchronous function with these parameters:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | Static source string to translate. | `string` | No | — |
+| [`options`](#options) | Context used to disambiguate the source. | [`GTStringOptions`](/docs/vue/reference/types/gt-string-options) | Yes | `{}` |
+
+### `message`
+
+**Type** `string` · **Required**
+
+The static source string registered by the extractor and looked up at runtime.
+
+### `options`
+
+**Type** [`GTStringOptions`](/docs/vue/reference/types/gt-string-options) · **Optional** · **Default** `{}`
+
+The only supported field is `$context?: string`. It changes the catalog identity so identical source strings can have different translations.
+
+```vue
+<button>{{ gt('Open', { $context: 'Verb: open the settings panel' }) }}</button>
+```
+
+## Reactivity [#reactivity]
+
+The returned function reads reactive catalog and locale state when you call it. A template expression reruns automatically:
+
+```vue
+<p>{{ gt('Hello World') }}</p>
+```
+
+For a value created in setup, wrap the call in `computed`:
+
+```ts
+import { computed } from 'vue';
+
+const gt = useGT();
+const message = computed(() => gt('Hello World'));
+```
+
+Calling it once creates a plain string snapshot:
+
+```ts
+const gt = useGT();
+const message = gt('Hello World');
+```
+
+With a [`createGT()`](/docs/vue/reference/functions/create-gt) plugin, that snapshot does not update when the initial catalog finishes loading or the locale changes. A browser SPA initialized with [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) preloads before components run and reloads the page for locale changes, so setup-time snapshots are recreated with the loaded locale.
+
+## Example [#example]
+
+```vue title="SearchForm.vue"
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useGT } from 'gt-vue';
+
+const gt = useGT();
+const emptyMessage = computed(() =>
+  gt('No results', { $context: 'Empty search results' })
+);
+</script>
+
+<template>
+  <form>
+    <input :placeholder="gt('Search products')" />
+    <p>{{ emptyMessage }}</p>
+  </form>
+</template>
+```

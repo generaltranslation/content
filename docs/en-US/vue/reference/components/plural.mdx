@@ -1,0 +1,99 @@
+---
+
+title: "<Plural>"
+description: Render count-based content using the active locale's plural rules. API reference for the <Plural> component.
+
+---
+
+The `<Plural>` component selects a named slot from a numeric count and the active locale's plural rules. Put it inside [`<T>`](/docs/vue/reference/components/t) when its alternatives should be translated.
+
+## Overview [#overview]
+
+Pass the count through `n` and define statically named slots for the forms your source needs:
+
+```vue
+<Plural :n="count">
+  <template #one>One item</template>
+  <template #other>Several items</template>
+  <template #default>No matching form</template>
+</Plural>
+```
+
+Wrap a dynamic count in [`<Num>`](/docs/vue/reference/components/num) when it appears in a branch's rendered text.
+
+## How it works [#how-it-works]
+
+- **Locale-driven selection.** `Intl.PluralRules` determines the locale's CLDR plural category for `n`. The component then renders the best available named slot.
+- **Numeric aliases.** `zero`, `singular`, and `dual` can explicitly handle absolute values `0`, `1`, and `2`. `plural` is an alias used as a fallback for several non-singular categories.
+- **Fallback.** If none of the provided forms matches, the default slot renders. The component adds no HTML wrapper.
+- **Static extraction.** Inside [`<T>`](/docs/vue/reference/components/t), the extractor records every supported named branch even though runtime rendering selects only one.
+
+For a standalone `<Plural>`, the configured default locale ignores explicit `locales` and uses only that default. At another active locale, a standalone component tries explicit `locales`, the active locale, and the default locale in that order.
+
+Inside [`<T>`](/docs/vue/reference/components/t), the rich translation controls plural selection. Source fallback content uses the default locale; translated content tries the active locale and then the default. An explicit `locales` prop is ignored in that case.
+
+## Props and slots [#props]
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`n`](#n) | Count used to select a plural form. | `number` | No | — |
+| [`locales`](#locales) | Preferred locales for plural selection. | `string[]` | Yes | Locale resolution order |
+| [`default`](#default-slot) | Content rendered when no form matches. | `VNodeChild` | Yes | Empty |
+| [`[form]`](#form-slots) | Content for one supported plural form. | `VNodeChild` | Yes | — |
+
+### `n`
+
+**Type** `number` · **Required**
+
+The count used to choose a plural category. Display the count separately with [`<Num>`](/docs/vue/reference/components/num); `n` only controls selection.
+
+### `locales`
+
+**Type** `string[]` · **Optional** · **Default** Locale resolution order
+
+Preferred BCP 47 locale codes for standalone plural rules. They take priority only when the active locale is not the configured default. Inside [`<T>`](/docs/vue/reference/components/t), the prop is ignored.
+
+### Default slot
+
+**Type** `VNodeChild` · **Optional** · **Default** Empty
+
+Content rendered when no supplied named slot matches the selected form.
+
+### Form slots
+
+**Type** `VNodeChild` · **Optional**
+
+The supported names are:
+
+- CLDR categories: `zero`, `one`, `two`, `few`, `many`, and `other`
+- General aliases: `singular`, `dual`, and `plural`
+
+Only add the categories needed by the locales you support. `one` does not universally mean the number `1`; selection follows the locale's plural rules, with the explicit numeric aliases taking priority where applicable.
+
+Inside [`<T>`](/docs/vue/reference/components/t), form slots must be unconditional, statically named, and unscoped. A named slot takes precedence over a static primitive attribute with the same name. Static string attributes are also supported for simple alternatives:
+
+```vue
+<Plural :n="count" one="One item" other="Several items" />
+```
+
+## Examples [#examples]
+
+```vue title="InboxCount.vue"
+<script setup lang="ts">
+import { Num, Plural, T } from 'gt-vue';
+
+defineProps<{ count: number }>();
+</script>
+
+<template>
+  <T>
+    <Plural :n="count">
+      <template #one>You have <Num :value="count" /> message.</template>
+      <template #other>You have <Num :value="count" /> messages.</template>
+      <template #default>No messages.</template>
+    </Plural>
+  </T>
+</template>
+```
+
+For arbitrary value-based selection, use [`<Branch>`](/docs/vue/reference/components/branch).

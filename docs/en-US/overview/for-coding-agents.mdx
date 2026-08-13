@@ -24,11 +24,12 @@ Pick the package that matches the stack:
 
 - **Next.js (App Router or Pages Router)** → `gt-next`
 - **React (SPA, e.g. Vite)** → `gt-react`
+- **Vue 3** → `gt-vue`
 - **Node.js server** → `gt-node`
 - **Any JavaScript runtime, or lower-level control** → `generaltranslation` (the Core library)
 - **Translating content files (JSON, MDX, YAML, and more) or running translation in CI** → the `gt` CLI
 
-All of these are free and open-source. The libraries work with or without a General Translation account; an API key unlocks on-demand translation in development and the hosted translation API.
+All of these are free and open-source. The libraries work with or without a General Translation account; an API key unlocks the hosted translation API and, where supported, on-demand translation in development. Vue uses the API key only in the CLI process that generates its local catalogs, never in browser code.
 
 ## Setup
 
@@ -40,11 +41,20 @@ npx gt init
 
 It installs the right library and the `gt` CLI, wires up the framework (for Next.js, adds `withGTConfig` and `GTProvider`), creates `gt.config.json`, and generates API credentials.
 
+Vue support is currently available under the `iris` prerelease tag. For Vue, run `npx gt@iris init` instead.
+
 For manual setup, install the packages yourself:
 
 ```bash
 npm install gt-next   # or gt-react / gt-node / generaltranslation
 npm install -D gt
+```
+
+For Vue, install the matching prerelease packages:
+
+```bash
+npm install gt-vue@iris
+npm install -D gt@iris
 ```
 
 Then create `gt.config.json` in the project root — this is the single source of truth for locales:
@@ -60,6 +70,8 @@ Then create `gt.config.json` in the project root — this is the single source o
 - `defaultLocale` — the language the source is written in.
 - `locales` — the languages to translate into.
 - `files.gt.output` — where the CLI writes translation files (`[locale]` is replaced per language). Add this directory to `.gitignore`; the files are generated.
+
+For a manual Vue setup, set `files.gt.output` to `src/_gt/[locale].json`, then follow the [Vue Quickstart](/docs/vue/quickstart) to add the catalog loader and install the `gt-vue` plugin. Vue bundles these catalogs with the application instead of reading them from `public/`.
 
 Set API credentials as environment variables (in `.env.local` for Next.js, `.env` otherwise):
 
@@ -83,6 +95,22 @@ import { T } from 'gt-next'; // or 'gt-react'
 </T>;
 ```
 
+In Vue, use the same component in a template and pass runtime values through `<Var>` slots:
+
+```vue
+<script setup lang="ts">
+import { T, Var } from 'gt-vue';
+
+defineProps<{ name: string }>();
+</script>
+
+<template>
+  <T>
+    Welcome, <Var>{{ name }}</Var>!
+  </T>
+</template>
+```
+
 Use `useGT()` for standalone strings (placeholders, `aria-label`, `alt`, button labels). `useGT()` returns the translation function directly:
 
 ```tsx
@@ -93,6 +121,8 @@ const gt = useGT(); // ✅ correct
 
 <input placeholder={gt('Search products')} />;
 ```
+
+In Vue, call `useGT()` from `<script setup>` and invoke the returned function from the template so reactive locale changes rerender the string. See [Translating strings in Vue](/docs/vue/guides/translating-strings).
 
 In async App Router components, use `getGT` instead. `gt-next/server` does not work with the Pages Router:
 
@@ -157,7 +187,7 @@ Don't:
 - [`llms.txt`](/llms.txt) — short, machine-readable docs index.
 - [`llms-full.txt`](/llms-full.txt) — full docs content for tools that can load a larger context.
 - [`sitemap.xml`](/sitemap.xml) — map of every published page.
-- Quickstarts: [React](/docs/react/react-quickstart), [Node](/docs/node/quickstart), [Core library](/docs/platform/core/quickstart), and the [CLI](/docs/cli/quickstart).
+- Quickstarts: [React](/docs/react/react-quickstart), [Vue](/docs/vue/quickstart), [Node](/docs/node/quickstart), [Core library](/docs/platform/core/quickstart), and the [CLI](/docs/cli/quickstart).
 - [Key concepts](/docs/overview/key-concepts) — locales, context, and static vs. dynamic content.
 ````
 
@@ -223,7 +253,7 @@ Configure the connection using whichever transport your tool supports. The confi
   </Tab>
 </Tabs>
 
-Once connected, ask your agent to use the `generaltranslation` MCP server. *Example: "Use the generaltranslation MCP server to explain how to use a [`<T>`](/docs/react/reference/components/t) component."*
+Once connected, ask your agent to use the `generaltranslation` MCP server. *Example: "Use the generaltranslation MCP server to explain how to use a [`<T>`](/docs/vue/reference/components/t) component in Vue."*
 
 ## Editor-specific tips [#editor-tips]
 
@@ -237,6 +267,6 @@ Most setup is the same across agents; these are the few places the guidance diff
 
 Agents are reliable for mechanical i18n work, but translation quality and configuration still need a human. Use this split:
 
-- **Hand to the agent:** wrapping user-facing copy in [`<T>`](/docs/react/reference/components/t), adding [`useGT()`](/docs/react/reference/hooks/use-gt) for standalone strings, scaffolding `gt.config.json`, and running [`npx gt init`](/docs/cli/reference/commands/init).
-- **Verify by hand:** the [translation context](/docs/overview/key-concepts#context) (Glossary and Custom Prompts) the agent writes, the locale configuration (`defaultLocale` and `locales`), and that dynamic or private values are wrapped in [`<Var>`](/docs/react/reference/components/var).
+- **Hand to the agent:** wrapping user-facing copy in [`<T>`](/docs/react/reference/components/t) (or the [Vue component](/docs/vue/reference/components/t)), adding [`useGT()`](/docs/react/reference/hooks/use-gt) (or the [Vue composable](/docs/vue/reference/composables/use-gt)) for standalone strings, scaffolding `gt.config.json`, and running [`npx gt init`](/docs/cli/reference/commands/init).
+- **Verify by hand:** the [translation context](/docs/overview/key-concepts#context) (Glossary and Custom Prompts) the agent writes, the locale configuration (`defaultLocale` and `locales`), and that dynamic or private values are wrapped in [`<Var>`](/docs/react/reference/components/var) or the [Vue equivalent](/docs/vue/reference/components/var).
 - **Never let the agent do:** hand-editing generated translation files, or hardcoding already-translated strings instead of translating source copy with the CLI.

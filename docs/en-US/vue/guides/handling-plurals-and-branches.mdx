@@ -1,0 +1,103 @@
+---
+
+title: Handling plurals and branches
+description: How to translate count-based and conditional Vue content with <Plural> and <Branch>.
+related:
+  links:
+    - /docs/vue/guides/formatting-variables
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/translating-strings
+    - /docs/vue/guides/managing-locales
+
+---
+
+Different locales can require different plural forms and different wording around a condition. Represent every finite alternative in named slots so the CLI can extract each complete phrase.
+
+Use [`<Plural>`](/docs/vue/reference/components/plural) when a number selects the wording. Use [`<Branch>`](/docs/vue/reference/components/branch) for statuses, plans, booleans, and other named values.
+
+## Choose plurals or branches [#choose]
+
+- Use [`<Plural>`](/docs/vue/reference/components/plural) when a count determines the phrase.
+- Use [`<Branch>`](/docs/vue/reference/components/branch) when another value determines the phrase.
+- Place either component inside [`<T>`](/docs/vue/reference/components/t) so every named slot belongs to the translated entry.
+- Use the default slot as a fallback for an unrecognized category or branch.
+- Wrap runtime values inside each phrase with [`<Num>`](/docs/vue/reference/components/num), [`<Var>`](/docs/vue/reference/components/var), or another formatting component.
+
+## Pluralize with `<Plural>` [#plural]
+
+Pass the count through `:n` and provide named slots for the categories used by the source locale:
+
+```vue
+<script setup lang="ts">
+import { Num, Plural, T } from 'gt-vue';
+
+defineProps<{ count: number }>();
+</script>
+
+<template>
+  <T>
+    <Plural :n="count">
+      <template #one>
+        You have <Num :value="count" /> message.
+      </template>
+      <template #other>
+        You have <Num :value="count" /> messages.
+      </template>
+      <template #default>
+        You have new messages.
+      </template>
+    </Plural>
+  </T>
+</template>
+```
+
+[`<Plural>`](/docs/vue/reference/components/plural) selects a category with the active locale's [Unicode CLDR plural rules](https://cldr.unicode.org/index/cldr-spec/plural-rules). English commonly uses `one` and `other`; target translations can contain additional categories such as `zero`, `two`, `few`, and `many`.
+
+Do not model plural grammar with `count === 1` or by appending a suffix. Those shortcuts encode the source language's rules rather than the active locale's rules.
+
+## Branch on a named value [#branch]
+
+Pass a string, number, or boolean through `:branch`, then use a statically named slot for each expected value:
+
+```vue
+<script setup lang="ts">
+import { Branch, T } from 'gt-vue';
+
+defineProps<{ plan: 'free' | 'pro' | 'enterprise' }>();
+</script>
+
+<template>
+  <T>
+    <Branch :branch="plan">
+      <template #free>Upgrade to unlock more.</template>
+      <template #pro>Thanks for going Pro!</template>
+      <template #enterprise>Contact your account manager.</template>
+      <template #default>Welcome.</template>
+    </Branch>
+  </T>
+</template>
+```
+
+Every slot is included in the surrounding [`<T>`](/docs/vue/reference/components/t) entry, while only the active branch renders. If no named slot matches, [`<Branch>`](/docs/vue/reference/components/branch) renders the default slot.
+
+## Replace inline conditionals [#conditionals]
+
+An inline `v-if` changes the translated structure at runtime. Move finite alternatives into [`<Branch>`](/docs/vue/reference/components/branch) instead:
+
+```vue
+<!-- ❌ Runtime structure hidden from the translation -->
+<T>
+  <span v-if="isActive">Active</span>
+  <span v-else>Inactive</span>
+</T>
+
+<!-- ✅ Every phrase is visible during extraction -->
+<T>
+  <Branch :branch="isActive ? 'active' : 'inactive'">
+    <template #active>Active</template>
+    <template #inactive>Inactive</template>
+  </Branch>
+</T>
+```
+
+Slot names must be static and unconditional. When the set of alternatives is not finite at build time, keep that runtime content outside [`<T>`](/docs/vue/reference/components/t) or preserve it as an opaque [`<Var>`](/docs/vue/reference/components/var).

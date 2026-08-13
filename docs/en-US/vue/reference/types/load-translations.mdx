@@ -1,0 +1,68 @@
+---
+
+title: LoadTranslations
+description: Load the complete translation catalog for a requested locale. API reference for LoadTranslations.
+
+---
+
+Provide this callback to [`createGT()`](/docs/vue/reference/functions/create-gt) or [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) when target catalogs live in application files, a database, an API, or another host.
+
+## Overview [#overview]
+
+```ts
+type LoadTranslations = (
+  locale: string
+) => Promise<TranslationCatalog>;
+```
+
+The plugin calls the loader only for uncached target locales. The default locale uses source text and never calls it.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locale` | Locale whose complete catalog should be returned. | `string` | No | — |
+
+An ordinary [`createGT()`](/docs/vue/reference/functions/create-gt) plugin passes the requested locale unchanged. An [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) plugin first resolves the locale against its configured `locales` and `customMapping`, preserving the configured spelling for file paths.
+
+## Return value [#returns]
+
+**Type** `Promise<`[`TranslationCatalog`](/docs/vue/reference/types/translation-catalog)`>`
+
+Resolve with the complete hash-keyed catalog for `locale`. Resolve with `{}` when no translations are available and the application should use source content.
+
+Do not return `null`, `undefined`, or a partial value with a different shape. The public callback type requires a catalog object.
+
+## Loading behavior [#loading-behavior]
+
+- A successful result is cached for the lifetime of that plugin.
+- Concurrent loads for the same locale share one promise.
+- `plugin.loadTranslations(locale)` preloads without changing the active locale.
+- A reactive `plugin.setLocale(locale)` loads before switching.
+- [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) loads the initial target locale before its promise resolves.
+- Installing a [`createGT()`](/docs/vue/reference/functions/create-gt) plugin starts the initial target load in the background, allowing source content to render first.
+
+## Failures [#failures]
+
+When the callback rejects, `gt-vue` logs a diagnostic, rethrows the same failure, removes the in-flight entry, and leaves the result uncached. A later call can retry.
+
+An imperative `loadTranslations()` call, a reactive locale change, or SPA initialization therefore rejects. The background load started by `app.use(createGT(...))` catches the rejection after logging so the application can continue with source content.
+
+## Example [#example]
+
+```ts title="src/loadTranslations.ts"
+import type { LoadTranslations } from 'gt-vue';
+
+const loadTranslations: LoadTranslations = async (locale) => {
+  try {
+    return (await import(`./_gt/${locale}.json`)).default;
+  } catch (error) {
+    console.error(`No translation catalog for ${locale}`, error);
+    return {};
+  }
+};
+
+export default loadTranslations;
+```
+
+The loader above converts missing files into a successful empty catalog. Remove the `try`/`catch` when a missing or invalid catalog should stop initialization.
