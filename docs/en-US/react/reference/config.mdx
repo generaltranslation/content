@@ -46,13 +46,12 @@ The `gt.config.json` file holds the shared locale and file settings. Both the in
 | [`initializeGT`](#initialize) | Initialize without browser locale detection, for server-rendered apps. | `function` | No | — |
 | [`initializeGTSPA`](#initialize-spa) | Initialize a single-page app, including browser locale detection. | `function` | No | — |
 
-Both functions accept the fields below. They share the same options, except that only `initializeGTSPA` performs browser locale detection.
+Both functions accept these shared fields:
 
 | Option | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | `defaultLocale` | Source locale to translate from. | `string` | Yes | `en` |
 | `locales` | Supported target locales. | `string[]` | Yes | `[defaultLocale]` |
-| `locale` | Explicit initial locale. Skips detection when set. | `string` | Yes | Detected |
 | [`loadTranslations`](/docs/react/reference/functions/load-translations) | Loader returning translations for a locale. Document: [`loadTranslations`](/docs/react/reference/functions/load-translations). | `(locale: string) => Promise<unknown>` | Yes | GT CDN |
 | [`loadDictionary`](/docs/react/reference/functions/load-dictionary) | Loader returning a dictionary for a locale. Document: [`loadDictionary`](/docs/react/reference/functions/load-dictionary). | `(locale: string) => Promise<unknown>` | Yes | — |
 | `dictionary` | Inline dictionary, as an alternative to [`loadDictionary`](/docs/react/reference/functions/load-dictionary). | `object` | Yes | — |
@@ -62,9 +61,7 @@ Both functions accept the fields below. They share the same options, except that
 | `cacheUrl` | Custom translations host. `null` disables remote loading. | `string \| null` | Yes | GT CDN |
 | `runtimeUrl` | Runtime translation host, used for development translation. | `string \| null` | Yes | GT runtime |
 | `customMapping` | Locale aliases and property overrides. | `object` | Yes | — |
-| `region` | Initial region code for region-aware formatting. | `string` | Yes | — |
-| `enableI18n` | Translate content. When `false`, renders the source locale. | `boolean` | Yes | `true` |
-| `htmlTagOptions` | Compatibility field that is accepted but ignored. | `object` | Yes | — |
+| [`_tagIds`](#tag-ids) | Expose each [`<T>`](/docs/react/reference/components/t) translation hash as a `data-_gt-hash` DOM attribute. | `boolean` | Yes | `false` |
 
 ### `initializeGT` [#initialize]
 
@@ -85,6 +82,15 @@ initializeGT({
 
 Initializes `gt-react` in a single-page app. Call it once, before your first render. It creates the translation cache, resolves the active locale from cookies and the browser, and preloads translations. Available in the browser entry only.
 
+It also accepts these browser-only fields:
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locale` | Explicit initial locale. Skips detection when set. | `string` | Yes | Detected |
+| `region` | Initial region code for region-aware formatting. | `string` | Yes | — |
+| `enableI18n` | Translate content. When `false`, renders the source locale. | `boolean` | Yes | `true` |
+| [`htmlTagOptions`](#htmltagoptions) | Compatibility field that is accepted but ignored. | `object` | Yes | — |
+
 ```tsx
 await initializeGTSPA({
   ...gtConfig,
@@ -93,7 +99,13 @@ await initializeGTSPA({
 });
 ```
 
-Because it resolves the locale from the environment, `initializeGTSPA` returns a promise — await it before rendering. The `htmlTagOptions` field remains accepted for backward compatibility but has no effect. Update the `<html>` element's `lang` and `dir` attributes in your app when the locale changes.
+Because it resolves the locale from the environment, `initializeGTSPA` returns a promise — await it before rendering. Update the `<html>` element's `lang` and `dir` attributes in your app when the locale changes.
+
+#### `htmlTagOptions`
+
+**Type** `object` · **Optional**
+
+Browser-only compatibility field accepted by `initializeGTSPA`. It has no effect.
 
 ## `gt.config.json` [#config-file]
 
@@ -110,6 +122,7 @@ Because it resolves the locale from the environment, `initializeGTSPA` returns a
 | [`runtimeUrl`](#runtime-url) | Base URL for runtime (development) translations. | `string` | Yes | GT runtime |
 | [`stageTranslations`](#stage-translations) | Require review before translations go to production. | `boolean` | Yes | `false` |
 | [`files`](#files) | Local translation file paths and parsing flags. | `object` | Yes | — |
+| [`_tagIds`](#tag-ids) | Expose each [`<T>`](/docs/react/reference/components/t) translation hash as a `data-_gt-hash` DOM attribute. | `boolean` | Yes | `false` |
 | [`_versionId`](#version-id) | Internal translation version identifier. Do not edit. | `string` | Yes | — |
 
 ### `projectId` [#project-id]
@@ -187,11 +200,37 @@ Where locally stored translations are written, as an alternative to storing them
 
 See the [CLI configuration reference](/docs/cli/reference/config) for the complete `files` schema.
 
+## `_tagIds` [#tag-ids]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+Enables DOM id-tagging for rendered [`<T>`](/docs/react/reference/components/t) and [`<Tx>`](/docs/react/nextjs/reference/components/tx) output in `gt-react`, `gt-next`, and `gt-tanstack-start`. Tooling such as localized replay and in-context QA uses the `data-_gt-hash` attribute to map a rendered node back to its translation.
+
+Set `_tagIds` in the shared config file, then pass that config to [`initializeGT`](#initialize) or [`initializeGTSPA`](#initialize-spa). The `withGTConfig` plugin reads the same file in Next.js:
+
+```json title="gt.config.json"
+{
+  "_tagIds": true
+}
+```
+
+The value must be the literal `true`. Any other value, including a truthy non-boolean, leaves tagging off. React Native accepts the shared config field but skips DOM tagging.
+
+<Callout type="warn">
+  **Enabling this can add wrapper elements.** Span injection is kept to the minimum necessary:
+
+  - **A single host element** (for example `<T><td>…</td></T>`) is annotated in place. No wrapper is added, so the markup stays valid inside restricted parents such as `<tr>`, `<select>`, and `<ul>`.
+  - **Bare text, a fragment, or a component root** has no host element to carry the attribute, so the output is wrapped in a layout-neutral `display:contents` `<span>`. This is the only case that injects one.
+  - **Output that renders nothing** (`null`, `undefined`, booleans, `''`, arrays whose entries all render nothing, or an empty fragment) is left untouched, so no empty `<span>` appears. Note that `0` and `NaN` do render text and are tagged normally.
+
+  This markup injection is why tagging is off by default. Leave it off unless a tool you run requires the hashes.
+</Callout>
+
 ### `_versionId` [#version-id]
 
 **Type** `string` · **Optional**
 
-Internal identifier the CLI uses to track the translation version, which allows rolling back to previous translations. It is autogenerated — do not edit it. Keys prefixed with an underscore are internal.
+Internal identifier the CLI uses to track the translation version, which allows rolling back to previous translations. It is autogenerated — do not edit it.
 
 ## Examples [#examples]
 
