@@ -3,7 +3,7 @@
  *
  * CI script that validates all internal links in MDX content files.
  * Parses MDX into an AST, extracts links and headings, then checks:
- *   1. Internal links (starting with /) resolve to actual files
+ *   1. Root-relative and same-origin absolute links resolve to actual files
  *   2. Anchor fragments (#heading) exist in the target file
  *   3. Same-page anchors (#heading) exist in the current file
  *   4. Template placeholder links expand correctly for all target libraries
@@ -15,7 +15,8 @@
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, relative, extname, dirname, basename } from 'path';
+import { join, relative, extname, dirname, basename, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { mdxFromMarkdown } from 'mdast-util-mdx';
 import { mdxjs } from 'micromark-extension-mdxjs';
@@ -62,6 +63,7 @@ const TEMPLATE_TARGETS: Record<
 };
 
 const VERBOSE = process.argv.includes('--verbose');
+const CONTENT_ORIGIN = 'https://generaltranslation.com';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -231,6 +233,33 @@ function buildFileIndex(): void {
 // ─── Link Extraction & Validation ───────────────────────────────────────────
 
 /**
+ * Normalize root-relative and same-origin links for internal validation.
+ * Query strings do not affect file or anchor resolution.
+ */
+export function normalizeInternalLink(href: string): string | null {
+  let normalized = href;
+  if (
+    href === CONTENT_ORIGIN ||
+    href.startsWith(`${CONTENT_ORIGIN}/`)
+  ) {
+    normalized = href.slice(CONTENT_ORIGIN.length);
+  }
+
+  if (!normalized.startsWith('/') && !normalized.startsWith('#')) {
+    return null;
+  }
+
+  const hashIndex = normalized.indexOf('#');
+  const fragment = hashIndex >= 0 ? normalized.slice(hashIndex) : '';
+  const pathAndQuery =
+    hashIndex >= 0 ? normalized.slice(0, hashIndex) : normalized;
+  const queryIndex = pathAndQuery.indexOf('?');
+  const path = queryIndex >= 0 ? pathAndQuery.slice(0, queryIndex) : pathAndQuery;
+
+  return `${path}${fragment}`;
+}
+
+/**
  * Extract all internal links from an MDX file.
  * Returns an array of { link, line, column } objects.
  */
@@ -259,8 +288,9 @@ function extractLinks(
       let match;
       while ((match = linkRegex.exec(lines[i])) !== null) {
         const href = match[1];
-        if (href.startsWith('/') || href.startsWith('#')) {
-          links.push({ link: href, line: i + 1, column: match.index + 1 });
+        const link = normalizeInternalLink(href);
+        if (link) {
+          links.push({ link, line: i + 1, column: match.index + 1 });
         }
       }
     }
@@ -270,9 +300,10 @@ function extractLinks(
   // Walk AST for markdown links: [text](url)
   visit(tree, 'link', (node: any) => {
     const href: string = node.url || '';
-    if (href.startsWith('/') || href.startsWith('#')) {
+    const link = normalizeInternalLink(href);
+    if (link) {
       links.push({
-        link: href,
+        link,
         line: node.position?.start?.line ?? 0,
         column: node.position?.start?.column ?? 0,
       });
@@ -287,13 +318,14 @@ function extractLinks(
     let match;
     while ((match = jsxHrefRegex.exec(lines[i])) !== null) {
       const href = match[1];
-      if (href.startsWith('/') || href.startsWith('#')) {
+      const link = normalizeInternalLink(href);
+      if (link) {
         // Avoid duplicates with AST-extracted links on same line
         const alreadyFound = links.some(
-          (l) => l.line === i + 1 && l.link === href
+          (l) => l.line === i + 1 && l.link === link
         );
         if (!alreadyFound) {
-          links.push({ link: href, line: i + 1, column: match.index + 1 });
+          links.push({ link, line: i + 1, column: match.index + 1 });
         }
       }
     }
@@ -550,4 +582,9 @@ function main(): void {
   }
 }
 
-main();
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main();
+}

@@ -20,8 +20,8 @@ npx gt translate
 1. Reads `gt.config.json` to determine the target locales, the files to translate, and their output paths.
 2. For `gt-next`, `gt-react`, `gt-react-native`, and `gt-tanstack-start` projects, scans your `src` globs for inline content — [`<T>`](/docs/react/reference/components/t) components and [`useGT`](/docs/react/reference/hooks/use-gt) calls — and includes your dictionary file.
 3. Auto-detects a third-party i18n library from `package.json` — `next-intl` or `i18next` (with `i18next-icu` support) — and translates its JSON files while respecting that library's syntax.
-4. Detects local edits to previously downloaded translations and saves them to the platform. Pass `--no-save-local` to skip this step.
-5. Stages the collected content and downloads the results in one step. Internally this is [`gt stage`](/docs/cli/reference/commands/stage) followed by [`gt download`](/docs/cli/reference/commands/download); use the split commands to run those parts separately. Because Lottie layout processing is asynchronous, a project with `.lottie` files exits here when `stageTranslations` is `false` and directs you to the split flow.
+4. Stages the collected content with [`gt stage`](/docs/cli/reference/commands/stage): it uploads sources, detects and saves local edits to previous translations unless `--no-save-local` is set, then enqueues translation jobs. Because Lottie layout processing is asynchronous, a project with `.lottie` files exits before this step when `stageTranslations` is `false`, without uploading or enqueuing anything, and directs you to the split flow.
+5. Downloads the results with [`gt download`](/docs/cli/reference/commands/download). Use the split commands to run staging and download separately.
 6. Saves translations to your codebase, and to the CDN when `--publish` or the [`publish`](/docs/cli/reference/config#publish) config key is set.
 
 By default, the CLI syncs local translation edits before starting new work and does not overwrite them unless the source content has changed. Use `--force` to re-translate everything, or `--force-download` to re-download without re-translating.
@@ -32,7 +32,7 @@ By default, the CLI syncs local translation edits before starting new work and d
 | --- | --- | --- | --- | --- |
 | `--api-key <key>` | Production API key. | `string` | Yes | `GT_API_KEY` |
 | `--project-id <id>` | Project ID. | `string` | Yes | `GT_PROJECT_ID` |
-| `--version-id <id>` | Version ID for the run. | `string` | Yes | Content hash |
+| `--version-id <id>` | Accepted but has no effect; see the note below. | `string` | Yes | — |
 | `-c, --config <path>` | Path to the config file. | `string` | Yes | `gt.config.json` |
 | `--default-locale <locale>` | Source locale for the project. | `string` | Yes | `en` |
 | `--locales <locales...>` | Extra target locales, appended to config locales. | `string[]` | Yes | — |
@@ -42,8 +42,8 @@ By default, the CLI syncs local translation edits before starting new work and d
 | `--force-download` | Re-download all translations, overwriting local changes. | `boolean` | Yes | `false` |
 | `--save-local, --no-save-local` | Enable or disable saving local edits before enqueuing. | `boolean` | Yes | `true` |
 | `--publish` | Publish translations to the CDN. | `boolean` | Yes | `false` |
-| `--enable-branching` | Enable branch-based tracking. | `boolean` | Yes | `false` |
-| `--branch <branch>` | Branch name instead of auto-detecting. | `string` | Yes | — |
+| `--enable-branching` | Enable branch-based tracking. | `boolean` | Yes | — |
+| `--branch <branch>` | Branch name instead of auto-detecting. Implies `--enable-branching`. | `string` | Yes | — |
 | `--disable-branch-detection` | Use only the specified branch, without relationship detection. | `boolean` | Yes | `false` |
 | `--remote-name <name>` | Git remote used for branch detection. | `string` | Yes | `origin` |
 | `--omit-config-ids` | Do not write `_versionId` or `_branchId` to `gt.config.json`. | `boolean` | Yes | — |
@@ -98,7 +98,8 @@ npx gt translate --tag v2.1.0 -m "Added checkout page translations"
 - **Lottie:** translate animations with [`gt stage`](/docs/cli/reference/commands/stage), then re-run [`gt download`](/docs/cli/reference/commands/download) until every locale is ready. See the [Lottie format reference](/docs/cli/reference/formats/lottie-files).
 - **Tagging:** tagging is non-blocking — if tag creation fails, the run continues. Pass `--tag` with no value to use the current git commit hash and message.
 - **Publishing:** enable the CDN in your Project settings before using `--publish`. If the CDN is not enabled, the run translates successfully but the publish step fails with a warning.
-- **Branching:** pass `--enable-branching` to track translations per git branch. See [Tracking translations by branch](/docs/cli/guides/branching).
+- **Branching:** pass `--enable-branching` to track translations per git branch, or pass `--branch <name>`, which enables branching on its own. When neither flag is set, the CLI falls back to `branchOptions.enabled` in `gt.config.json`, and to off if that is unset. See [Tracking translations by branch](/docs/cli/guides/branching).
+- **`--version-id` has no effect.** The flag is parsed but nothing reads it: version IDs are per-file content hashes, and the commands that need a run-level version read `_versionId` from `gt.config.json`. Set [`_versionId`](/docs/cli/reference/config) there instead.
 - **Security:** never store your API key in `gt.config.json`. The CLI reads `GT_API_KEY` and `GT_PROJECT_ID` from the environment automatically.
 
 ### Version history
