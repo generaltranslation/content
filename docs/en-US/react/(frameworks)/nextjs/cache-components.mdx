@@ -1,0 +1,111 @@
+---
+
+title: Using Cache Components
+description: How to use Next.js Cache Components with locale-safe request functions and locally stored translations.
+related:
+  links:
+    - /docs/react/nextjs/app-router-middleware
+    - /docs/react/nextjs/app-router-static-site-generation
+    - /docs/react/nextjs/registering-request-locales
+    - /docs/react/nextjs/locale-alias-seo
+
+---
+
+Cache Components can prerender and cache localized server content. The locale, region, and translations must all resolve without request headers, cookies, or the default remote translation loader.
+
+*Note: This guide uses Next.js 16 or later, where Cache Components are configured with `cacheComponents: true`.*
+
+## Enable Cache Components [#enable]
+
+Enable Cache Components in `next.config.ts`. Keep [`withGTConfig`](/docs/react/nextjs/config) around the Next.js config:
+
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+
+const nextConfig: NextConfig = {
+  cacheComponents: true,
+};
+
+export default withGTConfig(nextConfig);
+```
+
+When Cache Components are enabled, `gt-next`:
+
+- Requires a custom [`loadTranslations`](/docs/react/reference/functions/load-translations) function. The default remote loader is not safe during prerendering.
+- Warns when custom [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) and [`getRegion`](/docs/react/nextjs/reference/functions/get-region) request functions are missing.
+- Disables development runtime translation hot reload because it makes dynamic requests.
+- Lets Next.js own cache invalidation instead of applying the normal General Translation cache expiry.
+
+## Resolve request values [#request-values]
+
+Put the `[locale]` segment at the root of the App Router tree. The root layout must be `app/[locale]/layout.tsx`, with no `app/layout.tsx` above it.
+
+Create `getLocale.ts` at the project root:
+
+```ts title="getLocale.ts"
+import { locale } from 'next/root-params';
+
+export default async function getLocale() {
+  return await locale();
+}
+```
+
+Create `getRegion.ts` beside it. Return a fixed region when your output depends on one, or `undefined` to disable region detection:
+
+```ts title="getRegion.ts"
+export default async function getRegion() {
+  return undefined;
+}
+```
+
+`withGTConfig` detects both files automatically. If they live elsewhere, set [`getLocalePath` and `getRegionPath`](/docs/react/nextjs/config#request-function-paths).
+
+<Callout type="warn">
+  Do not call `headers()` or `cookies()` from these request functions. Dynamic request APIs cannot run inside a `"use cache"` boundary. Read the locale from `next/root-params` and return a fixed region instead.
+</Callout>
+
+## Store translations locally [#local-translations]
+
+Generate translation files before the Next.js build, then load them from your bundle:
+
+```ts title="loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  try {
+    const translations = await import(`./public/_gt/${locale}.json`);
+    return translations.default;
+  } catch {
+    return {};
+  }
+}
+```
+
+`withGTConfig` detects `loadTranslations.ts` at the project root or in `src/`. You can also set [`loadTranslationsPath`](/docs/react/nextjs/config#load-translations-path).
+
+Configure the CLI output to match the loader and run [`npx gt translate`](/docs/cli/reference/commands/translate) before `next build`. See [Storing translations locally](/docs/react/guides/storing-translations) for the complete workflow.
+
+## Cache translated content [#cache-content]
+
+Resolve the locale outside the cached function and pass it as a serializable argument. Function arguments become part of the Cache Components cache key, which keeps entries for different locales separate.
+
+```tsx title="app/[locale]/page.tsx"
+import { T } from 'gt-next';
+import { getLocale } from 'gt-next/server';
+import { cacheLife, cacheTag } from 'next/cache';
+
+async function CachedContent({ locale }: { locale: string }) {
+  'use cache';
+
+  cacheLife('hours');
+  cacheTag(`home-${locale}`);
+
+  return <T>Welcome to our site</T>;
+}
+
+export default async function Page() {
+  const locale = await getLocale();
+  return <CachedContent locale={locale} />;
+}
+```
+
+Apply the same pattern to any region or other request value that changes the rendered translation. Never let two locales share a cache entry.

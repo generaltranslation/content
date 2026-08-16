@@ -1,0 +1,100 @@
+---
+
+title: Troubleshooting React Native
+description: How to diagnose native module, polyfill, locale, translation file, and development issues in a React Native app.
+related:
+  links:
+    - /docs/react/guides/configuring
+    - /docs/react/guides/storing-translations
+    - /docs/react/guides/managing-locales
+    - /docs/react/guides/translating-jsx
+
+---
+
+Start with the error shown by Metro or the device, then check the corresponding setup layer: native linking, Babel polyfills, locale configuration, or generated translation files.
+
+## Fix the native module [#native-module]
+
+An error that says `GtReactNative` could not be found means the native module is not part of the installed app binary.
+
+### Expo
+
+Expo Go cannot load custom native modules. Create and run a development build:
+
+```bash
+npx expo run:ios
+# or
+npx expo run:android
+```
+
+After adding or upgrading `gt-react-native`, rebuild the development client. Restarting Metro alone does not update native modules in an existing binary.
+
+### React Native CLI
+
+Install iOS pods after adding the package, then rebuild the app:
+
+```bash
+cd ios
+pod install
+cd ..
+```
+
+If the module is still missing, remove the previous app from the simulator or device and run a clean native build.
+
+*Note: React Native Web does not require the native module. It uses browser locale detection and storage instead.*
+
+## Fix polyfill setup [#polyfills]
+
+If the app reports invalid locale codes or a missing `Intl` API, confirm that the [Babel plugin](/docs/react/react-native/plugin) runs against the app's actual entry file.
+
+- Expo Router normally uses `require.resolve('expo-router/entry')`.
+- A bare React Native app normally uses the absolute path to `index.js`.
+- A custom entry file must be passed through `entryPointFilePath`.
+
+The plugin needs the default locale and every target locale. Pass `locales` directly, pass `config`, or set `configFilePath` to a readable `gt.config.json`. The plugin loads FormatJS locale data only for supported canonical locale codes; if your app routes with a custom alias, pass its canonical code to the plugin.
+
+Clear Metro's transform cache after changing Babel configuration:
+
+```bash
+npx expo start --clear
+```
+
+For a bare React Native app, restart Metro with its cache reset:
+
+```bash
+npx react-native start --reset-cache
+```
+
+If Babel cannot run in your setup, follow the manual import example in the [plugin reference](/docs/react/react-native/plugin#how-it-works).
+
+## Generate missing files [#missing-files]
+
+Metro resolves static `require()` calls before the app starts. Every translation file named in your [`loadTranslations`](/docs/react/reference/functions/load-translations) map must already exist.
+
+Generate source-populated placeholder files without an API key:
+
+```bash
+npx gt generate
+```
+
+Or generate translated files with Project credentials:
+
+```bash
+npx gt translate
+```
+
+Keep the CLI output path in `gt.config.json` aligned with the paths in `loadTranslations.ts`. Restart Metro after adding files that previously did not exist.
+
+## Understand development behavior [#development]
+
+Development runtime translations can take longer the first time a locale is opened because the app requests uncached translations. Production builds should run [`npx gt translate`](/docs/cli/reference/commands/translate) ahead of time and load the generated files locally.
+
+If a translation is inaccurate, add context to ambiguous content:
+
+```tsx
+<T $context="the technology company">Apple</T>
+```
+
+The [`useGT`](/docs/react/reference/hooks/use-gt) translation function accepts the same `$context` option.
+
+Server-side React Native environments are not explicitly supported. If an Expo web or React Native Web build renders on the server, test locale detection and storage behavior in that runtime before deploying.

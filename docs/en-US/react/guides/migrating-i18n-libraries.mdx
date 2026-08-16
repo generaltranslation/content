@@ -1,0 +1,96 @@
+---
+
+title: Migrating i18n libraries
+description: How to move an existing React internationalization setup to General Translation without discarding current translations.
+related:
+  links:
+    - /docs/react/guides/translating-with-dictionaries
+    - /docs/react/guides/translating-jsx
+    - /docs/react/guides/translating-strings
+    - /docs/react/guides/configuring
+
+---
+
+Migrate one complete feature or route at a time so locale selection, translated output, and fallback behavior remain testable throughout the change.
+
+## Before you start [#before-start]
+
+Complete the Quickstart for your framework and keep the existing i18n provider active until its last consumer is migrated:
+
+- [React SPA Quickstart](/docs/react/react-spa-quickstart)
+- [Next.js Quickstart](/docs/react/nextjs-quickstart)
+- [TanStack Start Quickstart](/docs/react/tanstack-start-quickstart)
+- [React Native Quickstart](/docs/react/react-native-quickstart)
+
+Record the current source locale, supported locales, fallback behavior, and locale URL format. Use the same values in `gt.config.json` before moving content.
+
+## Choose a migration strategy [#strategies]
+
+### Replace keys with source content
+
+Choose this approach when you want translatable copy to live beside the component that renders it.
+
+Replace key lookups with [`<T>`](/docs/react/reference/components/t) for JSX and [`useGT`](/docs/react/reference/hooks/use-gt) for strings:
+
+```tsx
+// Before
+const { t } = useTranslation();
+return <h1>{t('home.welcome')}</h1>;
+
+// After
+return (
+  <T>
+    <h1>Welcome back</h1>
+  </T>
+);
+```
+
+Copy the source-locale value from the old dictionary instead of the translated value. General Translation uses that source content and its surrounding structure as translation context.
+
+### Keep the existing dictionaries
+
+Choose this approach when stable keys are part of your content workflow or when replacing every lookup is unnecessary.
+
+Move the source dictionary into the [dictionary setup](/docs/react/guides/translating-with-dictionaries), then replace the old hook with [`useTranslations`](/docs/react/reference/hooks/use-translations):
+
+```tsx
+// Before
+import { useTranslation } from 'react-i18next';
+
+const { t } = useTranslation();
+return <h1>{t('home.welcome')}</h1>;
+
+// After
+import { useTranslations } from 'gt-react';
+
+const t = useTranslations();
+return <h1>{t('home.welcome')}</h1>;
+```
+
+In Next.js, place `dictionary.json`, `dictionary.ts`, or `dictionary.js` at the project root or in `src/`. [`withGTConfig`](/docs/react/nextjs/config) detects it automatically.
+
+### Run both libraries temporarily
+
+Choose this approach for a staged migration across independently deployed routes or features. Both libraries can run concurrently and, where both integrations use providers, those providers can coexist. Each string should have one translation owner, and both libraries must receive the same active locale.
+
+<Callout type="warn">
+  Two i18n libraries can disagree about the active locale, cookies, URL routing, and fallback rules. Define one locale source of truth, test navigation between migrated and unmigrated routes, and remove the old provider as soon as its final consumer is gone.
+</Callout>
+
+## Migrate one feature [#migrate-feature]
+
+1. Pick one route or component and list every old translation key it reads.
+2. Copy the source-locale text and any interpolation or plural rules.
+3. Replace each lookup with [`<T>`](/docs/react/reference/components/t), [`useGT`](/docs/react/reference/hooks/use-gt), or [`useTranslations`](/docs/react/reference/hooks/use-translations), according to the strategy you chose.
+4. Preserve variables as variables instead of inserting their current values into source text.
+5. Run [`npx gt translate`](/docs/cli/reference/commands/translate).
+6. Test the source locale, every target locale, missing-translation fallback, and locale switching.
+7. Remove old keys only after the repository has no remaining references to them.
+
+Repeat this sequence until the old provider and dependency have no consumers, then remove their configuration, generated files, and build commands.
+
+## Preserve existing translations [#preserve-translations]
+
+Keeping a source dictionary preserves keys, but existing target-language files are not automatically imported into General Translation. Continue loading those dictionaries during the migration, or upload reviewed translations through the [Core upload workflow](/docs/platform/core/reference/gt-class-methods/translation/upload-translations).
+
+Do not hand-copy translated strings into [`<T>`](/docs/react/reference/components/t) as source content. Keep the original source language in code and verify imported translations against the same source version.
