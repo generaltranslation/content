@@ -1,0 +1,90 @@
+---
+
+title: Managing audit logs
+description: How to download audit events and continuously deliver them to Amazon S3 from the Dashboard.
+related:
+  links:
+    - /docs/platform/dashboard/guides/managing-billing
+    - /docs/platform/dashboard/guides/using-ask-ai
+    - /docs/platform/dashboard/guides/reviewing-translations
+    - /docs/platform/dashboard/guides/defining-context-for-translations
+
+---
+
+Audit Logs records security-sensitive activity across an Organization or Enterprise. Each event identifies its actor, source, resource, scope, and recorded changes.
+
+## Before you start [#before-start]
+
+- Audit Logs requires an Enterprise plan.
+- You need the entity's management permission. The default **Admin** role has this permission.
+- For S3 delivery, you need permission to create an AWS Identity and Access Management (IAM) role that can write to your bucket.
+
+Use **Organization > Settings > Audit Logs** for one Organization. Use **Enterprise > Settings > Audit Logs** for Enterprise-wide events, including events from its Organizations.
+
+## Download audit events [#download]
+
+1. Open **Audit Logs** at the Organization or Enterprise scope.
+2. Choose a date range. A range can cover up to one year.
+3. Select **Download**.
+
+The Dashboard downloads an uncompressed JSON Lines (`.jsonl`) file in the same event format as S3 exports. A download contains up to the oldest 10,000 events in the selected range. If it is truncated, narrow the range or use S3 delivery for the complete available history.
+
+## Configure S3 delivery [#configure-s3]
+
+### 1. Copy the trust values
+
+Open **Audit Logs**, then copy **External ID** and **Trusted principal**. The Dashboard creates a stable External ID for your Organization or Enterprise before you save a destination.
+
+### 2. Create the IAM role
+
+Create an IAM role in your AWS account. Its trust policy must allow the displayed Trusted principal to call `sts:AssumeRole` only when the displayed External ID matches:
+
+```json title="Trust policy"
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "<trusted-principal-arn>"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "<external-id>"
+        }
+      }
+    }
+  ]
+}
+```
+
+Grant the role `s3:PutObject` for the destination bucket and prefix. If you provide a customer-managed AWS Key Management Service (KMS) key or alias, it must be in the bucket's region. Configure the role and key policy to allow `kms:GenerateDataKey` for that key.
+
+<Callout type="warn">
+  Use the Trusted principal and External ID shown in your Dashboard. Do not reuse
+  values from another Organization, Enterprise, or environment.
+</Callout>
+
+### 3. Save the destination
+
+Enter:
+
+- **Bucket** — the S3 bucket name
+- **Bucket region** — the AWS region that contains the bucket
+- **Prefix (optional)** — the object-key prefix for delivered files
+- **IAM role ARN** — the role General Translation should assume
+- **KMS key ARN (optional)** — a customer-managed key for server-side encryption
+
+Select **Save destination**. Saving also writes a verification object through the same role, bucket, prefix, and KMS path used for audit events. A successful test activates delivery unless the destination is disabled. A failed test sets **ERROR** unless delivery is disabled; tests preserve **DISABLED**.
+
+## Test and manage delivery [#manage-delivery]
+
+- **Test connection** writes a new verification object to the bucket and updates the destination status.
+- **Disable** pauses new deliveries without deleting the destination. **Enable** sets it to **ACTIVE** without testing connectivity, so test the connection first after correcting an error.
+- **Delete** stops future delivery and removes the destination and its **Recent Deliveries** history from the Dashboard. Configuring another destination generates a new External ID, so update the IAM trust policy before saving again. Existing S3 objects are unaffected.
+- **Recent Deliveries** shows the ten latest attempts, including status, event count, S3 object key, creation time, and an error for failed attempts.
+
+The first activation starts with the earliest available event in scope. Editing destination fields preserves the delivery checkpoint, so previously delivered events are not copied to a new bucket or prefix. Deleting and recreating the destination resets the checkpoint and can deliver the full available history again.
+
+S3 delivery is at least once. A retry after an ambiguous failure can create overlapping objects, so deduplicate events by their `id`. See the [Audit Logs reference](/docs/platform/dashboard/reference/audit-logs) for statuses, object keys, and event fields.

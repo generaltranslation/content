@@ -4,9 +4,10 @@ title: App Router static site generation
 description: How to pre-render localized Next.js App Router pages with General Translation.
 related:
   links:
-    - /docs/react/nextjs-quickstart
     - /docs/react/nextjs/app-router-middleware
-    - /docs/react/nextjs/config
+    - /docs/react/nextjs/registering-request-locales
+    - /docs/react/nextjs/cache-components
+    - /docs/react/nextjs/locale-alias-seo
 
 ---
 
@@ -58,3 +59,60 @@ export default function HomePage() {
 ```
 
 Next.js now pre-renders `app/[locale]/page.tsx` once for each locale.
+
+<Callout type="warn">
+  This setup can prerender pages while still deploying a Next.js server. A project with `output: 'export'` cannot build while `proxy.ts` or `middleware.ts` is present. Remove the middleware, export `dynamicParams = false`, generate every locale path, and link directly to those paths for a fully static export; locale detection and redirects will be unavailable.
+</Callout>
+
+## Check Next.js compatibility [#compatibility]
+
+The custom `getLocale.ts` file needs access to the root `[locale]` parameter during prerendering. Use the API available in your Next.js version:
+
+| Next.js version | Root locale API |
+| --- | --- |
+| 15.5 and later | `locale()` from `next/root-params` |
+| 15.2.0 and 15.2.3–15.4 | `unstable_rootParams()` from `next/server` |
+| Earlier than 15.2 | Upgrade before using this App Router SSG setup |
+
+`gt-next` excludes Next.js 15.2.1 and 15.2.2 from its supported peer range. Upgrade those releases to 15.2.3 or later.
+
+For Next.js 15.2.0 or 15.2.3–15.4, use:
+
+```ts title="./getLocale.ts"
+import { unstable_rootParams } from 'next/server';
+
+export default async function getLocale() {
+  const params = await unstable_rootParams();
+  return params?.locale;
+}
+```
+
+Keep the Next.js 15.5-and-later `next/root-params` example from the [middleware guide](/docs/react/nextjs/app-router-middleware#root-locale) for current projects.
+
+## Recover from build failures [#build-failures]
+
+### No locale could be determined
+
+Middleware does not run while Next.js prerenders a page. Confirm that `getLocale.ts` exists at the project root or that [`getLocalePath`](/docs/react/nextjs/config#request-function-paths) points to it.
+
+If an arbitrary route value should produce a 404 instead of the default-locale fallback, validate the `[locale]` parameter with [`isLocaleSupported`](/docs/react/nextjs/reference/functions/is-locale-supported).
+
+### `DYNAMIC_SERVER_USAGE`
+
+This error means static rendering reached a dynamic request API. Check that:
+
+- `getLocale.ts` reads only the root route parameter.
+- `getRegion.ts` returns a fixed value or `undefined`.
+- Neither function calls `headers()` or `cookies()`.
+
+If Cache Components are enabled, also follow the stricter [Cache Components setup](/docs/react/nextjs/cache-components).
+
+### Root parameter export errors
+
+An error that says the `locale` export does not exist usually means the project uses the wrong API for its Next.js version. Follow the [compatibility table](#compatibility).
+
+The `[locale]` segment must also be the first dynamic segment in the App Router tree. Put the root layout at `app/[locale]/layout.tsx`; a layout above that segment cannot read the root locale during prerendering.
+
+### Metadata image routes
+
+Open Graph, Twitter, icon, and Apple icon files are Route Handlers internally and cannot read `next/root-params`. Read `params.locale` and call [`registerLocale`](/docs/react/nextjs/reference/functions/register-locale) before other server helpers. See [Registering request locales](/docs/react/nextjs/registering-request-locales#metadata-images).
