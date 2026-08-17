@@ -84,12 +84,24 @@ tags: ['tag1', 'tag2']
 
 ```yaml
 ---
-title: Release Title
+title: package-name@1.2.0
+headline: Condensed summary of the release
 date: 2025-01-15
 authors: [author-slug]
 tags: ['package-name', 'version']
 ---
 ```
+
+#### Devlog titles and headlines
+
+Devlog frontmatter follows a fixed shape:
+
+- `title` is the release identifier: `package@major.minor.patch` (`gt-sanity@2.1.0`), with no prose and no `v` prefix. A release cutting several packages together joins them with ` / ` (spaces required): `gt-flask@0.1.0 / gt-fastapi@0.1.0`. Scoped packages keep their scope: `@generaltranslation/react-core-linter@0.1.0`.
+- `headline` is the condensed summary of the release — the one thing this version means to a user, in 3–60 characters. It renders in two places: under the package name on the blog index's changelog strip, and in the article title as `package version: headline` ("gt-sanity 2.1.0: Field-level localization").
+  - Lead with the capability or outcome. Never repeat the package name or version — both already render next to the headline.
+  - Name the concrete feature, not a vague theme: "Field-level localization", never "Sanity improvements".
+  - API names are welcome when they are the story: "msg() accepts arrays", "Runtime translation with tx()".
+  - Sentence case, no trailing punctuation, no `@`, one line.
 
 ### Author profiles
 
