@@ -10,6 +10,7 @@ import { z } from 'zod';
 const contentFrontmatterSchema = frontmatterSchema.extend({
   authors: z.array(z.string()).optional(),
   date: z.any().optional(),
+  headline: z.string().min(3).max(60).optional(),
   images: z.array(z.string()).optional(),
   index: z.boolean().default(false),
   method: z.string().optional(),
