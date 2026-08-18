@@ -87,8 +87,19 @@ const NARROW_EXCLUSIONS: NarrowExclusion[] = [
   {
     path: 'devlog/en-US/gt-i18n_v0_9_0.mdx',
     symbol: 'getTranslations()',
-    line: 10,
     reason: 'The gt-i18n export has no package-specific reference page.',
+  },
+  {
+    path: 'devlog/en-US/gt-i18n_v0_9_0.mdx',
+    symbol: 'loadDictionary()',
+    reason:
+      'This is the gt-node dictionary loader option, not the React standalone function.',
+  },
+  {
+    path: 'devlog/en-US/gt-i18n_v0_9_0.mdx',
+    symbol: 'loadDictionary',
+    reason:
+      'This is the gt-node dictionary loader option, not the React standalone function.',
   },
 ];
 
