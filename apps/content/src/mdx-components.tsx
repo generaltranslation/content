@@ -17,6 +17,24 @@ function StubComponent() {
   return null;
 }
 
+function GitHubEmbed() {
+  return (
+    <p>
+      <a href='https://github.com/generaltranslation/gt'>
+        View General Translation on GitHub
+      </a>
+    </p>
+  );
+}
+
+function TweetEmbed({ id }: { id: string }) {
+  return (
+    <p>
+      <a href={`https://x.com/i/status/${id}`}>View the announcement on X</a>
+    </p>
+  );
+}
+
 function MdxImage({ style, ...props }: ComponentPropsWithoutRef<'img'>) {
   return (
     <img {...props} style={{ maxWidth: '100%', height: 'auto', ...style }} />
@@ -44,7 +62,9 @@ const customComponents = {
   CardFooter: StubComponent,
   CardHeader: StubComponent,
   CardTitle: StubComponent,
+  GitHub: GitHubEmbed,
   SupportedLocales: StubComponent,
+  Tweet: TweetEmbed,
   Video,
 } satisfies MDXComponents;
 
