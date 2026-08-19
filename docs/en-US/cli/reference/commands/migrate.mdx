@@ -1,0 +1,81 @@
+---
+
+title: gt migrate
+description: Convert an existing internationalized Next.js app to gt-next in one command. API reference for the gt migrate command.
+
+---
+
+Converts an existing internationalized Next.js App Router project to [`gt-next`](/docs/react/overview) in one command. It reads your current i18n setup, sets up gt-next, and rewrites your code and message catalogs. Your existing translations are preserved.
+
+`--from` is required. The supported values today are `next-intl`, `react-intl`, and `react-i18next`. For a new project with no existing i18n library, use [`gt init`](/docs/cli/reference/commands/init) instead.
+
+*Note: `migrate` requires a clean git working tree. Commit or stash your changes first, so every edit the command makes is easy to review and revert. Pass `--allow-dirty` to skip this check.*
+
+```bash
+npx gt migrate --from next-intl
+```
+
+## How it works [#how-it-works]
+
+1. **Surveys the project.** Confirms the library you passed to `--from` is installed, then reads your locales and default locale, where your message catalogs live, and your package manager. Library detection is advisory here: `--from` decides what is migrated, and a mismatch is reported as a warning.
+2. **Sets up gt-next.** Creates or updates `gt.config.json`, wires up dictionary loading, adds the provider, wraps your Next.js config in `withGTConfig`, adds middleware when the project needs it, and installs `gt-next`. The `withGTConfig` options carry `cacheUrl: null` until a General Translation project is configured, so a dictionary-only project does not warn about a missing Project ID on every build.
+3. **Migrates the code and catalogs.** Rewrites call sites and components, converts message catalogs (including ICU plural and context forms), and removes the old library where it is safe to do so.
+
+Every edit is buffered until the last pass finishes, so a run that stops partway leaves the project untouched.
+
+### Requirements
+
+- **App Router.** A project with no `app/` or `src/app/` directory is refused with nothing changed. Pages Router and `next-i18next` setups are not supported.
+- **A server provider boundary, for `react-intl` and `react-i18next`.** These need `[locale]` as the root layout segment, a Server Component in that chain rendering `<body>`, and Next.js 15.5 or later. Without all three the run stops before writing anything and prints the manual steps, because gt-next's server `GTProvider` has nowhere correct to mount.
+- **Next.js 15.5 or later to keep static rendering.** `next-intl` projects still migrate on older Next.js, but the locale then resolves per request and the report leaves a TODO instead of restoring static rendering.
+- **`gt-next` 11.1.0 or later for webpack builds.** On an older `gt-next`, build with `next build --turbopack` or upgrade.
+
+## Flags [#flags]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--from <library>` | Library to migrate from: `next-intl`, `react-intl`, or `react-i18next`. | `string` | No | None |
+| `--src <paths...>` | Glob patterns for the source files to migrate. | `string[]` | Yes | `src`, `app`, `pages`, `components`, and `i18n` globs, plus the directories your i18n config files sit in |
+| `-c, --config <path>` | Path to the config file. | `string` | Yes | `gt.config.json` |
+| `--dry-run` | Print the migration report without writing files. | `boolean` | Yes | `false` |
+| `--allow-dirty` | Skip the clean-git-tree safety check. | `boolean` | Yes | `false` |
+| `-y, --yes` | Skip the confirmation prompt. | `boolean` | Yes | `false` |
+
+## Example [#example]
+
+```bash
+# Migrate a next-intl project to gt-next
+npx gt migrate --from next-intl
+
+# Preview the changes without writing anything
+npx gt migrate --from next-intl --dry-run
+
+# Migrate from react-i18next
+npx gt migrate --from react-i18next
+```
+
+## What to expect [#what-to-expect]
+
+- **Report:** the command writes `gt-migrate-report.md` to your project root. It lists everything that changed, every file it skipped and why, and the TODOs that need a human decision.
+- **Partial migrations:** migrations can be partial by design. Anything the tool cannot convert safely is skipped, and the old library stays wired up for those files, so your app keeps working. A run that finishes exits `0` even when it held files back.
+- **Hard stops:** a wiring the command cannot produce correctly stops the run before anything is written, and it exits `1`. That covers a missing server provider boundary, a Next.js config it cannot wrap in `withGTConfig`, catalogs it cannot find, and a routing config whose locales share nothing usable with your catalogs.
+- **Confirmation:** the command prompts before rewriting files in place. Pass `-y` in CI; with no terminal to answer the prompt, it exits without writing.
+- **Formatting:** it runs your project's formatter over the files it rewrote. A file is left unformatted when reformatting would change its rendered JSX, and the report names it.
+- **Lockfile:** installing `gt-next` rewrites your lockfile. Run your lockfile install once (`npm ci`) before committing: npm can write a lockfile it then rejects, and a second `npm install` resyncs it.
+- **On-demand engine:** the migration engine ships as a separate package, `@generaltranslation/migrate`, so the `gt` CLI stays small. The first `gt migrate` run downloads it automatically. This is a one-time step and needs network access. In an offline or restricted environment, add `@generaltranslation/migrate` as a devDependency with your package manager and run the command again.
+
+## Manual follow-ups [#manual-follow-ups]
+
+Some patterns need a human, and the report flags each one so you can finish it by hand:
+
+- Test wiring: setup files, render helpers, and module mocks that reference the old library. They keep intercepting code that now calls gt-next, so those suites fail until you migrate them. The report lists each file with the evidence that flagged it.
+- Rich-text render-prop translations, such as next-intl's `t.rich`.
+- Dynamic translation keys or namespaces that the tool cannot resolve at build time.
+- Custom wrapper hooks around the old library. For `react-i18next` this includes the App Router wrapper pattern, where components import from a local `i18n/client` or `i18n/server` module; the server side is skipped with a `getTranslations` recipe.
+
+## After the migration [#after]
+
+1. Review `gt-migrate-report.md` and resolve any TODOs it lists.
+2. Migrate the test wiring it lists, then run those suites.
+3. Run your build, then your app, to confirm the migrated pages render in the right locale.
+4. Translate new strings with [`gt translate`](/docs/cli/reference/commands/translate). The run records the migrated catalog as the `dictionary` key in `gt.config.json`, so no flag is needed unless your config already named a dictionary. See [Generating translations](/docs/cli/guides/generating-translations) for the full workflow.
