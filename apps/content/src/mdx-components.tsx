@@ -27,10 +27,36 @@ function GitHub() {
   );
 }
 
-function Tweet({ id }: { id: string }) {
+type TweetProps =
+  | {
+      id: string;
+      header?: never;
+      subheader?: never;
+    }
+  | {
+      id?: never;
+      header: string;
+      subheader: string;
+    };
+
+function Tweet(props: TweetProps) {
+  if (props.id === undefined) {
+    return (
+      <p>
+        <a href='https://x.com/generaltxn'>
+          <strong>{props.header}</strong>
+          <br />
+          {props.subheader}
+        </a>
+      </p>
+    );
+  }
+
   return (
     <p>
-      <a href={`https://x.com/generaltxn/status/${id}`}>View post on X</a>
+      <a href={`https://x.com/generaltxn/status/${props.id}`}>
+        View post on X
+      </a>
     </p>
   );
 }
