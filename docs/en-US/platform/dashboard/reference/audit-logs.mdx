@@ -1,0 +1,174 @@
+---
+
+title: Audit Logs
+description: Review security-sensitive activity and deliver event records to Amazon S3. Reference for Dashboard audit logs and export settings.
+
+---
+
+Audit Logs is an Enterprise feature available at Organization and Enterprise scope. It requires the entity's management permission, which the default **Admin** role has.
+
+## Overview [#overview]
+
+| Area | Description |
+| --- | --- |
+| [Access](#access) | Plan, permission, and event-scope behavior. |
+| [Downloads](#downloads) | Date-range limits and JSON Lines output. |
+| [S3 destination](#destination) | Continuous delivery settings and validation. |
+| [Destination statuses](#statuses) | Whether a destination is configured, active, paused, or in error. |
+| [Delivery behavior](#delivery-behavior) | Object keys, backfills, retries, and delivery history. |
+| [Event records](#event-records) | Fields written on each JSON Lines record. |
+
+## Access and downloads [#access-downloads]
+
+### Access
+
+Audit Logs requires an Enterprise plan and one of these permissions:
+
+- **Organization scope:** `org:manage`.
+- **Enterprise scope:** `enterprise:manage`.
+
+The default **Admin** role has the management permission. Users without it see an access-denied page.
+
+An Organization export contains events scoped to that Organization. An Enterprise export contains events scoped to the Enterprise, including events from its managed Organizations.
+
+### Downloads
+
+**Organization path** **Organization > Settings > Audit Logs**  
+**Enterprise path** **Enterprise > Settings > Audit Logs**
+
+The Dashboard downloads an uncompressed JSON Lines (`.jsonl`) file:
+
+- The selected start and end dates are inclusive and use your browser's local timezone. Future dates are unavailable.
+- The selected range can span up to 366 days.
+- Each download contains up to the oldest 10,000 events in that range.
+- If more events match, the Dashboard marks the result as truncated. Narrow the range or use S3 delivery for complete available history.
+- If no events match, the Dashboard reports an empty result instead of downloading a file.
+
+Downloading logs creates an audit event after the file contents are selected. That event appears in later downloads and S3 deliveries, not in the file being downloaded.
+
+## S3 delivery [#s3-delivery]
+
+### Destination
+
+Each Organization or Enterprise can configure one S3 destination. General Translation assumes the supplied IAM role with an External ID that remains stable for the lifetime of the destination and writes objects directly to the configured bucket. It does not store AWS access keys.
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| **Bucket** | S3 bucket name using lowercase letters, numbers, dots, and hyphens. It must contain 3–63 characters, start and end with a letter or number, and contain no consecutive dots. | `string` | No | — |
+| **Bucket region** | AWS region that contains the bucket, such as `us-east-1`. | `string` | No | — |
+| **Prefix** | Object-key prefix. Empty path segments and surrounding slashes are removed; maximum 512 characters. | `string` | Yes | Empty |
+| **IAM role ARN** | AWS IAM role that permits `s3:PutObject` for the bucket and prefix. | `string` | No | — |
+| **KMS key ARN** | Customer-managed KMS key or alias used for S3 server-side encryption. It must be in the bucket's region. | `string` | Yes | Bucket default encryption |
+| **External ID** | Read-only value that the role trust policy must require. It remains stable for the destination's lifetime. | `string` | No | Generated |
+| **Trusted principal** | Read-only role ARN that the trust policy permits to call `sts:AssumeRole`. | `string` | No | Environment-specific |
+
+Saving a destination persists the fields and immediately tests delivery. The test assumes the role and writes a JSON verification object through the configured bucket, prefix, and KMS path. A failed test leaves the saved configuration available for correction.
+
+Verification objects use this key shape:
+
+```text
+<prefix>/<owner-partition>/verification/gt_audit_export_verification_<timestamp>_<id>.json
+```
+
+The owner partition is `org_id=<id>` or `enterprise_id=<id>`.
+
+See [Managing audit logs](/docs/platform/dashboard/guides/managing-audit-logs) for the trust-policy workflow.
+
+### Statuses
+
+| Status | Meaning |
+| --- | --- |
+| `PENDING` | A pre-provisioned destination that holds only the External ID, so you can finish your IAM trust policy before the first save. Nothing is delivered in this state. |
+| `ACTIVE` | The destination is enabled. A successful save or connection test sets this status unless delivery was manually disabled. |
+| `DISABLED` | Delivery is paused. Connection tests preserve this status. |
+| `ERROR` | The latest save or connection test could not write the verification object. No events are delivered while this status remains. |
+
+**Enable** changes either `DISABLED` or `ERROR` to `ACTIVE` without testing connectivity. **Delete** stops future delivery, removes the destination and its **Recent Deliveries** history from the Dashboard, and causes a new External ID to be generated if another destination is configured. Existing S3 objects are unaffected.
+
+### Delivery behavior
+
+Active destinations receive gzipped JSON Lines objects with this key shape:
+
+```text
+<prefix>/<owner-partition>/year=YYYY/month=MM/day=DD/hour=HH/audit_<timestamp>_<id>.jsonl.gz
+```
+
+Active destinations are checked every three minutes. Each sweep excludes events from the most recent 60 seconds and writes up to 1,000 events per object. The UTC date partitions and filename timestamp reflect delivery time, not the events' `occurred_at` values. Each object has content type `application/jsonl` and content encoding `gzip`.
+
+Delivery is at least once. Each attempt uses a new object key. If an upload succeeds but its checkpoint update cannot be confirmed, a later retry can produce another object containing overlapping events. Consumers should deduplicate by the event `id`.
+
+The first activation starts with the earliest available event in scope. Editing destination fields preserves the export checkpoint, so previously delivered events are not copied to a new bucket or prefix. Deleting and recreating the destination resets the checkpoint and can deliver the full available history again.
+
+**Recent Deliveries** shows the ten latest attempts:
+
+| Field | Description |
+| --- | --- |
+| **Status** | `DELIVERED` or `FAILED`. |
+| **Events** | Number of events in the attempted object. |
+| **Object** | S3 object key. Failed attempts also show the delivery error. |
+| **Created** | Time the attempt was recorded. |
+
+## Event records [#event-records]
+
+Each line is one JSON object. Optional objects and fields are omitted when no value was recorded.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `id` | Stable event identifier. Use it to deduplicate S3 delivery. | `string` |
+| `occurred_at` | Event time as an ISO 8601 timestamp. | `string` |
+| `event_type` | Dot-separated activity identifier, such as `project.created` or `api_key.deleted`. | `string` |
+| `result` | Event outcome: `SUCCESS`, `FAILURE`, or `DENIED`. | `string` |
+| `actor` | Actor `type` and, when available, `id`, `email`, and `display`. | `object` |
+| `source` | Request `ip`, `user_agent`, and `request_id`, when available. | `object` |
+| `resource` | Affected resource `type` and `id`, when available. | `object` |
+| `scope` | Associated `org_id` and `enterprise_id`, when available. | `object` |
+| `metadata` | Event-specific context. | JSON |
+| `changes` | Event-specific changed values. | JSON |
+
+Actor types are `USER`, `API_KEY`, `SYSTEM`, `GT_ADMIN`, and `LOCADEX`.
+
+### Event types
+
+| Category | `event_type` values |
+| --- | --- |
+| Authentication | `auth.login.success`, `auth.access.denied`, `auth.access.bypass` |
+| Administrative access | `admin.super_user.started`, `admin.super_user.stopped` |
+| Users | `user.created`, `user.updated`, `user.deleted`, `user.joined`, `user.left` |
+| Projects | `project.created`, `project.updated`, `project.deleted` |
+| Organizations | `organization.created`, `organization.updated`, `organization.deleted`, `organization.member.invited`, `organization.member.invite_removed`, `organization.member.removed`, `organization.member.role_updated`, `organization.billing.details_updated`, `organization.billing.subscription_updated`, `organization.billing.subscription_deleted`, `organization.billing.auto_reload_updated`, `organization.billing.credits_purchased`, `organization.billing.credits_granted`, `organization.billing.recovery_payment_retried` |
+| Enterprises | `enterprise.created`, `enterprise.updated`, `enterprise.deleted`, `enterprise.member.invited`, `enterprise.member.invite_removed`, `enterprise.member.removed`, `enterprise.member.role_updated`, `enterprise.billing.details_updated`, `enterprise.billing.auto_reload_updated`, `enterprise.billing.credits_purchased`, `enterprise.billing.recovery_payment_retried` |
+| API keys | `api_key.created`, `api_key.updated`, `api_key.deleted`, `org_api_key.created`, `org_api_key.updated`, `org_api_key.deleted` |
+| Access policies | `access_policy.updated` |
+| Webhooks | `dashboard.webhook.signing_secret.revealed` |
+| Audit Logs | `audit_log.destination.created`, `audit_log.destination.updated`, `audit_log.destination.deleted`, `audit_log.destination.tested`, `audit_log.downloaded` |
+| SSO and SCIM | `sso.provider.created`, `sso.provider.updated`, `sso.provider.deleted`, `sso.enforcement.updated`, `sso.sp_signing_key.rotated`, `scim.token.created`, `scim.connection.deleted` |
+| Integrations | `integration.created`, `integration.deleted`, `integration.translation.enqueued`, `account.integration.authorized`, `account.integration.revoked` |
+| Locadex | `locadex.settings.updated`, `locadex.workflow_settings.updated`, `locadex.secrets.updated`, `locadex.secrets.revealed`, `locadex.repository.disconnected` |
+
+```json title="Audit event"
+{
+  "id": "event_id",
+  "occurred_at": "2026-08-13T15:19:02.000Z",
+  "event_type": "project.created",
+  "result": "SUCCESS",
+  "actor": {
+    "type": "USER",
+    "id": "user_id",
+    "email": "admin@example.com",
+    "display": "admin@example.com"
+  },
+  "source": {
+    "ip": "203.0.113.10",
+    "user_agent": "Mozilla/5.0",
+    "request_id": "request_id"
+  },
+  "resource": {
+    "type": "PROJECT",
+    "id": "project_id"
+  },
+  "scope": {
+    "org_id": "org_id",
+    "enterprise_id": "enterprise_id"
+  }
+}
+```

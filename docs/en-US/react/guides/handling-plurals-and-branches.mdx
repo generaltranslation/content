@@ -1,7 +1,7 @@
 ---
 
 title: Handling plurals and branches
-description: How to render count-based and conditional content with the General Translation <Plural> and <Branch> components.
+description: How to handle React pluralization and conditional translated content with <Plural> and <Branch>.
 related:
   links:
     - /docs/react/guides/formatting-variables
@@ -11,11 +11,22 @@ related:
 
 ---
 
-Text that changes with a count or a condition cannot be a single static string, because other languages pluralize and vary differently. Use [`<Plural>`](/docs/react/reference/components/plural) for counts and [`<Branch>`](/docs/react/reference/components/branch) for other conditions so every variation is translated correctly. Both components work the same in every framework; only the import package differs.
+Different locales use different plural forms: English usually has `one` and `other`, while some languages need additional forms.
+
+Use [`<Plural>`](/docs/react/reference/components/plural) for count-based wording, and use [`<Branch>`](/docs/react/reference/components/branch) for other conditional content.
+
+## Choose plurals or branches [#choose]
+
+- Use [`<Plural>`](/docs/react/reference/components/plural) when a number determines the wording, such as message counts or search results.
+- Use [`<Branch>`](/docs/react/reference/components/branch) when a status, plan, boolean, or other value determines the content.
+- Place either component inside [`<T>`](/docs/react/reference/components/t) so every variation can be translated.
+- Wrap dynamic values inside each variation with a [variable component](/docs/react/guides/formatting-variables), such as [`<Num>`](/docs/react/reference/components/num) or [`<Var>`](/docs/react/reference/components/var).
+
+Both components work the same across React, Next.js, TanStack Start, and React Native. Only the import package differs.
 
 ## Pluralize with `<Plural>` [#plural]
 
-Pass the count as `n` and provide a child for each plural form. General Translation picks the correct form for the active locale using the locale's plural rules.
+Do not build plurals by checking `count === 1` or appending an `s`; that only models English grammar. Pass the count as [`n`](/docs/react/reference/components/plural#n), then provide the forms used by your source language. [`<Plural>`](/docs/react/reference/components/plural) selects the correct form with the active locale's [Unicode CLDR plural rules](https://cldr.unicode.org/index/cldr-spec/plural-rules).
 
 <Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
   <Tab value="React">
@@ -75,11 +86,21 @@ Pass the count as `n` and provide a child for each plural form. General Translat
   </Tab>
 </Tabs>
 
-Provide the plural categories your source language uses (commonly `one` and `other`); translators supply the categories each target language needs, such as `zero`, `two`, `few`, and `many`.
+Provide the [`plural categories`](/docs/react/reference/components/plural#form) your source language uses—commonly `one` and `other` for English. Translators supply categories required by each target language, which may include `zero`, `two`, `few`, and `many`.
+
+If the exact category is unavailable, [`<Plural>`](/docs/react/reference/components/plural) uses the `plural` branch, then `other`. [`children`](/docs/react/reference/components/plural#children) renders only when neither generic branch exists:
+
+```tsx
+<T>
+  <Plural n={count} one={<>One result</>}>
+    <Num>{count}</Num> results
+  </Plural>
+</T>;
+```
 
 ## Branch on a value with `<Branch>` [#branch]
 
-Use [`<Branch>`](/docs/react/reference/components/branch) to choose content based on an arbitrary value. Pass the value as `branch` and provide a child prop for each possible value, plus `children` as the fallback. Import [`Branch`](/docs/react/reference/components/branch) from the same package as [`<T>`](/docs/react/reference/components/t).
+Use [`<Branch>`](/docs/react/reference/components/branch) when content depends on a value other than a count. Pass the value as [`branch`](/docs/react/reference/components/branch#branch), add a [prop for each expected value](/docs/react/reference/components/branch#value), and use [`children`](/docs/react/reference/components/branch#children) as the fallback.
 
 ```tsx
 <T>
@@ -93,6 +114,22 @@ Use [`<Branch>`](/docs/react/reference/components/branch) to choose content base
 </T>;
 ```
 
-Each branch child is translated independently, so every variation reads naturally in every language.
+Each branch is translated independently, so translators can adapt its complete wording instead of working around an inline JavaScript conditional.
 
-*Note: The [`<Branch>`](/docs/react/reference/components/branch) component ignores any `data-*` attributes. The linter's [`no-data-attrs-on-branch`](/docs/react/reference/lint-rules) rule flags them.*
+### Replace conditionals inside `<T>`
+
+An inline ternary makes the children of [`<T>`](/docs/react/reference/components/t) dynamic and prevents reliable extraction. Represent the same condition with [`<Branch>`](/docs/react/reference/components/branch):
+
+```tsx
+// ❌ Inline conditional
+<T>{isActive ? 'Active' : 'Inactive'}</T>;
+
+// ✅ Translatable branches
+<T>
+  <Branch branch={isActive} true="Active">
+    Inactive
+  </Branch>
+</T>;
+```
+
+*Note: [`<Branch>`](/docs/react/reference/components/branch) ignores `data-*` attributes because non-reserved props represent branch values. Put test IDs and other data attributes on a wrapper element; the [`no-data-attrs-on-branch`](/docs/react/reference/lint-rules#no-data-attrs) lint rule flags this mistake.*

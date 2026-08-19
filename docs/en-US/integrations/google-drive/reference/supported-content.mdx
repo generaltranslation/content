@@ -1,67 +1,68 @@
 ---
 
 title: Supported content
-description: Learn which files the Google Drive integration supports and how translated copies work. Reference for Google Drive content.
+description: Review the Google Drive file types and text structures the integration can translate. Reference for supported Google Drive content.
 
 ---
 
-The Google Drive integration translates Google Docs and Google Slides. It keeps each source unchanged and creates one translated copy for every target language.
+The integration translates native Google Docs and Google Slides files. Other Drive file types cannot be added, and non-text content is left as it is.
 
 ## Overview [#overview]
 
 | Topic | Description |
 | --- | --- |
-| [Supported file types](#file-types) | Google Drive file types supported for translation. |
-| [Ways to connect](#access-modes) | Personal and Organization shared drive connections. |
-| [Dashboard permissions](#permissions) | Permissions needed to connect and use Google Drive. |
-| [Translated copies](#translated-copies) | Where translations are saved and how they are named. |
+| [Supported file types](#file-types) | Drive file types that can be added, and what is translated in each. |
+| [Formatting and structure](#formatting) | Styling that carries over, and how structural changes are handled. |
+| [Skipped content](#skipped-content) | Text and elements the integration leaves unchanged. |
+| [Translated copies](#translated-copies) | Where copies are saved and when they are reused. |
 | [Updating translations](#update-behavior) | What happens when a source changes. |
 
 ## Supported file types [#file-types]
 
-- Google Docs (`application/vnd.google-apps.document`)
-- Google Slides (`application/vnd.google-apps.presentation`)
+| File type | MIME type | Translated content |
+| --- | --- | --- |
+| Google Docs | `application/vnd.google-apps.document` | Body paragraphs and table cells, tabs and child tabs, headers, footers, and footnotes. |
+| Google Slides | `application/vnd.google-apps.presentation` | Text in shapes, table cells, and speaker notes. |
 
 Google Sheets, PDFs, Microsoft Office files, images, and folders are not supported.
 
-The integration preserves the structure of Google Docs. For Google Slides, it also adjusts the translated presentation's layout for the new text.
+Connection modes, OAuth scopes, and the permissions each action needs are covered in [Connection](/docs/integrations/google-drive/reference/connection).
 
-## Ways to connect [#access-modes]
+## Formatting and structure [#formatting]
 
-- **Personal account:** each person signs in with Google and chooses the files they want to translate. The integration uses the `drive.file` scope and can access those files and the translated copies it creates.
-- **Organization shared drive:** everyone with Project access uses a shared connection set up by an Organization admin. The connection uses the `drive` scope to browse its configured shared drives.
+The translated file starts as a copy of the source, so the source is never modified and the copy keeps its Drive structure. The integration applies the source's paragraph styling, text styling, links, and lists to the translated text.
 
-Disconnecting a personal account removes that person's authorization. It does not delete linked files or translated copies.
+Google Slides gets an extra layout pass after the text is applied, because translated text rarely occupies the same space as the original. The Dashboard shows per-locale progress while translation and layout processing run.
 
-<Callout type="info">
-  **Organization admins:** Shared drive access must be available on your plan. Open **Organization > Connections**, click **Add connection**, then **Set up** for Google Drive; add the displayed email to the shared drive as a **Content manager**, return to the Dashboard, and click **Verify access**.
-</Callout>
+Once a copy exists, the two file types update differently:
 
-## Dashboard permissions [#permissions]
+- **Google Slides** does not merge incrementally. Every run — forced or not — rebuilds the copy as a faithful transplant of the source, so its structure always mirrors the source: obsolete slides disappear, and added or reordered slides appear. Because rebuilding re-mints Slides object IDs, existing translations are matched to the new copy by structural position rather than by ID.
+- **Google Docs** does merge incrementally. The integration reapplies translations to the units that still match by structural location and leaves the rest of the copy in place. Content added to the source and not present in the copy is not applied, and content that exists only in the copy is left untouched.
 
-| Action | Required permission |
-| --- | --- |
-| Connect Google Drive to a Project | `project:write` |
-| Add or remove files | `translations:content:write` |
-| Start or force translation | `translations:content:write` |
+For Slides, the integration also restores the previous copy's text-box geometry and run styles on non-forced runs, matching them by content signature.
 
-Project access and plan features can also limit these actions.
+## Skipped content [#skipped-content]
+
+The integration skips content that holds no translatable text or cannot be represented safely:
+
+- Empty text.
+- Unsupported structural elements or document regions.
+- Rich content with no supported text representation.
+- Text ranges that cannot be resolved in the source structure.
+
+Images, videos, charts, and other non-text Drive content are never translated.
 
 ## Translated copies [#translated-copies]
 
-The integration creates one copy for every source file and target language. By default, the copy sits next to the source and is named `<source file name> [<target language in the source language>]`.
+The integration creates one copy per source file and target language, in the source file's folder, and records which copy belongs to which source and language. See [Using translated content](/docs/integrations/google-drive/guides/using-translated-content#names) for how each copy is named.
 
-For example, an English file named `Launch plan` becomes `Launch plan [French]` when translated into French.
+Later runs update that same copy. If the recorded copy is missing, inaccessible, or in the trash, the integration creates a replacement the next time it can copy the source.
 
-For a Spanish source, the same French copy is named `Launch plan [francés]`. If the language name cannot be resolved, the integration uses the target locale code.
-
-Later runs update the same copy. If that copy was deleted or moved to trash, the integration creates a new one the next time it translates the file.
-
-The connected account must be able to create and edit translated copies. If it cannot edit a copy, the integration stops that file and language instead of creating an unrelated duplicate.
+The active Drive identity must be able to create and edit translated copies. If it cannot edit an existing copy, the integration stops that file and language rather than creating an unrelated duplicate.
 
 ## Updating translations [#update-behavior]
 
 - **Apply changes** reuses existing translations where possible and updates the translated copy.
 - **Force retranslation** translates from scratch and replaces translated text and layout changes in the copy.
 
-The integration matches content between the current source and the existing copy. For Google Slides, it also tries to add, remove, and reorder whole slides, but structural updates are best-effort. Review the translated copy when you change slides, tables, or other structural content.
+Both actions match content between the current source and the existing copy, following the per-file-type behavior in [Formatting and structure](#formatting). Review the copy after you change slides, tables, or other structural content.

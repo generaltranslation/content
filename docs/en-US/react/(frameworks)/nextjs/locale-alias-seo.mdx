@@ -1,0 +1,139 @@
+---
+
+title: Managing locale alias SEO
+description: How to use custom locale aliases in Next.js URLs while publishing canonical language metadata for search engines.
+related:
+  links:
+    - /docs/react/nextjs/app-router-middleware
+    - /docs/react/nextjs/app-router-static-site-generation
+    - /docs/react/nextjs/registering-request-locales
+    - /docs/react/nextjs/cache-components
+
+---
+
+A locale alias lets a route use a custom segment such as `/cn` while translations use the canonical BCP 47 code `zh`. `gt-next` resolves the mapping for translations and routing, but your app remains responsible for `<html lang>`, canonical URLs, language alternates, and sitemap entries.
+
+## Configure an alias [#configure]
+
+Map the URL locale to its canonical code with [`customMapping`](/docs/react/reference/config#custom-mapping):
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en-US",
+  "locales": ["en-US", "cn", "ja"],
+  "customMapping": {
+    "cn": {
+      "code": "zh",
+      "name": "Mandarin"
+    }
+  }
+}
+```
+
+The middleware accepts `/cn` as a localized route. General Translation resolves `cn` to `zh` when it needs the canonical locale.
+
+Keep these two values separate in SEO code:
+
+- Use the **alias** in route URLs, such as `/cn/about`.
+- Use the **canonical BCP 47 code** in `lang` and `hreflang`, such as `zh`.
+
+## Set the document language [#document-language]
+
+Resolve the route locale before setting the `<html lang>` attribute:
+
+```tsx title="app/[locale]/layout.tsx"
+import { resolveCanonicalLocale } from 'gt-next/server';
+
+export default async function LocaleLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const canonicalLocale = resolveCanonicalLocale(locale);
+
+  return (
+    <html lang={canonicalLocale}>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+Without this conversion, the `/cn` route would render `lang="cn"`, which is not a valid Chinese language tag.
+
+## Publish page alternates [#page-alternates]
+
+Next.js emits `hreflang` links from `metadata.alternates.languages`. Use canonical codes as the object keys and alias-based routes as the values:
+
+This homepage example belongs on the localized page. Build route-specific URLs in each nested page's metadata.
+
+```tsx title="app/[locale]/page.tsx"
+import type { Metadata } from 'next';
+import { resolveCanonicalLocale } from 'gt-next/server';
+
+const locales = ['en-US', 'cn', 'ja'];
+const baseUrl = 'https://example.com';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const languages = Object.fromEntries(
+    locales.map((urlLocale) => [
+      resolveCanonicalLocale(urlLocale),
+      `${baseUrl}/${urlLocale}`,
+    ])
+  );
+
+  return {
+    alternates: {
+      canonical: `${baseUrl}/${locale}`,
+      languages: {
+        ...languages,
+        'x-default': `${baseUrl}/en-US`,
+      },
+    },
+  };
+}
+```
+
+This produces an alternate whose language is `zh` and whose URL remains `/cn`. Add only one URL for each canonical language key; otherwise a later entry overwrites the earlier one.
+
+If both `/cn` and `/zh` can render the same page, choose one preferred URL and point both pages' `canonical` value at it. This avoids publishing duplicate indexable URLs for the same localized content.
+
+## Add sitemap alternates [#sitemap]
+
+Apply the same mapping in `app/sitemap.ts`:
+
+```ts title="app/sitemap.ts"
+import type { MetadataRoute } from 'next';
+import { resolveCanonicalLocale } from 'gt-next/server';
+
+const locales = ['en-US', 'cn', 'ja'];
+const pages = ['', '/about', '/pricing'];
+const baseUrl = 'https://example.com';
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  return pages.map((page) => ({
+    url: `${baseUrl}/en-US${page}`,
+    alternates: {
+      languages: {
+        ...Object.fromEntries(
+          locales.map((urlLocale) => [
+            resolveCanonicalLocale(urlLocale),
+            `${baseUrl}/${urlLocale}${page}`,
+          ])
+        ),
+        'x-default': `${baseUrl}/en-US${page}`,
+      },
+    },
+  }));
+}
+```
+
+Keep the language-to-URL mapping identical in page metadata and the sitemap. Include an alternate only when that localized page exists.

@@ -17,6 +17,50 @@ function StubComponent() {
   return null;
 }
 
+function GitHub() {
+  return (
+    <p>
+      <a href='https://github.com/generaltranslation/gt'>
+        View generaltranslation/gt on GitHub
+      </a>
+    </p>
+  );
+}
+
+type TweetProps =
+  | {
+      id: string;
+      header?: never;
+      subheader?: never;
+    }
+  | {
+      id?: never;
+      header: string;
+      subheader: string;
+    };
+
+function Tweet(props: TweetProps) {
+  if (props.id === undefined) {
+    return (
+      <p>
+        <a href='https://x.com/generaltxn'>
+          <strong>{props.header}</strong>
+          <br />
+          {props.subheader}
+        </a>
+      </p>
+    );
+  }
+
+  return (
+    <p>
+      <a href={`https://x.com/generaltxn/status/${props.id}`}>
+        View post on X
+      </a>
+    </p>
+  );
+}
+
 function MdxImage({ style, ...props }: ComponentPropsWithoutRef<'img'>) {
   return (
     <img {...props} style={{ maxWidth: '100%', height: 'auto', ...style }} />
@@ -44,7 +88,9 @@ const customComponents = {
   CardFooter: StubComponent,
   CardHeader: StubComponent,
   CardTitle: StubComponent,
+  GitHub,
   SupportedLocales: StubComponent,
+  Tweet,
   Video,
 } satisfies MDXComponents;
 

@@ -4,29 +4,28 @@ info:
   version: '2026-03-06.v1'
   description: >
     The public General Translation API. Use it to upload source content and
-    translated files, download translations, queue and translate content, manage
-    branches and tags, and read project and job status.
+    translated files, download translations, queue and translate content, create
+    projects, manage branches and tags, and read project and job status.
 
 
-    Most endpoints operate on a single project and live under
-    `https://api2.gtx.dev`. The runtime translation endpoint (`POST /v2/translate`)
-    is served from `https://runtime2.gtx.dev`.
+    Most endpoints operate on a single project. All endpoints live under
+    `https://api.gtx.dev`.
 
 
     Authenticate every request with an API key as a bearer token in the standard
     `Authorization: Bearer <key>` header.
     Project keys (`gtx-api-`, `gtx-dev-`) are bound to one project. Organization
     keys (`gtx-org-`) work across projects but must include the target project in
-    the `gt-project-id` header for project-scoped routes.
+    the `gt-project-id` header for project-scoped routes. Organization-scoped
+    routes, such as `POST /v2/projects`, derive the organization from the key and
+    do not use a `gt-project-id` header.
   contact:
     name: General Translation Support
     email: support@generaltranslation.com
     url: https://generaltranslation.com
 servers:
-  - url: https://api2.gtx.dev
-    description: Project and file API
-  - url: https://runtime2.gtx.dev
-    description: Runtime translation API (POST /v2/translate)
+  - url: https://api.gtx.dev
+    description: General Translation API
 security:
   - Bearer: []
 tags:
@@ -41,7 +40,7 @@ tags:
   - name: Tags
     description: Tag file versions.
   - name: Project
-    description: Read and update project information.
+    description: Create projects and read or update project information.
   - name: Jobs
     description: Read background job status.
 
@@ -234,6 +233,10 @@ paths:
     get:
       tags: [Context]
       summary: Check if context generation is needed
+      description: >
+        Check whether the Project needs translation context generated. This
+        deprecated endpoint is retained for backward compatibility and is no
+        longer called by current clients.
       deprecated: true
       operationId: shouldGenerateContext
       parameters:
@@ -305,6 +308,10 @@ paths:
     get:
       tags: [Context]
       summary: Get context generation job status
+      description: >
+        Track a context generation job. This deprecated endpoint is retained
+        for backward compatibility; new integrations should use
+        `POST /v2/project/jobs/info`.
       deprecated: true
       operationId: getContextStatus
       parameters:
@@ -469,7 +476,10 @@ paths:
       tags: [Files]
       summary: Download a single file
       deprecated: true
-      description: Download a single source or translated file. Prefer the batch POST endpoint.
+      description: >
+        Download a single source or translated file. This deprecated endpoint
+        is retained for backward compatibility; new integrations should use
+        `POST /v2/project/files/download`.
       operationId: downloadFile
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
@@ -568,6 +578,8 @@ paths:
     post:
       tags: [Branches]
       summary: Get branch information
+      description: >
+        Return the Project's default branch and any branches requested by name.
       operationId: getBranchInfo
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
@@ -701,10 +713,219 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /v2/projects:
+    post:
+      tags: [Project]
+      summary: Create a Project
+      description: >
+        Create a Project in the Organization associated with an Organization API
+        key. The key must have the `org:projects:create` permission. Project keys
+        cannot use this endpoint. Enabling CDN delivery also requires
+        `project:write`.
+      operationId: createProject
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, defaultLocale]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                  description: >
+                    Project name. Supports letters, numbers, spaces, dashes,
+                    underscores, apostrophes, parentheses, and periods.
+                  example: Customer Portal
+                defaultLocale:
+                  type: string
+                  description: Source locale for the project.
+                  example: en-US
+                cdnEnabled:
+                  type: boolean
+                  default: false
+                  description: Enable CDN delivery for the new project.
+      responses:
+        '201':
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project]
+                properties:
+                  project:
+                    type: object
+                    required: [id, name, orgId, defaultLocale]
+                    properties:
+                      id: { type: string, example: prj_abc123 }
+                      name: { type: string, example: Customer Portal }
+                      orgId: { type: string, example: org_abc123 }
+                      defaultLocale: { type: string, example: en-US }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Missing, invalid, or non-organization API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: >
+            The API key lacks `org:projects:create` or is blocked by an access
+            policy, or `cdnEnabled` is true and the key lacks `project:write`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The organization has reached its project limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500':
+          description: The project could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v2/project/assets:
+    post:
+      tags: [Project]
+      summary: Upload Project assets
+      description: >
+        Upload OpenType or TrueType fonts through a Project and make them
+        available to Lottie translation workflows across its Organization.
+        Each font is keyed by a normalized identity derived from its family,
+        weight, and italic style (from the supplied `family` and `style`, or
+        from the font metadata and file name). Re-uploading the same identity
+        overwrites the existing asset, so complete retries after a `500`
+        response are safe.
+      operationId: uploadProjectAssets
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - $ref: '#/components/parameters/GtProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assets]
+              properties:
+                assets:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [assetType, content, fileName]
+                    properties:
+                      assetType:
+                        type: string
+                        enum: [FONT]
+                        description: Asset type. Only `FONT` is supported.
+                      content:
+                        type: string
+                        description: >
+                          Base64-encoded font content, up to 20MB after
+                          decoding.
+                      fileName:
+                        type: string
+                        minLength: 1
+                        maxLength: 255
+                        description: >
+                          Font file name ending in `.ttf` or `.otf`.
+                        example: BrandSans.ttf
+                      family:
+                        type: string
+                        minLength: 1
+                        maxLength: 255
+                        description: >
+                          Font family name used by the Lottie file. When
+                          omitted, the server derives it from the font
+                          metadata or file name.
+                        example: Brand Sans
+                      style:
+                        type: string
+                        minLength: 1
+                        maxLength: 100
+                        description: >
+                          Style or weight used with `family`, such as `Bold`,
+                          `350`, or `Bold Italic`. Defaults to Regular (`400`)
+                          when `family` is set.
+                        example: Bold
+      responses:
+        '201':
+          description: Uploaded font assets.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assets, count]
+                properties:
+                  assets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Stored organization asset ID.
+                          example: asset_abc123
+                        assetKey:
+                          type: string
+                          description: >
+                            Normalized identity in the form
+                            `<family>-<weight>[-i]`.
+                          example: brandsans-700
+                        fileName: { type: string, example: BrandSans.ttf }
+                  count:
+                    type: number
+                    description: Number of uploaded assets.
+                    example: 1
+        '400':
+          description: >
+            Invalid request body, invalid base64, an empty asset, an
+            unsupported file extension, an asset larger than 20MB, or a font
+            family that cannot be determined.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: The JSON request body exceeds 100MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500':
+          description: >
+            An asset could not be stored. Retry the complete request; each
+            font identity is upserted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /v2/project/info/{projectId}:
     get:
       tags: [Project]
-      summary: Get project information
+      summary: Get Project information
+      description: >
+        Read the authenticated Project's name, Organization ID, locale settings,
+        and auto-approval setting.
       operationId: getProjectInfo
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
@@ -735,8 +956,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     post:
       tags: [Project]
-      summary: Update project information
-      description: Update project settings such as the default locale.
+      summary: Update Project information
+      description: Update the Project's default locale or CDN delivery setting.
       operationId: updateProjectInfo
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
@@ -754,6 +975,9 @@ paths:
               type: object
               properties:
                 defaultLocale: { type: string }
+                cdnEnabled:
+                  type: boolean
+                  description: Enable or disable CDN delivery.
       responses:
         '200':
           description: Project updated.
@@ -772,6 +996,9 @@ paths:
     post:
       tags: [Jobs]
       summary: Get translation job status
+      description: >
+        Return normalized status information for one or more queued translation
+        or context generation jobs.
       operationId: getJobsInfo
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
@@ -907,6 +1134,9 @@ paths:
     get:
       tags: [Files]
       summary: Get translation status for a file
+      description: >
+        Return translation progress and availability by locale for one source
+        file, along with its source metadata.
       operationId: getTranslationStatus
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
@@ -1076,9 +1306,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   /v2/translate:
-    servers:
-      - url: https://runtime2.gtx.dev
-        description: Runtime translation API
     post:
       tags: [Translation]
       summary: Translate content at runtime
@@ -1186,7 +1413,8 @@ components:
         API key sent as a bearer token in the standard `Authorization: Bearer
         <key>` header. Use a project key (`gtx-api-`, `gtx-dev-`) or an
         organization key (`gtx-org-`). Organization keys must also send
-        `gt-project-id` on project-scoped routes.
+        `gt-project-id` on project-scoped routes. Organization-scoped routes
+        derive the organization from the key and do not use `gt-project-id`.
 
   parameters:
     GtApiVersion:
@@ -1222,7 +1450,7 @@ components:
         fileName: { type: string }
         fileFormat:
           type: string
-          description: File format, e.g. json, yaml, xml.
+          description: File format identifier, for example JSON, MDX, or LOTTIE.
         dataFormat:
           type: string
           description: Data format, e.g. STRING, JSX, ICU.

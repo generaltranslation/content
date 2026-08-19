@@ -21,7 +21,7 @@ In a single-page app, `gt-react` runs entirely in the browser — you initialize
 - Node.js 18+
 
 <Callout type="info">
-  **Tip:** Run `npx gt@latest` to configure everything with the [Setup Wizard](/docs/cli/quickstart). This guide covers manual setup.
+  **Tip:** Run `npx gt@latest` to configure the Vite bootstrap and translation loading with the [setup wizard](/docs/cli/quickstart). This guide covers manual setup.
 </Callout>
 
 <Callout type="info">
@@ -109,8 +109,45 @@ export default async function loadTranslations(locale: string) {
 This function loads JSON translation files from your `src/_gt/` directory. The CLI generates these files when you run [`npx gt translate`](/docs/cli/reference/commands/translate).
 
 <Callout type="info">
-  **Note:** Rollup cannot analyze this fully dynamic import path. Use the [static locale-loader map](/docs/react/guides/developing-spa-translations#setup) shown in the SPA development guide.
+  **Rollup:** Plain Rollup cannot analyze the fully dynamic import above. Use the [static locale-loader map](/docs/react/guides/developing-spa-translations#setup) instead.
 </Callout>
+
+<Accordions>
+  <Accordion title="Keeping Create React App translations in public?">
+
+Create React App can use the source-directory loader above. If you prefer to keep generated translations in `public/`, change the CLI output to `public/_gt/[locale].json`:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json"
+    }
+  }
+}
+```
+
+Load the file over HTTP with `PUBLIC_URL`:
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  try {
+    const response = await fetch(
+      `${process.env.PUBLIC_URL}/_gt/${locale}.json`
+    );
+    if (!response.ok) throw new Error('Translation file not found');
+    return await response.json();
+  } catch {
+    console.warn(`No translations found for ${locale}`);
+    return {};
+  }
+}
+```
+
+  </Accordion>
+</Accordions>
 
 
 ### 4. Initialize the library
@@ -181,7 +218,7 @@ createRoot(document.getElementById('root')!).render(
 );
 ```
 
-Then update the module script tag in your `index.html` to point at the new entry: change its `src` from `/src/main.tsx` to `/src/index.ts`.
+In Vite, update the module script tag in `index.html` to point at the new entry: change its `src` from `/src/main.tsx` to `/src/index.ts`.
 
 ```html title="index.html"
 <!-- <script type="module" src="/src/main.tsx"></script> -->
@@ -189,6 +226,33 @@ Then update the module script tag in your `index.html` to point at the new entry
 ```
 
 [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) runs once at startup — the configuration is immutable for the lifetime of the app. After it resolves, translations can be resolved in any module. **You don't need to wrap your app in a provider.**
+
+<Accordions>
+  <Accordion title="Using Create React App?">
+
+Create React App blocks imports from outside `src/` and does not enable top-level `await`. Keep the root `gt.config.json` for the CLI, rename your existing `src/index.tsx` entry to `src/main.tsx`, then create this new entry:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import loadTranslations from './loadTranslations';
+
+async function start() {
+  await initializeGTSPA({
+    defaultLocale: 'en',
+    locales: ['es', 'fr', 'ja'],
+    loadTranslations,
+  });
+
+  await import('./main');
+}
+
+start().catch(console.error);
+```
+
+Keep these locale values synchronized with the root config whenever you add or remove a language. Leave `public/index.html` unchanged; Create React App already loads `src/index`.
+
+  </Accordion>
+</Accordions>
 
 <Callout type="info">
   **Tip:** Follow [Developing with SPA translations](/docs/react/guides/developing-spa-translations) to add the compiler and development credentials.

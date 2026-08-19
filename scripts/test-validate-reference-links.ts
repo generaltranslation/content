@@ -66,6 +66,11 @@ const references: ReferenceSource[] = [
     path: 'docs/en-US/cli/reference/commands/translate.mdx',
     source: '---\ntitle: gt translate\n---\n',
   },
+  {
+    path:
+      'docs/en-US/platform/core/reference/utility-functions/locales/get-locale-properties.mdx',
+    source: '---\ntitle: getLocaleProperties\n---\n',
+  },
 ];
 
 const index = buildReferenceSymbolIndex(references);
@@ -113,6 +118,12 @@ const skippedCases = [
     name: 'same-named type from another package',
     path: 'docs/en-US/node/reference/config.mdx',
     source: 'The loader has type `TranslationsLoader`.',
+  },
+  {
+    name: 'returned callback with a standalone namesake',
+    path: 'docs/en-US/react/reference/hooks/use-locale-selector.mdx',
+    source:
+      'The returned `getLocaleProperties` callback uses the configured custom mapping.',
   },
 ];
 
@@ -166,6 +177,14 @@ const foundCases = [
     path: 'docs/en-US/node/guides/example.mdx',
     source: 'In `gt-node`, call `getGT()` before translating.',
     target: '/docs/node/reference/functions/get-gt',
+  },
+  {
+    name: 'standalone utility outside the narrow exclusion',
+    path: 'docs/en-US/platform/core/guides/example.mdx',
+    source:
+      'Import the standalone `getLocaleProperties()` utility from `generaltranslation`.',
+    target:
+      '/docs/platform/core/reference/utility-functions/locales/get-locale-properties',
   },
 ];
 
