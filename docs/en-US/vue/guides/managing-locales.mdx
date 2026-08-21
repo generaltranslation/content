@@ -1,0 +1,129 @@
+---
+
+title: Managing locales
+description: How to declare Vue locales, build a language switcher, and control reactive or reload-based changes.
+related:
+  links:
+    - /docs/vue/guides/configuring
+    - /docs/vue/guides/storing-translations
+    - /docs/vue/guides/developing-spa-translations
+    - /docs/vue/guides/translating-content
+
+---
+
+Locale codes such as `en-US` and `fr` connect a user's language choice to the correct catalog and formatting rules. Configure the source and target locales, then use the locale composables inside your Vue components.
+
+## Declare available locales [#declare]
+
+Set the source locale and target locales in `gt.config.json`:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "de"]
+}
+```
+
+`defaultLocale` is the language of your source content. `locales` lists the languages the CLI should generate.
+
+Pass `defaultLocale` to [`createGT()`](/docs/vue/reference/functions/create-gt). Keep the target list for your language switcher:
+
+```ts
+const gt = createGT({
+  defaultLocale: gtConfig.defaultLocale,
+  loadTranslations,
+});
+
+const availableLocales = [gtConfig.defaultLocale, ...gtConfig.locales];
+```
+
+A plugin created with [`createGT()`](/docs/vue/reference/functions/create-gt) does not restrict locale codes to this list. Only offer supported values in your interface, and make the loader return an empty catalog or reject unsupported requests intentionally.
+
+## Read the active locale [#read]
+
+[`useLocale()`](/docs/vue/reference/composables/use-locale) returns a readonly Vue ref. Templates unwrap it automatically:
+
+```vue
+<script setup lang="ts">
+import { watch } from 'vue';
+import { useLocale } from 'gt-vue';
+
+const locale = useLocale();
+
+watch(locale, (nextLocale) => {
+  document.documentElement.lang = nextLocale;
+});
+</script>
+
+<template>
+  <p>Active locale: {{ locale }}</p>
+</template>
+```
+
+Read `locale.value` in ordinary script expressions. Components, computed values, and render effects that read the ref update after a reactive locale switch finishes.
+
+## Build a language switcher [#switcher]
+
+[`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) returns an async setter. Await it so the interface can represent a pending load or handle a rejection:
+
+```vue title="src/components/LocaleSwitcher.vue"
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useLocale, useSetLocale } from 'gt-vue';
+
+const props = defineProps<{ locales: readonly string[] }>();
+const locale = useLocale();
+const setLocale = useSetLocale();
+const changing = ref(false);
+
+async function changeLocale(event: Event) {
+  const target = event.target as HTMLSelectElement;
+  changing.value = true;
+
+  try {
+    await setLocale(target.value);
+  } finally {
+    changing.value = false;
+  }
+}
+</script>
+
+<template>
+  <select :value="locale" :disabled="changing" @change="changeLocale">
+    <option v-for="code in props.locales" :key="code" :value="code">
+      {{ code }}
+    </option>
+  </select>
+</template>
+```
+
+With a [`createGT()`](/docs/vue/reference/functions/create-gt) plugin, the setter loads an uncached catalog before changing the locale. Successful results are cached. If requests overlap, only the latest request changes the active locale.
+
+An empty catalog is a successful load: the locale changes and source content renders as the fallback. A rejected loader leaves the active locale and its cookie unchanged.
+
+## Persist the locale [#persistence]
+
+In a browser, the active locale is stored in a path-wide session cookie named `generaltranslation.locale`. When `locale` is omitted from [`createGT()`](/docs/vue/reference/functions/create-gt), that cookie wins over `defaultLocale`.
+
+Set `localeCookieName` when the app must share another cookie with a router or server:
+
+```ts
+createGT({
+  defaultLocale: 'en',
+  localeCookieName: 'my-app.locale',
+  loadTranslations,
+});
+```
+
+Use [`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) rather than writing the cookie directly. Browsers do not emit a reactive event for cookie changes, so an external write does not schedule a Vue render by itself.
+
+## Choose reactive or reload-based switching [#runtime-mode]
+
+The initialization mode determines what happens after the cookie changes:
+
+- [`createGT()`](/docs/vue/reference/functions/create-gt) loads the catalog and updates reactive consumers without reloading the page.
+- [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) writes the cookie and reloads the document so module-level [`t()`](/docs/vue/reference/functions/t) calls execute again after preloading the new locale.
+
+The SPA initializer accepts `locales` and falls back to `defaultLocale` when a saved or requested locale is unsupported. Follow [Developing with SPA translations](/docs/vue/guides/developing-spa-translations) when module-level translation requires that behavior.
+
+For server rendering, resolve the request locale on the server and pass it explicitly to [`createGT()`](/docs/vue/reference/functions/create-gt). The explicit value overrides a stale browser cookie and keeps the server render and hydration locale aligned.

@@ -1,0 +1,138 @@
+---
+
+title: "<T>"
+description: Translate Vue template content in place. API reference for the <T> component.
+
+---
+
+The `<T>` component reads statically authored content from its default slot and renders the matching rich-content catalog entry. Missing entries render the original slot, and the component adds no HTML wrapper.
+
+## Overview [#overview]
+
+Wrap text and markup that should form one translation:
+
+```vue
+<T>
+  Today, I went to the <strong>store</strong>.
+</T>
+```
+
+Use [`<Var>`](/docs/vue/reference/components/var), [`<Num>`](/docs/vue/reference/components/num), [`<Currency>`](/docs/vue/reference/components/currency), and [`<DateTime>`](/docs/vue/reference/components/datetime) for runtime values. Use [`<Plural>`](/docs/vue/reference/components/plural) or [`<Branch>`](/docs/vue/reference/components/branch) for alternatives.
+
+## How it works [#how-it-works]
+
+- **Static extraction.** The CLI extracts the literal template structure, translation metadata, supported text props, and every supported branch. Runtime expressions that contribute translated content must be wrapped in a variable component; ordinary component props and listeners remain runtime values.
+- **Catalog lookup.** The component hashes its source structure and metadata, then reads that entry from the active plugin's catalog. A missing or incompatible entry falls back to the source slot.
+- **Reactive rendering.** With a [`createGT()`](/docs/vue/reference/functions/create-gt) plugin, a newly loaded catalog or locale change rerenders the lookup. A plugin returned by [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) preloads before mounting and changes locale by reloading the page.
+- **Fragment root.** The component always returns a Vue Fragment boundary. It does not insert a DOM element, and translated output may contain zero, one, or several children without changing that component boundary.
+
+`<T>` does not process ICU syntax or interpolate placeholders. Put each dynamic value in the appropriate variable component.
+
+## Props and slots [#props]
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`default`](#default-slot) | Static template content to translate. | `VNodeChild` | Yes | Empty |
+| [`context`](#context) | Context that disambiguates identical source content. | `string` | Yes | — |
+| [`id`](#id) | Deprecated compatibility metadata. | `string` | Yes | — |
+| [`maxChars`](#maxchars) | Requested maximum length for the translation. | `number` | Yes | — |
+| [`requiresReview`](#requiresreview) | Marks the entry as requiring human review. | `boolean` | Yes | `false` |
+
+### Default slot
+
+**Type** `VNodeChild` · **Optional** · **Default** Empty
+
+The text, elements, components, and supported branches that form the translation. The authored content must be static except for values wrapped in variable components.
+
+### `context`
+
+**Type** `string` · **Optional**
+
+Static context used when calculating the content hash. Use it when the same source text needs different translations, such as `"Open"` as a verb and as an adjective.
+
+```vue
+<T context="Button that opens the settings panel">Open</T>
+```
+
+### `id`
+
+**Type** `string` · **Optional** · **Deprecated**
+
+Compatibility metadata for code adapted from the React API. It does not replace Vue's content-based catalog hash and should not be used as a stable translation identifier.
+
+### `maxChars`
+
+**Type** `number` · **Optional**
+
+Maximum character count requested from translation tooling. This is translation metadata; the Vue runtime does not truncate rendered output.
+
+Use a statically bound integer in a template:
+
+```vue
+<T :max-chars="80">Save your changes</T>
+```
+
+### `requiresReview`
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+Marks the translation entry as requiring human review. This is translation metadata and does not change rendering by itself.
+
+```vue
+<T requires-review>Terms and conditions apply.</T>
+```
+
+## Template rules [#template-rules]
+
+Keep the source shape deterministic so extraction and runtime rendering agree:
+
+- Do not nest one `<T>` inside another.
+- Wrap every interpolation and other runtime value that renders as translated content in a variable component.
+- Move `v-if`, `v-else-if`, `v-else`, and `v-for` outside the translation, or represent the alternatives with [`<Branch>`](/docs/vue/reference/components/branch) or [`<Plural>`](/docs/vue/reference/components/plural).
+- Do not use `v-html`, `v-text`, or `<slot>` inside the translation.
+- Use direct tags for custom components. Selector forms such as `<component :is="...">` and `is="vue:..."` are supported only for recognized GT components or supported Vue built-ins that the extractor resolves explicitly; arbitrary custom, runtime-selected, and unresolved selectors are not supported.
+- Keep `context` and `id` as static strings, `maxChars` as a statically bound integer, and `requiresReview` as a static boolean or bare attribute.
+
+Static `placeholder`, `title`, `alt`, `aria-label`, `aria-labelledby`, and `aria-describedby` props on HTML elements and custom components participate in the translation when both the authored and translated child values pass the runtime truthiness check. Childless elements such as `<img>` and nodes whose source or translated child value is falsy keep their source props. Translate text props on those elements separately with [`useGT()`](/docs/vue/reference/composables/use-gt). Dynamic versions of these text props are not supported inside `<T>`.
+
+```vue title="ProfileGreeting.vue"
+<script setup lang="ts">
+import { T, Var } from 'gt-vue';
+
+defineProps<{ name: string }>();
+</script>
+
+<template>
+  <T>
+    Hello, <Var>{{ name }}</Var>!
+  </T>
+</template>
+```
+
+## Component boundaries [#components]
+
+Statically authored default-slot content inside a custom component remains part of the surrounding translation. Vue preserves the component, non-translatable runtime props, listeners, and identity while replacing its default-slot content and supported static text props:
+
+```vue
+<T>
+  <DocsLink to="/docs">Read the documentation</DocsLink>
+</T>
+```
+
+Content created inside `DocsLink`'s implementation is not visible to the outer translation. Use a direct tag for a custom component. Selector forms are limited to recognized GT components and supported Vue built-ins that the extractor resolves explicitly; arbitrary custom, runtime-selected, and unresolved selectors are not translation sources.
+
+For scoped or arbitrary named custom-component slots, put `<T>` inside the slot instead. You can also wrap an opaque dynamic component boundary in [`<Var>`](/docs/vue/reference/components/var).
+
+Literal `<Suspense>` boundaries support a static, single-root default slot. That default content participates in the outer translation, while the fallback slot is preserved but excluded. Put separate `<T>` components inside the default and fallback slots when the boundary is dynamic or aliased in a way the extractor cannot resolve.
+
+## Whitespace [#whitespace]
+
+Vue's template compiler decides whether source whitespace is condensed or preserved. The extractor uses the consuming app's Vue compiler settings, so changing the compiler's `whitespace` option can change the source content and its hash.
+
+Keep meaningful spaces explicit and inline:
+
+```vue
+<T>Hello <strong>world</strong>!</T>
+```
+
+Avoid comments that split text or sit next to meaningful whitespace inside `<T>`. Vue can preserve comments differently across builds, and the extractor rejects cases where that would make the translation hash build-dependent.

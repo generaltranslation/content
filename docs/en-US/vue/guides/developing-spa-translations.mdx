@@ -1,0 +1,105 @@
+---
+
+title: Developing with SPA translations
+description: How to preload a Vue SPA and translate static strings at module scope with t().
+related:
+  links:
+    - /docs/vue/guides/translating-strings
+    - /docs/vue/guides/managing-locales
+    - /docs/vue/guides/storing-translations
+    - /docs/vue/guides/configuring
+
+---
+
+Browser-only single-page applications can preload the active catalog before application modules run. This enables synchronous, module-level [`t()`](/docs/vue/reference/functions/t) calls for constants, navigation definitions, and other strings outside Vue components.
+
+[`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) complements [`useGT()`](/docs/vue/reference/composables/use-gt); it does not replace it. Use the composable for normal component content and for Vue or server-rendered applications that need reactive locale switching.
+
+## Choose the SPA runtime [#choose]
+
+Use [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) only when all of these statements are true:
+
+- The application runs entirely in the browser.
+- Modules must translate strings while they are evaluated.
+- Reloading the page when the locale changes is acceptable.
+
+Use [`createGT()`](/docs/vue/reference/functions/create-gt) when the app renders on the server or should switch locale reactively without a page reload.
+
+## Bootstrap before importing the app [#bootstrap]
+
+The initialization boundary must run before any module that calls [`t()`](/docs/vue/reference/functions/t). A small async bootstrap works with the stock Vite 6 build target and does not require top-level `await` or `build.target: 'esnext'`.
+
+### 1. Export a mount function
+
+Change the normal Vite entry module so it exports a function that accepts the initialized [`GTPlugin`](/docs/vue/reference/types/gt-plugin):
+
+```ts title="src/main.ts"
+import { createApp } from 'vue';
+import type { GTPlugin } from 'gt-vue';
+import App from './App.vue';
+
+export function mount(gt: GTPlugin) {
+  createApp(App).use(gt).mount('#app');
+}
+```
+
+### 2. Initialize and dynamically import
+
+Create a bootstrap module that awaits [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa), imports the application afterward, and installs the exact plugin returned by initialization:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-vue';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  const gt = await initializeGTSPA({
+    ...gtConfig,
+    loadTranslations,
+  });
+
+  const { mount } = await import('./main');
+  mount(gt);
+}
+
+bootstrap().catch((error) => {
+  console.error('Failed to initialize translations', error);
+});
+```
+
+The first call owns the page-wide SPA runtime. Concurrent calls share its initialization, and later calls return the same plugin. Do not call [`createGT()`](/docs/vue/reference/functions/create-gt) for the mounted app or component lookups and module-level lookups will use different state.
+
+### 3. Point Vite at the bootstrap
+
+Update the module script in `index.html` to load `src/index.ts` instead of `src/main.ts`:
+
+```html title="index.html"
+<script type="module" src="/src/index.ts"></script>
+```
+
+## Translate module-level strings [#translate]
+
+Modules loaded by the dynamic application import can call [`t()`](/docs/vue/reference/functions/t) synchronously:
+
+```ts title="src/navigation.ts"
+import { t } from 'gt-vue';
+
+export const message = t('Hello World');
+
+export const navigation = [
+  { label: t('Documentation', { $context: 'primary navigation' }), href: '/docs' },
+  { label: t('Account settings'), href: '/settings' },
+];
+```
+
+Calls must use a static source string and may pass a static `$context`. The extractor registers those strings, and the preloaded catalog makes the lookup synchronous when the module runs.
+
+[`t()`](/docs/vue/reference/functions/t) does not support tagged templates, ICU syntax, interpolation, `$format`, or `$maxChars`. Use [`<T>`](/docs/vue/reference/components/t) with [`<Var>`](/docs/vue/reference/components/var) for content containing runtime values.
+
+## Change locales in an initialized SPA [#locales]
+
+Pass `defaultLocale` and `locales` from `gt.config.json` into [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa). An unsupported saved locale falls back to the default locale during the next initialization.
+
+When [`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) changes the locale, the SPA runtime writes the locale cookie and reloads the document. It intentionally keeps the current page on its initialized locale until that reload. The bootstrap then preloads the new catalog before module-level calls execute again.
+
+This reload contract is what makes module-level constants safe. If locale changes must happen without navigation, use [`createGT()`](/docs/vue/reference/functions/create-gt) and call [`useGT()`](/docs/vue/reference/composables/use-gt) from a template or computed value instead.

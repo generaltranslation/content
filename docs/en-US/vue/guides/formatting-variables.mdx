@@ -1,0 +1,112 @@
+---
+
+title: Formatting numbers and dates
+description: How to preserve dynamic values and format numbers, currency, and dates for each Vue locale.
+related:
+  links:
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/handling-plurals-and-branches
+    - /docs/vue/guides/translating-strings
+    - /docs/vue/guides/managing-locales
+
+---
+
+Dynamic values must remain separate from the static text that translators can reorder. Use [`<Var>`](/docs/vue/reference/components/var) for values that should render unchanged and the formatting components for values that should follow locale conventions.
+
+## Choose the right component [#choose]
+
+- [`<Var>`](/docs/vue/reference/components/var) preserves a runtime value without translating or formatting it.
+- [`<Num>`](/docs/vue/reference/components/num) formats numbers, percentages, and units.
+- [`<Currency>`](/docs/vue/reference/components/currency) formats an amount with a currency code; it does not convert the amount.
+- [`<DateTime>`](/docs/vue/reference/components/datetime) formats a calendar date, time, or both.
+
+All three formatting components require a `value` prop. Unlike their React counterparts, they do not read the value from slot content.
+
+## Preserve a value with `<Var>` [#var]
+
+Place the runtime value in [`<Var>`](/docs/vue/reference/components/var)'s default slot:
+
+```vue
+<script setup lang="ts">
+import { T, Var } from 'gt-vue';
+
+defineProps<{ accountName: string }>();
+</script>
+
+<template>
+  <T>Welcome back, <Var>{{ accountName }}</Var>!</T>
+</template>
+```
+
+[`<Var>`](/docs/vue/reference/components/var) is intentionally child-only. It does not accept React-style `name` or `value` props. The value is excluded from translation and reinserted wherever the translated phrase references it.
+
+Use it for usernames, identifiers, private information, and other values that should appear exactly as supplied.
+
+## Format numbers and currency [#numbers]
+
+Pass the runtime number through `:value`. Use `options` for any [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) option:
+
+```vue
+<script setup lang="ts">
+import { Currency, Num, T } from 'gt-vue';
+
+const completion = 0.72;
+const total = 1299.5;
+</script>
+
+<template>
+  <T>
+    Your profile is
+    <Num :value="completion" :options="{ style: 'percent' }" />
+    complete.
+  </T>
+
+  <T>
+    Your total is <Currency :value="total" currency="USD" />.
+  </T>
+</template>
+```
+
+[`<Currency>`](/docs/vue/reference/components/currency) defaults to `USD` when `currency` is omitted. Set the code explicitly when the amount belongs to another currency.
+
+Formatting changes presentation only. A value of `1299.5` remains the same amount even when separators and currency placement change.
+
+## Format dates and times [#dates]
+
+[`<DateTime>`](/docs/vue/reference/components/datetime) accepts a `Date`, epoch number, date string, or `null`. Pass [`Intl.DateTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) options to choose the displayed fields and time zone:
+
+```vue
+<script setup lang="ts">
+import { DateTime, T } from 'gt-vue';
+
+const publishedAt = new Date('2026-08-12T17:30:00Z');
+</script>
+
+<template>
+  <T>
+    Published
+    <DateTime
+      :value="publishedAt"
+      :options="{
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'UTC',
+      }"
+    />.
+  </T>
+</template>
+```
+
+Fix the time zone when the same instant must render consistently on the server and client. Otherwise, each environment's local time zone can produce different output during hydration.
+
+## Control formatting locales [#locales]
+
+The active translation locale normally controls formatting. A standalone formatter may receive an ordered `locales` preference:
+
+```vue
+<Num :value="total" :locales="['fr-CA', 'fr']" />
+```
+
+When the active locale is not the default locale, a standalone formatter tries explicit `locales` first, then the active locale, then the default locale. At the default locale, source formatting uses that default and ignores the override.
+
+Inside [`<T>`](/docs/vue/reference/components/t), the rich translation pipeline owns locale selection: source fallback content uses the default locale, while translated content uses the active locale and then the default. Prefer the active locale unless the value has a specific external locale requirement.
