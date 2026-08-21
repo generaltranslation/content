@@ -1,28 +1,59 @@
 ---
 
 title: VM image
-description: Reference for the sandbox environment Locadex uses to run automations.
+description: Review the runtimes, command-line tools, and limitations available to automations. Reference for the Locadex VM image.
 
 ---
 
 The sandbox environment where Locadex runs each automation installs dependencies, runs configured commands, updates files, and prepares pull request changes.
 
+## Runtime [#runtime]
+
+Every sandbox provider runs Node.js 24 and includes:
+
+- Node.js 24 and npm.
+- Bun 1.3.9.
+- Python 3 and `pip`.
+
+Locadex uses the package manager selected for the automation when it installs Project dependencies.
+
+The underlying Linux image differs by sandbox provider. Do not depend on `apt`, `dnf`, or another operating-system package manager being available across every run.
+
 ## Environment variables [#environment-variables]
 
 Environment variables configured at `/org/{orgId}/locadex/secrets` are injected into the sandbox when automations run. Replace `{orgId}` with your Organization ID; the Secrets page is not currently listed in the Dashboard sidebar.
 
-Use them for API keys, tokens, or command configuration.
+Use them for API keys, tokens, or command configuration. See [Adding environment variables](/docs/platform/locadex/guides/adding-environment-variables) for access requirements and setup.
 
-## Commands [#commands]
+## Command-line tools [#tools]
 
-Pre-process and post-process commands run in the sandbox.
+Every sandbox includes:
 
-Commands run from the repository root.
+- `git`
+- `wget`
+- `curl`
+- `tar`
+- `unzip`
+- Python 3 and `pip`
+- `ripgrep`
+- `jq`
+- `ca-certificates`
+- A C/C++ build toolchain for native packages
 
-For monorepos, configure the automation's **Target directory** and make sure commands target the correct app.
+Every provider also installs `biome`, `eslint`, and `ultracite` globally. Locadex can run these preset checks without adding the tools to your package manifest or lockfile. Use the Project's TypeScript dependency when a command calls `tsc`.
 
-## Package manager [#package-manager]
+## Project commands [#commands]
 
-The selected package manager is used to install dependencies in the sandbox.
+Pre-process and post-process commands run from the repository root. For monorepos, configure the automation's **Target directory** and make sure commands target the correct app.
 
-Set it on the automation detail page under **Project > Automations**.
+Project dependencies are not baked into the VM image. Add an install or setup command when the selected package manager cannot install everything the Project needs automatically. See [Configuring Locadex automations](/docs/platform/locadex/guides/configuring-automations#configure-automation).
+
+## Limitations [#limitations]
+
+The sandbox environment does not include:
+
+- Browser runtimes. Install the required browser in a command if an end-to-end test or build needs one.
+- Docker-in-Docker. Commands cannot start sibling containers or run a Docker daemon inside the sandbox.
+- Project-specific global tools beyond the listed presets. Install them through the Project or a pre-process command.
+
+Keep commands non-interactive and repository-local so the same automation can run from a clean sandbox.

@@ -4,9 +4,10 @@ title: Pages Router static site generation
 description: How to pre-render localized Next.js Pages Router pages with General Translation.
 related:
   links:
-    - /docs/react/nextjs-pages-router-quickstart
     - /docs/react/nextjs/pages-router-middleware
     - /docs/react/guides/storing-translations
+    - /docs/react/guides/managing-locales
+    - /docs/react/guides/migrating-i18n-libraries
 
 ---
 
@@ -66,3 +67,68 @@ export const getStaticProps = withGTStaticProps();
 ```
 
 Next.js calls `getStaticProps` once for each configured locale and supplies `context.locale`. Pass the generated values to [`GTProvider`](/docs/react/reference/components/gt-provider) and [connect locale changes](/docs/react/nextjs/pages-router-middleware#locale-changes) in `_app.tsx`.
+
+## Handle dynamic results [#dynamic-results]
+
+The wrapper preserves `redirect` and `notFound` results from your `getStaticProps` function. It only loads translations when the result contains `props`.
+
+```tsx title="pages/products/[id].tsx"
+import { withGTStaticProps } from 'gt-next';
+
+export const getStaticProps = withGTStaticProps(async ({ params }) => {
+  const product = await loadProduct(params?.id);
+
+  if (!product) {
+    return { notFound: true };
+  }
+
+  return {
+    props: { product },
+    revalidate: 3600,
+  };
+});
+```
+
+Dynamic Pages Router routes still need `getStaticPaths`. Return each path once for every locale you want to pre-render:
+
+```tsx title="pages/products/[id].tsx"
+import type { GetStaticPaths } from 'next';
+
+export const getStaticPaths: GetStaticPaths = async ({ locales = [] }) => {
+  const products = await loadProducts();
+
+  return {
+    paths: products.flatMap((product) =>
+      locales.map((locale) => ({
+        params: { id: product.id },
+        locale,
+      }))
+    ),
+    fallback: 'blocking',
+  };
+};
+```
+
+If a path omits `locale`, Next.js generates only the default-locale version of that path.
+
+## Recover from build failures [#build-failures]
+
+### The locale cannot be determined
+
+`withGTStaticProps` throws when Next.js supplies neither `context.locale` nor `context.defaultLocale`. Add `i18n.locales` and `i18n.defaultLocale` to `next.config.ts`, and keep them aligned with `gt.config.json`.
+
+Do not use [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) as a replacement for Pages Router `i18n` configuration. Middleware does not provide the build-time locale passed to `getStaticProps`.
+
+### The default locale renders untranslated
+
+The default locale intentionally receives an empty translation snapshot because the source content is already present in the page. Other locales load their generated translation snapshot.
+
+If a target locale also renders source content, confirm that [`npx gt translate`](/docs/cli/reference/commands/translate) ran before `next build` and that the locale exists in both Next.js and General Translation configuration.
+
+### The helper throws in an App Router file
+
+`withGTStaticProps` is a Pages Router API. Use `generateStaticParams` and the [App Router static generation setup](/docs/react/nextjs/app-router-static-site-generation) under `app/`.
+
+### Static export rejects locale routing
+
+Next.js Pages Router `i18n` configuration does not support `output: 'export'`. Deploy the generated pages through a Next.js server or platform adapter, or move to App Router routes that generate an explicit `[locale]` parameter.
