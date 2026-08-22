@@ -1,0 +1,284 @@
+---
+
+title: Vue extractor
+description: Extract gt-vue messages from source files or mixed-framework workspaces. API reference for @generaltranslation/vue-extractor.
+
+---
+
+`@generaltranslation/vue-extractor` powers Vue extraction in the CLI and exposes lower-level APIs for custom tooling. The unstable 0.x package is ESM-only and resolves application compiler behavior without executing Vite or Nuxt configuration.
+
+## Functions [#functions]
+
+| Function | Entry point | Description |
+| --- | --- | --- |
+| [`extractFromVueSource`](#extractfromvuesource) | Package root | Extract one Vue source file. |
+| [`planVueExtraction`](#planvueextraction) | Package root, `/integration` | Plan mixed-framework extraction. |
+| [`manifestDirectlyDeclaresGTVue`](#manifestdirectlydeclaresgtvue) | `/integration` | Check direct manifest ownership. |
+| [`resolveVueCompilerOptions`](#resolvevuecompileroptions) | `/config` | Resolve hash-affecting compiler settings. |
+| [`detectVueProject`](#detectvueproject) | `/detect` | Detect Vue ownership without loading the compiler. |
+| [`inspectVueProject`](#inspectvueproject) | `/inspect` | Inspect root and workspace ownership synchronously. |
+| [`inspectVueProjectAsync`](#inspectvueprojectasync) | `/inspect` | Inspect workspace ownership asynchronously. |
+| [`partitionVueSourcePatterns`](#partitionvuesourcepatterns) | `/inspect` | Partition explicit mixed-framework source globs. |
+| [`readVueSfcExclusionPatterns`](#readvuesfcexclusionpatterns) | `/inspect` | Return exclusions for definitive Vue SFCs. |
+| [`extractFromVueProject`](#extractfromvueproject) | `/project` | Extract every owned Vue source in a project. |
+| [`mergeVueProjectExtraction`](#mergevueprojectextraction) | `/project` | Merge Vue updates into another extractor's output. |
+
+### `extractFromVueSource`
+
+```ts
+extractFromVueSource(
+  sourceCode: string,
+  filePath: string,
+  options?: VueExtractionOptions
+): Promise<VueExtractionOutput>
+```
+
+Parses one Vue single-file component or script and returns extracted results plus errors and warnings. `filePath` is used for language selection, module resolution, and metadata. Supply the consuming application's exact Vue compiler when compiler version parity matters.
+
+### `planVueExtraction`
+
+```ts
+planVueExtraction(
+  options: VueExtractionPlannerOptions
+): VueExtractionPlan
+```
+
+Returns a synchronous `{ handled: false }` plan for an unrelated project. It handles extraction only when `library` is `gt-vue` or the root manifest directly declares `gt-vue` in `dependencies` or `devDependencies`.
+
+A handled plan exposes asynchronous `run()`. Pass `extractPrimary` to preserve and merge another framework's extraction.
+
+### `manifestDirectlyDeclaresGTVue`
+
+```ts
+manifestDirectlyDeclaresGTVue(manifest: unknown): boolean
+```
+
+Returns `true` for a root manifest with `gt-vue` in `dependencies` or `devDependencies`. A declaration in `optionalDependencies` vetoes ownership, and `peerDependencies` never establishes it.
+
+### `resolveVueCompilerOptions`
+
+```ts
+resolveVueCompilerOptions(
+  cwd: string,
+  explicitOptions: VueCompilerOptions | undefined,
+  resolverOptions?: VueCompilerOptionsResolverOptions
+): VueCompilerOptionsResolution
+```
+
+Combines explicit `whitespace` and `delimiters` values with statically analyzable Vite or Nuxt configuration. It returns diagnostics instead of executing config files or silently choosing behavior when relevant settings conflict.
+
+### `detectVueProject`
+
+```ts
+detectVueProject(cwd?: string): boolean
+```
+
+Checks the root package and publicly re-exported wrappers for `gt-vue` ownership without loading the Vue compiler or running full project extraction. Invalid or unreadable project input returns `false`.
+
+### `inspectVueProject`
+
+```ts
+inspectVueProject(cwd?: string): VueProjectInspection
+```
+
+Synchronously discovers Vue ownership in the root and declared workspaces. Reuse the returned opaque inspection with [`extractFromVueProject`](#extractfromvueproject) to avoid repeated traversal.
+
+### `inspectVueProjectAsync`
+
+```ts
+inspectVueProjectAsync(
+  cwd?: string
+): Promise<VueProjectInspection>
+```
+
+Reads declared workspace manifests with bounded asynchronous I/O and returns the same reusable inspection shape as `inspectVueProject`.
+
+### `partitionVueSourcePatterns`
+
+```ts
+partitionVueSourcePatterns(
+  inspection: VueProjectInspection,
+  filePatterns: readonly string[]
+): {
+  primaryExclusionPatterns: string[];
+  vueExclusionPatterns: string[];
+}
+```
+
+Partitions explicitly selected `.vue` files between an existing parser and the Vue extractor. Definitive Vue SFCs are excluded from the primary parser. Ambiguous files that could be standard-tag JSX stay with the primary parser and are excluded from the Vue pass.
+
+### `readVueSfcExclusionPatterns`
+
+```ts
+readVueSfcExclusionPatterns(
+  inspection: VueProjectInspection,
+  filePatterns: readonly string[]
+): string[]
+```
+
+Returns the `primaryExclusionPatterns` from [`partitionVueSourcePatterns`](#partitionvuesourcepatterns).
+
+### `extractFromVueProject`
+
+```ts
+extractFromVueProject(
+  options?: VueProjectExtractionOptions
+): Promise<VueProjectExtractionOutput>
+```
+
+Discovers owned source scopes, resolves compiler settings and aliases, extracts every matching source, and calculates stable catalog hashes. When `filePatterns` is omitted, defaults include root SFCs and conventional Vue and Nuxt source directories.
+
+### `mergeVueProjectExtraction`
+
+```ts
+mergeVueProjectExtraction(
+  primary: InlineExtractionOutput,
+  vue: VueProjectExtractionOutput
+): InlineExtractionOutput
+```
+
+Appends Vue results without mutating either input. Hash collisions keep the primary catalog value and ordering while combining unique file paths and source context. Diagnostics retain their original order and multiplicity.
+
+## Types [#types]
+
+Every public type is available from the package root or the subpath shown below.
+
+| Type | Entry point | Description |
+| --- | --- | --- |
+| [`VueCompiler`](#vuecompiler) | Root, `/types` | Version-neutral compiler boundary. |
+| [`VueCompilerOptions`](#vuecompileroptions) | Root, `/types` | Hash-affecting template options. |
+| [`VueExtractionOptions`](#vueextractionoptions) | Root, `/types` | Single-file extraction options. |
+| [`VueExtractionOutput`](#vueextractionoutput) | Root, `/types` | Single-file results and diagnostics. |
+| [`VueExtractionResult`](#vueextractionresult) | Root, `/types` | One STRING or JSX result. |
+| [`VueExtractionMetadata`](#vueextractionmetadata) | Root, `/types` | Metadata attached to a result. |
+| [`VueSourceCode`](#vuesourcecode) | Root, `/types` | Captured source context lines. |
+| [`VueJsxChild`](#vuejsxchild) | Root, `/types` | One serialized rich child. |
+| [`VueJsxChildren`](#vuejsxchildren) | Root, `/types` | Complete Vue rich-source wire type. |
+| [`VueJsxElement`](#vuejsxelement) | Root, `/types` | Serialized rich element. |
+| [`VueGTProp`](#vuegtprop) | Root, `/types` | Rich element metadata. |
+| [`VueBranchSource`](#vuebranchsource) | Root, `/types` | Branch or plural source value. |
+| [`VueProjectExtractionOptions`](#vueprojectextractionoptions) | Root, `/project`, `/types` | Project extraction options. |
+| [`VueProjectExtractionOutput`](#vueprojectextractionoutput) | Root, `/project`, `/types` | Project results and diagnostics. |
+| [`VueProjectExtractionResult`](#vueprojectextractionresult) | Root, `/project`, `/types` | Hashed project result. |
+| [`VueProjectInspection`](#vueprojectinspection) | Root, `/inspect`, `/project`, `/types` | Opaque ownership plan. |
+| [`InlineExtractionOutput`](#inlineextractionoutput) | Root, `/integration`, `/project` | Framework-neutral CLI output. |
+| [`PrimaryInlineExtractor`](#primaryinlineextractor) | Root, `/integration` | Existing extractor callback. |
+| [`VueExtractionPlannerOptions`](#vueextractionplanneroptions) | Root, `/integration` | Planner options. |
+| [`VueExtractionRunOptions`](#vueextractionrunoptions) | Root, `/integration` | Handled-plan callbacks. |
+| [`VueExtractionPlan`](#vueextractionplan) | Root, `/integration` | Handled or unhandled planner result. |
+| [`VueCompilerOptionsResolution`](#vuecompileroptionsresolution) | `/config` | Resolved settings and diagnostics. |
+| [`VueCompilerOptionsResolverOptions`](#vuecompileroptionsresolveroptions) | `/config` | Config discovery controls. |
+
+### `VueCompiler`
+
+Requires `version`, `parse`, and `compileTemplate`, with optional `parseTemplate`. Callable members are opaque so consumers can pass the exact compiler used by their Vue release.
+
+### `VueCompilerOptions`
+
+Accepts `whitespace?: 'condense' | 'preserve'` and `delimiters?: [string, string]`.
+
+### `VueExtractionOptions`
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `compiler` | Exact consuming application compiler. | `VueCompiler` | Yes | Package compiler |
+| `compilerOptions` | Hash-affecting template options. | `VueCompilerOptions` | Yes | Compiler defaults |
+| `includeSourceCodeContext` | Include surrounding source lines. | `boolean` | Yes | `false` |
+| `projectRoot` | Root used for relative metadata paths. | `string` | Yes | `process.cwd()` |
+| `requireGTProvenance` | Skip scripts without proven `gt-vue` provenance. | `boolean` | Yes | `false` |
+| `resolveModule` | Resolve a static module specifier to local source. | `(specifier, importer) => string \| undefined` | Yes | Relative and index resolution |
+| `surroundingLineCount` | Source lines captured before and after a result. | `number` | Yes | Package default |
+
+### `VueExtractionOutput`
+
+Contains `results: VueExtractionResult[]`, `errors: string[]`, and `warnings: string[]`.
+
+### `VueExtractionResult`
+
+A discriminated union. `dataFormat: 'JSX'` carries `VueJsxChildren | undefined`; `dataFormat: 'STRING'` carries a `string`. Both include `VueExtractionMetadata`.
+
+### `VueExtractionMetadata`
+
+May include `context`, deprecated `id`, `maxChars`, `requiresReview`, `filePaths`, `hash`, and `sourceCode`.
+
+### `VueSourceCode`
+
+Contains `before`, `target`, and `after` source strings.
+
+### `VueJsxChild`
+
+A `string`, `VueJsxElement`, or General Translation variable placeholder.
+
+### `VueJsxChildren`
+
+A scalar `VueJsxChild`, `boolean`, `null`, or a `VueJsxChild[]`. Scalar booleans and `null` preserve Vue's authored child semantics.
+
+### `VueJsxElement`
+
+A serialized element with optional nested `c: VueJsxChildren` and `d: VueGTProp`.
+
+### `VueGTProp`
+
+General Translation element metadata whose optional `b` field maps branch names to `VueBranchSource`.
+
+### `VueBranchSource`
+
+An alias for `VueJsxChildren`.
+
+### `VueProjectExtractionOptions`
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `cwd` | Project root. | `string` | Yes | `process.cwd()` |
+| `inspection` | Reusable ownership inspection. | `VueProjectInspection` | Yes | Discovered |
+| `filePatterns` | Project-relative source globs replacing defaults. | `string[]` | Yes | Framework defaults |
+| `includeSourceCodeContext` | Include surrounding source lines. | `boolean` | Yes | `false` |
+| `conditionNames` | Package export conditions for static resolution. | `string[]` | Yes | Resolver defaults |
+| `vueCompilerOptions` | Explicit template compiler options. | `VueCompilerOptions` | Yes | Discovered |
+| `viteConfigPath` | Project-relative active Vite config. | `string` | Yes | Discovered |
+| `tsconfigPath` | Explicit TypeScript or JavaScript config. | `string` | Yes | Nearest per importer |
+| `surroundingLineCount` | Source lines captured around results. | `number` | Yes | Package default |
+
+### `VueProjectExtractionOutput`
+
+Contains `updates: VueProjectExtractionResult[]`, `errors: string[]`, and `warnings: string[]`.
+
+### `VueProjectExtractionResult`
+
+Extends `VueExtractionResult` with a required `metadata.hash`.
+
+### `VueProjectInspection`
+
+An immutable summary with `projectRoot`, `rootOwnsVue`, and `hasVueScopes`. Treat the object as opaque and pass it back to project APIs.
+
+### `InlineExtractionOutput`
+
+Contains framework-neutral `updates`, `errors`, and `warnings` arrays accepted by the CLI adapter.
+
+### `PrimaryInlineExtractor`
+
+```ts
+type PrimaryInlineExtractor = (
+  filePatterns: string[] | undefined
+) => Promise<InlineExtractionOutput>;
+```
+
+### `VueExtractionPlannerOptions`
+
+Requires `library` and `projectRoot`. It also accepts `filePatterns`, `includeSourceCodeContext`, `conditionNames`, `vueCompilerOptions`, `viteConfigPath`, `tsconfigPath`, and `surroundingLineCount`.
+
+### `VueExtractionRunOptions`
+
+Accepts an optional `extractPrimary: PrimaryInlineExtractor` callback.
+
+### `VueExtractionPlan`
+
+A discriminated union on `handled`. The handled branch exposes `run(options?): Promise<InlineExtractionOutput>`.
+
+### `VueCompilerOptionsResolution`
+
+Contains `compilerOptions: VueCompilerOptions` and `errors: string[]`.
+
+### `VueCompilerOptionsResolverOptions`
+
+Accepts `viteConfigPath?: string` and `sourceDiscoveryIsExplicit?: boolean`.

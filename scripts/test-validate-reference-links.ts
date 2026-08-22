@@ -71,6 +71,20 @@ const references: ReferenceSource[] = [
       'docs/en-US/platform/core/reference/utility-functions/locales/get-locale-properties.mdx',
     source: '---\ntitle: getLocaleProperties\n---\n',
   },
+  {
+    path: 'docs/en-US/vue/reference/components.mdx',
+    source: '---\ntitle: Components\n---\n\n### `<T>`\n\n### `<Var>`\n',
+  },
+  {
+    path: 'docs/en-US/vue/reference/functions.mdx',
+    source:
+      '---\ntitle: Functions\n---\n\n### `createGT`\n\n### `useGT`\n',
+  },
+  {
+    path: 'docs/en-US/react/reference/recording-demos.mdx',
+    source:
+      '---\ntitle: Localized recordings\n---\n\n### `<GTRecorder>`\n\n### `useRecorder`\n',
+  },
 ];
 
 const index = buildReferenceSymbolIndex(references);
@@ -101,6 +115,11 @@ const skippedCases = [
   {
     name: 'self-link',
     path: 'docs/en-US/react/reference/hooks/use-gt.mdx',
+    source: 'Call `useGT()` in a component.',
+  },
+  {
+    name: 'grouped Vue self-link',
+    path: 'docs/en-US/vue/reference/functions.mdx',
     source: 'Call `useGT()` in a component.',
   },
   {
@@ -147,6 +166,24 @@ const foundCases = [
     path: 'docs/en-US/react/guides/example.mdx',
     source: 'Call `useGT()` for dynamic strings.',
     target: '/docs/react/reference/hooks/use-gt',
+  },
+  {
+    name: 'grouped Vue component',
+    path: 'docs/en-US/vue/guides/example.mdx',
+    source: 'Wrap the content in `<T>`.',
+    target: '/docs/vue/reference/components#t',
+  },
+  {
+    name: 'grouped Vue function',
+    path: 'docs/en-US/vue/guides/example.mdx',
+    source: 'Call `useGT()` for dynamic strings.',
+    target: '/docs/vue/reference/functions#usegt',
+  },
+  {
+    name: 'grouped recording API',
+    path: 'docs/en-US/react/guides/example.mdx',
+    source: 'Mount `<GTRecorder>` once.',
+    target: '/docs/react/reference/recording-demos#gtrecorder',
   },
   {
     name: 'anchor-level initializeGT',

@@ -1,0 +1,136 @@
+---
+
+title: Types
+description: Configure Vue runtimes, catalog loading, and string translation with exported gt-vue types. API reference for gt-vue types.
+
+---
+
+`gt-vue` exports eight TypeScript types from its package root. Internal reactive state and compiler-only metadata are not part of the public API.
+
+## Overview [#overview]
+
+| Type | Description |
+| --- | --- |
+| [`CreateGTOptions`](#creategtoptions) | Configure an isolated Vue plugin. |
+| [`InitializeGTSPAOptions`](#initializegtspaoptions) | Configure the browser SPA runtime. |
+| [`GTPlugin`](#gtplugin) | Installed runtime and imperative controls. |
+| [`TranslationCatalog`](#translationcatalog) | Hash-keyed locale catalog. |
+| [`LoadTranslations`](#loadtranslations) | Load one complete locale catalog. |
+| [`GTStringOptions`](#gtstringoptions) | Context accepted by plain-string lookups. |
+| [`GTFunction`](#gtfunction) | Synchronous plain-string lookup. |
+| [`MessagesFunction`](#messagesfunction) | Resolve registered and raw strings. |
+
+## Runtime options [#runtime-options]
+
+### `CreateGTOptions`
+
+Configures [`createGT`](/docs/vue/reference/functions#creategt).
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `customMapping` | Locale aliases used for formatting and plural rules. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | — |
+| `defaultLocale` | Source and fallback locale. | `string` | Yes | `en` |
+| `loadTranslations` | Async locale catalog loader. | [`LoadTranslations`](#loadtranslations) | Yes | Returns `{}` |
+| `locale` | Explicit initial locale. | `string` | Yes | Cookie, then `defaultLocale` |
+| `localeCookieName` | Browser cookie used to persist the locale. | `string` | Yes | `generaltranslation.locale` |
+
+The source locale is represented by source content, so its catalog is initialized as an empty object and the loader is not called for it.
+
+An explicit `locale` wins over the browser cookie. When it is omitted, a cookie value wins over `defaultLocale`.
+
+`customMapping` changes locale-sensitive formatting and plural selection. It does not change the alias used as the catalog key, loader argument, or cookie value.
+
+### `InitializeGTSPAOptions`
+
+Extends [`CreateGTOptions`](#creategtoptions) with one property:
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locales` | Target locales declared by the application configuration. | `readonly string[]` | Yes | Loader-defined availability |
+
+Pass a parsed `gt.config.json` object directly to [`initializeGTSPA`](/docs/vue/reference/functions#initializegtspa). When `locales` is present, unsupported persisted or requested locales fall back to `defaultLocale`.
+
+## Plugin and catalogs [#catalogs]
+
+### `GTPlugin`
+
+The Vue plugin returned by [`createGT`](/docs/vue/reference/functions#creategt) or [`initializeGTSPA`](/docs/vue/reference/functions#initializegtspa).
+
+| Member | Description | Type |
+| --- | --- | --- |
+| `install` | Provide this runtime to a Vue application. | `(app: App) => void` |
+| `getLocale` | Return the active locale. | `() => string` |
+| `loadTranslations` | Preload and cache a locale without changing it. | `(locale: string) => Promise<TranslationCatalog>` |
+| `setLocale` | Change or persist the locale. | `(locale: string) => Promise<void>` |
+
+Install it with `app.use(plugin)`. State and catalogs are scoped to this plugin, except that the browser SPA initializer returns one page-wide singleton plugin.
+
+#### `install`
+
+Provides this plugin's state to a Vue application. `app.use(plugin)` calls it automatically.
+
+#### `getLocale`
+
+Returns the active locale. An SPA plugin returns the locale pinned when the page initialized.
+
+#### `loadTranslations`
+
+Loads and caches a locale without making it active. Loading the source locale returns its existing empty catalog without calling the configured loader.
+
+#### `setLocale`
+
+With a [`createGT`](/docs/vue/reference/functions#creategt) plugin, loads a missing catalog before changing reactive state. With an SPA plugin, writes the cookie and reloads the document.
+
+### `TranslationCatalog`
+
+```ts
+type TranslationCatalog = Record<string, JsxChildren>;
+```
+
+A complete hash-keyed catalog for one locale. Values may be plain strings or the structured rich-content format consumed by [`<T>`](/docs/vue/reference/components#t).
+
+### `LoadTranslations`
+
+```ts
+type LoadTranslations = (
+  locale: string
+) => Promise<TranslationCatalog>;
+```
+
+Loads the complete catalog for one locale. Return an empty object when a locale has no catalog. Successful results are cached, and concurrent calls for the same locale are deduplicated.
+
+## String translation [#string-types]
+
+### `GTStringOptions`
+
+```ts
+type GTStringOptions = {
+  $context?: string;
+};
+```
+
+`$context` disambiguates identical source strings when the catalog hash is calculated. Plain-string translation intentionally does not accept interpolation variables, `$format`, `$maxChars`, or ICU syntax.
+
+### `GTFunction`
+
+```ts
+type GTFunction = (
+  message: string,
+  options?: GTStringOptions
+) => string;
+```
+
+Performs a synchronous catalog lookup. Missing entries return `message`.
+
+### `MessagesFunction`
+
+```ts
+type MessagesFunction = <
+  T extends string | null | undefined
+>(
+  message: T,
+  options?: GTStringOptions
+) => T extends string ? string : T;
+```
+
+Resolves encoded [`msg`](/docs/vue/reference/functions#msg) values and raw source strings. Encoded metadata takes precedence over the call-site `options`; `null` and `undefined` are returned unchanged.

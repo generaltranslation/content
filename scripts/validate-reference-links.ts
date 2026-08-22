@@ -201,7 +201,10 @@ function aliasesForTarget(target: ReferenceTarget): string[] {
     aliases.push(`${title}()`);
   }
 
-  if (target.path.includes('/reference/components/')) {
+  if (
+    target.path.includes('/reference/components/') ||
+    target.path.endsWith('/reference/components.mdx')
+  ) {
     aliases.push(`<${title}>`, `<${title} />`);
   }
 
@@ -226,8 +229,8 @@ function addTarget(
 }
 
 /**
- * Builds lookup aliases from dedicated API reference page titles and the two
- * React initialization sections documented on the shared config page.
+ * Builds lookup aliases from dedicated API reference page titles, grouped Vue
+ * API item headings, and React initialization sections on the shared config page.
  */
 export function buildReferenceSymbolIndex(
   references: ReferenceSource[]
@@ -268,6 +271,30 @@ export function buildReferenceSymbolIndex(
         }
       }
     }
+
+    if (
+      /\/vue\/reference\/(?:components|extractor|functions|types)\.mdx$/.test(
+        normalizedPath
+      ) ||
+      normalizedPath.endsWith('/react/reference/recording-demos.mdx')
+    ) {
+      const apiHeading = /^#{3,4}\s+`([^`]+)`\s*$/gm;
+      let match: RegExpExecArray | null;
+      while ((match = apiHeading.exec(reference.source)) !== null) {
+        const symbol = match[1];
+        const anchor = normalizeSymbol(symbol)
+          .toLowerCase()
+          .replace(/[^a-z0-9$_.-]+/g, '-');
+        const target: ReferenceTarget = {
+          symbol,
+          url: `${pathToUrl(normalizedPath)}#${anchor}`,
+          path: normalizedPath,
+        };
+        for (const alias of aliasesForTarget(target)) {
+          addTarget(index, alias, target);
+        }
+      }
+    }
   }
 
   return index;
@@ -287,6 +314,7 @@ function targetContexts(target: ReferenceTarget): string[] {
   if (path.includes('/react/')) {
     return ['react', 'gt-react'];
   }
+  if (path.includes('/vue/')) return ['vue', 'gt-vue'];
   if (path.includes('/node/')) return ['node', 'gt-node'];
   if (path.includes('/python/')) {
     return [
@@ -336,7 +364,7 @@ function sourceContexts(path: string): string[] {
     normalizedPath.includes('/cli/guides/using-autoderive.mdx') ||
     normalizedPath.includes('/cli/guides/using-auto-jsx.mdx')
   ) {
-    return ['cli', 'react'];
+    return ['cli', 'react', 'vue'];
   }
   if (normalizedPath.includes('/react/(frameworks)/nextjs/')) {
     return ['react', 'nextjs'];
@@ -348,6 +376,7 @@ function sourceContexts(path: string): string[] {
     return ['react', 'react-native'];
   }
   if (normalizedPath.includes('/react/')) return ['react'];
+  if (normalizedPath.includes('/vue/')) return ['vue'];
   if (normalizedPath.includes('/node/')) return ['node'];
   if (normalizedPath.includes('/python/')) return ['python'];
   if (normalizedPath.includes('/cli/')) return ['cli'];
@@ -404,6 +433,15 @@ function targetIsApplicable(
       context.includes('gt-react-native') ||
       context.includes('react component') ||
       context.includes('jsx')
+    );
+  }
+
+  if (path.includes('/vue/')) {
+    return (
+      sourceTags.includes('vue') ||
+      sourceTags.includes('cli') ||
+      context.includes('gt-vue') ||
+      context.includes('vue')
     );
   }
 

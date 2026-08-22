@@ -1,0 +1,148 @@
+---
+
+title: Components
+description: Translate rich content, format values, and select branches in Vue templates. API reference for gt-vue components.
+
+---
+
+`gt-vue` exports seven Vue components. They read locale and catalog state from the plugin installed with [`createGT`](/docs/vue/reference/functions#creategt) or [`initializeGTSPA`](/docs/vue/reference/functions#initializegtspa).
+
+## Overview [#overview]
+
+| Component | Description |
+| --- | --- |
+| [`<T>`](#t) | Translate rich default-slot content. |
+| [`<Var>`](#var) | Preserve a runtime value inside `<T>`. |
+| [`<Num>`](#num) | Format a numeric value. |
+| [`<Currency>`](#currency) | Format a numeric value as currency. |
+| [`<DateTime>`](#datetime) | Format a date or time value. |
+| [`<Plural>`](#plural) | Select a named slot with locale plural rules. |
+| [`<Branch>`](#branch) | Select an arbitrary named slot. |
+
+## Translation components [#translation]
+
+### `<T>`
+
+Translates statically authored default-slot content. Missing catalog entries render the source slot, and catalog or locale changes trigger a reactive rerender.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `context` | Disambiguating context for translators. | `string` | Yes | — |
+| `id` | Deprecated custom message ID retained for React compatibility. | `string` | Yes | — |
+| `maxChars` | Maximum translated character count supplied to tooling. | `number` | Yes | — |
+| `requiresReview` | Require human approval for generated translations. | `boolean` | Yes | `false` |
+
+```vue
+<T context="checkout action" :max-chars="30" requires-review>
+  Continue to payment
+</T>
+```
+
+`id` does not replace the content-based catalog hash. Use [`<Var>`](#var) for runtime values; `<T>` does not process string placeholders or ICU syntax.
+
+Statically authored default-slot content in a custom component participates in the translation. The child component, props, and listeners remain intact. Arbitrary named slots depend on the child's runtime behavior, so place `<T>` inside those slots when their content must be translated independently.
+
+### `<Var>`
+
+Preserves a runtime default-slot child inside `<T>`. The translated rich tree can reorder the placeholder, but the runtime value itself is not translated.
+
+`<Var>` has no public props. In particular, it does not accept `name` or `value`.
+
+```vue
+<T>Hello, <Var>{{ accountName }}</Var>!</T>
+```
+
+## Formatting components [#formatting]
+
+### `<Num>`
+
+Formats a required numeric value with `Intl.NumberFormat`.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `value` | Number or numeric string to format. | `number \| string \| null` | No | — |
+| `locales` | Locale preferences for standalone formatting. | `string[]` | Yes | Active locale, then source locale |
+| `options` | Options forwarded to `Intl.NumberFormat`. | `Intl.NumberFormatOptions` | Yes | Runtime defaults |
+
+```vue
+<Num :value="1200" :options="{ maximumFractionDigits: 0 }" />
+```
+
+`null` and blank strings render no content. A nonnumeric string is returned unchanged.
+
+### `<Currency>`
+
+Formats a required numeric value with `Intl.NumberFormat` and `style: 'currency'`.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `value` | Number or numeric string to format. | `number \| string \| null` | No | — |
+| `currency` | ISO 4217 currency code. | `string` | Yes | `USD` |
+| `locales` | Locale preferences for standalone formatting. | `string[]` | Yes | Active locale, then source locale |
+| `options` | Additional options forwarded to `Intl.NumberFormat`. | `Intl.NumberFormatOptions` | Yes | Runtime defaults |
+
+```vue
+<Currency :value="49.95" currency="EUR" />
+```
+
+The `currency` prop overrides `options.currency`. `null` and blank strings render no content; a nonnumeric string is returned unchanged.
+
+### `<DateTime>`
+
+Formats a required date value with `Intl.DateTimeFormat`.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `value` | Date object, epoch number, date string, or `null`. | `Date \| number \| string \| null` | No | — |
+| `locales` | Locale preferences for standalone formatting. | `string[]` | Yes | Active locale, then source locale |
+| `options` | Options forwarded to `Intl.DateTimeFormat`. | `Intl.DateTimeFormatOptions` | Yes | Runtime defaults |
+
+```vue
+<DateTime
+  :value="new Date('2026-08-22T12:00:00Z')"
+  :options="{ dateStyle: 'medium' }"
+/>
+```
+
+`null` and blank strings render no content. An invalid date string is returned unchanged.
+
+At the configured source locale, formatter components ignore explicit `locales` and use the source locale. Inside `<T>`, the rich translation pipeline selects formatting locales: source fallbacks use the source locale, and translated content uses the active locale followed by the source locale.
+
+## Branch components [#branches]
+
+### `<Plural>`
+
+Selects a named slot with `Intl.PluralRules`. Accepted slot names are `zero`, `one`, `two`, `few`, `many`, and `other`.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `n` | Numeric value used to select a plural category. | `number` | No | — |
+| `locales` | Locale preferences for plural selection. | `string[]` | Yes | Active locale, then source locale |
+
+```vue
+<Plural :n="count">
+  <template #one>One item</template>
+  <template #other>{{ count }} items</template>
+  <template #default>No matching category</template>
+</Plural>
+```
+
+A missing category renders the default slot. At the source locale, explicit `locales` are ignored.
+
+### `<Branch>`
+
+Converts `branch` to a string and renders the named slot with that key.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `branch` | Named branch to render. | `string \| number \| boolean` | Yes | — |
+
+```vue
+<Branch :branch="status">
+  <template #ready>Ready</template>
+  <template #waiting>Waiting</template>
+  <template #default>Unknown status</template>
+</Branch>
+```
+
+A missing key renders the default slot. Inside `<T>`, every named branch is extracted for translation while only the active branch renders.
