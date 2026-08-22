@@ -1,30 +1,38 @@
 ---
 
 title: msg
-description: Register and encode a string for translation at module scope. API reference for msg.
+description: Register a string for translation at module scope and encode its options when provided. API reference for msg.
 
 ---
 
-The `msg` function marks and encodes a string for translation. Use it to register strings at module scope — outside a component — then resolve them at runtime with [`useMessages`](/docs/react/reference/hooks/use-messages).
+The `msg` function marks a string for translation at module scope. It returns input unchanged when no options are passed and encodes strings that carry options. Resolve registered values at runtime with [`useMessages`](/docs/react/reference/hooks/use-messages).
 
 *Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`.*
 
 ## Overview [#overview]
 
-Call `msg` with a string to get an encoded string. Pass that encoded value to [`useMessages`](/docs/react/reference/hooks/use-messages) to retrieve the translation.
+Call `msg` with a string or array. Pass the registered value to [`useMessages`](/docs/react/reference/hooks/use-messages) to retrieve the translation.
 
 ```tsx
-const encodedString = msg('Hello, world!');
+const registered = msg('Hello, world!');
 ```
 
-*Note: `msg` encodes its input, so you cannot render it directly. To recover the original string, decode it with [`decodeMsg`](/docs/node/reference/functions/decode-msg).*
+```ts
+msg<T extends string | string[]>(message: T): T;
+msg<T extends string | string[]>(
+  message: T,
+  options?: GTTranslationOptions
+): T extends string ? string : string[];
+```
+
+*Note: when options are passed, `msg` returns opaque encoded metadata and the result should not be rendered directly. Recover its source text with [`decodeMsg`](/docs/node/reference/functions/decode-msg).*
 
 ## How it works [#how-it-works]
 
 - **Registration for extraction.** `msg` marks the string so the CLI can extract it for translation and [`useMessages`](/docs/react/reference/hooks/use-messages) can resolve it at runtime. Without options it returns the string unchanged; with options it returns an encoded string carrying those options.
-- **Message format.** The default `ICU` format interpolates variables before encoding. Set `$format: 'STRING'` to preserve braces and source text literally; interpolation variables are ignored in this mode.
+- **Message format.** The default `ICU` format interpolates variables before encoding. Set `$format: 'STRING'` to preserve braces and source text literally. User variables remain in the encoded options but are not substituted into STRING source.
 - **Build-time translation.** In production, registered strings are translated during the build. Missing translations fall back to the original. In development, translation happens on demand with a slight delay.
-- **Decoding.** `decodeMsg` extracts the original interpolated string from an encoded message. [`decodeOptions`](/docs/node/reference/functions/decode-options) extracts the options.
+- **Decoding.** `decodeMsg` extracts the content prefix from an encoded message: interpolated content for `ICU`, or literal source for `STRING`. [`decodeOptions`](/docs/node/reference/functions/decode-options) extracts the options.
 - **Arrays.** `msg` also accepts an array of strings; when an `$id` is provided, each entry is given a unique id of `${id}.${index}`.
 
 *Examples import from `gt-react`; import from your framework's package instead.*
@@ -54,13 +62,13 @@ The string content to register and encode. An array registers multiple strings a
 
 **Type** [`InlineTranslationOptions`](/docs/react/reference/types/inline-translation-options) · **Optional**
 
-Interpolation variables plus options such as `$context`, `$id`, `$format`, and `$maxChars`. Variables are inserted into the string for `ICU` messages. With `$format: 'STRING'`, the source is encoded literally and variables are ignored.
+Interpolation variables plus options such as `$context`, `$id`, `$format`, and `$maxChars`. Variables are inserted into the string for `ICU` messages. With `$format: 'STRING'`, the source is encoded literally; variables remain in the encoded options but are not substituted.
 
 ## Returns [#returns]
 
-**Type** `string`
+**Type** `string | string[]`
 
-An encoded string. `ICU` messages include interpolated variables; `STRING` messages preserve the source text literally. For an array input, an array of encoded strings is returned. Resolve the result with [`useMessages`](/docs/react/reference/hooks/use-messages).
+The original input when no options are passed, or encoded content when options are passed. `ICU` messages include interpolated variables; `STRING` messages preserve source text literally. Arrays return an array of the same shape. Resolve the result with [`useMessages`](/docs/react/reference/hooks/use-messages).
 
 ## Examples [#examples]
 
@@ -100,7 +108,7 @@ import { msg } from 'gt-react';
 // Preserve braces as literal source text instead of interpolating them.
 const TEMPLATE = msg('Use {name} in your template', {
   $format: 'STRING',
-  name: 'Ada', // Ignored for STRING messages.
+  name: 'Ada', // Encoded as metadata, but not substituted into the source.
 });
 ```
 
