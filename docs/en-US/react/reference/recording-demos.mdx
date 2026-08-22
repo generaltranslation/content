@@ -1,0 +1,374 @@
+---
+
+title: Localized recordings
+description: Record browser walkthroughs and replay them with published locale catalogs. API reference for gt-rrweb.
+
+---
+
+`gt-rrweb` combines rrweb capture with General Translation catalog overlays. The experimental 0.x package exposes recorder APIs at its root, low-level mapping utilities from `gt-rrweb/harvest`, and playback APIs from `gt-rrweb/replay`.
+
+## Installation [#installation]
+
+| Import | Required peer packages |
+| --- | --- |
+| `gt-rrweb` | `@rrweb/record`, `@rrweb/types`, `react`, `react-dom` |
+| `gt-rrweb/harvest` | `@rrweb/types` |
+| `gt-rrweb/replay` | `@rrweb/replay`, `@rrweb/types`; `react` and `react-dom` for `<GTReplayer>` |
+
+The record and replay peers are optional in the package manifest so an application can install only the side it uses. Importing an entry without its required peer fails at module resolution.
+
+## Recorder API [#recorder]
+
+| Item | Description |
+| --- | --- |
+| [`<GTRecorder>`](#gtrecorder) | Configure capture and render controls while recording. |
+| [`<RecordingOverlay>`](#recordingoverlay) | Render standalone recording chrome. |
+| [`useRecorder`](#userecorder) | Read and control the module-level recorder. |
+| [`DEFAULT_CONTENT_SELECTOR`](#default_content_selector) | Default framed content selector. |
+| [`GT_EVENT`](#gt_event) | Custom event tags in the recording wire format. |
+
+### `<GTRecorder>`
+
+Mounts the capture configuration once and renders [`<RecordingOverlay>`](#recordingoverlay) while recording.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `enabled` | Enable recorder wiring and controls. | `boolean` | Yes | `true` |
+| `contentSelector` | Region reflowed into the capture frame. | `string` | Yes | `DEFAULT_CONTENT_SELECTOR` |
+| `frame` | Capture framing. | [`FrameOption`](#frameoption) | Yes | `none` |
+| `expose` | Attach `start` and `stop` to `window[name]`. | `string \| false` | Yes | `false` |
+| `onComplete` | Receive the completed bundle after harvesting. | `(bundle: RecorderBundle) => void` | Yes | — |
+| `harvest` | Catalog loading and source-locale options. | [`HarvestOptions`](#harvestoptions) | Yes | — |
+| `labels` | Override the REC and stop labels. | `{ rec?: string; stop?: string }` | Yes | — |
+
+```tsx
+import { GTRecorder } from 'gt-rrweb';
+
+<GTRecorder
+  contentSelector="[data-demo-content]"
+  frame="16:9"
+  harvest={{ loadTranslations }}
+  onComplete={(bundle) => save(bundle)}
+/>;
+```
+
+The underlying recorder captures the document. `contentSelector` controls framing rather than privacy; use rrweb blocking for elements that must not be serialized.
+
+### `<RecordingOverlay>`
+
+Renders a recording frame, REC badge, and stop button in a portal.
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `onStop` | Called by the stop button. | `() => void` | No | — |
+| `aspect` | Numeric frame ratio, or `null` for no frame. | `number \| null` | Yes | `null` |
+| `labels` | Override REC and stop labels. | `{ rec?: string; stop?: string }` | Yes | — |
+
+The overlay root uses rrweb's `rr-block` class, so the operator controls do not appear in playback.
+
+### `useRecorder`
+
+```ts
+useRecorder(): UseRecorder
+```
+
+Returns the recorder's external-store state and controls:
+
+- `status` — `idle`, `recording`, or `preparing`.
+- `isRecording` — whether `status` is `recording`.
+- `start(config)` — begin capture after fonts are prepared.
+- `stop()` — stop and resolve the harvested bundle, or `null` when no recording is active.
+
+The recorder lives in module state, so controls and the mounted `<GTRecorder>` may be in different parts of the React tree.
+
+### `DEFAULT_CONTENT_SELECTOR`
+
+```ts
+const DEFAULT_CONTENT_SELECTOR = 'main, [data-gt-content]';
+```
+
+Used when `<GTRecorder>` does not receive `contentSelector`.
+
+### `GT_EVENT`
+
+```ts
+const GT_EVENT = {
+  nav: 'gt-nav',
+  locales: 'gt-locales',
+  i18n: 'gt-i18n',
+};
+```
+
+These rrweb custom-event tags record SPA navigation, source-first locale order, and harvested overlays.
+
+## Recorder types [#recorder-types]
+
+### `GTRecorderProps`
+
+The props documented for [`<GTRecorder>`](#gtrecorder).
+
+### `RecordingOverlayProps`
+
+The props documented for [`<RecordingOverlay>`](#recordingoverlay).
+
+### `UseRecorder`
+
+```ts
+type UseRecorder = {
+  status: RecorderStatus;
+  isRecording: boolean;
+  start: (config: RecorderConfig) => Promise<void>;
+  stop: () => Promise<RecorderBundle | null>;
+};
+```
+
+### `RecorderConfig`
+
+```ts
+type RecorderConfig = {
+  readonly locales: readonly string[];
+};
+```
+
+List the recorded source locale first, followed by target locales.
+
+### `RecorderBundle`
+
+```ts
+type RecorderBundle = {
+  events: eventWithTime[];
+  locales: string[];
+  overlay: LocaleTextOverlay;
+};
+```
+
+The `events` stream also embeds locale and overlay custom events, so an events-only JSON export can still be localized by the GT replayer.
+
+### `RecorderStatus`
+
+```ts
+type RecorderStatus = 'idle' | 'recording' | 'preparing';
+```
+
+`preparing` covers font collection before capture and catalog harvesting after capture.
+
+### `FrameOption`
+
+```ts
+type FrameOption = 'none' | '16:9' | { aspect: number };
+```
+
+A positive custom `aspect` is used as a width-to-height ratio. Invalid or omitted custom values behave as no frame.
+
+### `HarvestOptions`
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`loadTranslations`](/docs/react/reference/functions/load-translations) | Load a published hash-keyed locale catalog. | `TranslationsLoader` | Yes | No overlay |
+| `hashMessage` | Hash bare source text for simple string mapping. | `(message: string) => string \| undefined` | Yes | Only tagged rich content |
+| `sourceLocale` | Locale rendered during capture. | `string` | Yes | Named cookie, then `locales[0]` |
+| `localeCookieName` | Cookie to read when detecting the source locale. | `string` | Yes | — |
+
+Rich [`<T>`](/docs/react/reference/components/t) mapping requires [`_tagIds`](/docs/react/reference/config#tag-ids). `hashMessage` supplements it for bare text, but interpolated or contextual strings may not match their rendered source.
+
+### `LocaleTextOverlay`
+
+```ts
+type LocaleTextOverlay = Record<
+  string,
+  Record<number, string>
+>;
+```
+
+Maps a locale to rrweb text-node IDs and replacement text.
+
+### `TranslationsLoader`
+
+```ts
+type TranslationsLoader = (
+  locale: string
+) => Promise<unknown>;
+```
+
+The resolved value must be the application's published hash-keyed catalog for meaningful overlays.
+
+## Harvest API [#harvest]
+
+| Item | Description |
+| --- | --- |
+| [`harvestLocales`](#harvestlocales) | Build target-locale overlays with source detection. |
+| [`harvestHash`](#harvesthash) | Build overlays with an explicit source locale. |
+| [`flattenEntry`](#flattenentry) | Flatten one rich catalog entry into rendered leaves. |
+| [`collectRecordedText`](#collectrecordedtext) | Collect recorded text by rrweb node ID. |
+| [`recordingHasHashes`](#recordinghashashes) | Detect translation hashes in a recording. |
+| [`collectHashNodes`](#collecthashnodes) | Collect hashed rich-content nodes. |
+| [`overlayFromDict`](#overlayfromdict) | Align tagged rich content with a catalog. |
+| [`stringOverlay`](#stringoverlay) | Map bare recorded strings with a hash callback. |
+
+### `harvestLocales`
+
+```ts
+harvestLocales(
+  events: eventWithTime[],
+  locales: string[],
+  options?: HarvestOptions
+): Promise<LocaleTextOverlay>
+```
+
+Detects the source from `sourceLocale`, the named cookie, or `locales[0]`, in that order. Without [`loadTranslations`](/docs/react/reference/functions/load-translations), it returns an empty overlay.
+
+### `harvestHash`
+
+```ts
+harvestHash(
+  events: eventWithTime[],
+  locales: string[],
+  options: {
+    source: string;
+    loadTranslations: TranslationsLoader;
+    hashMessage?: (message: string) => string | undefined;
+  }
+): Promise<LocaleTextOverlay>
+```
+
+Loads every non-source target independently. A failed locale load produces an empty overlay for that locale.
+
+### `flattenEntry`
+
+```ts
+flattenEntry(
+  entry: GtJsxChildren | null | undefined
+): GtLeaf[] | null
+```
+
+Flattens translated text and variable placeholders in DOM order. Branch and plural entries return `null` because the recording does not identify one catalog branch.
+
+### `collectRecordedText`
+
+```ts
+collectRecordedText(
+  events: eventWithTime[]
+): Map<number, string>
+```
+
+Reads nonblank text from full snapshots and mutation events.
+
+### `recordingHasHashes`
+
+```ts
+recordingHasHashes(events: eventWithTime[]): boolean
+```
+
+Returns whether a full snapshot or added node carries `data-_gt-hash` or the compatible `data-_gt` string attribute.
+
+### `collectHashNodes`
+
+Collects each outermost hashed node and its descendant text nodes in document order. Nested hashed nodes are covered by the outer catalog entry and are not returned separately.
+
+### `overlayFromDict`
+
+Aligns collected hash nodes with a [`TranslationDict`](#translationdict). Missing entries, branch content, and leaf-count mismatches stay in the source language.
+
+### `stringOverlay`
+
+Hashes recorded bare strings, skips nodes already covered by rich mapping, and applies only nonblank string translations that differ from source.
+
+## Harvest types [#harvest-types]
+
+### `GtJsxChild`
+
+A catalog string, element, or variable placeholder.
+
+### `GtJsxChildren`
+
+A `GtJsxChild` or array of children used by the harvester's framework-neutral catalog reader.
+
+### `TranslationDict`
+
+```ts
+type TranslationDict = Record<
+  string,
+  GtJsxChildren | null
+>;
+```
+
+Maps a translation hash to rich content, a string, or `null`.
+
+### `GtLeaf`
+
+```ts
+type GtLeaf =
+  | { text: string }
+  | { variable: true };
+```
+
+Represents one rendered text node or an opaque runtime placeholder.
+
+## Replay API [#replay]
+
+| Item | Description |
+| --- | --- |
+| [`<GTReplayer>`](#gtreplayer) | React wrapper for the localized player. |
+| [`createGTReplayer`](#creategtreplayer) | Framework-neutral player constructor. |
+
+### `<GTReplayer>`
+
+```ts
+type GTReplayerProps = GTReplayerOptions & {
+  bundle: GTReplayerBundle;
+  className?: string;
+  style?: CSSProperties;
+};
+```
+
+Mounts the player in a `div` and destroys it on unmount or when the bundle or playback options change. The container fills its parent, so size the parent or pass `style`.
+
+### `createGTReplayer`
+
+```ts
+createGTReplayer(
+  container: HTMLElement,
+  bundle: GTReplayerBundle,
+  options?: GTReplayerOptions
+): GTReplayerHandle
+```
+
+Mounts a localized rrweb player with a synthesized cursor, scrubbing, theme and full-screen controls, and optional locale switching. Call `destroy()` when the host removes the player.
+
+Standard rrweb replay does not apply GT overlays; use one of these APIs for localized playback.
+
+## Replay types [#replay-types]
+
+### `GTReplayerProps`
+
+The props documented for [`<GTReplayer>`](#gtreplayer).
+
+### `GTReplayerBundle`
+
+```ts
+type GTReplayerBundle = {
+  events: eventWithTime[];
+  locales?: readonly string[];
+  overlay?: LocaleTextOverlay;
+};
+```
+
+Raw events are required. The replayer recovers omitted `locales` and `overlay` from embedded custom events when available.
+
+### `GTReplayerOptions`
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `initialLocale` | Locale shown on mount when present in the bundle. | `string` | Yes | Source locale |
+| `switchLocalesAllowed` | Show controls and allow locale changes. | `boolean` | Yes | `true` |
+| `debug` | Enable drag-and-drop JSON hot swapping. | `boolean` | Yes | `false` |
+
+### `GTReplayerHandle`
+
+```ts
+type GTReplayerHandle = {
+  destroy(): void;
+};
+```
+
+`destroy` removes listeners, observers, timers, and mounted replay state.

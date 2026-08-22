@@ -1,0 +1,81 @@
+---
+
+title: Managing locales
+description: How to read, change, persist, and map locales in a gt-vue application.
+related:
+  links:
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/rendering-on-server
+
+---
+
+Each installed plugin owns its active locale and catalog cache. Ordinary [`createGT`](/docs/vue/reference/functions#creategt) plugins switch reactively, while the browser-only SPA runtime reloads the page after a locale change.
+
+## Reading and changing the locale [#switching]
+
+[`useLocale`](/docs/vue/reference/functions#uselocale) returns a readonly ref. [`useSetLocale`](/docs/vue/reference/functions#usesetlocale) returns the active plugin's asynchronous setter.
+
+```vue
+<script setup lang="ts">
+import { useLocale, useSetLocale } from 'gt-vue';
+
+const locale = useLocale();
+const setLocale = useSetLocale();
+</script>
+
+<template>
+  <label>
+    Language
+    <select :value="locale" @change="setLocale($event.target.value)">
+      <option value="en">English</option>
+      <option value="fr">Français</option>
+      <option value="ja">日本語</option>
+    </select>
+  </label>
+</template>
+```
+
+Vue templates unwrap the ref. In JavaScript or TypeScript, read `locale.value`.
+
+A [`createGT`](/docs/vue/reference/functions#creategt) plugin loads a missing catalog before it changes the cookie or active locale. A failed or superseded load leaves both unchanged. Successful catalogs are cached for the lifetime of the plugin, and concurrent requests for the same locale share one promise.
+
+## Persisting the locale [#persistence]
+
+In a browser, `gt-vue` stores the locale in the path-wide `generaltranslation.locale` session cookie. When [`createGT`](/docs/vue/reference/functions#creategt) receives no explicit `locale`, the cookie wins over `defaultLocale`.
+
+Set `localeCookieName` to share a different cookie with routing or server code:
+
+```ts
+const gt = createGT({
+  defaultLocale: 'en',
+  localeCookieName: 'app.locale',
+  loadTranslations,
+});
+```
+
+Use the plugin setter for reactive changes. Browsers do not emit an event when `document.cookie` changes directly, so an external cookie write does not schedule a Vue render.
+
+## Mapping locale aliases [#aliases]
+
+Pass `customMapping` when the catalog uses an alias that should format values or select plurals with a canonical locale.
+
+```ts
+const gt = createGT({
+  defaultLocale: 'en-US',
+  locale: 'pirate',
+  customMapping: {
+    pirate: {
+      code: 'fr-FR',
+    },
+  },
+  loadTranslations,
+});
+```
+
+The alias remains the catalog key, loader argument, and cookie value. Only locale-sensitive formatting and plural rules use the mapped code.
+
+## Switching in the SPA runtime [#spa-switching]
+
+[`initializeGTSPA`](/docs/vue/reference/functions#initializegtspa) pins the preloaded locale for the lifetime of the page. Its setter writes the cookie and reloads the document so every module-level [`t`](/docs/vue/reference/functions#t) call runs again with the new catalog.
+
+Pass the `locales` array from `gt.config.json` to constrain supported locales. Persisted or requested locales that do not match the configured source or target locales fall back to `defaultLocale`.

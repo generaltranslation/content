@@ -1,0 +1,146 @@
+---
+
+title: Quickstart
+description: Add localization to a Vue 3 application with gt-vue and the CLI.
+related:
+  links:
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/managing-locales
+    - /docs/vue/guides/rendering-on-server
+
+---
+
+`gt-vue` provides rich-content translation, string lookups, locale switching, and locale-aware formatting for Vue 3. Translation catalogs can come from the CLI or your own loader.
+
+<Callout type="info">
+  `gt-vue` is unstable and versioned independently from the stable React packages. Its API may change between 0.x releases.
+</Callout>
+
+## Requirements [#requirements]
+
+- Vue 3.3 or later.
+- A General Translation Project and production API key for generated translations.
+- Node.js and a package manager.
+
+## Quickstart [#quickstart]
+
+Install the runtime, load a local catalog, translate your first component, and switch locales.
+
+### 1. Install the packages
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-vue
+    npm install --save-dev gt
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-vue
+    yarn add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-vue
+    bun add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-vue
+    pnpm add --save-dev gt
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Configure translation output
+
+Create `gt.config.json` at the application root. The CLI scans Vue single-file components and related JavaScript or TypeScript modules automatically.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+### 3. Install the Vue plugin
+
+Create a catalog loader. Return an empty object when a locale has no generated catalog.
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  try {
+    return (await import(`./_gt/${locale}.json`)).default;
+  } catch {
+    return {};
+  }
+}
+```
+
+Install one [`createGT`](/docs/vue/reference/functions#creategt) plugin instance when the app starts.
+
+```ts title="src/main.ts"
+import { createApp } from 'vue';
+import { createGT } from 'gt-vue';
+import App from './App.vue';
+import loadTranslations from './loadTranslations';
+
+const gt = createGT({
+  defaultLocale: 'en',
+  loadTranslations,
+});
+
+createApp(App).use(gt).mount('#app');
+```
+
+### 4. Translate a component
+
+Use [`<T>`](/docs/vue/reference/components#t) for rich template content, [`<Var>`](/docs/vue/reference/components#var) for runtime values, and [`useGT`](/docs/vue/reference/functions#usegt) for plain strings.
+
+```vue title="src/App.vue"
+<script setup lang="ts">
+import { T, Var, useGT, useLocale, useSetLocale } from 'gt-vue';
+
+const name = 'Ada';
+const gt = useGT();
+const locale = useLocale();
+const setLocale = useSetLocale();
+</script>
+
+<template>
+  <main>
+    <T context="welcome">Hello, <Var>{{ name }}</Var>!</T>
+    <p>{{ gt('A plain string', { $context: 'homepage' }) }}</p>
+    <button @click="setLocale(locale === 'en' ? 'fr' : 'en')">
+      {{ locale }}
+    </button>
+  </main>
+</template>
+```
+
+Vue templates unwrap the `locale` ref automatically. [`setLocale`](/docs/vue/reference/types#setlocale) loads the target catalog before rerendering consumers.
+
+### 5. Generate translations
+
+Set `GT_API_KEY` and `GT_PROJECT_ID` in your local environment, then run:
+
+```bash
+npx gt translate
+```
+
+The CLI extracts the [`<T>`](/docs/vue/reference/components#t) and [`useGT`](/docs/vue/reference/functions#usegt) content and writes `src/_gt/fr.json`.
+
+### 6. Run the app
+
+Start your normal Vue development command. The page initially renders English source content. Select the button to load French and rerender the translated content.

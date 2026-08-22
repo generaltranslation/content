@@ -1,0 +1,159 @@
+---
+
+title: Recording localized walkthroughs
+description: How to capture a browser walkthrough once and replay it with published translations in multiple locales.
+related:
+  links:
+    - /docs/react/guides/configuring
+    - /docs/react/guides/storing-translations
+    - /docs/react/guides/managing-locales
+    - /docs/react/guides/translating-jsx
+
+---
+
+`gt-rrweb` records a React application's DOM and interactions, maps published translations onto the recording, and replays the walkthrough with locale switching.
+
+<Callout type="info">
+  `gt-rrweb` is experimental. Its 0.x API and recording format may change between releases.
+</Callout>
+
+## Before you start [#before-start]
+
+- Use a browser-based React application. Recording is not supported in React Native.
+- Provide a loader for the application's published translation catalogs.
+- Review the recording area for sensitive visible content.
+
+<Callout type="warn">
+  The recorder masks typed input values, but visible DOM content and interactions are captured. Limit the recording region, block sensitive elements with rrweb's `rr-block` class, and treat the resulting JSON as sensitive when appropriate.
+</Callout>
+
+## Installing the recorder [#install]
+
+Install `gt-rrweb` and its rrweb peers. Install both record and replay packages when the same app does both.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+</Tabs>
+
+The recorder entry requires `@rrweb/record`; the replay entry requires `@rrweb/replay`. Both use `@rrweb/types`.
+
+## Enabling rich-content mapping [#tag-ids]
+
+Turn on [`_tagIds`](/docs/react/reference/config#tag-ids) so rendered [`<T>`](/docs/react/reference/components/t) content carries the translation hash used during harvesting.
+
+```json title="gt.config.json"
+{
+  "_tagIds": true
+}
+```
+
+Without tag IDs, the recorder still captures source content. A `hashMessage` callback can map simple bare strings from [`useGT`](/docs/react/reference/hooks/use-gt), but rich [`<T>`](/docs/react/reference/components/t) content cannot be matched to its catalog entry.
+
+## Mounting the recorder [#mount]
+
+Mount one [`<GTRecorder>`](/docs/react/reference/recording-demos#gtrecorder) near the application root. Pass the same catalog loader your app uses.
+
+```tsx title="src/DemoRecorder.tsx"
+'use client';
+
+import { hashSource } from 'generaltranslation/id';
+import { GTRecorder, type RecorderBundle } from 'gt-rrweb';
+import loadTranslations from './loadTranslations';
+
+const harvest = {
+  loadTranslations,
+  hashMessage: (message: string) =>
+    hashSource({ source: message, dataFormat: 'ICU' }),
+};
+
+export default function DemoRecorder() {
+  function saveRecording(bundle: RecorderBundle) {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(bundle)], { type: 'application/json' })
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'localized-walkthrough.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <GTRecorder
+      contentSelector="[data-demo-content]"
+      frame="16:9"
+      harvest={harvest}
+      onComplete={saveRecording}
+    />
+  );
+}
+```
+
+`contentSelector` chooses the region reflowed into the capture frame. Recording still observes the document, so use `rr-block` on content that must not appear.
+
+The public `hashSource` example covers uncontextualized bare strings. Strings with interpolation or context may not match rendered text and fall back to the source.
+
+## Starting and stopping [#controls]
+
+Call [`useRecorder`](/docs/react/reference/recording-demos#userecorder) from any component. List locales with the recorded source first.
+
+```tsx title="src/RecordingControls.tsx"
+'use client';
+
+import { useRecorder } from 'gt-rrweb';
+
+export default function RecordingControls() {
+  const recorder = useRecorder();
+
+  return recorder.isRecording ? (
+    <button onClick={() => recorder.stop()}>Stop recording</button>
+  ) : (
+    <button onClick={() => recorder.start({ locales: ['en', 'fr', 'ja'] })}>
+      Start recording
+    </button>
+  );
+}
+```
+
+After `stop()` ends capture, the recorder loads each target catalog and embeds the locale overlays into the event stream. A loader or structural mismatch is nonfatal; affected text stays in the source locale.
+
+## Replaying the walkthrough [#replay]
+
+Install the React [`<GTReplayer>`](/docs/react/reference/recording-demos#gtreplayer) from `gt-rrweb/replay` in a sized container.
+
+```tsx
+import { GTReplayer } from 'gt-rrweb/replay';
+import recording from './localized-walkthrough.json';
+
+export default function Walkthrough() {
+  return (
+    <div style={{ width: 960, height: 540 }}>
+      <GTReplayer bundle={recording} initialLocale="fr" />
+    </div>
+  );
+}
+```
+
+Use [`GTReplayer`](/docs/react/reference/recording-demos#gtreplayer) or [`createGTReplayer`](/docs/react/reference/recording-demos#creategtreplayer) for localized playback. A standard rrweb replayer does not apply the embedded translation overlays and replays source content only.

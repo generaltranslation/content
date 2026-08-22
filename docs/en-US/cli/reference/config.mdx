@@ -29,7 +29,7 @@ The `gt.config.json` file configures what the CLI translates and where results a
 
 **Type** `string` · **Optional** · **Default** `en`
 
-The locale your source content is written in. This is the locale the CLI translates from, and the fallback locale when you use `gt-next` or `gt-react`.
+The locale your source content is written in. This is the locale the CLI translates from, and the fallback locale when you use `gt-next`, `gt-react`, or `gt-vue`.
 
 ```json title="gt.config.json"
 {
@@ -41,7 +41,7 @@ The locale your source content is written in. This is the locale the CLI transla
 
 **Type** `string[]` · **Optional** · **Default** —
 
-The target locales to translate into. See [supported locales](/docs/platform/dashboard/reference/supported-locales) for accepted codes. When you use `gt-next` or `gt-react`, these are also the locales your app supports.
+The target locales to translate into. See [supported locales](/docs/platform/dashboard/reference/supported-locales) for accepted codes. When you use `gt-next`, `gt-react`, or `gt-vue`, these are also the locales your app supports.
 
 ```json title="gt.config.json"
 {
@@ -59,7 +59,7 @@ An object with one key per file type to translate. Each type maps to an object o
 
 | Key | File type | Reference |
 | --- | --- | --- |
-| `gt` | General Translation files for `gt-next`, `gt-react`, and `gt-react-native`. | [GT](/docs/cli/reference/formats/gt-jsx-files) |
+| `gt` | General Translation files for `gt-next`, `gt-react`, `gt-react-native`, and `gt-vue`. | [GT](/docs/cli/reference/formats/gt-jsx-files) |
 | `json` | JSON files. | [JSON](/docs/cli/reference/formats/json-files) |
 | `yaml` | YAML files (`.yaml` and `.yml`). | [YAML](/docs/cli/reference/formats/yaml-files) |
 | `pot` | PO/POT gettext files. | [PO / POT](/docs/cli/reference/formats/po-pot-files) |
@@ -82,7 +82,7 @@ Each file type accepts the following keys.
 - `transformationFormat` — outputs translated files in a different format than the source. For example, `pot` sources with `"transformationFormat": "PO"` produce `.po` files.
 - `requiresReview` — gates translated files behind human review. Accepts `true`/`false`, or an object with `include` and `exclude` glob arrays where `exclude` takes precedence.
 - `output` — for `gt` files only, the local save path with a `[locale]` placeholder, such as `public/i18n/[locale].json`.
-- `parsingFlags` — for `gt` files only, flags that control inline content parsing. See [`autoderive`](/docs/cli/guides/using-autoderive) and [automatic JSX injection](/docs/cli/guides/using-auto-jsx).
+- `parsingFlags` — for `gt` files only, flags that control inline content parsing. See [`autoderive`](/docs/cli/guides/using-autoderive), [automatic JSX injection](/docs/cli/guides/using-auto-jsx), and [Vue parsing flags](#vue-parsing).
 
 ```json title="gt.config.json"
 {
@@ -190,9 +190,9 @@ The project-wide default for review gating: when `true`, translated artifacts re
 
 ## `src` [#src]
 
-**Type** `string[]` · **Optional** · **Default** `src`, `app`, `pages`, `components` globs
+**Type** `string[]` · **Optional** · **Default** Framework source globs
 
-An array of glob patterns for the source files scanned for inline content when you use `gt-next`, `gt-react`, or `gt-react-native`.
+An array of glob patterns for source files scanned for inline content. React frameworks scan JavaScript and TypeScript files under `src`, `app`, `pages`, and `components`. `gt-vue` also scans root `.vue` files and Vue, Nuxt, and shared source directories including `composables`, `layouts`, `plugins`, `server`, `stores`, and `views`.
 
 ```json title="gt.config.json"
 {
@@ -202,6 +202,41 @@ An array of glob patterns for the source files scanned for inline content when y
     "pages/**/*.{js,jsx,ts,tsx}",
     "components/**/*.{js,jsx,ts,tsx}"
   ]
+}
+```
+
+## Vue parsing flags [#vue-parsing]
+
+`gt-vue` projects may set these keys under `files.gt.parsingFlags` when automatic Vue configuration discovery is not sufficient.
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `viteConfigPath` | Project-relative path to the active Vite config. | `string` | Yes | Discovered Vite or Nuxt config |
+| `vueCompilerOptions` | Hash-affecting Vue template compiler options. | `object` | Yes | Discovered compiler options |
+
+`viteConfigPath` must point to a readable JavaScript or TypeScript config inside the project root and outside `node_modules`. Set it when both Nuxt and Vite config files exist or when the active Vite config has a nonstandard path.
+
+`vueCompilerOptions` accepts only:
+
+- `whitespace` — `condense` or `preserve`.
+- `delimiters` — a two-string tuple such as `["${", "}"]`.
+
+The CLI combines explicit values with statically analyzable Vite or Nuxt configuration. Conflicting or dynamic hash-affecting options stop extraction instead of producing catalog hashes that differ from Vue's runtime behavior.
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json",
+      "parsingFlags": {
+        "viteConfigPath": "config/vite.app.ts",
+        "vueCompilerOptions": {
+          "whitespace": "preserve",
+          "delimiters": ["${", "}"]
+        }
+      }
+    }
+  }
 }
 ```
 

@@ -1,0 +1,147 @@
+---
+
+title: Translating content
+description: How to translate Vue templates, runtime values, and module-level strings with gt-vue.
+related:
+  links:
+    - /docs/vue/guides/managing-locales
+    - /docs/vue/guides/rendering-on-server
+
+---
+
+Use components for rich template content and synchronous functions for plain strings. The CLI extracts static content from Vue single-file components and Vue-owned script modules.
+
+## Translating template content [#templates]
+
+Wrap complete phrases in [`<T>`](/docs/vue/reference/components#t). The component preserves Vue elements and replaces translated text from the active catalog.
+
+```vue
+<template>
+  <T>
+    Read the <a href="https://example.com/docs">documentation</a>.
+  </T>
+</template>
+```
+
+Static default-slot content inside a custom component participates in the surrounding translation. The component, props, and listeners remain intact. Content created inside the child component's implementation is not visible to the outer [`<T>`](/docs/vue/reference/components#t).
+
+Use [`<Var>`](/docs/vue/reference/components#var) for values that must remain unchanged:
+
+```vue
+<script setup lang="ts">
+import { T, Var } from 'gt-vue';
+
+defineProps<{ name: string }>();
+</script>
+
+<template>
+  <T>Hello, <Var>{{ name }}</Var>!</T>
+</template>
+```
+
+[`<Var>`](/docs/vue/reference/components#var) receives its value through the default slot. It does not accept React-style `name` or `value` props.
+
+## Formatting values [#formatting]
+
+Use [`<Num>`](/docs/vue/reference/components#num), [`<Currency>`](/docs/vue/reference/components#currency), and [`<DateTime>`](/docs/vue/reference/components#datetime) with a required `value` prop.
+
+```vue
+<script setup lang="ts">
+import { Currency, DateTime, Num, T } from 'gt-vue';
+
+const count = 1200;
+const price = 49.95;
+const createdAt = new Date('2026-08-22T12:00:00Z');
+</script>
+
+<template>
+  <T>
+    <Num :value="count" /> items cost
+    <Currency :value="price" currency="USD" /> as of
+    <DateTime :value="createdAt" :options="{ dateStyle: 'medium' }" />.
+  </T>
+</template>
+```
+
+Outside [`<T>`](/docs/vue/reference/components#t), an explicit `locales` list is tried before the active locale and source locale. Inside [`<T>`](/docs/vue/reference/components#t), source fallbacks use the source locale, while translated content uses the active locale followed by the source locale.
+
+## Selecting branches [#branches]
+
+Use named slots with [`<Plural>`](/docs/vue/reference/components#plural) and [`<Branch>`](/docs/vue/reference/components#branch).
+
+```vue
+<script setup lang="ts">
+import { Branch, Plural, T } from 'gt-vue';
+
+defineProps<{ count: number; status: 'ready' | 'waiting' }>();
+</script>
+
+<template>
+  <T>
+    <Plural :n="count">
+      <template #one>One file</template>
+      <template #other>{{ count }} files</template>
+    </Plural>
+
+    <Branch :branch="status">
+      <template #ready>Ready</template>
+      <template #waiting>Waiting</template>
+    </Branch>
+  </T>
+</template>
+```
+
+Missing branch or plural slots fall back to the default slot.
+
+## Translating strings [#strings]
+
+[`useGT`](/docs/vue/reference/functions#usegt) returns a synchronous catalog lookup for component code.
+
+```vue
+<script setup lang="ts">
+import { useGT } from 'gt-vue';
+
+const gt = useGT();
+</script>
+
+<template>
+  <p>{{ gt('A plain string', { $context: 'homepage' }) }}</p>
+</template>
+```
+
+`$context` is the only string option. Braces are literal text; `gt-vue` does not apply ICU formatting or interpolation to string lookups.
+
+Register module-scope strings with [`msg`](/docs/vue/reference/functions#msg), then resolve them inside a component with [`useMessages`](/docs/vue/reference/functions#usemessages):
+
+```vue
+<script setup lang="ts">
+import { msg, useMessages } from 'gt-vue';
+
+const title = msg('Settings', { $context: 'page title' });
+const m = useMessages();
+</script>
+
+<template>
+  <h1>{{ m(title) }}</h1>
+</template>
+```
+
+## Translating at module scope [#module-scope]
+
+Browser-only Vite applications can call [`t`](/docs/vue/reference/functions#t) after [`initializeGTSPA`](/docs/vue/reference/functions#initializegtspa) preloads the active catalog. Initialize first, then dynamically import modules that call [`t`](/docs/vue/reference/functions#t).
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-vue';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  const gt = await initializeGTSPA({ ...gtConfig, loadTranslations });
+  const { mount } = await import('./main');
+  mount(gt);
+}
+
+void bootstrap();
+```
+
+Install the returned plugin instead of creating another instance. [`initializeGTSPA`](/docs/vue/reference/functions#initializegtspa) and [`t`](/docs/vue/reference/functions#t) use page-wide browser state and are not valid during server rendering.

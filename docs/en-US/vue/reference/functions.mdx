@@ -1,0 +1,182 @@
+---
+
+title: Functions
+description: Create runtimes, translate strings, and manage locale state with gt-vue. API reference for gt-vue functions and composables.
+
+---
+
+The package exports runtime constructors, synchronous string functions, and Vue composables. Composables require an installed plugin.
+
+## Overview [#overview]
+
+| Function | Description |
+| --- | --- |
+| [`createGT`](#creategt) | Create an isolated Vue plugin. |
+| [`initializeGTSPA`](#initializegtspa) | Initialize the page-wide browser SPA runtime. |
+| [`useGT`](#usegt) | Return a component-scoped plain-string lookup. |
+| [`t`](#t) | Translate a string at module scope in an initialized SPA. |
+| [`msg`](#msg) | Register a module-scope string for later resolution. |
+| [`useMessages`](#usemessages) | Resolve registered messages and raw strings. |
+| [`useLocale`](#uselocale) | Return a readonly ref for the active locale. |
+| [`useSetLocale`](#usesetlocale) | Return the active plugin's locale setter. |
+
+## Runtime setup [#runtime]
+
+### `createGT`
+
+**Parameters** [`CreateGTOptions`](/docs/vue/reference/types#creategtoptions) · **Returns** [`GTPlugin`](/docs/vue/reference/types#gtplugin)
+
+Creates an isolated plugin with reactive locale state and a per-locale catalog cache.
+
+```ts
+createGT(options?: CreateGTOptions): GTPlugin
+```
+
+```ts
+import { createApp } from 'vue';
+import { createGT } from 'gt-vue';
+import App from './App.vue';
+
+const gt = createGT({
+  defaultLocale: 'en',
+  loadTranslations: async (locale) =>
+    (await import(`./_gt/${locale}.json`)).default,
+});
+
+createApp(App).use(gt).mount('#app');
+```
+
+Successful loads are cached for the plugin's lifetime, and concurrent loads for one locale share a promise. The source locale uses source content and never calls [`loadTranslations`](/docs/vue/reference/types#loadtranslations).
+
+In a browser, `locale` wins over the locale cookie, which wins over `defaultLocale`. For server rendering, create one plugin per request, pass an explicit locale, and preload it before rendering.
+
+### `initializeGTSPA`
+
+**Parameters** [`InitializeGTSPAOptions`](/docs/vue/reference/types#initializegtspaoptions) · **Returns** `Promise<GTPlugin>`
+
+Initializes the browser-only page-wide runtime and preloads the active locale before application modules execute.
+
+```ts
+initializeGTSPA(options?: InitializeGTSPAOptions): Promise<GTPlugin>
+```
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-vue';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+const gt = await initializeGTSPA({ ...gtConfig, loadTranslations });
+const { mount } = await import('./main');
+mount(gt);
+```
+
+The first call owns the runtime. Concurrent calls share initialization, and later calls return the same plugin. Install that plugin instead of creating another instance.
+
+The active locale remains pinned until reload. [`setLocale`](/docs/vue/reference/types#setlocale) writes the cookie and reloads the document so module-level [`t`](#t) calls run again. Calling this function during server rendering throws an error.
+
+## String translation [#strings]
+
+### `useGT`
+
+**Parameters** None · **Returns** [`GTFunction`](/docs/vue/reference/types#gtfunction)
+
+Returns a synchronous plain-string lookup for the installed plugin.
+
+```vue
+<script setup lang="ts">
+import { useGT } from 'gt-vue';
+
+const gt = useGT();
+</script>
+
+<template>
+  <p>{{ gt('A plain string', { $context: 'homepage' }) }}</p>
+</template>
+```
+
+`$context` is the only option. Braces remain literal, no ICU formatting or interpolation is applied, and missing entries return the source string. Call the returned function from a render, computed value, or reactive effect when the result must update with catalog or locale changes.
+
+### `t`
+
+**Parameters** `message: string`, `options?: GTStringOptions` · **Returns** `string`
+
+Performs a synchronous module-level lookup in a browser SPA initialized with [`initializeGTSPA`](#initializegtspa).
+
+```ts
+import { t } from 'gt-vue';
+
+export const navigation = [
+  t('Documentation', { $context: 'primary navigation' }),
+];
+```
+
+The CLI extracts static calls. `t` supports only plain strings and static `$context`; it does not support ICU syntax, interpolation, tagged templates, `$format`, or `$maxChars`.
+
+Calling `t` before initialization or during server rendering throws an error.
+
+### `msg`
+
+**Parameters** `message: string | readonly string[]`, `options?: GTStringOptions` · **Returns** `string | string[]`
+
+Registers static plain strings for extraction and later resolution with [`useMessages`](#usemessages).
+
+```ts
+import { msg } from 'gt-vue';
+
+export const title = msg('Settings', { $context: 'page title' });
+```
+
+With no options, `msg` returns the original string or array. With `$context`, it appends opaque lookup metadata while preserving source text literally. It performs no ICU processing or interpolation.
+
+### `useMessages`
+
+**Parameters** None · **Returns** [`MessagesFunction`](/docs/vue/reference/types#messagesfunction)
+
+Returns a synchronous resolver for `msg` values, raw strings, and nullish values.
+
+```vue
+<script setup lang="ts">
+import { msg, useMessages } from 'gt-vue';
+
+const title = msg('Settings', { $context: 'page title' });
+const m = useMessages();
+</script>
+
+<template>
+  <h1>{{ m(title) }}</h1>
+</template>
+```
+
+Encoded metadata takes precedence over call-site options. Raw strings may pass `$context`. `null` and `undefined` are returned unchanged, and missing entries return source text.
+
+## Locale state [#locales]
+
+### `useLocale`
+
+**Parameters** None · **Returns** `Readonly<Ref<string>>`
+
+Returns a readonly ref for the active locale. Vue templates unwrap it automatically.
+
+```ts
+import { useLocale } from 'gt-vue';
+
+const locale = useLocale();
+console.log(locale.value);
+```
+
+With a `createGT` plugin, reactive consumers update after locale switching completes. An `initializeGTSPA` plugin reloads the page instead.
+
+### `useSetLocale`
+
+**Parameters** None · **Returns** `(locale: string) => Promise<void>`
+
+Returns the installed plugin's asynchronous locale setter.
+
+```ts
+import { useSetLocale } from 'gt-vue';
+
+const setLocale = useSetLocale();
+await setLocale('fr');
+```
+
+A `createGT` plugin loads a missing catalog before updating reactive consumers. An `initializeGTSPA` plugin writes the locale cookie and reloads the document without loading the target catalog on the current page.

@@ -1,0 +1,76 @@
+---
+
+title: Rendering on the server
+description: How to keep locale state and translation catalogs request-scoped in a Vue SSR application.
+related:
+  links:
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/managing-locales
+
+---
+
+Create one [`createGT`](/docs/vue/reference/functions#creategt) plugin per server request. Resolve the request locale in your framework, preload its catalog, and install the same locale before client hydration.
+
+## Rendering a request [#server-render]
+
+Resolve the locale from your route, cookie, or request headers before creating the Vue app. An explicit `locale` takes precedence over browser cookie state.
+
+```ts title="src/server/render.ts"
+import { createSSRApp } from 'vue';
+import { renderToString } from '@vue/server-renderer';
+import { createGT } from 'gt-vue';
+import App from '../App.vue';
+import loadTranslations from '../loadTranslations';
+
+export async function render(locale: string) {
+  const gt = createGT({
+    defaultLocale: 'en',
+    locale,
+    loadTranslations,
+  });
+
+  await gt.loadTranslations(locale);
+
+  const app = createSSRApp(App);
+  app.use(gt);
+
+  return renderToString(app);
+}
+```
+
+Do not reuse the plugin across requests. Its active locale and catalog cache belong to one request.
+
+You may call `await gt.setLocale(locale)` instead of [`loadTranslations`](/docs/vue/reference/types#loadtranslations). On a [`createGT`](/docs/vue/reference/functions#creategt) plugin, [`setLocale`](/docs/vue/reference/types#setlocale) loads the catalog and then updates locale state.
+
+## Hydrating the client [#hydration]
+
+Create the client plugin with the locale used for the server render and preload it before mounting.
+
+```ts title="src/client.ts"
+import { createSSRApp } from 'vue';
+import { createGT } from 'gt-vue';
+import App from './App.vue';
+import loadTranslations from './loadTranslations';
+
+export async function hydrate(locale: string) {
+  const gt = createGT({
+    defaultLocale: 'en',
+    locale,
+    loadTranslations,
+  });
+
+  await gt.loadTranslations(locale);
+
+  const app = createSSRApp(App);
+  app.use(gt);
+  app.mount('#app');
+}
+```
+
+Starting hydration before the asynchronous catalog is ready can render source text and cause a hydration mismatch.
+
+## Avoiding browser-only APIs [#browser-apis]
+
+Do not call [`initializeGTSPA`](/docs/vue/reference/functions#initializegtspa) or [`t`](/docs/vue/reference/functions#t) during server rendering. They use page-wide browser state, and locale changes reload the document.
+
+For module-scope content shared with SSR, register strings with [`msg`](/docs/vue/reference/functions#msg) and resolve them inside components with [`useMessages`](/docs/vue/reference/functions#usemessages).
