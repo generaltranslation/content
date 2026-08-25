@@ -226,8 +226,9 @@ function addTarget(
 }
 
 /**
- * Builds lookup aliases from dedicated API reference page titles and the two
- * React initialization sections documented on the shared config page.
+ * Builds lookup aliases from dedicated API reference page titles, the two
+ * React initialization sections documented on the shared config page, and
+ * the grouped rrweb API sections.
  */
 export function buildReferenceSymbolIndex(
   references: ReferenceSource[]
@@ -268,6 +269,21 @@ export function buildReferenceSymbolIndex(
         }
       }
     }
+
+    if (normalizedPath.includes('/rrweb/reference/')) {
+      const apiHeading = /^##\s+`([^`]+)`\s+\[#([^\]]+)\]/gm;
+      let match: RegExpExecArray | null;
+      while ((match = apiHeading.exec(reference.source)) !== null) {
+        const target: ReferenceTarget = {
+          symbol: match[1],
+          url: `${pathToUrl(normalizedPath)}#${match[2]}`,
+          path: normalizedPath,
+        };
+        for (const alias of aliasesForTarget(target)) {
+          addTarget(index, alias, target);
+        }
+      }
+    }
   }
 
   return index;
@@ -288,6 +304,7 @@ function targetContexts(target: ReferenceTarget): string[] {
     return ['react', 'gt-react'];
   }
   if (path.includes('/vue/')) return ['vue', 'gt-vue'];
+  if (path.includes('/rrweb/')) return ['rrweb', 'gt-rrweb'];
   if (path.includes('/node/')) return ['node', 'gt-node'];
   if (path.includes('/python/')) {
     return [
@@ -313,6 +330,7 @@ function sourceContexts(path: string): string[] {
   }
   if (normalizedPath.includes('devlog/en-US/gt-react_')) return ['react'];
   if (normalizedPath.includes('devlog/en-US/gt-vue_')) return ['vue'];
+  if (normalizedPath.includes('devlog/en-US/gt-rrweb_')) return ['rrweb'];
   if (normalizedPath.includes('devlog/en-US/gt-node_')) return ['node'];
   if (
     normalizedPath.includes('devlog/en-US/gt-cli_') ||
@@ -351,6 +369,7 @@ function sourceContexts(path: string): string[] {
   }
   if (normalizedPath.includes('/react/')) return ['react'];
   if (normalizedPath.includes('/vue/')) return ['vue'];
+  if (normalizedPath.includes('/rrweb/')) return ['rrweb'];
   if (normalizedPath.includes('/node/')) return ['node'];
   if (normalizedPath.includes('/python/')) return ['python'];
   if (normalizedPath.includes('/cli/')) return ['cli'];
@@ -432,6 +451,9 @@ function targetIsApplicable(
   if (path.includes('/node/')) {
     return sourceTags.includes('node') || context.includes('gt-node');
   }
+  if (path.includes('/rrweb/')) {
+    return sourceTags.includes('rrweb') || context.includes('gt-rrweb');
+  }
   if (path.includes('/python/')) {
     return (
       sourceTags.includes('python') ||
@@ -479,7 +501,7 @@ function scoreTarget(
   }
 
   for (const targetTag of targetTags) {
-    if (['react', 'vue', 'node', 'python', 'cli', 'core'].includes(targetTag)) {
+    if (['react', 'vue', 'rrweb', 'node', 'python', 'cli', 'core'].includes(targetTag)) {
       continue;
     }
     if (context.includes(targetTag)) score += targetTag.includes('-') ? 40 : 20;
@@ -492,6 +514,9 @@ function scoreTarget(
     score += 40;
   }
   if (target.path.includes('/python/') && context.includes('python')) {
+    score += 50;
+  }
+  if (target.path.includes('/rrweb/') && /\b(?:rrweb|gt-rrweb)\b/.test(context)) {
     score += 50;
   }
   if (target.path.includes('/react/') && /\b(?:react|jsx|tsx)\b/.test(context)) {

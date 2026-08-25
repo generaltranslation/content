@@ -10,6 +10,7 @@ const EXPECTED_ROOTS = [
   'cli',
   'react',
   'vue',
+  'rrweb',
   'node',
   'python',
   'integrations',
@@ -21,6 +22,7 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
   cli: ['Guides', 'Reference'],
   react: ['Guides', 'Reference', 'Frameworks'],
   vue: ['Guides', 'Reference'],
+  rrweb: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
   integrations: ['Mintlify', 'Sanity', 'Storyblok', 'Google Drive'],
@@ -36,6 +38,7 @@ const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
   hooks: 'Hooks',
   composables: 'Composables',
   reference: 'Reference',
+  rrweb: 'rrweb',
   types: 'Types',
 };
 

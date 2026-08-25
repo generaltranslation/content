@@ -1,0 +1,133 @@
+---
+
+title: Quickstart
+description: Record a product walkthrough once and replay it with your published translations.
+related:
+  links:
+    - /docs/rrweb/guides/recording-walkthroughs
+    - /docs/rrweb/guides/replaying-recordings
+
+---
+
+`gt-rrweb` records a browser walkthrough with rrweb, maps the captured text to your existing translation catalogs, and plays the same session in each locale. The recorder uses React, while the replayer is available as either a React component or a framework-agnostic function.
+
+**Requirements:**
+
+- React 18 or later for recording
+- A browser application with published translation catalogs
+- A function that loads one catalog by locale
+
+## Quickstart [#quickstart]
+
+### 1. Install the packages
+
+Install `gt-rrweb` and the rrweb packages used for capture and playback.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-rrweb @rrweb/record @rrweb/replay @rrweb/types
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Expose translation hashes
+
+The recorder matches rendered [`<T>`](/docs/react/reference/components/t) content to its published translation by DOM hash. Enable [`_tagIds`](/docs/react/reference/config#tag-ids) in your existing config:
+
+```json title="gt.config.json"
+{
+  "_tagIds": true
+}
+```
+
+### 3. Add the recorder
+
+Mount [`GTRecorder`](/docs/rrweb/reference/recorder#gt-recorder) once inside your translation provider. Pass the same catalog loader your app uses, then call [`useRecorder()`](/docs/rrweb/reference/recorder#use-recorder) from any descendant control.
+
+```tsx title="src/RecordingTools.tsx"
+'use client';
+
+import { GTRecorder, useRecorder, type RecorderBundle } from 'gt-rrweb';
+import loadTranslations from './loadTranslations';
+
+function download(bundle: RecorderBundle) {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(bundle)], { type: 'application/json' })
+  );
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'walkthrough.json';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function Controls() {
+  const { start, stop, status } = useRecorder();
+
+  return (
+    <div>
+      <button onClick={() => start({ locales: ['en', 'es', 'fr'] })}>
+        Record
+      </button>
+      <button onClick={stop} disabled={status !== 'recording'}>
+        Stop
+      </button>
+    </div>
+  );
+}
+
+export default function RecordingTools() {
+  return (
+    <>
+      <Controls />
+      <GTRecorder
+        frame="16:9"
+        harvest={{ loadTranslations, sourceLocale: 'en' }}
+        onComplete={download}
+      />
+    </>
+  );
+}
+```
+
+The first locale passed to `start()` is the source recording. Stopping waits for the locale harvest, calls `onComplete`, and returns the same bundle.
+
+### 4. Record the walkthrough
+
+Start recording, complete the flow in the source locale, and stop. Form input values are masked, mousemove telemetry is omitted, and clicks, navigation, DOM changes, scroll position, and page content remain part of the recording.
+
+### 5. Replay the bundle
+
+Import the saved JSON and render [`GTReplayer`](/docs/rrweb/reference/replayer#gt-replayer):
+
+```tsx title="src/Walkthrough.tsx"
+'use client';
+
+import { GTReplayer } from 'gt-rrweb/replay';
+import bundle from './walkthrough.json';
+
+export default function Walkthrough() {
+  return <GTReplayer bundle={bundle} />;
+}
+```
+
+The player starts in the recorded source locale and shows locale controls when the bundle contains additional locales.

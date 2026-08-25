@@ -99,6 +99,18 @@ const references: ReferenceSource[] = [
     source: '---\ntitle: gt translate\n---\n',
   },
   {
+    path: 'docs/en-US/rrweb/reference/recorder.mdx',
+    source: '---\ntitle: Recorder API\n---\n\n## `GTRecorder` [#gt-recorder]\n',
+  },
+  {
+    path: 'docs/en-US/rrweb/reference/harvest.mdx',
+    source: '---\ntitle: Harvest API\n---\n\n## `harvestLocales` [#harvest-locales]\n',
+  },
+  {
+    path: 'docs/en-US/rrweb/reference/replayer.mdx',
+    source: '---\ntitle: Replayer API\n---\n\n## `GTReplayer` [#gt-replayer]\n',
+  },
+  {
     path:
       'docs/en-US/platform/core/reference/utility-functions/locales/get-locale-properties.mdx',
     source: '---\ntitle: getLocaleProperties\n---\n',
@@ -281,6 +293,24 @@ const foundCases = [
     path: 'docs/en-US/node/guides/example.mdx',
     source: 'In `gt-node`, call `getGT()` before translating.',
     target: '/docs/node/reference/functions/get-gt',
+  },
+  {
+    name: 'rrweb recorder section',
+    path: 'docs/en-US/rrweb/guides/example.mdx',
+    source: 'Mount `GTRecorder` once before recording.',
+    target: '/docs/rrweb/reference/recorder#gt-recorder',
+  },
+  {
+    name: 'rrweb harvest section',
+    path: 'docs/en-US/rrweb/guides/example.mdx',
+    source: 'Call `harvestLocales()` after capture.',
+    target: '/docs/rrweb/reference/harvest#harvest-locales',
+  },
+  {
+    name: 'rrweb replayer section',
+    path: 'docs/en-US/rrweb/guides/example.mdx',
+    source: 'Render `GTReplayer` with the saved bundle.',
+    target: '/docs/rrweb/reference/replayer#gt-replayer',
   },
   {
     name: 'standalone utility outside the narrow exclusion',
