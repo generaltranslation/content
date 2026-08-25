@@ -1,0 +1,104 @@
+---
+title: Configuring a Rolldown SPA
+description: How to configure gt-react in a Rolldown-powered single-page React application.
+related:
+  links:
+    - /docs/react/guides/spa/internationalizing-react-spa
+    - /docs/react/guides/developing-spa-translations
+    - /docs/react/guides/storing-translations
+    - /docs/react/guides/configuring
+---
+
+Rolldown must see every translation import at build time. Configure a bootstrap
+input and an explicit locale-loader map so initialization and code splitting
+remain predictable.
+
+Follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) to install
+`gt-react`, create `gt.config.json`, and configure `src/_gt/[locale].json` as
+the translation output.
+
+## Configure the application [#configure]
+
+### Step 1: Add static translation loaders
+
+List each target locale with a literal import path. Add a matching entry whenever
+you add a locale to `gt.config.json`:
+
+```ts title="src/loadTranslations.ts"
+const translationLoaders = {
+  fr: () => import('./_gt/fr.json'),
+  de: () => import('./_gt/de.json'),
+};
+
+export default async function loadTranslations(locale: string) {
+  const loader =
+    translationLoaders[locale as keyof typeof translationLoaders];
+  return loader ? (await loader()).default : {};
+}
+```
+
+Create the imported JSON files before the first build. Running
+[`gt translate`](/docs/cli/reference/commands/translate) later replaces those
+stubs with generated translations.
+
+### Step 2: Create the bootstrap module
+
+Assuming the existing React entry is `src/main.tsx`, create `src/index.ts` and
+import the application only after
+[`initializeGTSPA()`](/docs/react/reference/config#initialize-spa) resolves:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+await initializeGTSPA({ ...gtConfig, loadTranslations });
+
+await import('./main');
+```
+
+<Accordions>
+  <Accordion title="What if the output format does not support top-level await?">
+
+Keep the existing output format and use an async bootstrap function:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  await initializeGTSPA({ ...gtConfig, loadTranslations });
+  await import('./main');
+}
+
+void bootstrap();
+```
+
+  </Accordion>
+</Accordions>
+
+### Step 3: Change the Rolldown input
+
+Point the existing input at the bootstrap and preserve the remaining settings:
+
+```js title="rolldown.config.mjs"
+export default {
+  // Keep the project's existing options.
+  input: 'src/index.ts',
+};
+```
+
+If development HTML references `src/main.tsx` directly, update that existing
+module script to reference `src/index.ts`.
+
+## Verify the setup [#verify]
+
+Run the application's existing production build. Rolldown should emit the
+bootstrap entry and a separate loadable chunk for each locale in the map.
+
+## Next steps
+
+- [Internationalize the SPA](/docs/react/guides/spa/internationalizing-react-spa) - Mark JSX and strings for translation.
+- [Develop with SPA translations](/docs/react/guides/developing-spa-translations) - Add compiler-powered development translations.
+- [Store translations](/docs/react/guides/storing-translations) - Generate and manage local translation files.

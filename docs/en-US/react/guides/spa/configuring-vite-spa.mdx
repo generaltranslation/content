@@ -1,0 +1,96 @@
+---
+title: Configuring a Vite SPA
+description: How to configure gt-react in a Vite-powered single-page React application.
+related:
+  links:
+    - /docs/react/guides/spa/internationalizing-react-spa
+    - /docs/react/guides/developing-spa-translations
+    - /docs/react/guides/storing-translations
+    - /docs/react/guides/configuring
+---
+
+Vite starts a React application from the module referenced by `index.html`.
+Use a small bootstrap module so GT finishes initializing before the rest of the
+application is evaluated.
+
+Follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) to install
+`gt-react`, create `gt.config.json`, and configure `src/_gt/[locale].json` as
+the translation output.
+
+## Configure the application [#configure]
+
+### Step 1: Add the translation loader
+
+Vite can discover a locale file from a dynamic import when the variable replaces
+only one path segment:
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  try {
+    const translations = await import(`./_gt/${locale}.json`);
+    return translations.default;
+  } catch {
+    return {};
+  }
+}
+```
+
+Create an empty JSON file for each target locale before the first build. Running
+[`gt translate`](/docs/cli/reference/commands/translate) later replaces those
+stubs with generated translations.
+
+### Step 2: Create the bootstrap module
+
+Assuming the existing React entry is `src/main.tsx`, create `src/index.ts` and
+import the application only after
+[`initializeGTSPA()`](/docs/react/reference/config#initialize-spa) resolves:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+await initializeGTSPA({ ...gtConfig, loadTranslations });
+
+await import('./main');
+```
+
+<Accordions>
+  <Accordion title="What if the output target does not support top-level await?">
+
+Keep the existing Vite target and use an async bootstrap function:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  await initializeGTSPA({ ...gtConfig, loadTranslations });
+  await import('./main');
+}
+
+void bootstrap();
+```
+
+  </Accordion>
+</Accordions>
+
+### Step 3: Update the HTML entry
+
+Point the existing module script at the bootstrap. Do not add a second entry:
+
+```html title="index.html"
+<script type="module" src="/src/index.ts"></script>
+```
+
+## Verify the setup [#verify]
+
+Run the application's existing production build. The build should emit the
+application entry and one loadable translation module for each locale.
+
+## Next steps
+
+- [Internationalize the SPA](/docs/react/guides/spa/internationalizing-react-spa) - Mark JSX and strings for translation.
+- [Develop with SPA translations](/docs/react/guides/developing-spa-translations) - Add compiler-powered development translations.
+- [Store translations](/docs/react/guides/storing-translations) - Generate and manage local translation files.

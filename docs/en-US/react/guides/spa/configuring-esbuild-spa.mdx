@@ -1,0 +1,104 @@
+---
+title: Configuring an esbuild SPA
+description: How to configure gt-react in an esbuild-powered single-page React application.
+related:
+  links:
+    - /docs/react/guides/spa/internationalizing-react-spa
+    - /docs/react/guides/developing-spa-translations
+    - /docs/react/guides/storing-translations
+    - /docs/react/guides/configuring
+---
+
+esbuild starts the browser bundle from its configured entry point. Route that
+entry through a bootstrap module so GT initializes before React and any
+module-level translations run.
+
+Follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) to install
+`gt-react`, create `gt.config.json`, and configure `src/_gt/[locale].json` as
+the translation output.
+
+## Configure the application [#configure]
+
+### Step 1: Add the translation loader
+
+Keep the locale expression between a static directory and file extension so
+esbuild can discover the matching JSON modules:
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  try {
+    const translations = await import(`./_gt/${locale}.json`);
+    return translations.default;
+  } catch {
+    return {};
+  }
+}
+```
+
+Create an empty JSON file for each target locale before the first build. Running
+[`gt translate`](/docs/cli/reference/commands/translate) later replaces those
+stubs with generated translations.
+
+### Step 2: Create the bootstrap module
+
+Assuming the existing React entry is `src/main.tsx`, create `src/index.ts` and
+import the application only after
+[`initializeGTSPA()`](/docs/react/reference/config#initialize-spa) resolves:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+await initializeGTSPA({ ...gtConfig, loadTranslations });
+
+await import('./main');
+```
+
+<Accordions>
+  <Accordion title="What if the output target does not support top-level await?">
+
+Keep the existing output format and target, then use an async bootstrap
+function:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  await initializeGTSPA({ ...gtConfig, loadTranslations });
+  await import('./main');
+}
+
+void bootstrap();
+```
+
+  </Accordion>
+</Accordions>
+
+### Step 3: Change the esbuild entry
+
+Point the existing `entryPoints` setting at the bootstrap and preserve the
+project's remaining build options:
+
+```js title="esbuild.config.mjs"
+const buildOptions = {
+  // Keep the project's existing options.
+  entryPoints: ['src/index.ts'],
+};
+```
+
+If development HTML references `src/main.tsx` directly, update that existing
+module script to reference `src/index.ts`.
+
+## Verify the setup [#verify]
+
+Run the application's existing production build. The build should emit the
+bootstrap entry and a loadable translation module for each locale.
+
+## Next steps
+
+- [Internationalize the SPA](/docs/react/guides/spa/internationalizing-react-spa) - Mark JSX and strings for translation.
+- [Develop with SPA translations](/docs/react/guides/developing-spa-translations) - Add compiler-powered development translations.
+- [Store translations](/docs/react/guides/storing-translations) - Generate and manage local translation files.
