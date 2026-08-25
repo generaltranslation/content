@@ -1,0 +1,95 @@
+---
+
+title: Harvest API
+description: Map recorded text nodes to published locale catalogs. Reference for the gt-rrweb harvest API.
+
+---
+
+Import harvest values from `gt-rrweb/harvest`. Most applications configure harvesting through [`GTRecorder`](/docs/rrweb/reference/recorder#gt-recorder); the direct API supports custom recording pipelines.
+
+## Overview [#overview]
+
+| API | Description |
+| --- | --- |
+| [`harvestLocales`](#harvest-locales) | Builds overlays for every requested locale. |
+| [`harvestHash`](#harvest-hash) | Builds overlays with an explicit source locale and loader. |
+| [`flattenEntry`](#flatten-entry) | Flattens translated GTJSON into rendered leaves. |
+| [`collectRecordedText`](#recorded-text) | Collects recorded text nodes by rrweb node id. |
+| [`recordingHasHashes`](#recording-hashes) | Checks whether the stream contains translation hashes. |
+| [`collectHashNodes`](#hash-nodes) | Collects hashed translation nodes and descendant text. |
+| [`overlayFromDict`](#overlay-dict) | Aligns hashed nodes with one translation catalog. |
+| [`stringOverlay`](#string-overlay) | Matches unwrapped source strings by message hash. |
+
+## `harvestLocales` [#harvest-locales]
+
+```ts
+function harvestLocales(
+  events: eventWithTime[],
+  locales: string[],
+  options?: HarvestOptions
+): Promise<LocaleTextOverlay>;
+```
+
+`locales[0]` is the fallback source locale. The function loads each target catalog through `options.loadTranslations`; without a loader it returns an empty overlay.
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `loadTranslations` | Loads a published hash-to-content catalog by locale. | `(locale: string) => Promise<unknown>` | Yes | — |
+| `hashMessage` | Hashes bare source strings for `gt()` and `useGT()` matching. | `(message: string) => string \| undefined` | Yes | — |
+| `sourceLocale` | Identifies the locale visible in the recording. | `string` | Yes | Locale cookie, then `locales[0]` |
+| `localeCookieName` | Names the cookie used to detect the source locale. | `string` | Yes | — |
+
+[`<T>`](/docs/react/reference/components/t) entries are aligned by the `data-_gt-hash` attribute emitted when [`_tagIds`](/docs/react/reference/config#tag-ids) is enabled. Untranslated entries, branch or plural entries without a single form, and structures whose leaf counts differ are left in the source locale.
+
+## `harvestHash` [#harvest-hash]
+
+```ts
+function harvestHash(
+  events: eventWithTime[],
+  locales: string[],
+  options: {
+    source: string;
+    loadTranslations: TranslationsLoader;
+    hashMessage?: (message: string) => string | undefined;
+  }
+): Promise<LocaleTextOverlay>;
+```
+
+`harvestHash` is the lower-level hash strategy used by `harvestLocales`. It requires an explicit source locale and catalog loader.
+
+## `flattenEntry` [#flatten-entry]
+
+`flattenEntry(entry)` returns translated text and variable leaves in document order. Variables and childless value-rendering components become placeholders that keep the recorded value; plural and branch entries return `null` because they do not identify one rendered form.
+
+## `collectRecordedText` [#recorded-text]
+
+`collectRecordedText(events)` returns a `Map<number, string>` containing every text node from full snapshots and mutations.
+
+## `recordingHasHashes` [#recording-hashes]
+
+`recordingHasHashes(events)` returns whether the recording includes GT message hashes.
+
+## `collectHashNodes` [#hash-nodes]
+
+`collectHashNodes(events)` returns each recorded translation hash with its descendant text node ids and source text in document order.
+
+## `overlayFromDict` [#overlay-dict]
+
+`overlayFromDict(hashNodes, dict)` aligns each hash node with one `TranslationDict`. It skips absent translations, plurals and branches, and structural mismatches instead of assigning text to the wrong node.
+
+## `stringOverlay` [#string-overlay]
+
+`stringOverlay(recorded, covered, dict, hashMessage)` handles bare text not already covered by a hashed [`<T>`](/docs/react/reference/components/t) node. It applies only string-valued catalog entries and leaves blank, unchanged, absent, or interpolated rendered strings in the source locale.
+
+## Types [#types]
+
+| Type | Definition |
+| --- | --- |
+| `LocaleTextOverlay` | `Record<string, Record<number, string>>` |
+| `TranslationsLoader` | `(locale: string) => Promise<unknown>` |
+| `TranslationDict` | `Record<string, GtJsxChildren \| null>` |
+| `GtJsxChildren` | A GTJSON child or array of children. |
+| `GtJsxChild` | `string \| GtElement \| GtVariable` |
+| `GtLeaf` | `{ text: string } \| { variable: true }` |
+
+The GTJSON helper types describe the compact catalog representation consumed by the overlay functions. They are useful when implementing custom harvest tooling; ordinary recorder setup does not need them.

@@ -9,6 +9,7 @@ const EXPECTED_ROOTS = [
   'platform',
   'cli',
   'react',
+  'rrweb',
   'node',
   'python',
   'integrations',
@@ -19,6 +20,7 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
   cli: ['Guides', 'Reference'],
   react: ['Guides', 'Reference', 'Frameworks'],
+  rrweb: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
   integrations: ['Mintlify', 'Sanity', 'Storyblok', 'Google Drive'],
@@ -33,6 +35,7 @@ const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
   guides: 'Guides',
   hooks: 'Hooks',
   reference: 'Reference',
+  rrweb: 'rrweb',
   types: 'Types',
 };
 
