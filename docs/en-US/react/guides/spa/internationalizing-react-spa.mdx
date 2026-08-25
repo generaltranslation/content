@@ -1,0 +1,126 @@
+---
+title: Internationalizing a React SPA
+description: How to mark JSX and strings for translation in a configured React SPA.
+related:
+  links:
+    - /docs/react/guides/translating-jsx
+    - /docs/react/guides/translating-strings
+    - /docs/react/guides/formatting-variables
+    - /docs/react/guides/handling-plurals-and-branches
+---
+
+Once the SPA initializer runs before the application entry, components and
+module-level strings can use the active locale immediately. This page collects
+the implementation rules that are specific to that startup model.
+
+## Translate JSX [#jsx]
+
+Wrap complete blocks of translatable JSX with the
+[`<T>` component](/docs/react/reference/components/t). Keep the structure inside
+each block static, and never nest one
+[`<T>`](/docs/react/reference/components/t) inside another:
+
+```tsx title="src/components/Welcome.tsx"
+import { T, Var } from 'gt-react';
+
+type WelcomeProps = {
+  name: string;
+};
+
+export default function Welcome({ name }: WelcomeProps) {
+  return (
+    <T>
+      <h1>
+        Welcome, <Var>{name}</Var>!
+      </h1>
+      <p>Your workspace is ready.</p>
+    </T>
+  );
+}
+```
+
+Use [`<Var>`](/docs/react/reference/components/var) for unformatted dynamic
+values. Use [`<Currency>`](/docs/react/reference/components/currency),
+[`<DateTime>`](/docs/react/reference/components/datetime), and
+[`<Num>`](/docs/react/reference/components/num) when a value needs locale-aware
+formatting.
+
+Conditional content must also have a stable translation structure. Use
+[`<Branch>`](/docs/react/reference/components/branch) for named alternatives and
+[`<Plural>`](/docs/react/reference/components/plural) for count-dependent text.
+Include complete sentences in each branch when the condition changes grammar
+outside a single word.
+
+See [Translating JSX](/docs/react/guides/translating-jsx),
+[Formatting variables](/docs/react/guides/formatting-variables), and
+[Handling plurals and branches](/docs/react/guides/handling-plurals-and-branches)
+for complete patterns.
+
+## Translate strings [#strings]
+
+In an initialized SPA, prefer [`t()`](/docs/react/reference/functions/t-function)
+for strings. The bootstrap waits for translations before importing the
+application, so [`t()`](/docs/react/reference/functions/t-function) also works
+at module scope:
+
+```ts title="src/navigation.ts"
+import { t } from 'gt-react';
+
+export const navigation = [
+  { label: t('Home'), href: '/' },
+  { label: t('About'), href: '/about' },
+];
+```
+
+The source message must be static. Pass dynamic values separately with ICU
+syntax:
+
+```ts
+import { t } from 'gt-react';
+
+const greeting = t('Hello, {name}!', { name: 'Ada' });
+const attendees = t(
+  '{count, plural, one {One person is here} other {# people are here}}',
+  { count: 3 }
+);
+```
+
+The SPA locale selector reloads the application after a locale change, so
+module-level translations evaluate again in the new locale. See
+[Translating strings](/docs/react/guides/translating-strings) for context and
+shared-message patterns.
+
+## Add locale selection [#locale-selector]
+
+Add the [`<LocaleSelector>` component](/docs/react/reference/components/locale-selector)
+where users choose a language:
+
+```tsx title="src/components/LanguageMenu.tsx"
+import { LocaleSelector } from 'gt-react';
+
+export default function LanguageMenu() {
+  return <LocaleSelector />;
+}
+```
+
+It reads the locales configured for the initializer, saves the selection, and
+reloads the SPA so module-level translations use the new locale.
+
+## Validate the implementation [#validate]
+
+Check translation syntax after marking content:
+
+```bash
+npx gt validate
+```
+
+Then run the application's existing typecheck and production build. Fix any
+translation syntax, missing locale file, or bundler import errors before
+generating translations.
+
+## Next steps
+
+- [Translate JSX](/docs/react/guides/translating-jsx) - Learn component patterns in depth.
+- [Translate strings](/docs/react/guides/translating-strings) - Add context and variables to strings.
+- [Manage locales](/docs/react/guides/managing-locales) - Configure and switch supported languages.
+- [Store translations](/docs/react/guides/storing-translations) - Generate local translation files.

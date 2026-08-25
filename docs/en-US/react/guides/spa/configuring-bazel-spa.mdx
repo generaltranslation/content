@@ -1,0 +1,127 @@
+---
+title: Configuring a Bazel SPA
+description: How to configure gt-react in a Bazel-powered single-page React application.
+related:
+  links:
+    - /docs/react/guides/spa/internationalizing-react-spa
+    - /docs/react/guides/developing-spa-translations
+    - /docs/react/guides/storing-translations
+    - /docs/react/guides/configuring
+---
+
+Bazel requires every source file, package, and configuration file used by the
+browser bundle to be declared. Add GT to the target that owns the React entry
+instead of creating a second build pipeline.
+
+Follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) to install
+`gt-react`. Run the package manager so the lockfile consumed by the repository's
+JavaScript rules is updated.
+
+## Configure the application [#configure]
+
+### Step 1: Create the GT config
+
+Set the framework to `react` because Bazel is the build system, then store local
+translations under the source directory:
+
+```json title="gt.config.json"
+{
+  "framework": "react",
+  "defaultLocale": "en",
+  "locales": ["fr", "de"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+Replace the example locales with the languages supported by your application.
+
+### Step 2: Declare the Bazel inputs
+
+Locate the target that builds the browser bundle. Add the installed `gt-react`
+npm label, make `gt.config.json` available through `srcs` or `data`, and change
+the browser entry to the bootstrap created below.
+
+For an application using Aspect's `esbuild` rule in the root Bazel package, the
+target can look like this:
+
+```starlark title="BUILD.bazel"
+load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
+
+esbuild(
+    name = "app",
+    srcs = glob(["src/**"]) + ["gt.config.json"],
+    deps = [
+        ":node_modules/react",
+        ":node_modules/react-dom",
+        ":node_modules/gt-react",
+    ],
+    entry_point = "src/index.js",
+    format = "esm",
+    output = "app.js",
+)
+```
+
+Keep the rule, labels, dependencies, and build options already established by
+your repository. A target in a child package may need labels such as
+`//:gt.config.json` and `//:node_modules/gt-react`. When a first-party
+`js_library` owns the importing source, declare `gt-react` on that target.
+
+### Step 3: Add static translation loaders
+
+List each target locale with a literal import path so Bazel and the underlying
+bundler can discover every file:
+
+```js title="src/loadTranslations.js"
+const translationLoaders = {
+  fr: () => import('./_gt/fr.json'),
+  de: () => import('./_gt/de.json'),
+};
+
+export default async function loadTranslations(locale) {
+  const loader = translationLoaders[locale];
+  return loader ? (await loader()).default : {};
+}
+```
+
+Create the imported JSON files before the first build. Running
+[`gt translate`](/docs/cli/reference/commands/translate) later replaces those
+stubs with generated translations. Ensure the owning target includes the files
+through its existing source glob or explicit `srcs` or `data` entries.
+
+### Step 4: Create the bootstrap module
+
+Assuming the original React entry is `src/main.js`, initialize
+[`initializeGTSPA()`](/docs/react/reference/config#initialize-spa) before
+importing it:
+
+```js title="src/index.js"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  await initializeGTSPA({ ...gtConfig, loadTranslations });
+  await import('./main');
+}
+
+void bootstrap();
+```
+
+This async bootstrap works when the target does not support top-level await. If
+the existing bundle already uses top-level await, you can await initialization
+directly without changing the output format or target.
+
+## Verify the setup [#verify]
+
+Run the repository's existing Bazel build or test target. Fix undeclared-input
+or missing-dependency errors on the target that owns each file or import.
+
+## Next steps
+
+- [Internationalize the SPA](/docs/react/guides/spa/internationalizing-react-spa) - Mark JSX and strings for translation.
+- [Develop with SPA translations](/docs/react/guides/developing-spa-translations) - Add compiler-powered development translations.
+- [Store translations](/docs/react/guides/storing-translations) - Generate and manage local translation files.
