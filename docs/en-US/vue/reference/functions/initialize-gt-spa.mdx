@@ -1,0 +1,105 @@
+---
+
+title: initializeGTSPA
+description: Initialize and preload the browser-only Vue SPA runtime for module-level translations. API reference for initializeGTSPA.
+
+---
+
+This initializer owns one page-wide runtime and makes its loaded catalog available to synchronous [`t()`](/docs/vue/reference/functions/t) calls. It complements the [`useGT()`](/docs/vue/reference/composables/use-gt) callback inside components; it does not replace the composable or support server rendering.
+
+## Overview [#overview]
+
+```ts
+function initializeGTSPA(
+  options?: InitializeGTSPAOptions
+): Promise<GTPlugin>;
+```
+
+Await the initializer before importing any module that calls [`t()`](/docs/vue/reference/functions/t), then install the exact returned plugin:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-vue';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  const gt = await initializeGTSPA({ ...gtConfig, loadTranslations });
+  const { mount } = await import('./main');
+  mount(gt);
+}
+
+void bootstrap().catch((error: unknown) => {
+  console.error(error);
+});
+```
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `options` | SPA locale, cookie, mapping, allowlist, and catalog loader configuration. | [`InitializeGTSPAOptions`](/docs/vue/reference/types/initialize-gt-spa-options) | Yes | `{}` |
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `defaultLocale` | Source and fallback locale. | `string` | Yes | `en` |
+| `loadTranslations` | Asynchronous target-catalog loader. | [`LoadTranslations`](/docs/vue/reference/types/load-translations) | Yes | Empty catalog |
+| `locale` | Explicit initial locale. It wins over the browser cookie. | `string` | Yes | Cookie, then `defaultLocale` |
+| `localeCookieName` | Cookie used to persist locale selection. | `string` | Yes | `generaltranslation.locale` |
+| `locales` | Target locales accepted from configuration, cookies, and setters. | `readonly string[]` | Yes | Unrestricted |
+| `customMapping` | Object mapping `code` values used for locale matching and formatter locale resolution. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | None |
+
+`locales` normally contains the target locales from `gt.config.json`; the initializer adds `defaultLocale` to the supported set. See [`InitializeGTSPAOptions`](/docs/vue/reference/types/initialize-gt-spa-options) for resolution details.
+
+## Initialization [#initialization]
+
+The first call starts the page-wide initialization and owns its options. Concurrent calls share that promise. After it succeeds, every later call returns the same [`GTPlugin`](/docs/vue/reference/types/gt-plugin) and ignores new options.
+
+Initialization performs these steps before resolving:
+
+1. Resolve the explicit locale, saved cookie, or default locale against `locales` and `customMapping`.
+2. Create a runtime whose active locale stays pinned for the lifetime of the page.
+3. Load and cache the active target catalog. The default locale uses source content and skips the loader.
+4. Publish the runtime to module-level [`t()`](/docs/vue/reference/functions/t) calls.
+
+If loading rejects, initialization logs the loader diagnostic and rejects. The failed attempt does not become the singleton, so a later call can retry.
+
+## Locale changes [#locale-changes]
+
+The returned plugin uses a reload transition. Calling `plugin.setLocale(locale)` or [`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) resolves the requested locale, writes it to the configured cookie, and reloads the document.
+
+The current page stays on its pinned locale until the reload. The next bootstrap resolves the new cookie and preloads that catalog before application modules run, so every module-level translation is evaluated again. The setter does not load the target catalog into the current page before reloading.
+
+If `locales` is provided, matching is case-insensitive and supports canonical aliases. The spelling from `gt.config.json` is preserved for loader paths. Unsupported saved or requested locales resolve to `defaultLocale`. When `locales` is omitted, non-default locale codes remain unrestricted.
+
+## Return and errors [#return-errors]
+
+**Returns** `Promise<`[`GTPlugin`](/docs/vue/reference/types/gt-plugin)`>`
+
+The promise resolves only after the initial locale is ready. Install this exact plugin; creating a separate [`createGT()`](/docs/vue/reference/functions/create-gt) instance would give components a different locale and catalog cache from [`t()`](/docs/vue/reference/functions/t).
+
+The returned promise rejects in a server-rendered environment because browser-global state and document reloads are not request-safe. Use one request-scoped [`createGT({ locale })`](/docs/vue/reference/functions/create-gt#server-rendering) plugin and [`useGT()`](/docs/vue/reference/composables/use-gt) inside components for server rendering.
+
+## Example [#example]
+
+Keep the normal Vue entry point behind a mount function:
+
+```ts title="src/main.ts"
+import { createApp } from 'vue';
+import type { GTPlugin } from 'gt-vue';
+import App from './App.vue';
+
+export function mount(gt: GTPlugin) {
+  createApp(App).use(gt).mount('#app');
+}
+```
+
+Any module reached through the later dynamic import can then translate during evaluation:
+
+```ts title="src/navigation.ts"
+import { t } from 'gt-vue';
+
+export const navigation = [
+  { label: t('Documentation'), href: '/docs' },
+  { label: t('Settings'), href: '/settings' },
+];
+```

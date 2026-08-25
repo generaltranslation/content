@@ -1,0 +1,122 @@
+---
+
+title: Configuring gt-vue
+description: How to create a Vue translation plugin, load catalogs, and configure browser or server rendering.
+related:
+  links:
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/translating-strings
+    - /docs/vue/guides/managing-locales
+    - /docs/vue/guides/storing-translations
+
+---
+
+Create one plugin for each isolated Vue application. The plugin owns its active locale, loaded catalogs, and reactive translation state.
+
+Use [`createGT()`](/docs/vue/reference/functions/create-gt) for ordinary Vue applications, including apps that switch locales without reloading and apps that render on the server. Browser-only SPAs that need module-level [`t()`](/docs/vue/reference/functions/t) use a different startup path described in [Developing with SPA translations](/docs/vue/guides/developing-spa-translations).
+
+## Create the plugin [#create]
+
+Pass the source locale and a [`loadTranslations`](/docs/vue/reference/types/load-translations) callback to [`createGT()`](/docs/vue/reference/functions/create-gt), then install the returned plugin with `app.use()`:
+
+```ts title="src/main.ts"
+import { createApp } from 'vue';
+import { createGT } from 'gt-vue';
+import App from './App.vue';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+const gt = createGT({
+  defaultLocale: gtConfig.defaultLocale,
+  loadTranslations,
+});
+
+createApp(App).use(gt).mount('#app');
+```
+
+Install that plugin once. Creating another instance gives it a separate locale and catalog cache.
+
+## Resolve the initial locale [#initial-locale]
+
+[`createGT()`](/docs/vue/reference/functions/create-gt) resolves the initial locale in this order:
+
+1. An explicit `locale` option.
+2. The browser value of the configured locale cookie.
+3. `defaultLocale`.
+
+An explicit locale is authoritative during server rendering and hydration. In a browser, it replaces a stale cookie so the client starts with the same locale as the server.
+
+```ts
+const gt = createGT({
+  defaultLocale: 'en',
+  locale: serverLocale,
+  localeCookieName: 'my-app.locale',
+  loadTranslations,
+});
+```
+
+The default cookie name is `generaltranslation.locale`. Change `localeCookieName` only when your router or server needs to share a different cookie.
+
+## Load translation catalogs [#load]
+
+The default locale renders directly from source content, so its loader is never called. Other locales are loaded through [`loadTranslations`](/docs/vue/reference/types/load-translations):
+
+```ts title="src/loadTranslations.ts"
+import type { LoadTranslations } from 'gt-vue';
+
+const loadTranslations: LoadTranslations = async (locale) => {
+  try {
+    return (await import(`./_gt/${locale}.json`)).default;
+  } catch {
+    return {};
+  }
+};
+
+export default loadTranslations;
+```
+
+Successful catalogs are cached for the lifetime of the plugin, and concurrent requests for the same locale share one load. On the client, the app can mount with source content while the first catalog loads; translated components rerender when it arrives.
+
+Returning an empty object uses source content as the fallback. If the callback rejects, locale changes reject and leave the current locale active.
+
+## Keep CLI and runtime configuration aligned [#shared-config]
+
+Use `gt.config.json` as the shared record of your source locale, target locales, and generated file location:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+The CLI reads this file directly. [`createGT()`](/docs/vue/reference/functions/create-gt) accepts its own runtime options, so pass `defaultLocale` and your loader explicitly. The `locales` list remains useful for your language switcher and for the CLI, but a reactive plugin does not reject other locale codes; your UI and loader decide which locales are available.
+
+Production API credentials belong to the CLI process that generates translations. Do not expose `GT_API_KEY` in browser code.
+
+## Configure server rendering [#ssr]
+
+Create a fresh plugin for every request so locale and catalog state cannot leak between users. Resolve the request locale, pass it explicitly, and preload its catalog before rendering:
+
+```ts title="src/gt-server.ts"
+import { createGT } from 'gt-vue';
+import loadTranslations from './loadTranslations';
+
+export async function createRequestGT(locale: string) {
+  const gt = createGT({
+    defaultLocale: 'en',
+    locale,
+    loadTranslations,
+  });
+
+  await gt.loadTranslations(locale);
+  return gt;
+}
+```
+
+Install the returned plugin on the request's Vue app. Before hydrating in the browser, create and preload a client plugin with the same explicit locale. Hydrating before the target catalog is ready can briefly render source content and cause a mismatch.

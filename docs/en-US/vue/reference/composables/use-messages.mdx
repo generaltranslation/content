@@ -1,0 +1,93 @@
+---
+
+title: useMessages
+description: Resolve strings registered with msg into the active locale. API reference for useMessages.
+
+---
+
+The `useMessages` composable returns a synchronous resolver for strings registered by [`msg()`](/docs/vue/reference/functions/msg). It also accepts ordinary source strings and preserves nullish values.
+
+## Overview [#overview]
+
+Register source text at module scope, then resolve each registered string inside a component:
+
+```ts title="src/messages.ts"
+import { msg } from 'gt-vue';
+
+export const savedMessage = msg('Your preferences are saved.', {
+  $context: 'Settings confirmation',
+});
+```
+
+```vue title="SettingsStatus.vue"
+<script setup lang="ts">
+import { useMessages } from 'gt-vue';
+import { savedMessage } from './messages';
+
+const m = useMessages();
+</script>
+
+<template>
+  <p>{{ m(savedMessage) }}</p>
+</template>
+```
+
+## How it works [#how-it-works]
+
+- **Registered messages.** [`msg()`](/docs/vue/reference/functions/msg) registers the source for extraction. When it receives options, it encodes source and context metadata that takes precedence over call-site options; without options, it returns the source string unchanged.
+- **Raw strings.** An ordinary string is looked up like a call through [`useGT()`](/docs/vue/reference/composables/use-gt) and can supply call-site `$context`.
+- **Nullish pass-through.** `null` returns `null`, and `undefined` returns `undefined`.
+- **Source fallback.** A missing or incompatible catalog entry returns the original source string.
+- **Plain strings only.** Braces remain literal; no ICU formatting or interpolation is performed.
+
+Call the resolver from a template, `computed`, or another reactive effect when it should update with a [`createGT()`](/docs/vue/reference/functions/create-gt) catalog or locale change. A value resolved once during setup is a plain string snapshot. A browser SPA initialized with [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) preloads its initial catalog and recreates snapshots after its locale-change reload.
+
+## Parameters [#parameters]
+
+`useMessages` takes no parameters.
+
+## Returns [#returns]
+
+**Type** `<T extends string | null | undefined>(message: T, options?: GTStringOptions) => T extends string ? string : T`
+
+A synchronous resolver with these parameters:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | Registered message, raw source string, or nullish value. | `string \| null \| undefined` | No | — |
+| [`options`](#options) | Context for an unencoded raw source string. | [`GTStringOptions`](/docs/vue/reference/types/gt-string-options) | Yes | `{}` |
+
+### `message`
+
+**Type** `string | null | undefined` · **Required**
+
+An individual string returned by [`msg()`](/docs/vue/reference/functions/msg), a static raw source string, `null`, or `undefined`. If [`msg()`](/docs/vue/reference/functions/msg) registered an array, resolve each member separately.
+
+### `options`
+
+**Type** [`GTStringOptions`](/docs/vue/reference/types/gt-string-options) · **Optional** · **Default** `{}`
+
+The only supported field is `$context?: string`. It applies to a raw source string. Context already encoded by [`msg()`](/docs/vue/reference/functions/msg) takes precedence.
+
+## Examples [#examples]
+
+Resolve a nullable registered message without a separate guard:
+
+```vue title="StatusMessage.vue"
+<script setup lang="ts">
+import { useMessages } from 'gt-vue';
+
+defineProps<{ encodedMessage: string | null }>();
+const m = useMessages();
+</script>
+
+<template>
+  <p>{{ m(encodedMessage) }}</p>
+</template>
+```
+
+Resolve a raw string with context:
+
+```vue
+<p>{{ m('Open', { $context: 'Adjective: an open issue' }) }}</p>
+```

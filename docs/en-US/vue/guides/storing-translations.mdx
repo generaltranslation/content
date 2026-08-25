@@ -1,0 +1,114 @@
+---
+
+title: Storing translations locally
+description: How to generate, bundle, and load gt-vue translation catalogs with your application.
+related:
+  links:
+    - /docs/vue/guides/configuring
+    - /docs/vue/guides/developing-spa-translations
+    - /docs/vue/guides/managing-locales
+    - /docs/vue/guides/translating-content
+
+---
+
+`gt-vue` receives target-locale catalogs through a [`loadTranslations`](/docs/vue/reference/types/load-translations) callback. Generate those catalogs into your source tree to bundle them with the app and avoid a runtime translation-service dependency.
+
+Bundled catalogs make translation updates part of your deployment. Regenerate and redeploy the app whenever source content or a translation changes.
+
+## Configure the output path [#configure]
+
+Set the `gt` output in `gt.config.json` to a path under your source directory. The `[locale]` placeholder creates one file per target locale:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+The default locale does not need a catalog file because its source content is already present in the application.
+
+## Generate the catalogs [#generate]
+
+Run the CLI after adding or changing translatable content:
+
+```bash
+npx gt translate
+```
+
+The command extracts supported [`<T>`](/docs/vue/reference/components/t), [`useGT()`](/docs/vue/reference/composables/use-gt), [`msg()`](/docs/vue/reference/functions/msg), and [`t()`](/docs/vue/reference/functions/t) usage, then writes the target-locale files. Treat those files as generated output rather than editing them by hand.
+
+Add translation generation before the production build when every deployment should include current catalogs:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && vue-tsc -b && vite build"
+  }
+}
+```
+
+The CLI needs `GT_PROJECT_ID` and `GT_API_KEY` in the build environment. Keep the production key out of the browser bundle.
+
+## Load catalogs with Vite [#vite]
+
+Create a [`loadTranslations`](/docs/vue/reference/types/load-translations) callback whose import path matches the configured output:
+
+```ts title="src/loadTranslations.ts"
+import type { LoadTranslations } from 'gt-vue';
+
+const loadTranslations: LoadTranslations = async (locale) => {
+  try {
+    return (await import(`./_gt/${locale}.json`)).default;
+  } catch {
+    return {};
+  }
+};
+
+export default loadTranslations;
+```
+
+Pass it to [`createGT()`](/docs/vue/reference/functions/create-gt) for reactive loading or [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) for a preloaded browser-only SPA.
+
+The callback above treats a missing file as an empty catalog, so source content renders for that locale. Let the error reject instead when a missing production catalog should block the locale change or application bootstrap.
+
+## Use explicit imports when required [#explicit-imports]
+
+Some bundlers cannot discover every file behind a variable import. Define a static loader map so each target is visible at build time:
+
+```ts title="src/loadTranslations.ts"
+import type { LoadTranslations } from 'gt-vue';
+
+const loaders = {
+  es: () => import('./_gt/es.json'),
+  fr: () => import('./_gt/fr.json'),
+};
+
+const loadTranslations: LoadTranslations = async (locale) => {
+  const load = loaders[locale as keyof typeof loaders];
+  return load ? (await load()).default : {};
+};
+
+export default loadTranslations;
+```
+
+Keep this map synchronized with `locales` in `gt.config.json`. Returning `{}` is appropriate for an intentionally unsupported locale; rejecting makes the failure visible to the caller.
+
+## Load from another source [#custom-source]
+
+The callback can fetch a catalog from your own endpoint instead of importing a bundled file:
+
+```ts
+const loadTranslations: LoadTranslations = async (locale) => {
+  const response = await fetch(`/translations/${locale}.json`);
+  if (!response.ok) throw new Error(`Catalog unavailable for ${locale}`);
+  return response.json();
+};
+```
+
+[`createGT()`](/docs/vue/reference/functions/create-gt) caches each successful catalog for the lifetime of its plugin instance and deduplicates concurrent loads. Validate responses at your endpoint boundary; the runtime expects a complete hash-keyed [`TranslationCatalog`](/docs/vue/reference/types/translation-catalog) for the requested locale.

@@ -1,0 +1,109 @@
+---
+
+title: Translating strings
+description: How to translate Vue labels, attributes, and shared strings with useGT and useMessages.
+related:
+  links:
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/developing-spa-translations
+    - /docs/vue/guides/formatting-variables
+    - /docs/vue/guides/configuring
+
+---
+
+Use [`useGT()`](/docs/vue/reference/composables/use-gt) for strings that cannot be expressed as template content, such as placeholders, accessible labels, and values passed to another component. Use [`msg()`](/docs/vue/reference/functions/msg) with [`useMessages()`](/docs/vue/reference/composables/use-messages) when a static message is declared in one module and rendered in another.
+
+## Translate with `useGT` [#use-gt]
+
+Call [`useGT()`](/docs/vue/reference/composables/use-gt) during component setup, then call its returned function from the template:
+
+```vue
+<script setup lang="ts">
+import { useGT } from 'gt-vue';
+
+const gt = useGT();
+</script>
+
+<template>
+  <input
+    type="search"
+    :placeholder="gt('Search products')"
+    :aria-label="gt('Search')"
+  />
+</template>
+```
+
+Use a string literal so the CLI can extract it. Missing catalog entries return the source string.
+
+The only supported option is a static `$context`:
+
+```vue
+<button>{{ gt('Archive', { $context: 'verb on a project action' }) }}</button>
+```
+
+Braces are literal text. [`useGT()`](/docs/vue/reference/composables/use-gt) does not process ICU syntax, interpolate variables, or accept React string options such as `$id`, `$maxChars`, and `$format`.
+
+## Keep translated results reactive [#reactivity]
+
+The function returned by [`useGT()`](/docs/vue/reference/composables/use-gt) reads the active catalog when it is called. Call it from a template, computed value, or reactive effect when the result should update after a locale or catalog change:
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useGT } from 'gt-vue';
+
+const gt = useGT();
+const pageTitle = computed(() => gt('Account settings'));
+</script>
+
+<template>
+  <h1>{{ pageTitle }}</h1>
+</template>
+```
+
+`const pageTitle = gt('Account settings')` translates once during setup and stores a snapshot. It does not run again when a [`createGT()`](/docs/vue/reference/functions/create-gt) plugin switches locale.
+
+## Register shared messages [#messages]
+
+Use [`msg()`](/docs/vue/reference/functions/msg) to register static strings in a shared module. It marks content for extraction; it does not perform a translation lookup.
+
+```ts title="src/messages.ts"
+import { msg } from 'gt-vue';
+
+export const statusMessages = {
+  active: msg('Active', { $context: 'account status' }),
+  paused: msg('Paused', { $context: 'account status' }),
+};
+```
+
+Resolve the selected message with [`useMessages()`](/docs/vue/reference/composables/use-messages) where it is rendered:
+
+```vue title="src/components/StatusBadge.vue"
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useMessages } from 'gt-vue';
+import { statusMessages } from '../messages';
+
+const props = defineProps<{ status: keyof typeof statusMessages }>();
+const m = useMessages();
+const label = computed(() => m(statusMessages[props.status]));
+</script>
+
+<template>
+  <span>{{ label }}</span>
+</template>
+```
+
+Without options, [`msg()`](/docs/vue/reference/functions/msg) returns the original string unchanged. With `$context`, it adds opaque lookup metadata that [`useMessages()`](/docs/vue/reference/composables/use-messages) reads. Do not parse or store assumptions about that encoded representation.
+
+## Translate content with runtime values [#variables]
+
+Plain string lookups do not interpolate runtime data. Put the complete phrase in [`<T>`](/docs/vue/reference/components/t) and mark the changing value with [`<Var>`](/docs/vue/reference/components/var):
+
+```vue
+<T>Welcome back, <Var>{{ accountName }}</Var>!</T>
+```
+
+Use [`<Num>`](/docs/vue/reference/components/num), [`<Currency>`](/docs/vue/reference/components/currency), and [`<DateTime>`](/docs/vue/reference/components/datetime) when the value also needs locale-aware formatting.
+
+Browser-only SPAs that need a static lookup while modules are evaluated can use [`t()`](/docs/vue/reference/functions/t) after awaiting [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa). Follow [Developing with SPA translations](/docs/vue/guides/developing-spa-translations) to preserve the required import order.
