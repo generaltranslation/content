@@ -1,0 +1,118 @@
+---
+
+title: "<DateTime>"
+description: Format a date or time for the active locale. API reference for the <DateTime> component.
+
+---
+
+The `<DateTime>` component formats a required date-like `value` with `Intl.DateTimeFormat`. Use it on its own or as a runtime variable inside [`<T>`](/docs/vue/reference/components/t).
+
+## Overview [#overview]
+
+Bind a `Date`, epoch-millisecond number, or date string through `value`:
+
+```vue
+<DateTime
+  :value="publishedAt"
+  :options="{ dateStyle: 'medium', timeZone: 'UTC' }"
+/>
+```
+
+Formatting happens locally. The value is not included in the rich translation source.
+
+## How it works [#how-it-works]
+
+- A `Date` is formatted directly. Numbers and strings are passed to the JavaScript `Date` constructor first.
+- `null` and whitespace-only strings render empty. An invalid date string renders unchanged.
+- Date-string parsing and default time zones are supplied by the JavaScript runtime. Use an unambiguous timestamp and set `timeZone` when output must match across environments.
+- Formatter slot children are ignored. Always provide `value` and use a self-closing tag.
+- The component adds no HTML wrapper.
+
+### Locale resolution
+
+When the active locale is the configured default locale, formatting uses only that default and ignores `locales`. At any other active locale, a standalone formatter tries explicit `locales` first, then the active locale, and finally the default locale.
+
+Inside [`<T>`](/docs/vue/reference/components/t), source fallback content uses the default locale. Translated content tries the active locale and then the default, and an explicit `locales` prop is ignored.
+
+## Props [#props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`value`](#value) | Date-like value to format. | `Date \| number \| string \| null` | No | — |
+| [`options`](#options) | Options forwarded to `Intl.DateTimeFormat`. | `Intl.DateTimeFormatOptions` | Yes | `{}` |
+| [`locales`](#locales) | Preferred formatting locales. | `string[]` | Yes | Locale resolution order |
+
+### `value`
+
+**Type** `Date | number | string | null` · **Required**
+
+The value to format. A number represents milliseconds since the Unix epoch. Prefer an ISO 8601 timestamp when passing a string because other date formats can parse differently between runtimes.
+
+### `options`
+
+**Type** `Intl.DateTimeFormatOptions` · **Optional** · **Default** `{}`
+
+Options forwarded to the JavaScript runtime's `Intl.DateTimeFormat` implementation. Common options include:
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `localeMatcher` | Locale matching algorithm. | `'lookup' \| 'best fit'` | Yes | `'best fit'` |
+| `calendar` | Calendar system, such as `gregory` or `japanese`. | `string` | Yes | Locale-dependent |
+| `numberingSystem` | Numbering system, such as `latn` or `arab`. | `string` | Yes | Locale-dependent |
+| `timeZone` | IANA time-zone name, such as `UTC` or `America/New_York`. | `string` | Yes | Runtime time zone |
+| `dateStyle` | Preset date width. | `'full' \| 'long' \| 'medium' \| 'short'` | Yes | — |
+| `timeStyle` | Preset time width. | `'full' \| 'long' \| 'medium' \| 'short'` | Yes | — |
+| `hour12` | Whether to use a 12-hour clock. | `boolean` | Yes | Locale-dependent |
+| `hourCycle` | Hour cycle. | `'h11' \| 'h12' \| 'h23' \| 'h24'` | Yes | Locale-dependent |
+| `weekday` | Weekday width. | `'long' \| 'short' \| 'narrow'` | Yes | — |
+| `era` | Era width. | `'long' \| 'short' \| 'narrow'` | Yes | — |
+| `year` | Year display. | `'numeric' \| '2-digit'` | Yes | — |
+| `month` | Month display. | `'numeric' \| '2-digit' \| 'long' \| 'short' \| 'narrow'` | Yes | — |
+| `day` | Day display. | `'numeric' \| '2-digit'` | Yes | — |
+| `hour` | Hour display. | `'numeric' \| '2-digit'` | Yes | — |
+| `minute` | Minute display. | `'numeric' \| '2-digit'` | Yes | — |
+| `second` | Second display. | `'numeric' \| '2-digit'` | Yes | — |
+| `fractionalSecondDigits` | Fractional-second precision. | `1 \| 2 \| 3` | Yes | — |
+| `timeZoneName` | Time-zone label format. | `string` | Yes | — |
+
+Do not combine `dateStyle` or `timeStyle` with individual date-time fields in runtimes that reject that combination. See the [`Intl.DateTimeFormat` options](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#options) for the complete runtime-defined set.
+
+### `locales`
+
+**Type** `string[]` · **Optional** · **Default** Locale resolution order
+
+Preferred BCP 47 locale codes for standalone formatting. These are tried before the active and default locales only when the active locale is not the configured default.
+
+## Examples [#examples]
+
+```vue title="PublishedAt.vue"
+<script setup lang="ts">
+import { DateTime, T } from 'gt-vue';
+
+defineProps<{ publishedAt: Date }>();
+</script>
+
+<template>
+  <T>
+    Published
+    <DateTime
+      :value="publishedAt"
+      :options="{ dateStyle: 'long', timeZone: 'UTC' }"
+    />.
+  </T>
+</template>
+```
+
+## Server rendering [#ssr]
+
+Server and client environments can choose different default locales or time zones. That produces different strings during hydration. Configure the same explicit locale on both [`createGT()`](/docs/vue/reference/functions/create-gt) plugins and pin the formatter's time zone:
+
+```vue
+<DateTime
+  :value="publishedAt"
+  :locales="['en-US']"
+  :options="{ dateStyle: 'medium', timeZone: 'UTC' }"
+/>
+```
+
+Preload the same locale catalog before server rendering and client hydration. When the active locale equals the configured default, remember that the component intentionally ignores its explicit `locales` list and formats with that default.
