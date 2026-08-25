@@ -64,6 +64,33 @@ const TEMPLATE_TARGETS: Record<
 
 const VERBOSE = process.argv.includes('--verbose');
 const CONTENT_ORIGIN = 'https://generaltranslation.com';
+const MACHINE_DOC_SCOPES = [
+  'overview',
+  'platform',
+  'platform/dashboard',
+  'platform/locadex',
+  'platform/core',
+  'platform/openapi',
+  'cli',
+  'react',
+  'node',
+  'python',
+  'integrations',
+];
+const GENERATED_DOC_ROUTES = new Set([
+  '/docs/llms.txt',
+  '/docs/llms-index.txt',
+  '/docs/llms-full.txt',
+  '/docs/platform/openapi/llms-full.txt',
+  ...MACHINE_DOC_SCOPES.map((scope) => `/docs/${scope}/llms.txt`),
+]);
+const GENERATED_ROOT_ROUTES = new Set([
+  '/llms.txt',
+  '/llms-index.txt',
+  '/llms-full.txt',
+  '/openapi.yaml',
+  '/sitemap.xml',
+]);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -259,6 +286,22 @@ export function normalizeInternalLink(href: string): string | null {
   return `${path}${fragment}`;
 }
 
+export function isGeneratedMachineRoute(path: string): boolean {
+  const normalized = stripLocale(path);
+  return (
+    GENERATED_DOC_ROUTES.has(normalized) || GENERATED_ROOT_ROUTES.has(normalized)
+  );
+}
+
+export function isMachineRouteCandidate(path: string): boolean {
+  const normalized = stripLocale(path);
+  return (
+    /^\/llms[^/]*\.txt$/.test(normalized) ||
+    /^\/(?:openapi[^/]*\.ya?ml|sitemap[^/]*\.xml)$/.test(normalized) ||
+    /^\/docs\/(?:.+\/)?llms[^/]*\.txt$/.test(normalized)
+  );
+}
+
 /**
  * Extract all internal links from an MDX file.
  * Returns an array of { link, line, column } objects.
@@ -399,6 +442,17 @@ function validateFile(absPath: string, relPath: string): LinkError[] {
 
     // External links (shouldn't reach here, but guard)
     if (!pathPart.startsWith('/')) continue;
+    if (isGeneratedMachineRoute(pathPart)) continue;
+    if (isMachineRouteCandidate(pathPart)) {
+      errors.push({
+        file: relPath,
+        line,
+        column,
+        link,
+        reason: `Broken link: unknown generated machine-readable route "${pathPart}".`,
+      });
+      continue;
+    }
 
     // Resolve the path
     const target = resolveLink(pathPart);

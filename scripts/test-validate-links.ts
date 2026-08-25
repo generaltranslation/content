@@ -9,7 +9,11 @@
 
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { normalizeInternalLink } from './validate-links.ts';
+import {
+  isGeneratedMachineRoute,
+  isMachineRouteCandidate,
+  normalizeInternalLink,
+} from './validate-links.ts';
 
 // ─── Test Harness ───────────────────────────────────────────────────────────
 
@@ -346,7 +350,34 @@ description: A test
     'Ignores external docs URLs'
   );
 
-  // Test 7: Fixture setup
+  // Test 7: Generated machine-readable docs routes
+  console.log('\n📋 Test: Generated docs routes');
+  assert(
+    isGeneratedMachineRoute('/docs/react/llms.txt'),
+    'Allows a scoped docs index'
+  );
+  assert(
+    isGeneratedMachineRoute('/en-US/docs/platform/openapi/llms-full.txt'),
+    'Allows a locale-prefixed OpenAPI bundle'
+  );
+  assert(
+    isGeneratedMachineRoute('/llms-index.txt'),
+    'Allows the exhaustive root index'
+  );
+  assert(
+    isGeneratedMachineRoute('/openapi.yaml'),
+    'Allows the canonical OpenAPI specification'
+  );
+  assert(
+    !isGeneratedMachineRoute('/llms-typo.txt'),
+    'Rejects unknown generated docs routes'
+  );
+  assert(
+    isMachineRouteCandidate('/llms-typo.txt'),
+    'Recognizes an invalid root machine route for error reporting'
+  );
+
+  // Test 8: Fixture setup
   console.log('\n📋 Test: Fixture setup');
   setupTestFixtures();
 

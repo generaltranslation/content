@@ -294,18 +294,22 @@ The **overview** section doubles as a **landing hub**: its `meta.json` lists the
 
 ### Machine-readable outputs
 
-The publishing app generates two machine-readable maps from the docs source:
+The publishing app generates machine-readable maps from the docs source:
 
-- `llms.txt` — an [llmstxt.org](https://llmstxt.org/)-style index for LLMs and agents, grouped by section.
+- `llms.txt` — a curated [llmstxt.org](https://llmstxt.org/)-style entry point with the primary Quickstarts and links to scoped indexes.
+- `llms-index.txt` — an exhaustive link index for every published docs page.
+- `llms-full.txt` — full page bodies for tools that can load a large context, excluding the generated OpenAPI reference.
+- `/docs/<section>/llms.txt` — exhaustive section indexes for Overview, Platform, CLI, React, Node, Python, and Integrations. Platform capabilities also have scoped indexes.
+- `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
 Do not add hand-written copies to this repository. When you add, rename, remove, or reorder pages, keep the `meta.json` filetree valid so the publishing app generates current output. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
 
 ### Agent-navigable by default
 
-Beyond the two maps above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
+Beyond the machine-readable outputs above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` to its URL. Never remove this affordance, and link to the logical page path in prose (the build serves the `.md` variant).
+- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` or `.mdx` to its URL. Use `.mdx` as the canonical machine-readable URL while preserving `.md` compatibility, and link to the logical page path in prose.
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 

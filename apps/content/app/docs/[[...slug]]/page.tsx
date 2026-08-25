@@ -61,7 +61,10 @@ export default async function Page({
       full={page.data.full}
     >
       <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription>{page.data.description}</DocsDescription>
+      <DocsDescription className='mb-6'>
+        {page.data.description}
+      </DocsDescription>
+      <hr className='border-fd-border mb-8' />
       <DocsBody>
         <MDXContent components={getMDXComponents()} />
       </DocsBody>
