@@ -1,0 +1,104 @@
+---
+
+title: InitializeGTSPAOptions
+description: Configure the browser-only singleton used for preloaded module-level translations. API reference for InitializeGTSPAOptions.
+
+---
+
+Pass this object to [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa). It extends [`CreateGTOptions`](/docs/vue/reference/types/create-gt-options) with the locale list and aliases that can be read directly from `gt.config.json`.
+
+## Overview [#overview]
+
+```ts
+type InitializeGTSPAOptions = CreateGTOptions & {
+  customMapping?: CustomMapping;
+  locales?: readonly string[];
+};
+```
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`defaultLocale`](#defaultlocale) | Source and fallback locale. | `string` | Yes | `en` |
+| [`loadTranslations`](#loadtranslations) | Asynchronous target-catalog loader. | [`LoadTranslations`](/docs/vue/reference/types/load-translations) | Yes | Empty catalog |
+| [`locale`](#locale) | Explicit initial locale. | `string` | Yes | Cookie, then `defaultLocale` |
+| [`localeCookieName`](#localecookiename) | Cookie used to persist locale selection. | `string` | Yes | `generaltranslation.locale` |
+| [`customMapping`](#custommapping) | Object mapping `code` values used for locale matching and formatter locale resolution. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | None |
+| [`locales`](#locales) | Target locales supported by this SPA. | `readonly string[]` | Yes | Unrestricted |
+
+## Shared options [#shared-options]
+
+### `defaultLocale`
+
+**Type** `string` · **Optional** · **Default** `en`
+
+The source and fallback locale. It is automatically part of the supported set and uses source content instead of calling the loader.
+
+### `loadTranslations`
+
+**Type** [`LoadTranslations`](/docs/vue/reference/types/load-translations) · **Optional** · **Default** empty catalog
+
+Loads a complete target catalog. SPA initialization awaits the active locale's catalog before resolving. A rejection logs a diagnostic, rejects initialization, and allows a later initialization call to retry.
+
+### `locale`
+
+**Type** `string` · **Optional** · **Default** browser cookie, then `defaultLocale`
+
+Explicit initial locale. It wins over the cookie, is resolved against `locales`, and is persisted. The current page then pins that resolved locale until a document reload.
+
+### `localeCookieName`
+
+**Type** `string` · **Optional** · **Default** `generaltranslation.locale`
+
+Names the path-wide session cookie read during bootstrap and written before SPA locale reloads.
+
+## SPA options [#spa-options]
+
+### `customMapping`
+
+**Type** `Record<string, string | Partial<LocaleProperties>>` · **Optional** · **Default** none
+
+Declares locale aliases from your General Translation configuration. The SPA uses a valid `code` in an object mapping for supported-locale matching and for the formatter locale used by rich content and formatter components. String values and other properties in an object mapping are not read by `gt-vue`.
+
+Loader paths still receive the spelling from the configured `defaultLocale` or `locales` entry that matched.
+
+### `locales`
+
+**Type** `readonly string[]` · **Optional** · **Default** unrestricted
+
+Target locales declared by the application. The initializer deduplicates `[defaultLocale, ...locales]`, matches requests case-insensitively and through canonical locale resolution, and falls back to `defaultLocale` when no configured locale matches.
+
+When this option is omitted, non-default locale codes are not rejected. Equivalent casing or aliases of `defaultLocale` still resolve to the configured default spelling.
+
+## Singleton behavior [#singleton]
+
+Only the first initialization attempt's options create the page-wide runtime. Concurrent calls share that attempt. Once it succeeds, later calls return the existing plugin and do not apply new option values.
+
+If the first attempt rejects, its in-flight singleton entry is cleared and a later call can retry with new options.
+
+## Example [#example]
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-vue';
+import type { InitializeGTSPAOptions } from 'gt-vue';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+const options: InitializeGTSPAOptions = {
+  defaultLocale: gtConfig.defaultLocale,
+  locales: gtConfig.locales,
+  customMapping: gtConfig.customMapping,
+  loadTranslations,
+};
+
+async function bootstrap() {
+  const gt = await initializeGTSPA(options);
+  const { mount } = await import('./main');
+  mount(gt);
+}
+
+void bootstrap().catch((error: unknown) => {
+  console.error(error);
+});
+```
+
+This API is browser-only. For server rendering, use request-scoped [`CreateGTOptions`](/docs/vue/reference/types/create-gt-options) with [`createGT()`](/docs/vue/reference/functions/create-gt).

@@ -1,0 +1,90 @@
+---
+
+title: useSetLocale
+description: Change the active locale. API reference for useSetLocale.
+
+---
+
+The `useSetLocale` composable returns the installed plugin's asynchronous locale setter. Its loading and navigation behavior depends on how that plugin was created.
+
+## Overview [#overview]
+
+Call the returned function with the target locale:
+
+```vue
+<script setup lang="ts">
+import { useSetLocale } from 'gt-vue';
+
+const setLocale = useSetLocale();
+</script>
+
+<template>
+  <button @click="setLocale('fr')">Français</button>
+</template>
+```
+
+Use [`useLocale()`](/docs/vue/reference/composables/use-locale) to read the active locale.
+
+## How it works [#how-it-works]
+
+### Reactive plugins
+
+For a [`createGT()`](/docs/vue/reference/functions/create-gt) plugin, the setter:
+
+1. Loads an uncached target catalog through the configured loader.
+2. Saves the target locale in the configured cookie after loading succeeds.
+3. Updates reactive consumers without reloading the page.
+
+Successful catalogs remain cached. Concurrent requests can finish in any order, but only the latest request changes the active locale. If its catalog load rejects, the promise rejects and the current locale and cookie remain unchanged.
+
+### Browser SPA plugins
+
+For the singleton returned by [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa), the setter resolves the requested locale against the configured locale list when one is provided, writes the cookie, and reloads the document. It does not load the target catalog on the current page, whose locale remains pinned until the reload. Reloading lets module-level [`t()`](/docs/vue/reference/functions/t) calls execute again after the new catalog is preloaded.
+
+## Parameters [#parameters]
+
+`useSetLocale` takes no parameters.
+
+## Returns [#returns]
+
+**Type** `(locale: string) => Promise<void>`
+
+An asynchronous setter with this parameter:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | Target locale code. | `string` | No | — |
+
+### `locale`
+
+**Type** `string` · **Required**
+
+The target locale code. A reactive [`createGT()`](/docs/vue/reference/functions/create-gt) plugin accepts any code its loader can handle. When an [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) plugin has a configured `locales` list, it matches those locales and configured aliases, falling back to its default locale when the request is unsupported.
+
+## Example [#example]
+
+Await reactive changes when subsequent code depends on the new locale:
+
+```vue title="LocaleSelect.vue"
+<script setup lang="ts">
+import { useLocale, useSetLocale } from 'gt-vue';
+
+const locale = useLocale();
+const setLocale = useSetLocale();
+
+async function changeLocale(event: Event) {
+  const target = event.target as HTMLSelectElement;
+  await setLocale(target.value);
+}
+</script>
+
+<template>
+  <select :value="locale" @change="changeLocale">
+    <option value="en">English</option>
+    <option value="fr">Français</option>
+    <option value="ja">日本語</option>
+  </select>
+</template>
+```
+
+In an SPA initialized with [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa), the document reload begins as part of the call, so do not schedule same-page work that assumes the target locale is already active.

@@ -1,0 +1,220 @@
+---
+
+title: Quickstart
+description: Add multiple languages to a Vue application with General Translation in under 10 minutes.
+related:
+  links:
+    - /docs/vue/guides/translating-content
+    - /docs/vue/guides/translating-strings
+    - /docs/vue/guides/managing-locales
+    - /docs/vue/guides/storing-translations
+
+---
+
+By the end of this guide, your Vue app will display content in multiple languages and let users change the active locale without reloading the page.
+
+`gt-vue` runs as a Vue plugin. The plugin loads each translation catalog once, caches it, and reactively rerenders translated content when the locale changes.
+
+**Prerequisites:**
+
+- A Vue 3 application on version 3.3 or later
+- Node.js 18+
+
+## Quickstart [#quickstart]
+
+### 1. Install the packages
+
+`gt-vue` powers translations in your app. [`gt`](/docs/cli/quickstart) extracts your source content and generates translation catalogs.
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-vue
+    npm install --save-dev gt
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-vue
+    yarn add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-vue
+    bun add --dev gt
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-vue
+    pnpm add --save-dev gt
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Create a translation config file
+
+Create `gt.config.json` in your project root. Set the locale your source is written in, the locales to translate into, and the output path for generated catalogs.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+- `defaultLocale` is the language of your source content.
+- `locales` lists the target languages. Choose any locale from the [supported locales list](/docs/platform/dashboard/reference/supported-locales).
+- `files.gt.output` tells the CLI where to write each catalog. Keep the `[locale]` placeholder in the path.
+
+### 3. Create a translation loader
+
+Create a loader that returns the generated catalog for a requested locale:
+
+```ts title="src/loadTranslations.ts"
+import type { LoadTranslations } from 'gt-vue';
+
+const loadTranslations: LoadTranslations = async (locale) => {
+  try {
+    return (await import(`./_gt/${locale}.json`)).default;
+  } catch {
+    return {};
+  }
+};
+
+export default loadTranslations;
+```
+
+The loader is not called for the default locale because your source content is already its catalog. Returning an empty object lets the app render source content when a target catalog is unavailable.
+
+### 4. Register the plugin
+
+Create one [`createGT()`](/docs/vue/reference/functions/create-gt) plugin and install it before mounting your app:
+
+```ts title="src/main.ts"
+import { createApp } from 'vue';
+import { createGT } from 'gt-vue';
+import App from './App.vue';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+const gt = createGT({
+  defaultLocale: gtConfig.defaultLocale,
+  loadTranslations,
+});
+
+createApp(App).use(gt).mount('#app');
+```
+
+The plugin uses the saved locale cookie when one exists and otherwise starts at `defaultLocale`. It mounts immediately with source content, then reactively updates when the requested catalog finishes loading.
+
+### 5. Mark content for translation
+
+Use [`<T>`](/docs/vue/reference/components/t) for rich template content and [`useGT()`](/docs/vue/reference/composables/use-gt) for standalone strings such as input attributes:
+
+```vue title="src/App.vue"
+<script setup lang="ts">
+import { T, useGT } from 'gt-vue';
+
+const gt = useGT();
+</script>
+
+<template>
+  <main>
+    <T>
+      <h1>Welcome to my app</h1>
+      <p>This content will be translated automatically.</p>
+    </T>
+
+    <input :placeholder="gt('Search products')" />
+  </main>
+</template>
+```
+
+Keep content inside [`<T>`](/docs/vue/reference/components/t) static. Use [variable and branching components](/docs/vue/guides/formatting-variables) for runtime values and conditional alternatives.
+
+### 6. Add a language switcher
+
+Read the current locale with [`useLocale()`](/docs/vue/reference/composables/use-locale) and change it with [`useSetLocale()`](/docs/vue/reference/composables/use-set-locale):
+
+```vue title="src/App.vue"
+<script setup lang="ts">
+import { T, useGT, useLocale, useSetLocale } from 'gt-vue';
+import gtConfig from '../gt.config.json';
+
+const gt = useGT();
+const locale = useLocale();
+const setLocale = useSetLocale();
+const locales = [gtConfig.defaultLocale, ...gtConfig.locales];
+
+async function changeLocale(event: Event) {
+  const target = event.target as HTMLSelectElement;
+  await setLocale(target.value);
+}
+</script>
+
+<template>
+  <main>
+    <label>
+      Language
+      <select :value="locale" @change="changeLocale">
+        <option v-for="code in locales" :key="code" :value="code">
+          {{ code }}
+        </option>
+      </select>
+    </label>
+
+    <T>
+      <h1>Welcome to my app</h1>
+      <p>This content will be translated automatically.</p>
+    </T>
+
+    <input :placeholder="gt('Search products')" />
+  </main>
+</template>
+```
+
+[`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) loads a missing catalog before saving the locale cookie and rerendering reactive consumers. With the loader above, a missing file returns an empty catalog, changes the locale, and renders source content. If a loader rejects instead, the current locale stays active.
+
+### 7. Authenticate and translate
+
+Authenticate with General Translation:
+
+```bash
+npx gt auth
+```
+
+The command guides you through signing in and creating credentials. Keep the generated production API key in your local environment file and out of browser code and version control.
+
+Then generate the translation catalogs:
+
+```bash
+npx gt translate
+```
+
+The CLI scans your Vue source, translates the extracted content, and writes one JSON file per target locale to `src/_gt/`. Run the command again whenever your source content changes.
+
+## Troubleshooting [#troubleshooting]
+
+<Accordions>
+  <Accordion title="The app stays in the source locale">
+
+The active locale is stored in the `generaltranslation.locale` cookie. Clear a stale cookie, then choose a target locale again. Also confirm that its JSON file exists under `src/_gt/` and that the loader returns its default export.
+
+  </Accordion>
+
+  <Accordion title="A translated string does not update after changing locales">
+
+Call the function returned by [`useGT()`](/docs/vue/reference/composables/use-gt) from the template or a Vue computed value. A string translated once during setup is a snapshot and does not run again when reactive locale state changes.
+
+  </Accordion>
+</Accordions>
