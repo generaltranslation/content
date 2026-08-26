@@ -1,51 +1,189 @@
 ---
 title: Configuring a Rollup SPA
-description: How to configure gt-react in a Rollup-powered single-page React application.
-related:
-  links:
-    - /docs/react/guides/spa/internationalizing-react-spa
-    - /docs/react/guides/developing-spa-translations
-    - /docs/react/guides/storing-translations
-    - /docs/react/guides/configuring
+description: 'Instructions for configuring gt-react in a Rollup-powered single-page React application.'
 ---
 
-Rollup must see every translation import at build time. Configure a bootstrap
-input and an explicit locale-loader map so initialization and code splitting
-remain predictable.
+# Overview
 
-Follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) to install
-`gt-react`, create `gt.config.json`, and configure `src/_gt/[locale].json` as
-the translation output.
+This guide will cover the following topics:
 
-## Configure the application [#configure]
+(1) React Rollup SPA setup
+(2) Loading translations
 
-### Step 1: Add static translation loaders
+The optional [`src`](/docs/cli/reference/config#src) field designates the source
+files GT scans for inline content; when omitted, it defaults to these
+JavaScript and TypeScript globs under `src`, `app`, `pages`, and `components`:
 
-List each target locale with a literal import path. Add a matching entry whenever
-you add a locale to `gt.config.json`:
+```json title="gt.config.json"
+{
+  "src": [
+    "src/**/*.{js,jsx,ts,tsx}",
+    "app/**/*.{js,jsx,ts,tsx}",
+    "pages/**/*.{js,jsx,ts,tsx}",
+    "components/**/*.{js,jsx,ts,tsx}"
+  ]
+}
+```
+
+Your task is not to internationalize content, rather, to prepare the application itself for i18n.
+
+## React Rollup SPA setup
+
+This is a guide on how to set up `gt-react` in a Rollup-powered single-page React application.
+
+### 1. Install gt-react
+
+If not already installed, install gt-react. Please use the latest version of gt-react. Do not just add it to the `package.json` without installing it. Please use repository's preferred package manager. If it has already been installed, then skip this step.
+
+### 2. Add a `gt.config.json` file to the root of the project
+
+Add a `gt.config.json` file to the root of the project. This file will contain the configuration for the `gt-react` package.
+
+The locales already present in the project or supplied to the setup task are authoritative. Preserve any existing `locales` and `defaultLocale` values. The values below are examples only. If the project has no locale configuration, do not infer locale requirements from these examples.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "de"]
+}
+```
+
+The optional `src` field designates the source files GT scans for inline content; when omitted, it defaults to these JavaScript and TypeScript globs under `src`, `app`, `pages`, and `components`:
+
+```json title="gt.config.json"
+{
+  "src": [
+    "src/**/*.{js,jsx,ts,tsx}",
+    "app/**/*.{js,jsx,ts,tsx}",
+    "pages/**/*.{js,jsx,ts,tsx}",
+    "components/**/*.{js,jsx,ts,tsx}"
+  ]
+}
+```
+
+### 3. Initialize the library
+
+Initialize the library with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) before the application renders or imports modules that use module-level translation functions.
+
+Create a bootstrap file next to the application's existing entry file. In this example, the original entry is `src/main.tsx` and the new bootstrap file is `src/index.ts`. Point Rollup's existing `input` configuration at the bootstrap file. Preserve all other build settings.
+
+The bootstrap and translation loader import JSON files. If the project does not already configure JSON module support, install `@rollup/plugin-json` as a development dependency with the repository's preferred package manager and add it to the existing plugin list. Preserve every existing plugin and its configuration.
+
+```js title="rollup.config.mjs"
+import json from '@rollup/plugin-json';
+
+export default {
+  // ...the project's existing options
+  input: 'src/index.ts',
+  plugins: [
+    // ...the project's existing plugins
+    json(),
+  ],
+};
+```
+
+If the development HTML directly references the original source entry, update it too:
+
+```html title="index.html"
+<!-- <script type="module" src="/src/main.tsx"></script> -->
+<script type="module" src="/src/index.ts"></script>
+```
+
+Then initialize GT and dynamically import the original entry only after initialization finishes. The Rollup reference application emits ESM and supports top-level await:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+
+await initializeGTSPA(gtConfig);
+
+await import('./main'); // render the app only after GT is ready
+```
+
+If the existing Rollup output format or target does not support top-level await, do not change it solely for this setup. Use an async bootstrap function instead:
+
+```ts title="src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../gt.config.json';
+
+async function bootstrap() {
+  await initializeGTSPA(gtConfig);
+  await import('./main');
+}
+
+void bootstrap();
+```
+
+## Loading translations
+
+This guide will explain how to set up translation loading for the application. We must load translations at runtime to display them. With no further configuration than the react-rollup-spa setup described above, behavior will default to loading translations from the `gt` CDN. However, most users prefer to ship translations in the application bundle. This requires logic overriding the default translation loading behavior and specifying a location to store the generated translation files. The following steps assume that a user has specified they want to ship translations in the application bundle, and that they want to store them in the default directory of `src/_gt/[locale].json`.
+
+### 1. Update the config
+
+We need to update the `gt.config.json` file to specify the location of these translation files. When the CLI tool runs to generate translations, at some point in the future, it will read this file and use the configured location to store the generated translation files.
+
+Only add or merge the `files.gt.output` setting. Preserve the project's existing `locales` and `defaultLocale`; the values shown below remain examples and must not replace the project's configured locales.
+
+Typically in a Rollup-powered application, the translations will be stored in the `src/_gt` directory. This allows Rollup to include the translation modules in the application bundle.
+
+```json title="gt.config.json"
+{
+  "locales": ["fr", "zh"],
+  "defaultLocale": "en",
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+### 2. Add the stubs
+
+We need to add stubs so that we can load the translation bundles without import complaining that the files do not exist. Create one empty JSON file for each target locale already configured in `gt.config.json`, excluding the default locale. The `fr` and `zh` files below illustrate the example configuration from this guide; create files for the project's actual configured target locales instead. If no target locales are configured, do not invent locales or create placeholder files.
+
+```bash title="src/_gt"
+src/_gt/
+├── fr.json
+└── zh.json
+```
+
+```json title="src/_gt/fr.json"
+{}
+```
+
+```json title="src/_gt/zh.json"
+{}
+```
+
+### 3. Add the loader
+
+Create `src/loadTranslations.ts` to load the translations. It must resolve to the same output location configured in `files.gt.output`.
+
+List every configured target locale explicitly in `translationLoaders`. Each loader must use a literal import path so Rollup can discover and emit every translation file at build time. The `fr` and `zh` entries below match this guide's example configuration; use the project's actual configured target locales instead.
 
 ```ts title="src/loadTranslations.ts"
 const translationLoaders = {
   fr: () => import('./_gt/fr.json'),
-  de: () => import('./_gt/de.json'),
+  zh: () => import('./_gt/zh.json'),
 };
 
 export default async function loadTranslations(locale: string) {
-  const loader =
-    translationLoaders[locale as keyof typeof translationLoaders];
-  return loader ? (await loader()).default : {};
+  try {
+    const loader =
+      translationLoaders[locale as keyof typeof translationLoaders];
+    if (!loader) return {};
+    const translations = await loader();
+    return translations.default;
+  } catch {
+    return {};
+  }
 }
 ```
 
-Create the imported JSON files before the first build. Running
-[`gt translate`](/docs/cli/reference/commands/translate) later replaces those
-stubs with generated translations.
+### 4. Update the initializer
 
-### Step 2: Create the bootstrap module
-
-Assuming the existing React entry is `src/main.tsx`, create `src/index.ts` and
-import the application only after
-[`initializeGTSPA()`](/docs/react/reference/config#initialize-spa) resolves:
+Update the initializer to use the new loader function. Preserve whichever top-level-await or async-function bootstrap form the application uses.
 
 ```ts title="src/index.ts"
 import { initializeGTSPA } from 'gt-react';
@@ -56,57 +194,3 @@ await initializeGTSPA({ ...gtConfig, loadTranslations });
 
 await import('./main');
 ```
-
-<Accordions>
-  <Accordion title="What if the output format does not support top-level await?">
-
-Keep the existing output format and use an async bootstrap function:
-
-```ts title="src/index.ts"
-import { initializeGTSPA } from 'gt-react';
-import gtConfig from '../gt.config.json';
-import loadTranslations from './loadTranslations';
-
-async function bootstrap() {
-  await initializeGTSPA({ ...gtConfig, loadTranslations });
-  await import('./main');
-}
-
-void bootstrap();
-```
-
-  </Accordion>
-</Accordions>
-
-### Step 3: Change the Rollup input
-
-Point the existing input at the bootstrap. Because the bootstrap and loader
-import JSON, add `@rollup/plugin-json` when the project does not already support
-JSON modules:
-
-```js title="rollup.config.mjs"
-import json from '@rollup/plugin-json';
-
-export default {
-  // Keep the project's existing options.
-  input: 'src/index.ts',
-  plugins: [
-    // Keep the project's existing plugins.
-    json(),
-  ],
-};
-```
-
-If development HTML references `src/main.tsx` directly, update that existing
-module script to reference `src/index.ts`.
-
-## Verify the setup [#verify]
-
-Run the application's existing production build. Rollup should emit the
-bootstrap entry and a separate loadable chunk for each locale in the map.
-
-## Next steps
-
-- [Internationalize the SPA](/docs/react/guides/spa/internationalizing-react-spa) - Mark JSX and strings for translation.
-- [Develop with SPA translations](/docs/react/guides/developing-spa-translations) - Add compiler-powered development translations.
-- [Store translations](/docs/react/guides/storing-translations) - Generate and manage local translation files.
