@@ -12,13 +12,17 @@ A recording contains the rrweb event stream, the source-first locale list, and a
 
 ## Choose the capture region [#capture-region]
 
-[`GTRecorder`](/docs/rrweb/reference/recorder#gt-recorder) captures the full document, but `contentSelector` identifies the product region that should be framed for playback. It defaults to `main, [data-gt-content]`.
+[`GTRecorder`](/docs/rrweb/reference/recorder#gt-recorder) captures the full document at its natural dimensions by default. When you enable framing, `contentSelector` identifies the product region to reflow for playback; it defaults to `main, [data-gt-content]`.
 
 ```tsx title="src/RecordingTools.tsx"
-<GTRecorder contentSelector="main" frame="16:9" />
+<GTRecorder frame="none" />
 ```
 
 Use `frame="none"` to preserve the region's natural dimensions, `frame="16:9"` for the built-in presentation frame, or `frame={{ aspect: 4 / 3 }}` for a custom ratio.
+
+<Callout type="warn">
+  **Framed capture:** The selected element must use `position: fixed` before recording. Framing static-positioned content can move it outside the viewport. Use `frame="none"` when the application cannot apply that layout.
+</Callout>
 
 ## Load published translations [#translations]
 
@@ -35,7 +39,7 @@ Pass `harvest.loadTranslations` to map recorded hashes to translated content. Wi
 
 Set `sourceLocale` when the recording locale is not read from your app's locale cookie. Alternatively, pass `localeCookieName` so the harvest reads your custom cookie.
 
-Content rendered by [`<T>`](/docs/react/reference/components/t) uses the DOM hashes enabled by [`_tagIds`](/docs/react/reference/config#tag-ids). To include bare `gt()` or `useGT()` strings, also pass a `hashMessage` function; interpolated strings whose rendered value differs from their source template remain in the source locale.
+Content rendered by [`<T>`](/docs/react/reference/components/t) uses the DOM hashes enabled by [`_tagIds`](/docs/react/reference/config#tag-ids). Bare translated strings are not harvested by this setup and remain in the source locale.
 
 ## Start and stop capture [#capture]
 
@@ -48,7 +52,7 @@ await start({ locales: ['en', 'de', 'ja'] });
 const bundle = await stop();
 ```
 
-The status moves from `preparing` to `recording`, returns to `preparing` while translations are harvested, and ends at `idle`. A harvest failure is non-fatal and returns a source-only bundle.
+The status moves from `preparing` to `recording`, returns to `preparing` while translations are harvested, and ends at `idle`. Harvest failures are handled per locale: a failed locale falls back to source text, while overlays completed for other locales remain in the bundle.
 
 ## Store the bundle [#store-bundle]
 

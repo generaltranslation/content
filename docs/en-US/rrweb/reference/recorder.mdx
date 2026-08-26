@@ -5,7 +5,7 @@ description: Capture an rrweb event stream and localized text overlay. API refer
 
 ---
 
-Import recorder values from `gt-rrweb`. Recording requires React and the optional `@rrweb/record` peer dependency.
+Import recorder values from `gt-rrweb`. Recording requires `react`, `react-dom`, and the optional `@rrweb/record` peer dependency.
 
 ## Overview [#overview]
 
@@ -21,6 +21,7 @@ Import recorder values from `gt-rrweb`. Recording requires React and the optiona
 | [`RecorderConfig`](#recorder-config) | Source-first locale list passed to `start()`. |
 | [`RecorderStatus`](#recorder-status) | Recorder lifecycle state. |
 | [`FrameOption`](#frame-option) | Capture frame configuration. |
+| [Styles and fonts](#styles-fonts) | Stylesheet and font behavior during capture and replay. |
 | [`DEFAULT_CONTENT_SELECTOR`](#content-selector) | Default framed content selector. |
 | [`GT_EVENT`](#gt-event) | Custom rrweb event tags embedded in the stream. |
 
@@ -30,7 +31,6 @@ Mount `GTRecorder` once near the application root. It renders nothing while idle
 
 ```tsx
 <GTRecorder
-  frame="16:9"
   harvest={{ loadTranslations, sourceLocale: 'en' }}
   onComplete={saveBundle}
 />
@@ -85,7 +85,7 @@ Concurrent `start()` calls are ignored. Calling `stop()` without an active recor
 | `locales` | Traced locales with the source locale first. | `string[]` | No | — |
 | `overlay` | Locale to rrweb node-id translation maps. | `Record<string, Record<number, string>>` | No | — |
 
-The bundle is JSON-serializable. A failed or unconfigured harvest leaves `overlay` empty without invalidating the event stream.
+The bundle is JSON-serializable. An unconfigured harvest leaves `overlay` empty without invalidating the event stream. Harvest failures are isolated by locale, so successful locale overlays remain available while failed locales fall back to source text.
 
 ## `RecorderConfig` [#recorder-config]
 
@@ -98,6 +98,14 @@ The bundle is JSON-serializable. A failed or unconfigured harvest leaves `overla
 ## `FrameOption` [#frame-option]
 
 `FrameOption` is `'none' | '16:9' | { aspect: number }`. A positive custom aspect is expressed as width divided by height; invalid custom values behave like no frame.
+
+`'none'` records the selected region at its natural size. For `'16:9'` or a custom aspect, apply `position: fixed` to the selected element before recording; framing static-positioned content can move it outside the viewport.
+
+## Styles and fonts [#styles-fonts]
+
+The recorder keeps stylesheet links instead of serializing their CSS. Replays can therefore depend on the original stylesheet host remaining reachable.
+
+Before capture, the recorder embeds font files referenced by readable same-origin `@font-face` rules. It skips cross-origin stylesheets, failed font requests, empty files, and individual font files larger than 5 MiB. Skipped fonts fall back according to the replay environment.
 
 ## `DEFAULT_CONTENT_SELECTOR` [#content-selector]
 
