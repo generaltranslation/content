@@ -12,8 +12,8 @@
  * interactive request playground.
  *
  * The generated pages and their navigation metadata live in
- * docs/en-US/platform/openapi/reference. Operation slugs and ordering come
- * from the contract's x-docs-slug and x-docs-order extensions.
+ * docs/en-US/platform/openapi/reference. Operation slugs and navigation come
+ * from the contract's x-docs-slug and x-docs-nav extensions.
  *
  * Usage:
  *   pnpm run generate-openapi-docs
@@ -32,14 +32,6 @@ const OPENAPI_PATH = path.join(OPENAPI_DIR, 'openapi.json');
 const OUTPUT_DIR = path.join(OPENAPI_DIR, 'reference');
 const document = JSON.parse(fs.readFileSync(OPENAPI_PATH, 'utf-8'));
 
-// Group presentation changes rarely and is not operation enumeration; route
-// slugs and within-group order remain owned by the OpenAPI contract.
-const GROUPS = [
-  { slug: 'files', title: 'Files' },
-  { slug: 'context', title: 'Context' },
-  { slug: 'translation', title: 'Translation' },
-  { slug: 'project', title: 'Project' },
-];
 const HTTP_METHODS = new Set([
   'get',
   'put',
@@ -58,64 +50,106 @@ function operationKey(method, route) {
 }
 
 function readOperationPages(document) {
-  const pagesByOperation = new Map();
-  const pagesBySlug = new Map();
-  const ordersByGroup = new Map();
+  const navigation = document['x-docs-nav'];
+  if (!Array.isArray(navigation) || navigation.length === 0) {
+    throw new Error('OpenAPI document must have a non-empty x-docs-nav array.');
+  }
 
+  const operationsBySlug = new Map();
   for (const [route, pathItem] of Object.entries(document.paths ?? {})) {
     for (const [method, operation] of Object.entries(pathItem ?? {})) {
       if (!HTTP_METHODS.has(method.toLowerCase())) continue;
 
       const key = operationKey(method, route);
       const slug = operation?.['x-docs-slug'];
-      const order = operation?.['x-docs-order'];
       if (typeof slug !== 'string' || !DOCS_SLUG_PATTERN.test(slug)) {
         throw new Error(
           `OpenAPI operation "${key}" must have an x-docs-slug in "group/page-name" format.`
         );
       }
-      if (!Number.isInteger(order) || order < 0) {
+      if (operationsBySlug.has(slug)) {
         throw new Error(
-          `OpenAPI operation "${key}" must have a non-negative integer x-docs-order.`
+          `Duplicate x-docs-slug "${slug}" on "${operationsBySlug.get(slug).key}" and "${key}".`
         );
       }
-      if (pagesBySlug.has(slug)) {
-        throw new Error(
-          `Duplicate x-docs-slug "${slug}" on "${pagesBySlug.get(slug).key}" and "${key}".`
-        );
-      }
-
-      const [group, page] = slug.split('/');
-      if (!GROUPS.some((item) => item.slug === group)) {
-        throw new Error(`Unknown documentation group "${group}" on "${key}".`);
-      }
-      const groupOrders = ordersByGroup.get(group) ?? new Map();
-      if (groupOrders.has(order)) {
-        throw new Error(
-          `Duplicate x-docs-order ${order} in group "${group}" on "${groupOrders.get(order)}" and "${key}".`
-        );
-      }
-
-      const metadata = {
+      operationsBySlug.set(slug, {
         key,
         route,
         method: method.toLowerCase(),
         slug,
-        group,
-        page,
-        order,
-      };
-      pagesByOperation.set(key, metadata);
-      pagesBySlug.set(slug, metadata);
-      groupOrders.set(order, key);
-      ordersByGroup.set(group, groupOrders);
+      });
     }
   }
 
-  return { pagesByOperation, pagesBySlug };
+  const pagesByOperation = new Map();
+  const pagesBySlug = new Map();
+  const groups = [];
+  const groupSlugs = new Set();
+
+  for (const item of navigation) {
+    if (
+      !item ||
+      typeof item !== 'object' ||
+      typeof item.group !== 'string' ||
+      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.group) ||
+      typeof item.title !== 'string' ||
+      item.title.length === 0 ||
+      !Array.isArray(item.pages) ||
+      item.pages.length === 0
+    ) {
+      throw new Error(
+        'Each x-docs-nav entry must have a group slug, title, and non-empty pages array.'
+      );
+    }
+    if (groupSlugs.has(item.group)) {
+      throw new Error(`Duplicate x-docs-nav group "${item.group}".`);
+    }
+    groupSlugs.add(item.group);
+
+    const pages = [];
+    for (const slug of item.pages) {
+      if (
+        typeof slug !== 'string' ||
+        !DOCS_SLUG_PATTERN.test(slug) ||
+        !slug.startsWith(`${item.group}/`)
+      ) {
+        throw new Error(
+          `Invalid x-docs-nav page "${slug}" in group "${item.group}".`
+        );
+      }
+      if (pagesBySlug.has(slug)) {
+        throw new Error(`Duplicate x-docs-nav page "${slug}".`);
+      }
+
+      const operation = operationsBySlug.get(slug);
+      if (!operation) {
+        throw new Error(
+          `x-docs-nav page "${slug}" has no matching OpenAPI operation.`
+        );
+      }
+      const page = slug.slice(item.group.length + 1);
+      const metadata = { ...operation, group: item.group, page };
+      pagesByOperation.set(operation.key, metadata);
+      pagesBySlug.set(slug, metadata);
+      pages.push(page);
+    }
+    groups.push({ slug: item.group, title: item.title, pages });
+  }
+
+  const missingSlugs = [...operationsBySlug.keys()].filter(
+    (slug) => !pagesBySlug.has(slug)
+  );
+  if (missingSlugs.length > 0) {
+    throw new Error(
+      `OpenAPI operations missing from x-docs-nav: ${missingSlugs.join(', ')}.`
+    );
+  }
+
+  return { groups, pagesByOperation, pagesBySlug };
 }
 
-const { pagesByOperation, pagesBySlug } = readOperationPages(document);
+const { groups, pagesByOperation, pagesBySlug } =
+  readOperationPages(document);
 
 // Mirror src/lib/openapi.ts. We re-create the server here instead of importing
 // that module because it lives behind a Next.js path alias and pulls in
@@ -186,17 +220,7 @@ ${openapiMetadata}
 }
 
 function writeNavigation() {
-  const groups = GROUPS.map(({ slug, title }) => {
-    const pages = [...pagesBySlug.values()]
-      .filter((page) => page.group === slug)
-      .sort((a, b) => a.order - b.order)
-      .map((page) => `./${page.page}`);
-    if (pages.length === 0) {
-      throw new Error(
-        `No OpenAPI operations found for documentation group "${slug}".`
-      );
-    }
-
+  for (const { slug, title, pages } of groups) {
     fs.mkdirSync(path.join(OUTPUT_DIR, slug), { recursive: true });
     fs.writeFileSync(
       path.join(OUTPUT_DIR, slug, 'meta.json'),
@@ -204,14 +228,13 @@ function writeNavigation() {
         {
           title,
           description: `Browse OpenAPI ${title} pages.`,
-          pages,
+          pages: pages.map((page) => `./${page}`),
         },
         null,
         2
       )}\n`
     );
-    return `./${slug}`;
-  });
+  }
 
   fs.writeFileSync(
     path.join(OUTPUT_DIR, 'meta.json'),
@@ -219,7 +242,7 @@ function writeNavigation() {
       {
         title: 'Reference',
         description: 'Browse Reference pages for the General Translation API.',
-        pages: groups,
+        pages: groups.map(({ slug }) => `./${slug}`),
       },
       null,
       2
