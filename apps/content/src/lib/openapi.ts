@@ -2,8 +2,9 @@ import path from 'node:path';
 
 import { createOpenAPI } from 'fumadocs-openapi/server';
 
-// The OpenAPI spec lives alongside the docs content so it ships with the docs.
-// We register it under a stable schema id (`gt-api`) so MDX pages can reference
+// This snapshot of gt-cloud/apps/api/openapi.public.json lives alongside the
+// docs content so it ships with the standalone app. We register it under a
+// stable schema id (`gt-api`) so MDX pages can reference
 // it with `<APIPage document="gt-api" />` regardless of the on-disk path, which
 // differs between this app and the landing app that renders the same content.
 export const openapi = createOpenAPI({

@@ -3,8 +3,8 @@
  * OpenAPI Documentation Generator
  *
  * Generates one MDX page per API operation from the OpenAPI JSON snapshot at
- * docs/en-US/platform/openapi/openapi.json. The canonical contract is generated
- * from route definitions in gt-cloud/apps/api; this snapshot supports the
+ * docs/en-US/platform/openapi/openapi.json. Its canonical source is the public
+ * artifact at gt-cloud/apps/api/openapi.public.json; this snapshot supports the
  * standalone content preview and page generation.
  *
  * Each generated page renders with the `<APIPage />` component (registered in
