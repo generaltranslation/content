@@ -1,0 +1,197 @@
+---
+title: Configuring a Bazel SPA
+description: 'Instructions for configuring gt-react in a Bazel-powered single-page React application.'
+---
+
+# Overview
+
+This guide will cover the following topics:
+
+(1) React Bazel SPA setup
+(2) Loading translations
+
+The optional [`src`](/docs/cli/reference/config#src) field designates the source
+files GT scans for inline content; when omitted, it defaults to these
+JavaScript and TypeScript globs under `src`, `app`, `pages`, and `components`:
+
+```json title="gt.config.json"
+{
+  "src": [
+    "src/**/*.{js,jsx,ts,tsx}",
+    "app/**/*.{js,jsx,ts,tsx}",
+    "pages/**/*.{js,jsx,ts,tsx}",
+    "components/**/*.{js,jsx,ts,tsx}"
+  ]
+}
+```
+
+Your task is not to internationalize content, rather, to prepare the application itself for i18n.
+
+## React Bazel SPA setup
+
+This is a guide on how to set up `gt-react` in a Bazel-powered single-page React application.
+
+### 1. Install gt-react
+
+If not already installed, install gt-react. Please use the latest version of gt-react. Do not just add it to the `package.json` without installing it. Please use repository's preferred package manager. If it has already been installed, then skip this step.
+
+### 2. Add a `gt.config.json` file to the root of the project
+
+Add a `gt.config.json` file to the root of the project. This file will contain the configuration for the `gt-react` package.
+
+The locales already present in the project or supplied to the setup task are authoritative. Preserve any existing `locales` and `defaultLocale` values. The values below are examples only. If the project has no locale configuration, do not infer locale requirements from these examples.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "de"]
+}
+```
+
+The optional `src` field designates the source files GT scans for inline content; when omitted, it defaults to these JavaScript and TypeScript globs under `src`, `app`, `pages`, and `components`:
+
+```json title="gt.config.json"
+{
+  "src": [
+    "src/**/*.{js,jsx,ts,tsx}",
+    "app/**/*.{js,jsx,ts,tsx}",
+    "pages/**/*.{js,jsx,ts,tsx}",
+    "components/**/*.{js,jsx,ts,tsx}"
+  ]
+}
+```
+
+### 3. Initialize the library
+
+Initialize the library with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa). This declares important variables and attaches it to the global object. This is important to happen at the module level or before other runtime code is executed. This is not the SPA provider, which means executing this at the module level is enough. SPA provider would require that this module be executed before any other code is executed, but this is not of concern for you. I just wanted to clarify that this is not the SPA provider.
+
+Furthermore, this is an `async` function responsible for loading the translations at the module level. This is so we can use translation functions at the module level, so it is essential that this module level function gets executed before any other code is executed that may have translation functions.
+
+Create a new file to bootstrap the application. From there, we can import the entry point file. In this example, we create `src/index.js` as our bootstrap file and import `src/main.jsx` as our entry point file.
+
+Locate the Bazel target that builds the browser bundle. Preserve the project's existing rule, dependencies, source declarations, and build options. Do not replace its bundler or add a second build pipeline.
+
+The target must receive every file imported by the new bootstrap. Add the installed `gt-react` npm label to the dependency list. Add `gt.config.json` to `srcs` or `data` when it is not already covered by a declared input. The bootstrap file is covered automatically when the target already includes the source directory with a glob.
+
+Then change the target's browser entry point from the existing React entry to the new bootstrap file. For an application using Aspect's `esbuild` rule at the repository root, the resulting target can look like this:
+
+```python title="BUILD.bazel"
+load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
+
+esbuild(
+    name = "app",
+    srcs = glob(["src/**"]) + ["gt.config.json"],
+    deps = [
+        ":node_modules/react",
+        ":node_modules/react-dom",
+        ":node_modules/gt-react",
+    ],
+    entry_point = "src/index.js",
+    format = "esm",
+    output = "app.js",
+)
+```
+
+Use the labels and attributes already established by the project. For example, a target in a child Bazel package may use `//:gt.config.json` and `//:node_modules/gt-react` instead of root-package-relative labels. If the bundle depends on a first-party `js_library`, declare `gt-react` on the target that owns the importing source rather than duplicating it arbitrarily.
+
+Use an async bootstrap function unless the existing Bazel bundle already supports top-level await. Do not change the output format or JavaScript target solely to enable top-level await.
+
+```js title="src/index.js"
+import { initializeGTSPA } from 'gt-react';
+
+import gtConfig from '../gt.config.json';
+
+async function bootstrap() {
+  await initializeGTSPA(gtConfig);
+  await import('./main');
+}
+
+void bootstrap();
+```
+
+Do not leave the original entry configured as a second browser entry. It must render only after [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) resolves. Run the repository's normal Bazel build or test target for the application. Do not start a persistent development or preview server.
+
+## Loading translations
+
+This guide will explain how to set up translation loading for the application. We must load translations at runtime to display them. With no further configuration than the react-bazel-spa setup described above, behavior will default to loading translations from the `gt` cdn. However, most users prefer to ship translations in the application bundle. This requires logic overriding the default translation loading behavior and specifying a location to store the generated translation files. The following steps assume that a user has specified they want to ship translations in the application bundle, and that they want to store them in the default directory of `src/_gt/[locale].json`.
+
+### 1. Update the config
+
+We need to update the `gt.config.json` file to specify the location of these translation files. When the CLI tool runs to generate translations, at some point in the future, it will read this file and use the configured location to store the generated translation files.
+
+Only add or merge the `files.gt.output` setting. Preserve the project's existing `locales` and `defaultLocale`; the values shown below remain examples and must not replace the project's configured locales.
+
+Typically in a Bazel-powered application, the translations will be stored in the `src/_gt` directory. This is so we can use the translations in the application code.
+
+```json title="gt.config.json"
+{
+  "locales": ["fr", "zh"],
+  "defaultLocale": "en",
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+### 2. Add the stubs
+
+We need to add stubs so that we can load the translation bundles without import complaining that the files do not exist. We just need to create one empty JSON file for each target locale already configured in `gt.config.json`, excluding the default locale. The `fr` and `zh` files below illustrate the example configuration from this guide; create files for the project's actual configured target locales instead. If no target locales are configured, do not invent locales or create placeholder files.
+
+```bash title="src/_gt"
+src/_gt/
+├── fr.json
+└── zh.json
+```
+
+```json title="src/_gt/fr.json"
+{}
+```
+
+```json title="src/_gt/zh.json"
+{}
+```
+
+Ensure the owning Bazel target declares these JSON files. An existing `glob(["src/**"])` includes them; otherwise add the files to the target's `srcs` or `data` according to the rule's API.
+
+### 3. Add the loader
+
+Create `src/loadTranslations.js` to load the translations. It must resolve to the same output location configured in `files.gt.output`.
+
+List every configured target locale explicitly in `translationLoaders`. Each loader must use a literal import path so Bazel and the underlying bundler can discover every translation file at build time. The `fr` and `zh` entries below match this guide's example configuration; use the project's actual configured target locales instead.
+
+```js title="src/loadTranslations.js"
+const translationLoaders = {
+  fr: () => import('./_gt/fr.json'),
+  zh: () => import('./_gt/zh.json'),
+};
+
+export default async function loadTranslations(locale) {
+  const loader = translationLoaders[locale];
+  if (!loader) return {};
+
+  const translations = await loader();
+  return translations.default;
+}
+```
+
+### 4. Update the initializer
+
+Update the initializer to use the new loader function. Preserve the async bootstrap form and the original application-entry import.
+
+```js title="src/index.js"
+import { initializeGTSPA } from 'gt-react';
+
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+async function bootstrap() {
+  await initializeGTSPA({ ...gtConfig, loadTranslations });
+  await import('./main');
+}
+
+void bootstrap();
+```
+
+Run the Bazel build or test target again after adding the bundled translations.
