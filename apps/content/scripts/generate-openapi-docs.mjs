@@ -11,14 +11,9 @@
  * the docs MDX components) against the `gt-api` schema, which provides the
  * interactive request playground.
  *
- * The generated pages live in `docs/en-US/platform/openapi/reference`. The
- * section's `overview.mdx`, `openapi.json`, and all `meta.json` files (section
- * + per-group ordering) are NOT touched by this script — only
- * Fumadocs-generated `.mdx` operation pages are regenerated.
- *
- * Every operation must have an entry in PAGES below. The mapping pins each
- * operation to a stable URL slug so links from other docs pages never break
- * when the spec is regenerated.
+ * The generated pages and their navigation metadata live in
+ * docs/en-US/platform/openapi/reference. Operation slugs and ordering come
+ * from the contract's x-docs-slug and x-docs-order extensions.
  *
  * Usage:
  *   pnpm run generate-openapi-docs
@@ -37,6 +32,91 @@ const OPENAPI_PATH = path.join(OPENAPI_DIR, 'openapi.json');
 const OUTPUT_DIR = path.join(OPENAPI_DIR, 'reference');
 const document = JSON.parse(fs.readFileSync(OPENAPI_PATH, 'utf-8'));
 
+// Group presentation changes rarely and is not operation enumeration; route
+// slugs and within-group order remain owned by the OpenAPI contract.
+const GROUPS = [
+  { slug: 'files', title: 'Files' },
+  { slug: 'context', title: 'Context' },
+  { slug: 'translation', title: 'Translation' },
+  { slug: 'project', title: 'Project' },
+];
+const HTTP_METHODS = new Set([
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+]);
+const DOCS_SLUG_PATTERN =
+  /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function operationKey(method, route) {
+  return `${method.toLowerCase()} ${route}`;
+}
+
+function readOperationPages(document) {
+  const pagesByOperation = new Map();
+  const pagesBySlug = new Map();
+  const ordersByGroup = new Map();
+
+  for (const [route, pathItem] of Object.entries(document.paths ?? {})) {
+    for (const [method, operation] of Object.entries(pathItem ?? {})) {
+      if (!HTTP_METHODS.has(method.toLowerCase())) continue;
+
+      const key = operationKey(method, route);
+      const slug = operation?.['x-docs-slug'];
+      const order = operation?.['x-docs-order'];
+      if (typeof slug !== 'string' || !DOCS_SLUG_PATTERN.test(slug)) {
+        throw new Error(
+          `OpenAPI operation "${key}" must have an x-docs-slug in "group/page-name" format.`
+        );
+      }
+      if (!Number.isInteger(order) || order < 0) {
+        throw new Error(
+          `OpenAPI operation "${key}" must have a non-negative integer x-docs-order.`
+        );
+      }
+      if (pagesBySlug.has(slug)) {
+        throw new Error(
+          `Duplicate x-docs-slug "${slug}" on "${pagesBySlug.get(slug).key}" and "${key}".`
+        );
+      }
+
+      const [group, page] = slug.split('/');
+      if (!GROUPS.some((item) => item.slug === group)) {
+        throw new Error(`Unknown documentation group "${group}" on "${key}".`);
+      }
+      const groupOrders = ordersByGroup.get(group) ?? new Map();
+      if (groupOrders.has(order)) {
+        throw new Error(
+          `Duplicate x-docs-order ${order} in group "${group}" on "${groupOrders.get(order)}" and "${key}".`
+        );
+      }
+
+      const metadata = {
+        key,
+        route,
+        method: method.toLowerCase(),
+        slug,
+        group,
+        page,
+        order,
+      };
+      pagesByOperation.set(key, metadata);
+      pagesBySlug.set(slug, metadata);
+      groupOrders.set(order, key);
+      ordersByGroup.set(group, groupOrders);
+    }
+  }
+
+  return { pagesByOperation, pagesBySlug };
+}
+
+const { pagesByOperation, pagesBySlug } = readOperationPages(document);
+
 // Mirror src/lib/openapi.ts. We re-create the server here instead of importing
 // that module because it lives behind a Next.js path alias and pulls in
 // app-only code paths that aren't resolvable from a plain node script.
@@ -47,49 +127,13 @@ const openapi = createOpenAPI({
   proxyUrl: '/api/proxy',
 });
 
-// Stable output slug (`<group>/<page>`) for every operation, keyed by
-// `<method> <path>`. Grouping intentionally differs from the spec's tags:
-// branch, tag, and job operations fold into the `project` and `translation`
-// sidebar groups.
-const PAGES = {
-  'post /v2/project/files/upload-files': 'files/upload-source',
-  'post /v2/project/files/upload-translations': 'files/upload-translations',
-  'post /v2/project/files/diffs': 'files/submit-diffs',
-  'post /v2/project/files/download': 'files/download-many',
-  'get /v2/project/files/download/{fileId}': 'files/download',
-  'post /v2/project/files/publish': 'files/publish-files',
-  'post /v2/project/files/info': 'files/file-info',
-  'get /v2/project/translations/files/status/{fileId}':
-    'files/translation-status',
-  'post /v2/project/files/moves': 'files/move-files',
-  'post /v2/project/files/orphaned': 'files/orphaned-files',
-  'post /v2/project/setup/generate': 'context/generate-context',
-  'get /v2/project/setup/should-generate': 'context/check-freshness',
-  'get /v2/project/setup/status/{jobId}': 'context/context-status',
-  'post /v2/translate': 'translation/translate-runtime',
-  'post /v2/project/translations/enqueue': 'translation/queue',
-  'post /v2/project/jobs/info': 'translation/job-status',
-  'post /v2/projects': 'project/create-project',
-  'get /v2/project/info/{projectId}': 'project/project-info',
-  'post /v2/project/info/{projectId}': 'project/update-project',
-  'post /v2/project/assets': 'project/upload-assets',
-  'post /v2/project/branches/info': 'project/branch-info',
-  'post /v2/project/branches/create': 'project/create-branch',
-  'post /v2/project/tags/create': 'project/upsert-tag',
-  'post /cli/wizard/session': 'cli/create-session',
-  'get /cli/wizard/{sessionId}': 'cli/get-session',
-  'delete /cli/wizard/{sessionId}': 'cli/delete-session',
-};
-
 function pageSlug(entry) {
-  const key = `${entry.item.method.toLowerCase()} ${entry.item.path}`;
-  const slug = PAGES[key];
-  if (!slug) {
-    throw new Error(
-      `No output slug mapped for operation "${key}". Add it to PAGES in ${fileURLToPath(import.meta.url)}.`
-    );
+  const key = operationKey(entry.item.method, entry.item.path);
+  const page = pagesByOperation.get(key);
+  if (!page) {
+    throw new Error(`No documentation metadata found for operation "${key}".`);
   }
-  return slug;
+  return page.slug;
 }
 
 function plainText(value) {
@@ -106,18 +150,14 @@ function completeSentence(value) {
 
 function normalizeFrontmatter(file, document) {
   const slug = file.path.replace(/\.mdx$/, '');
-  const page = Object.entries(PAGES).find(([, output]) => output === slug);
+  const page = pagesBySlug.get(slug);
   if (!page) {
-    throw new Error(`No operation mapped for generated page "${file.path}".`);
+    throw new Error(`No operation found for generated page "${file.path}".`);
   }
 
-  const [operationKey] = page;
-  const separator = operationKey.indexOf(' ');
-  const method = operationKey.slice(0, separator);
-  const route = operationKey.slice(separator + 1);
-  const operation = document.paths?.[route]?.[method];
+  const operation = document.paths?.[page.route]?.[page.method];
   if (!operation || typeof operation.summary !== 'string') {
-    throw new Error(`No OpenAPI operation found for "${operationKey}".`);
+    throw new Error(`No OpenAPI operation found for "${page.key}".`);
   }
 
   const frontmatterEnd = file.content.indexOf('\n---', 4);
@@ -139,25 +179,65 @@ function normalizeFrontmatter(file, document) {
 
 title: ${JSON.stringify(summary)}
 description: ${JSON.stringify(description)}
-method: ${method.toUpperCase()}
+method: ${page.method.toUpperCase()}
 full: true
 ${openapiMetadata}
 ---${body}`;
 }
 
+function writeNavigation() {
+  const groups = GROUPS.map(({ slug, title }) => {
+    const pages = [...pagesBySlug.values()]
+      .filter((page) => page.group === slug)
+      .sort((a, b) => a.order - b.order)
+      .map((page) => `./${page.page}`);
+    if (pages.length === 0) {
+      throw new Error(
+        `No OpenAPI operations found for documentation group "${slug}".`
+      );
+    }
+
+    fs.mkdirSync(path.join(OUTPUT_DIR, slug), { recursive: true });
+    fs.writeFileSync(
+      path.join(OUTPUT_DIR, slug, 'meta.json'),
+      `${JSON.stringify(
+        {
+          title,
+          description: `Browse OpenAPI ${title} pages.`,
+          pages,
+        },
+        null,
+        2
+      )}\n`
+    );
+    return `./${slug}`;
+  });
+
+  fs.writeFileSync(
+    path.join(OUTPUT_DIR, 'meta.json'),
+    `${JSON.stringify(
+      {
+        title: 'Reference',
+        description: 'Browse Reference pages for the General Translation API.',
+        pages: groups,
+      },
+      null,
+      2
+    )}\n`
+  );
+}
+
 // Marker Fumadocs writes into every generated MDX page.
 const GENERATED_MARKER = 'This file was generated by Fumadocs';
 
-// Recursively delete only Fumadocs-generated `.mdx` pages, leaving
-// hand-authored files (every meta.json) in place. Empty group folders left
-// behind after deletion are pruned.
+// Recursively delete only Fumadocs-generated `.mdx` pages, leaving navigation
+// metadata in place until it is deterministically regenerated.
 function cleanGenerated(dir = OUTPUT_DIR) {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const target = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       cleanGenerated(target);
-      if (fs.readdirSync(target).length === 0) fs.rmdirSync(target);
       continue;
     }
     if (!entry.name.endsWith('.mdx')) continue;
@@ -185,7 +265,8 @@ async function main() {
     },
   });
 
-  console.log(`\nGenerated operation pages into ${OUTPUT_DIR}`);
+  writeNavigation();
+  console.log(`\nGenerated operation pages and navigation into ${OUTPUT_DIR}`);
 }
 
 main().catch((e) => {
