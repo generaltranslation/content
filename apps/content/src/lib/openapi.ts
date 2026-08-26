@@ -10,7 +10,7 @@ export const openapi = createOpenAPI({
   input: () => ({
     'gt-api': path.join(
       process.cwd(),
-      '../../docs/en-US/platform/openapi/openapi.yaml'
+      '../../docs/en-US/platform/openapi/openapi.json'
     ),
   }),
   proxyUrl: '/api/proxy',

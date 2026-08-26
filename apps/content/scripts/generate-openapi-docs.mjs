@@ -2,15 +2,19 @@
 /**
  * OpenAPI Documentation Generator
  *
- * Generates one MDX page per API operation from the canonical OpenAPI spec
- * (docs/en-US/platform/openapi/openapi.yaml). Each generated page renders with
- * the `<APIPage />` component (registered in the docs MDX components) against
- * the `gt-api` schema, which provides the interactive request playground.
+ * Generates one MDX page per API operation from the OpenAPI JSON snapshot at
+ * docs/en-US/platform/openapi/openapi.json. The canonical contract is generated
+ * from route definitions in gt-cloud/apps/api; this snapshot supports the
+ * standalone content preview and page generation.
+ *
+ * Each generated page renders with the `<APIPage />` component (registered in
+ * the docs MDX components) against the `gt-api` schema, which provides the
+ * interactive request playground.
  *
  * The generated pages live in `docs/en-US/platform/openapi/reference`. The
- * section's `overview.mdx`, `openapi.yaml`, and all `meta.json` files (section
- * + per-group ordering) are authored by hand and are NOT touched by this
- * script — only Fumadocs-generated `.mdx` operation pages are regenerated.
+ * section's `overview.mdx`, `openapi.json`, and all `meta.json` files (section
+ * + per-group ordering) are NOT touched by this script — only
+ * Fumadocs-generated `.mdx` operation pages are regenerated.
  *
  * Every operation must have an entry in PAGES below. The mapping pins each
  * operation to a stable URL slug so links from other docs pages never break
@@ -29,14 +33,16 @@ import { createOpenAPI } from 'fumadocs-openapi/server';
 
 const REPO_ROOT = path.join(fileURLToPath(import.meta.url), '../../../..');
 const OPENAPI_DIR = path.join(REPO_ROOT, 'docs/en-US/platform/openapi');
+const OPENAPI_PATH = path.join(OPENAPI_DIR, 'openapi.json');
 const OUTPUT_DIR = path.join(OPENAPI_DIR, 'reference');
+const document = JSON.parse(fs.readFileSync(OPENAPI_PATH, 'utf-8'));
 
 // Mirror src/lib/openapi.ts. We re-create the server here instead of importing
 // that module because it lives behind a Next.js path alias and pulls in
 // app-only code paths that aren't resolvable from a plain node script.
 const openapi = createOpenAPI({
   input: () => ({
-    'gt-api': path.join(OPENAPI_DIR, 'openapi.yaml'),
+    'gt-api': document,
   }),
   proxyUrl: '/api/proxy',
 });
