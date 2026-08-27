@@ -70,6 +70,9 @@ const PAGES = {
   'post /v2/project/branches/info': 'project/branch-info',
   'post /v2/project/branches/create': 'project/create-branch',
   'post /v2/project/tags/create': 'project/upsert-tag',
+  'post /cli/wizard/session': 'cli/create-session',
+  'get /cli/wizard/{sessionId}': 'cli/get-session',
+  'delete /cli/wizard/{sessionId}': 'cli/delete-session',
 };
 
 function pageSlug(entry) {

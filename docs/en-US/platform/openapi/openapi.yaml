@@ -43,6 +43,8 @@ tags:
     description: Create projects and read or update project information.
   - name: Jobs
     description: Read background job status.
+  - name: CLI Wizard
+    description: Create and poll unauthenticated CLI sign-in sessions.
 
 paths:
   /v2/project/files/upload-files:
@@ -83,11 +85,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [uploadedFiles, count, message]
                 properties:
                   uploadedFiles:
                     type: array
                     items:
                       type: object
+                      required: [fileId, versionId, fileName, fileFormat]
                       properties:
                         branchId: { type: string }
                         fileId: { type: string }
@@ -100,7 +104,10 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /v2/project/files/upload-translations:
@@ -157,11 +164,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [uploadedFiles, count, message]
                 properties:
                   uploadedFiles:
                     type: array
                     items:
                       type: object
+                      required: [fileId, versionId, fileName, fileFormat]
                       properties:
                         branchId: { type: string }
                         fileId: { type: string }
@@ -175,7 +184,10 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /v2/project/files/diffs:
@@ -183,7 +195,7 @@ paths:
       tags: [Files]
       summary: Submit translation diffs
       description: Overwrite translations with user-provided localized content.
-      operationId: submitDiffs
+      operationId: submitUserEditDiffs
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -220,6 +232,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [filesProcessed, entriesReceived, message]
                 properties:
                   filesProcessed: { type: integer }
                   entriesReceived: { type: integer }
@@ -227,7 +240,9 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/setup/should-generate:
     get:
@@ -238,7 +253,7 @@ paths:
         deprecated endpoint is retained for backward compatibility and is no
         longer called by current clients.
       deprecated: true
-      operationId: shouldGenerateContext
+      operationId: shouldGenerateProjectContext
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -249,17 +264,22 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [shouldSetupProject]
                 properties:
                   shouldSetupProject: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/setup/generate:
     post:
       tags: [Context]
       summary: Generate translation context
       description: Generate glossaries and translation instructions for the project.
-      operationId: generateContext
+      operationId: generateProjectContext
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -295,14 +315,21 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [status]
                 properties:
-                  setupJobId: { type: string }
                   status:
                     type: string
                     enum: [queued, completed]
+                  setupJobId:
+                    type: string
+                    description: Present and required when status is queued.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/setup/status/{jobId}:
     get:
@@ -313,7 +340,7 @@ paths:
         for backward compatibility; new integrations should use
         `POST /v2/project/jobs/info`.
       deprecated: true
-      operationId: getContextStatus
+      operationId: getProjectContextGenerationStatus
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -328,14 +355,20 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [status]
                 properties:
-                  jobId: { type: string }
                   status:
                     type: string
                     enum: [queued, processing, completed, failed, unknown]
+                  jobId:
+                    type: string
+                    description: Present and required unless status is completed.
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/translations/enqueue:
     post:
@@ -344,7 +377,7 @@ paths:
       description: >
         Enqueue uploaded source files for background translation. Max 100 files
         per request. The response shape depends on the requested `gt-api-version`.
-      operationId: enqueueTranslations
+      operationId: enqueueFileTranslations
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -391,13 +424,69 @@ paths:
               schema:
                 type: object
                 description: >
-                  On `gt-api-version` >= 2025-11-03.v1 returns `jobData`; earlier
-                  versions return inline `translations` and `data`.
+                  API version 2025-11-03.v1 and later returns `jobData`.
+                  Earlier versions return `translations` and `data`.
+                required: [locales, message]
                 properties:
                   jobData:
                     type: object
-                    additionalProperties: true
-                    description: Map of jobId to job details.
+                    description: Map of job ID to translation job details in current API versions.
+                    additionalProperties:
+                      type: object
+                      required: [sourceFileId, fileId, versionId, branchId, targetLocale, projectId, force]
+                      properties:
+                        kind:
+                          type: string
+                          enum: [file_translation]
+                        sourceFileId: { type: string }
+                        fileId: { type: string }
+                        versionId: { type: string }
+                        branchId: { type: string }
+                        targetLocale: { type: string }
+                        projectId: { type: string }
+                        force: { type: boolean }
+                        outputFileFormat: { $ref: '#/components/schemas/FileFormat' }
+                        modelProvider:
+                          type: string
+                          enum: [ANTHROPIC, OPENAI, XAI, GOOGLE]
+                        glossaryRetranslate: { type: boolean }
+                        changedGlossaryTerms:
+                          type: array
+                          items: { type: string }
+                        onComplete:
+                          type: object
+                          required: [kind]
+                          properties:
+                            kind:
+                              type: string
+                              enum: [google_drive_apply]
+                            userId: { type: string }
+                  translations:
+                    type: array
+                    description: Completed translations returned by legacy API versions.
+                    items:
+                      type: object
+                      required: [locale, metadata, fileId, fileName, versionId, branchId, id, isReady, downloadUrl]
+                      properties:
+                        locale: { type: string }
+                        metadata:
+                          description: Translation metadata.
+                        fileId: { type: string }
+                        fileName: { type: string }
+                        versionId: { type: string }
+                        branchId: { type: string }
+                        id: { type: string }
+                        isReady: { type: boolean }
+                        downloadUrl: { type: string }
+                  data:
+                    type: object
+                    description: File metadata returned by legacy API versions.
+                    additionalProperties:
+                      type: object
+                      required: [fileName, versionId]
+                      properties:
+                        fileName: { type: string }
+                        versionId: { type: string }
                   locales:
                     type: array
                     items: { type: string }
@@ -408,15 +497,25 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [error]
                 properties:
                   error: { type: string }
                   missing:
                     type: array
-                    items: { type: string }
+                    items:
+                      type: object
+                      required: [fileId, versionId]
+                      properties:
+                        fileId: { type: string }
+                        versionId: { type: string }
                   count: { type: integer }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/files/publish:
     post:
@@ -455,11 +554,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [results]
                 properties:
                   results:
                     type: array
                     items:
                       type: object
+                      required: [fileId, versionId, branchId, success]
                       properties:
                         fileId: { type: string }
                         versionId: { type: string }
@@ -470,6 +571,10 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/files/download/{fileId}:
     get:
@@ -507,13 +612,29 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     type: string
                     description: Base64-encoded file content.
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '425':
+          description: The translated file is still processing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message]
+                properties:
+                  status:
+                    type: string
+                    enum: [processing]
+                  message: { type: string }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/files/download:
     post:
@@ -550,11 +671,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [files, count]
                 properties:
                   files:
                     type: array
                     items:
                       type: object
+                      required: [id, branchId, fileId, versionId, data, metadata, fileFormat]
                       properties:
                         id: { type: string }
                         branchId: { type: string }
@@ -570,9 +693,23 @@ paths:
                         fileFormat: { $ref: '#/components/schemas/FileFormat' }
                         locale: { type: string }
                   count: { type: integer }
+                  pending:
+                    type: array
+                    description: Translated files still processing. Retry these entries.
+                    items:
+                      type: object
+                      required: [branchId, fileId, locale, versionId]
+                      properties:
+                        branchId: { type: string }
+                        fileId: { type: string }
+                        locale: { type: string }
+                        versionId: { type: string }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/branches/info:
     post:
@@ -602,6 +739,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [branches, defaultBranch]
                 properties:
                   branches:
                     type: array
@@ -609,6 +747,7 @@ paths:
                       $ref: '#/components/schemas/Branch'
                   defaultBranch:
                     type: [object, 'null']
+                    required: [id, name]
                     properties:
                       id: { type: string }
                       name: { type: string }
@@ -616,6 +755,9 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/branches/create:
     post:
@@ -647,17 +789,17 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [branch]
                 properties:
                   branch:
                     $ref: '#/components/schemas/Branch'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403':
-          description: Forbidden. Free plans cannot create non-default branches.
-          content:
-            text/plain:
-              schema:
-                type: string
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/tags/create:
     post:
@@ -700,18 +842,23 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [tag]
                 properties:
                   tag:
                     type: object
+                    required: [id, tagId, message, createdAt, updatedAt]
                     properties:
                       id: { type: string }
                       tagId: { type: string }
-                      message: { type: string }
+                      message: { type: [string, 'null'] }
                       createdAt: { type: string, format: date-time }
                       updatedAt: { type: string, format: date-time }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/projects:
     post:
@@ -782,6 +929,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '409':
           description: The organization has reached its project limit.
           content:
@@ -808,7 +956,7 @@ paths:
         from the font metadata and file name). Re-uploading the same identity
         overwrites the existing asset, so complete retries after a `500`
         response are safe.
-      operationId: uploadProjectAssets
+      operationId: uploadAssets
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -875,6 +1023,7 @@ paths:
                     type: array
                     items:
                       type: object
+                      required: [id, assetKey, fileName]
                       properties:
                         id:
                           type: string
@@ -888,7 +1037,8 @@ paths:
                           example: brandsans-700
                         fileName: { type: string, example: BrandSans.ttf }
                   count:
-                    type: number
+                    type: integer
+                    minimum: 0
                     description: Number of uploaded assets.
                     example: 1
         '400':
@@ -942,18 +1092,22 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [id, name, orgId, defaultLocale, currentLocales, autoApprove]
                 properties:
                   id: { type: string }
                   name: { type: string }
                   orgId: { type: string }
-                  defaultLocale: { type: string }
+                  defaultLocale: { type: [string, 'null'] }
                   currentLocales:
                     type: array
                     items: { type: string }
+                  autoApprove: { type: boolean }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
     post:
       tags: [Project]
       summary: Update Project information
@@ -985,12 +1139,18 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [success]
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
+                    enum: [true]
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/jobs/info:
     post:
@@ -999,7 +1159,7 @@ paths:
       description: >
         Return normalized status information for one or more queued translation
         or context generation jobs.
-      operationId: getJobsInfo
+      operationId: getTranslationJobInfo
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -1024,6 +1184,7 @@ paths:
                 type: array
                 items:
                   type: object
+                  required: [status, jobId]
                   properties:
                     status:
                       type: string
@@ -1031,12 +1192,17 @@ paths:
                     jobId: { type: string }
                     error:
                       type: object
+                      description: Present and required when status is failed.
+                      required: [message]
                       properties:
-                        message: { type: string }
+                        message: { type: [string, 'null'] }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/files/info:
     post:
@@ -1080,11 +1246,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [sourceFiles, translatedFiles]
                 properties:
                   sourceFiles:
                     type: array
                     items:
                       type: object
+                      required: [branchId, fileId, versionId, fileName, fileFormat, dataFormat, createdAt, updatedAt, publishedAt, locales, sourceLocale]
                       properties:
                         branchId: { type: string }
                         fileId: { type: string }
@@ -1094,9 +1262,6 @@ paths:
                         dataFormat: { type: [string, 'null'] }
                         createdAt: { type: string, format: date-time }
                         updatedAt: { type: string, format: date-time }
-                        approvalRequiredAt:
-                          type: [string, 'null']
-                          format: date-time
                         publishedAt:
                           type: [string, 'null']
                           format: date-time
@@ -1108,6 +1273,7 @@ paths:
                     type: array
                     items:
                       type: object
+                      required: [branchId, fileId, versionId, fileFormat, dataFormat, createdAt, updatedAt, approvedAt, publishedAt, completedAt, locale]
                       properties:
                         branchId: { type: string }
                         fileId: { type: string }
@@ -1129,6 +1295,9 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/translations/files/status/{fileId}:
     get:
@@ -1160,11 +1329,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [translations, sourceFile]
                 properties:
                   translations:
                     type: array
                     items:
                       type: object
+                      required: [locale, completedAt, approvedAt, publishedAt, createdAt, updatedAt]
                       properties:
                         locale: { type: string }
                         completedAt:
@@ -1184,6 +1355,7 @@ paths:
                           format: date-time
                   sourceFile:
                     type: object
+                    required: [id, branchId, fileId, versionId, fileName, sourceLocale, fileFormat, dataFormat, createdAt, updatedAt, locales]
                     properties:
                       id: { type: string }
                       branchId: { type: string }
@@ -1195,22 +1367,22 @@ paths:
                       dataFormat: { type: [string, 'null'] }
                       createdAt: { type: string, format: date-time }
                       updatedAt: { type: string, format: date-time }
-                      approvalRequiredAt:
-                        type: [string, 'null']
-                        format: date-time
                       locales:
                         type: array
                         items: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/files/moves:
     post:
       tags: [Files]
       summary: Move or rename files
       description: Clone source files and their translations under new file IDs.
-      operationId: moveFiles
+      operationId: processFileMoves
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -1241,26 +1413,35 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [results]
                 properties:
                   results:
                     type: array
                     items:
                       type: object
+                      required: [oldFileId, newFileId, success]
                       properties:
                         oldFileId: { type: string }
                         newFileId: { type: string }
                         success: { type: boolean }
+                        newSourceFileId: { type: string }
+                        clonedTranslationsCount:
+                          type: integer
                         error: { type: string }
                   summary:
                     type: object
+                    required: [total, succeeded, failed]
                     properties:
-                      total: { type: integer }
-                      succeeded: { type: integer }
-                      failed: { type: integer }
+                      total: { type: integer, minimum: 0 }
+                      succeeded: { type: integer, minimum: 0 }
+                      failed: { type: integer, minimum: 0 }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/project/files/orphaned:
     post:
@@ -1291,11 +1472,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [orphanedFiles]
                 properties:
                   orphanedFiles:
                     type: array
                     items:
                       type: object
+                      required: [fileId, versionId, fileName]
                       properties:
                         fileId: { type: string }
                         versionId: { type: string }
@@ -1304,6 +1487,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
   /v2/translate:
     post:
@@ -1311,12 +1497,11 @@ paths:
       summary: Translate content at runtime
       description: >
         Translate one or more strings or structured content entries with caching
-        and memoization. Authentication is optional; unauthenticated requests may
-        receive partial results.
+        and memoization. Requires an API key with
+        `project:translations:generate`; development keys are accepted.
       operationId: translate
       security:
         - Bearer: []
-        - {}
       parameters:
         - $ref: '#/components/parameters/GtApiVersion'
         - $ref: '#/components/parameters/GtProjectId'
@@ -1361,6 +1546,7 @@ paths:
                             type: object
                             additionalProperties:
                               type: array
+                              maxItems: 5
                               items:
                                 type: object
                                 required: [before, target, after]
@@ -1400,9 +1586,136 @@ paths:
               schema:
                 $ref: '#/components/schemas/RuntimeTranslationResponse'
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /cli/wizard/session:
+    post:
+      tags: [CLI Wizard]
+      summary: Create a CLI wizard session
+      description: >
+        Create an unauthenticated sign-in session for the CLI. Limited to 60
+        requests per minute.
+      operationId: createCliWizardSession
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyType:
+                  type: string
+                  enum: [development, production, all]
+                  default: production
+      responses:
+        '200':
+          description: CLI wizard session created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessionId]
+                properties:
+                  sessionId: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+
+  /cli/wizard/{sessionId}:
+    get:
+      tags: [CLI Wizard]
+      summary: Get a CLI wizard session
+      description: >
+        Return credentials when sign-in completes, or a waiting response while
+        the session is pending. Version 2026-03-06.v1 returns `apiKeys`; earlier
+        versions return `apiKey`. Limited to 60 requests per minute.
+      operationId: getCliWizardSession
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: CLI wizard session credentials.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projectId]
+                properties:
+                  apiKey:
+                    type: string
+                    description: Returned by API versions before 2026-03-06.v1.
+                  apiKeys:
+                    type: array
+                    description: Returned by API version 2026-03-06.v1 and later.
+                    items:
+                      type: object
+                      required: [key, type]
+                      properties:
+                        key: { type: string }
+                        type:
+                          type: string
+                          enum: [development, production]
+                  projectId: { type: string }
+        '202':
+          description: CLI wizard session is waiting for sign-in.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    delete:
+      tags: [CLI Wizard]
+      summary: Delete a CLI wizard session
+      description: Delete an unauthenticated CLI sign-in session.
+      operationId: deleteCliWizardSession
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GtApiVersion'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: CLI wizard session deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
 
 components:
   securitySchemes:
@@ -1506,15 +1819,20 @@ components:
           additionalProperties: true
     Branch:
       type: object
+      required: [id, name]
       properties:
         id: { type: string }
         name: { type: string }
     Error:
       type: object
+      required: [error]
       properties:
         error:
           type: string
           description: Human-readable error message.
+    PlainTextError:
+      type: string
+      description: Human-readable error message.
 
   responses:
     BadRequest:
@@ -1523,39 +1841,93 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
     Unauthorized:
       description: Missing or invalid API key.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
     Forbidden:
       description: The API key lacks the required permission, or the action is not allowed on the current plan.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
     NotFound:
       description: The requested resource was not found.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
     RateLimited:
       description: Rate limit or quota exceeded.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
     PaymentRequired:
       description: Payment or quota validation failed.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
+    Conflict:
+      description: The request conflicts with an existing resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
+    PayloadTooLarge:
+      description: The request body exceeds the endpoint limit.
+      content:
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
+    TooEarly:
+      description: The requested translation is still processing.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
+    InternalServerError:
+      description: The server could not complete the request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
     ServiceUnavailable:
       description: The server is temporarily busy.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+        text/html:
+          schema:
+            $ref: '#/components/schemas/PlainTextError'
