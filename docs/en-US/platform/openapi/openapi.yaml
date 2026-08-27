@@ -93,7 +93,7 @@ paths:
                         fileId: { type: string }
                         versionId: { type: string }
                         fileName: { type: string }
-                        fileFormat: { type: string }
+                        fileFormat: { $ref: '#/components/schemas/FileFormat' }
                         dataFormat: { type: string }
                   count: { type: integer }
                   message: { type: string }
@@ -141,11 +141,11 @@ paths:
                               type: string
                               description: Base64-encoded translated file content.
                             fileName: { type: string }
-                            fileFormat: { type: string }
+                            fileFormat: { $ref: '#/components/schemas/FileFormat' }
                             locale: { type: string }
                             dataFormat: { type: string }
                             transformFormat:
-                              type: string
+                              $ref: '#/components/schemas/FileFormat'
                               description: Output file format transformation.
                 sourceLocale:
                   type: string
@@ -168,7 +168,7 @@ paths:
                         versionId: { type: string }
                         fileName: { type: string }
                         locale: { type: string }
-                        fileFormat: { type: string }
+                        fileFormat: { $ref: '#/components/schemas/FileFormat' }
                         dataFormat: { type: string }
                   count: { type: integer }
                   message: { type: string }
@@ -368,7 +368,7 @@ paths:
                       fileId: { type: string }
                       versionId: { type: string }
                       fileName: { type: string }
-                      transformFormat: { type: string }
+                      transformFormat: { $ref: '#/components/schemas/FileFormat' }
                 targetLocales:
                   type: array
                   items: { type: string }
@@ -567,7 +567,7 @@ paths:
                         metadata:
                           type: object
                           additionalProperties: true
-                        fileFormat: { type: string }
+                        fileFormat: { $ref: '#/components/schemas/FileFormat' }
                         locale: { type: string }
                   count: { type: integer }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -1090,7 +1090,7 @@ paths:
                         fileId: { type: string }
                         versionId: { type: string }
                         fileName: { type: string }
-                        fileFormat: { type: string }
+                        fileFormat: { $ref: '#/components/schemas/FileFormat' }
                         dataFormat: { type: [string, 'null'] }
                         createdAt: { type: string, format: date-time }
                         updatedAt: { type: string, format: date-time }
@@ -1112,7 +1112,7 @@ paths:
                         branchId: { type: string }
                         fileId: { type: string }
                         versionId: { type: string }
-                        fileFormat: { type: string }
+                        fileFormat: { $ref: '#/components/schemas/FileFormat' }
                         dataFormat: { type: [string, 'null'] }
                         createdAt: { type: string, format: date-time }
                         updatedAt: { type: string, format: date-time }
@@ -1191,7 +1191,7 @@ paths:
                       versionId: { type: string }
                       fileName: { type: string }
                       sourceLocale: { type: string }
-                      fileFormat: { type: string }
+                      fileFormat: { $ref: '#/components/schemas/FileFormat' }
                       dataFormat: { type: [string, 'null'] }
                       createdAt: { type: string, format: date-time }
                       updatedAt: { type: string, format: date-time }
@@ -1344,7 +1344,12 @@ paths:
                           id: { type: string }
                           hash: { type: string }
                           context: { type: string }
-                          maxChars: { type: integer }
+                          maxChars:
+                            type: number
+                            description: >
+                              Requested maximum translation length. Only positive
+                              integers apply a character limit; other numeric
+                              values are ignored.
                           dataFormat:
                             type: string
                             enum: [STRING, JSX, ICU, I18NEXT]
@@ -1358,10 +1363,17 @@ paths:
                               type: array
                               items:
                                 type: object
+                                required: [before, target, after]
                                 properties:
-                                  before: { type: string, maxLength: 2000 }
-                                  target: { type: string, maxLength: 500 }
-                                  after: { type: string, maxLength: 2000 }
+                                  before:
+                                    type: string
+                                    description: Truncated to 2,000 characters before translation.
+                                  target:
+                                    type: string
+                                    description: Truncated to 500 characters before translation.
+                                  after:
+                                    type: string
+                                    description: Truncated to 2,000 characters before translation.
                 targetLocale:
                   type: string
                   minLength: 1
@@ -1380,25 +1392,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: object
-                  properties:
-                    success: { type: boolean }
-                    translation: { type: string }
-                    error: { type: string }
+                $ref: '#/components/schemas/RuntimeTranslationResponse'
         '201':
           description: Translation results, keyed by request key.
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: object
-                  properties:
-                    success: { type: boolean }
-                    translation: { type: string }
-                    error: { type: string }
+                $ref: '#/components/schemas/RuntimeTranslationResponse'
         '400': { $ref: '#/components/responses/BadRequest' }
         '402': { $ref: '#/components/responses/PaymentRequired' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1440,6 +1440,40 @@ components:
         type: string
 
   schemas:
+    FileFormat:
+      type: string
+      description: Supported file format. Request values are case-insensitive.
+      enum:
+        - GTJSON
+        - MDX
+        - JSON
+        - YAML
+        - MD
+        - TS
+        - JS
+        - HTML
+        - TXT
+        - PO
+        - POT
+        - TWILIO_CONTENT_JSON
+        - LOTTIE
+        - SVG
+    RuntimeTranslationResponse:
+      type: object
+      additionalProperties:
+        type: object
+        required: [success]
+        properties:
+          success: { type: boolean }
+          translation:
+            type: [string, object, array, number, boolean, 'null']
+            description: Translated content in the requested data format.
+          dataFormat:
+            type: string
+            enum: [JSX, ICU, I18NEXT, STRING]
+          locale: { type: string }
+          error: { type: string }
+          code: { type: number }
     SourceFileInput:
       type: object
       required: [content, fileName, fileFormat, locale]
@@ -1449,8 +1483,7 @@ components:
           description: Base64-encoded file content.
         fileName: { type: string }
         fileFormat:
-          type: string
-          description: File format identifier, for example JSON, MDX, or LOTTIE.
+          $ref: '#/components/schemas/FileFormat'
         dataFormat:
           type: string
           description: Data format, e.g. STRING, JSX, ICU.
