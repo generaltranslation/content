@@ -1,14 +1,11 @@
 ---
+
 title: Configuring a Bazel SPA
-description: 'Instructions for configuring gt-react in a Bazel-powered single-page React application.'
+description: How to configure gt-react in a Bazel-powered single-page React application.
+
 ---
 
-# Overview
-
-This guide will cover the following topics:
-
-(1) React Bazel SPA setup
-(2) Loading translations
+Configure the application runtime and optionally bundle generated translation catalogs with your Bazel build.
 
 The optional [`src`](/docs/cli/reference/config#src) field designates the source
 files GT scans for inline content; when omitted, it defaults to these
@@ -25,15 +22,15 @@ JavaScript and TypeScript globs under `src`, `app`, `pages`, and `components`:
 }
 ```
 
-Your task is not to internationalize content, rather, to prepare the application itself for i18n.
+This guide prepares the application runtime. Mark user-facing content for translation separately.
 
-## React Bazel SPA setup
+## React Bazel SPA setup [#setup]
 
-This is a guide on how to set up `gt-react` in a Bazel-powered single-page React application.
+Initialize `gt-react` before the application entry point runs.
 
 ### 1. Install gt-react
 
-If not already installed, install gt-react. Please use the latest version of gt-react. Do not just add it to the `package.json` without installing it. Please use repository's preferred package manager. If it has already been installed, then skip this step.
+Install the latest `gt-react` with the repository's preferred package manager. Skip this step when it is already installed.
 
 ### 2. Add a `gt.config.json` file to the root of the project
 
@@ -63,11 +60,9 @@ The optional `src` field designates the source files GT scans for inline content
 
 ### 3. Initialize the library
 
-Initialize the library with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa). This declares important variables and attaches it to the global object. This is important to happen at the module level or before other runtime code is executed. This is not the SPA provider, which means executing this at the module level is enough. SPA provider would require that this module be executed before any other code is executed, but this is not of concern for you. I just wanted to clarify that this is not the SPA provider.
+[`initializeGTSPA`](/docs/react/reference/config#initialize-spa) configures module-level translation functions and awaits the initial catalog. Call it in a bootstrap module before importing code that translates at module scope.
 
-Furthermore, this is an `async` function responsible for loading the translations at the module level. This is so we can use translation functions at the module level, so it is essential that this module level function gets executed before any other code is executed that may have translation functions.
-
-Create a new file to bootstrap the application. From there, we can import the entry point file. In this example, we create `src/index.js` as our bootstrap file and import `src/main.jsx` as our entry point file.
+Create `src/index.js` as the bootstrap file and import the existing `src/main.jsx` entry after initialization.
 
 Locate the Bazel target that builds the browser bundle. Preserve the project's existing rule, dependencies, source declarations, and build options. Do not replace its bundler or add a second build pipeline.
 
@@ -111,13 +106,13 @@ void bootstrap();
 
 Do not leave the original entry configured as a second browser entry. It must render only after [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) resolves. Run the repository's normal Bazel build or test target for the application. Do not start a persistent development or preview server.
 
-## Loading translations
+## Loading translations [#translations]
 
-This guide will explain how to set up translation loading for the application. We must load translations at runtime to display them. With no further configuration than the react-bazel-spa setup described above, behavior will default to loading translations from the `gt` cdn. However, most users prefer to ship translations in the application bundle. This requires logic overriding the default translation loading behavior and specifying a location to store the generated translation files. The following steps assume that a user has specified they want to ship translations in the application bundle, and that they want to store them in the default directory of `src/_gt/[locale].json`.
+By default, the runtime loads translations from the General Translation CDN. To ship catalogs in the application bundle, configure an output path and a matching loader. The steps below use `src/_gt/[locale].json`.
 
 ### 1. Update the config
 
-We need to update the `gt.config.json` file to specify the location of these translation files. When the CLI tool runs to generate translations, at some point in the future, it will read this file and use the configured location to store the generated translation files.
+Set `files.gt.output` to the location where the CLI should write generated translation files.
 
 Only add or merge the `files.gt.output` setting. Preserve the project's existing `locales` and `defaultLocale`; the values shown below remain examples and must not replace the project's configured locales.
 
@@ -137,7 +132,7 @@ Typically in a Bazel-powered application, the translations will be stored in the
 
 ### 2. Add the stubs
 
-We need to add stubs so that we can load the translation bundles without import complaining that the files do not exist. We just need to create one empty JSON file for each target locale already configured in `gt.config.json`, excluding the default locale. The `fr` and `zh` files below illustrate the example configuration from this guide; create files for the project's actual configured target locales instead. If no target locales are configured, do not invent locales or create placeholder files.
+Create one empty JSON file for each target locale already configured in `gt.config.json`, excluding the default locale. These stubs let imports resolve before translation bundles exist. The `fr` and `zh` files below illustrate the example configuration from this guide; create files for the project's actual configured target locales instead. If no target locales are configured, do not invent locales or create placeholder files.
 
 ```bash title="src/_gt"
 src/_gt/
