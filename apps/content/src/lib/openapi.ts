@@ -1,6 +1,6 @@
-import path from 'node:path';
-
 import { createOpenAPI } from 'fumadocs-openapi/server';
+
+import { OPENAPI_SPEC_PATH } from './openApiPath';
 
 // This snapshot of gt-cloud/apps/api/openapi.public.json lives alongside the
 // docs content so it ships with the standalone app. We register it under a
@@ -9,10 +9,7 @@ import { createOpenAPI } from 'fumadocs-openapi/server';
 // differs between this app and the landing app that renders the same content.
 export const openapi = createOpenAPI({
   input: () => ({
-    'gt-api': path.join(
-      process.cwd(),
-      '../../docs/en-US/platform/openapi/openapi.json'
-    ),
+    'gt-api': OPENAPI_SPEC_PATH,
   }),
   proxyUrl: '/api/proxy',
 });
