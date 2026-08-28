@@ -47,6 +47,7 @@ const HTTP_METHODS = new Set([
   'patch',
   'trace',
 ]);
+const MANUAL_REFERENCE_PAGES = ['./typescript-sdk'];
 const DOCS_SLUG_PATTERN =
   /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -247,7 +248,10 @@ function writeNavigation() {
       {
         title: 'Reference',
         description: 'Browse Reference pages for the General Translation API.',
-        pages: groups.map(({ slug }) => `./${slug}`),
+        pages: [
+          ...MANUAL_REFERENCE_PAGES,
+          ...groups.map(({ slug }) => `./${slug}`),
+        ],
       },
       null,
       2
