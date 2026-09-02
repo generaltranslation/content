@@ -235,12 +235,17 @@ The docs have these top-level sections, in this order:
 3. **CLI**
 4. **React** — the React ecosystem SDKs (`gt-react`, `gt-next`, TanStack Start, and `gt-react-native`) and the React Core linter, folded into **one multi-framework section** (see React section (multi-framework)).
 5. **Vue** — the Vue 3 SDK (`gt-vue`).
-6. **rrweb** — localized browser recording and replay with `gt-rrweb`.
-7. **Node**
-8. **Python**
-9. **Integrations** — plugins for third-party content platforms (for example, Sanity, Storyblok, and Google Drive).
+6. **Node**
+7. **Python**
+8. **Integrations** — plugins and add-ons that attach General Translation to a third-party platform or tool (for example, Sanity, Storyblok, Google Drive, and rrweb).
 
-Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Vue, rrweb, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
+### When something gets its own top-level section
+
+Reserve a top-level section for a **framework**: a first-party SDK that developers install into their own application and build on directly — the React ecosystem, Vue, Node, and Python — plus the CLI and the Platform itself. A framework earns a tab because readers arrive already thinking in that framework's terms and need a whole spine (Quickstart → Guides → Reference) shaped around it.
+
+Everything else lives under **Integrations**, as one plugin folder with its own Quickstart → Guides → Reference: content platforms and CMSs (Sanity, Storyblok), storage and docs tools (Google Drive, Mintlify), and libraries that attach to another tool rather than host an app (`gt-rrweb` for rrweb recordings). **When in doubt, put it in Integrations.** Promote a plugin to its own section only when it has grown into a framework SDK in the sense above; that is an information-architecture change, so the top-level list is pinned by CI (`scripts/validate-docs-structure.ts`) and the Overview hub must be updated with it.
+
+Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Vue, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
 
 ### The three-section spine
 
@@ -277,7 +282,7 @@ A `meta.json` supports these keys:
   - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
 - `pages` — the ordered list of entries; **this array is the source of truth for page order**.
 - `icon` — a named icon token (e.g. `Terminal`, `React`, `Python`, `Globe`) shown next to the section in the nav. Set it only on the top-level section roots.
-- `root` — set `"root": true` on the nine top-level sections only; it marks the folder as a navigable section root.
+- `root` — set `"root": true` on the eight top-level sections only; it marks the folder as a navigable section root.
 - `defaultOpen` — optional flag controlling whether the folder starts expanded in the sidebar.
 
 Entries in `pages` take three forms:
@@ -337,7 +342,7 @@ The entry page for a capability is named for its audience:
 Shape the entry page itself:
 
 - **Default to a single condensed entry page** placed directly in the capability folder: open with what it does and when to use it, then include the steps on the same page (a **Quickstart** for technical capabilities; **Key workflows/Configuration/Navigation** for product capabilities).
-- **For single-part sections (CLI, Vue, rrweb, Node, Python), the section landing page is the Quickstart itself** (`quickstart.md` at the section root); there is no separate section index page.
+- **For single-part sections (CLI, Vue, Node, Python) and for each Integrations plugin, the section landing page is the Quickstart itself** (`quickstart.md` at the section root); there is no separate section index page.
 - **The React section is the exception:** it is multi-framework, so its landing page is **Get Started → Overview**, followed by one **[Framework] Quickstart** per framework (see React section (multi-framework)).
 - **Split into a Get Started section with separate Overview and Quickstart pages only when** the capability needs substantial conceptual grounding before a reader can act — concepts, architecture, or a mental model that would overwhelm a single page (typical of larger frameworks). Small libraries, single APIs, and the current Platform capabilities do not need a split.
   - When split: **Overview** covers what it is, why, when to use it, and the core concepts; **Quickstart** is the numbered path to first success.
@@ -481,7 +486,7 @@ Link to it with the anchor: `/docs/platform/core/guides/translate-string#variabl
 The entry page orients the reader and gives them a fast path to first success. Shape it to the capability (see Get Started vs. Quickstart for which name to use):
 
 - **Product/nontechnical capabilities (**`get-started.md`**: Dashboard, Locadex, Overview).** Lead with orientation, not code. Dashboard-style: **Key workflows** → **Configuration** → **Navigation** → **FAQs**. Locadex-style: **How [product] works** → numbered setup steps.
-- **Technical capabilities (**`quickstart.md`**: Core, CLI, React, Vue, rrweb, Node, Python, OpenAPI, integration plugins).** The page title is **Quickstart**. Open with what the library/API does and when to use it, then put the numbered path to first success (install → authenticate → first call) under a dedicated `## Quickstart [#quickstart]` H2 with `### 1. …` steps — title that section **Quickstart**, not "Translate your first app" or similar. Precede the steps with a short paragraph so the reader has context before acting. If there are concrete prerequisites (minimum runtime/library versions, supported platforms, required accounts or keys), list them explicitly up front — a short **Requirements** or **Before you start** section, or a `Note` callout for a single version floor.
+- **Technical capabilities (**`quickstart.md`**: Core, CLI, React, Vue, Node, Python, OpenAPI, integration plugins).** The page title is **Quickstart**. Open with what the library/API does and when to use it, then put the numbered path to first success (install → authenticate → first call) under a dedicated `## Quickstart [#quickstart]` H2 with `### 1. …` steps — title that section **Quickstart**, not "Translate your first app" or similar. Precede the steps with a short paragraph so the reader has context before acting. If there are concrete prerequisites (minimum runtime/library versions, supported platforms, required accounts or keys), list them explicitly up front — a short **Requirements** or **Before you start** section, or a `Note` callout for a single version floor.
 - Do not add a separate conceptual overview page (unless the section is split per Information architecture) or a "Next steps" section (see No next-steps sections).
 
 
