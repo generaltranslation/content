@@ -1,0 +1,91 @@
+---
+
+title: Android strings.xml
+description: Translate Android strings.xml resource files with the General Translation CLI. API reference for the Android strings.xml file format.
+
+---
+
+The CLI translates Android string resources. An Android project keeps its default-language strings in `res/values/strings.xml` and each translation in a locale-qualified sibling directory, such as `res/values-es/strings.xml`. Translations keep the resource names, the `<xliff:g>` placeholders, and the inline markup that the app renders.
+
+## Overview [#overview]
+
+| Topic | Description |
+| --- | --- |
+| [Configuration](#config) | Route the base resource file to locale-qualified directories. |
+| [Resource directory qualifiers](#qualifiers) | How locale codes are spelled in `values-*` directory names. |
+| [Plurals](#plurals) | Rebuild `<plurals>` for each target language's CLDR categories. |
+| [Untranslated resources](#untranslated) | Resources the CLI leaves alone. |
+
+## Configuration [#config]
+
+Add an `androidStrings` entry under `files`. Android's base resource file is `res/values/strings.xml`, which has no locale qualifier in its path, so there is nowhere to put a `[locale]` placeholder. Point `include` at the base file and use `transform` to route the translated output into the locale-qualified directories:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "pl"],
+  "files": {
+    "androidStrings": {
+      "include": ["res/values/strings.xml"],
+      "transform": {
+        "match": "res/values/(.*)",
+        "replace": "res/values-{locale}/$1"
+      }
+    }
+  }
+}
+```
+
+With this config, the CLI reads `res/values/strings.xml` and writes `res/values-es/strings.xml`, `res/values-fr/strings.xml`, and `res/values-pl/strings.xml`. See the [configuration reference](/docs/cli/reference/config#files) for all file keys.
+
+This is the shape to use for a standard Android project, and it differs from the other file formats: a pattern such as `res/values-[locale]/strings.xml` resolves the placeholder to your `defaultLocale` and looks for `res/values-en/strings.xml`, which a standard project does not have. It matches no files, and the run finishes without translating anything.
+
+If your project does keep its source strings in a qualified directory such as `res/values-en/`, use the placeholder form instead and drop the `transform`:
+
+```json title="gt.config.json"
+{
+  "files": {
+    "androidStrings": {
+      "include": ["res/values-[locale]/strings.xml"]
+    }
+  }
+}
+```
+
+The `androidStrings` key requires `gt` 2.19.0 or later.
+
+## Resource directory qualifiers [#qualifiers]
+
+Android parses the locale out of a `values-*` directory name and fails the build on a name it cannot parse, so the locale in the path is not always spelled the way you write it in [`locales`](/docs/cli/reference/config#locales). For `androidStrings`, the CLI converts the locale to an Android resource qualifier in both the `[locale]` placeholder and the `{locale}` transform placeholder:
+
+| Configured locale | Resource directory |
+| --- | --- |
+| `es` | `res/values-es` |
+| `fr-CA` | `res/values-fr-rCA` |
+| `zh-Hans` | `res/values-b+zh+Hans` |
+| `es-419` | `res/values-b+es+419` |
+
+A region subtag takes the legacy `-r` form, while a script subtag or a numeric region uses the BCP 47 `b+` form. This conversion applies only to `androidStrings`; every other file format uses the locale exactly as configured.
+
+## Plurals [#plurals]
+
+Android quantity strings are `<plurals>` elements holding one `<item quantity="...">` per CLDR category. A translated file carries the categories the target language actually uses, which is rarely the same set as the source. English selects between `one` and `other`, but Polish uses three forms for an integer count, Arabic uses six, and Chinese uses one.
+
+```xml title="res/values/strings.xml"
+<plurals name="photo_count">
+  <item quantity="one">%d photo</item>
+  <item quantity="other">%d photos</item>
+</plurals>
+```
+
+The CLI rebuilds each `<plurals>` against the target language's CLDR rules, adding the categories that language needs and dropping the ones it never selects. Android resolves a quantity through CLDR alone, so a category the target language does not use is unreachable and is removed, including a `zero` present in the source. Do not expect the translated element to have the same `quantity` values as the source; compare rendered output at representative counts instead.
+
+## Untranslated resources [#untranslated]
+
+The CLI leaves these resources in the translated file without sending them for translation:
+
+- Resources marked `translatable="false"`, the standard way to exclude API keys, brand names, and debug values. The attribute is matched the way AAPT reads it, so `False` and `FALSE` are honored too.
+- Values that are resource references rather than text, meaning a value beginning with `@` or `?`. Translating one would leave the app pointing at a resource that does not exist.
+- Resource types that hold no user-facing text, such as `<bool>`, `<integer>`, and `<color>`.
+
+A comment above a resource is passed to the translation engine as context, so use one to disambiguate a short or overloaded string.
