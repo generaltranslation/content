@@ -1,0 +1,317 @@
+---
+
+title: TypeScript SDK
+description: Call public API endpoints with a generated, type-safe client and workflow helpers. API reference for @generaltranslation/api.
+
+---
+
+The `@generaltranslation/api` package provides generated functions and types for the public OpenAPI contract. It also configures authentication, Project selection, request timeouts, retries, batching, content encoding, and translation-job polling.
+
+## Overview [#overview]
+
+| Export | Type | Description |
+| --- | --- | --- |
+| [`createApiClient`](#client) | Function | Creates a client with shared URL, authentication, Project, version, timeout, and retry settings. |
+| [`API_VERSION`](#client) | Constant | The API version sent by default. |
+| [Generated operation functions](#operations) | Functions | Call the public endpoints with generated request and response types. |
+| [`awaitJobs`](#job-polling) | Function | Polls translation jobs until they reach terminal states or time out. |
+| [`processBatches`](#utilities) | Function | Processes an input array in configurable batches. |
+| [`DEFAULT_BATCH_SIZE`](#utilities) | Constant | The default batch size used by `processBatches`. |
+| [`encodeBase64`](#utilities) | Function | Encodes a UTF-8 string as base64. |
+| [`decodeBase64`](#utilities) | Function | Decodes a base64 value as a UTF-8 string. |
+| [`encodeFileContent`](#utilities) | Function | Encodes content for an API file payload. |
+| [`decodeFileContent`](#utilities) | Function | Decodes content from an API file payload. |
+| [Generated types](#types-errors) | Types | Describe the client, endpoint data, errors, and responses. |
+
+Install the package with your package manager:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install @generaltranslation/api
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add @generaltranslation/api
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add @generaltranslation/api
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @generaltranslation/api
+    ```
+  </Tab>
+</Tabs>
+
+The package supports ECMAScript modules and CommonJS.
+
+## Client setup [#client]
+
+Create one client and pass it to each generated operation function.
+
+```ts title="src/api.ts"
+import { createApiClient } from '@generaltranslation/api';
+
+const apiKey = process.env.GT_API_KEY;
+const projectId = process.env.GT_PROJECT_ID;
+
+if (!apiKey || !projectId) {
+  throw new Error('GT_API_KEY and GT_PROJECT_ID are required');
+}
+
+export const apiClient = createApiClient({
+  apiKey,
+  baseUrl: 'https://api.gtx.dev',
+  projectId,
+});
+```
+
+### `createApiClient`
+
+```ts
+createApiClient(config: ApiClientConfig): Client
+```
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `apiKey` | API key sent as a bearer token. | `string` | Yes | — |
+| `apiVersion` | Contract version sent in `gt-api-version`. | `ApiVersion` | Yes | `API_VERSION` |
+| `baseUrl` | Base URL for every request. Use `https://api.gtx.dev` for the hosted API. | `string` | No | — |
+| `fetch` | Fetch implementation used for requests. | `typeof fetch` | Yes | `globalThis.fetch` |
+| `projectId` | Project ID sent in `gt-project-id`. Required for Project-scoped calls made with an Organization API key. | `string` | Yes | — |
+| `retryPolicy` | Retry delay strategy. | `'exponential' \| 'linear' \| 'none'` | Yes | `'exponential'` |
+| `timeoutMs` | Timeout for each request attempt. | `number` | Yes | `60000` |
+
+`API_VERSION` is `2026-03-06.v1`. Unlike a raw request, which defaults to the oldest supported API version when the header is absent, a client created by `createApiClient` sends this current version automatically.
+
+The client retries `429` responses for all methods. It retries network failures and `5xx` responses only for `GET`, `HEAD`, `OPTIONS`, `PUT`, and `DELETE`. The default policy allows up to three retries after the first attempt. Set `retryPolicy: 'none'` to disable retries.
+
+Exponential and linear retries start at 500 ms. For `429` responses, the client uses `Retry-After`, then `RateLimit-Reset`, and otherwise waits 60 seconds.
+
+## Generated operations [#operations]
+
+Each operation accepts one object with a required `client` and the endpoint's generated `body`, `path`, `query`, and `headers` fields. The function returns `{ data, error, request, response }` by default.
+
+```ts title="src/project.ts"
+import { getProjectInfo } from '@generaltranslation/api';
+
+import { apiClient } from './api.js';
+
+const projectId = process.env.GT_PROJECT_ID;
+
+if (!projectId) {
+  throw new Error('GT_PROJECT_ID is required');
+}
+
+const { data } = await getProjectInfo({
+  client: apiClient,
+  path: { projectId },
+  throwOnError: true,
+});
+
+console.log(data.name);
+```
+
+Use these common options with any generated operation:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `client` | Client returned by `createApiClient`. | `Client` | No | — |
+| `body` | Typed JSON request body when the endpoint accepts one. | Endpoint-specific | Varies | — |
+| `path` | Typed path parameters when the endpoint accepts them. | Endpoint-specific | Varies | — |
+| `query` | Typed query parameters when the endpoint accepts them. | Endpoint-specific | Varies | — |
+| `headers` | Per-call headers. Values override headers configured on the client. | Endpoint-specific | Yes | — |
+| `throwOnError` | Throws for unsuccessful responses instead of returning `error`. | `boolean` | Yes | `false` |
+| `responseStyle` | Returns the full fields object or only parsed response data. | `'fields' \| 'data'` | Yes | `'fields'` |
+| `signal` | Cancels the request through the standard Fetch API signal. | `AbortSignal` | Yes | — |
+| `meta` | Arbitrary values available to custom client integrations. | `Record<string, unknown>` | Yes | — |
+
+The package exports one generated function per public endpoint:
+
+| Function | Endpoint reference |
+| --- | --- |
+| [`createProject`](/docs/platform/openapi/reference/project/create-project) | [Create a Project](/docs/platform/openapi/reference/project/create-project) |
+| [`uploadSourceFiles`](/docs/platform/openapi/reference/files/upload-source) | [Upload source files](/docs/platform/openapi/reference/files/upload-source) |
+| [`uploadTranslations`](/docs/platform/openapi/reference/files/upload-translations) | [Upload translated files](/docs/platform/openapi/reference/files/upload-translations) |
+| [`uploadAssets`](/docs/platform/openapi/reference/project/upload-assets) | [Upload Project assets](/docs/platform/openapi/reference/project/upload-assets) |
+| [`submitUserEditDiffs`](/docs/platform/openapi/reference/files/submit-diffs) | [Submit translation diffs](/docs/platform/openapi/reference/files/submit-diffs) |
+| [`shouldGenerateProjectContext`](/docs/platform/openapi/reference/context/check-freshness) | [Check if context generation is needed](/docs/platform/openapi/reference/context/check-freshness) |
+| [`generateProjectContext`](/docs/platform/openapi/reference/context/generate-context) | [Generate translation context](/docs/platform/openapi/reference/context/generate-context) |
+| [`getProjectContextGenerationStatus`](/docs/platform/openapi/reference/context/context-status) | [Get context generation job status](/docs/platform/openapi/reference/context/context-status) |
+| [`enqueueFileTranslations`](/docs/platform/openapi/reference/translation/queue) | [Queue files for translation](/docs/platform/openapi/reference/translation/queue) |
+| [`publishFiles`](/docs/platform/openapi/reference/files/publish-files) | [Publish or unpublish files](/docs/platform/openapi/reference/files/publish-files) |
+| [`downloadFile`](/docs/platform/openapi/reference/files/download) | [Download a single file](/docs/platform/openapi/reference/files/download) |
+| [`downloadFiles`](/docs/platform/openapi/reference/files/download-many) | [Download multiple files](/docs/platform/openapi/reference/files/download-many) |
+| [`getBranchInfo`](/docs/platform/openapi/reference/project/branch-info) | [Get branch information](/docs/platform/openapi/reference/project/branch-info) |
+| [`createBranch`](/docs/platform/openapi/reference/project/create-branch) | [Create a branch](/docs/platform/openapi/reference/project/create-branch) |
+| [`createTag`](/docs/platform/openapi/reference/project/upsert-tag) | [Create or update a tag](/docs/platform/openapi/reference/project/upsert-tag) |
+| [`getProjectInfo`](/docs/platform/openapi/reference/project/project-info) | [Get Project information](/docs/platform/openapi/reference/project/project-info) |
+| [`updateProjectInfo`](/docs/platform/openapi/reference/project/update-project) | [Update Project information](/docs/platform/openapi/reference/project/update-project) |
+| [`getTranslationJobInfo`](/docs/platform/openapi/reference/translation/job-status) | [Get translation job status](/docs/platform/openapi/reference/translation/job-status) |
+| [`translate`](/docs/platform/openapi/reference/translation/translate-runtime) | [Translate content at runtime](/docs/platform/openapi/reference/translation/translate-runtime) |
+| [`getFileInfo`](/docs/platform/openapi/reference/files/file-info) | [Get file metadata](/docs/platform/openapi/reference/files/file-info) |
+| [`getTranslationStatus`](/docs/platform/openapi/reference/files/translation-status) | [Get translation status for a file](/docs/platform/openapi/reference/files/translation-status) |
+| [`processFileMoves`](/docs/platform/openapi/reference/files/move-files) | [Move or rename files](/docs/platform/openapi/reference/files/move-files) |
+| [`getOrphanedFiles`](/docs/platform/openapi/reference/files/orphaned-files) | [Find orphaned files](/docs/platform/openapi/reference/files/orphaned-files) |
+
+[`shouldGenerateProjectContext`](/docs/platform/openapi/reference/context/check-freshness), [`getProjectContextGenerationStatus`](/docs/platform/openapi/reference/context/context-status), and [`downloadFile`](/docs/platform/openapi/reference/files/download) call deprecated endpoints. Use [`generateProjectContext`](/docs/platform/openapi/reference/context/generate-context) and [`getTranslationJobInfo`](/docs/platform/openapi/reference/translation/job-status) for context jobs, and use [`downloadFiles`](/docs/platform/openapi/reference/files/download-many) for downloads.
+
+## Job polling [#job-polling]
+
+[`awaitJobs`](#job-polling) calls [`getTranslationJobInfo`](/docs/platform/openapi/reference/translation/job-status) until every requested job is complete, failed, or unknown, or until the overall timeout expires.
+
+```ts
+awaitJobs(
+  client: Client,
+  jobIds: readonly string[],
+  options?: AwaitJobsOptions
+): Promise<AwaitJobsResult>
+```
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `client` | Configured API client. | `Client` | No | — |
+| `jobIds` | Translation or context-generation job IDs to monitor. | `readonly string[]` | No | — |
+| `pollingIntervalSeconds` | Delay between status requests. | `number` | Yes | `5` |
+| `timeoutSeconds` | Overall polling deadline. | `number` | Yes | `600` |
+
+```ts
+import {
+  awaitJobs,
+  enqueueFileTranslations,
+} from '@generaltranslation/api';
+
+import { apiClient } from './api.js';
+
+const { data: enqueueResult } = await enqueueFileTranslations({
+  client: apiClient,
+  body: {
+    files: [
+      {
+        fileId: 'homepage',
+        versionId: 'version-1',
+      },
+    ],
+    sourceLocale: 'en',
+    targetLocales: ['es'],
+  },
+  throwOnError: true,
+});
+
+if (!('jobData' in enqueueResult)) {
+  throw new Error('The response did not use the current API version');
+}
+
+const result = await awaitJobs(
+  apiClient,
+  Object.keys(enqueueResult.jobData)
+);
+
+if (!result.complete) {
+  console.warn('Translation jobs did not finish before the timeout');
+}
+```
+
+The result contains:
+
+- `complete`: `true` when every requested job reached a terminal state or was missing from the response; `false` when polling timed out.
+- `jobs`: the latest result for each requested job. A missing job is returned with the `unknown` status.
+
+Passing an empty job ID array resolves immediately with `{ complete: true, jobs: [] }`.
+
+## Utility helpers [#utilities]
+
+### Batch processing
+
+`processBatches` splits an input array into chunks, calls your processor for each chunk, and flattens the returned arrays in input-batch order.
+
+```ts
+processBatches<TInput, TOutput>(
+  items: readonly TInput[],
+  processBatch: (batch: TInput[]) => Promise<TOutput[]>,
+  options?: BatchOptions
+): Promise<TOutput[]>
+```
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `items` | Values to split into batches. | `readonly TInput[]` | No | — |
+| `processBatch` | Async function called with each batch. | `(batch: TInput[]) => Promise<TOutput[]>` | No | — |
+| `batchSize` | Positive number of input values per batch. | `number` | Yes | `DEFAULT_BATCH_SIZE` |
+| `parallel` | Processes all batches concurrently when `true`, or sequentially when `false`. | `boolean` | Yes | `true` |
+
+`DEFAULT_BATCH_SIZE` is `100`.
+
+```ts
+import {
+  processBatches,
+  uploadSourceFiles,
+  type UploadSourceFilesData,
+} from '@generaltranslation/api';
+
+import { apiClient } from './api.js';
+
+type SourceFile = UploadSourceFilesData['body']['data'][number];
+
+const files: SourceFile[] = [
+  {
+    source: {
+      content: 'eyJoZWxsbyI6ICJIZWxsbyJ9',
+      fileFormat: 'JSON',
+      fileName: 'messages.json',
+      locale: 'en',
+    },
+  },
+];
+
+const results = await processBatches(files, async (batch) => {
+  const { data } = await uploadSourceFiles({
+    client: apiClient,
+    body: { data: batch },
+    throwOnError: true,
+  });
+  return data.uploadedFiles;
+});
+```
+
+### Content encoding
+
+`encodeBase64` and `decodeBase64` convert between UTF-8 strings and base64 strings in Node.js and browsers.
+
+```ts
+encodeBase64(data: string): string
+decodeBase64(base64: string): string
+```
+
+`encodeFileContent(content, fileFormat)` and `decodeFileContent(content, fileFormat)` apply the API's file-content convention. Lottie payloads remain unchanged because the `.lottie` archive is already supplied as base64. Other formats are encoded or decoded as UTF-8 text.
+
+```ts
+encodeFileContent(content: string, fileFormat: FileFormat): string
+decodeFileContent(content: string, fileFormat: FileFormat): string
+```
+
+## Types and errors [#types-errors]
+
+The package exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `JobResult`, `BatchOptions`, and all generated OpenAPI types.
+
+`Client` also exposes `request`, `buildUrl`, `getConfig`, [`setConfig`](#types-errors), request methods for each HTTP verb, and request and response interceptors. Prefer the generated operation functions when the endpoint is part of the contract so TypeScript can infer its inputs and outputs.
+
+For every generated operation, the package exports:
+
+- `<Operation>Data`: the typed body, headers, path, and query input.
+- `<Operation>Errors`: a status-code map of documented error responses.
+- `<Operation>Error`: the union of documented error responses.
+- `<Operation>Responses`: a status-code map of documented successful responses.
+- `<Operation>Response`: the union of documented successful responses.
+
+Shared generated types include `ClientOptions`, `ErrorResponse`, [`FileFormat`](/docs/platform/core/reference/types/file-format), `Branch`, `RuntimeTranslationRequest`, and `RuntimeTranslationResponse`. The linked reference also describes availability for the generated `SVG` value. Endpoint reference pages define the fields and status codes used by each operation.
+
+With the default `throwOnError: false`, generated operations return a discriminated result containing either `data` or `error`, plus the Fetch API `request` and `response`. With `throwOnError: true`, successful calls return `data`, `request`, and `response`, while API, network, cancellation, and timeout failures throw.
