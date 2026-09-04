@@ -77,6 +77,7 @@ function TOC({
 
 const customComponents = {
   AllLogoCards: StubComponent,
+  AuthorSpotlight: StubComponent,
   LogoCard: StubComponent,
   LogoCardContainer: StubComponent,
   LogoCardContent: StubComponent,
@@ -88,6 +89,7 @@ const customComponents = {
   CardFooter: StubComponent,
   CardHeader: StubComponent,
   CardTitle: StubComponent,
+  FumadocsArchitecture: StubComponent,
   GitHub,
   SupportedLocales: StubComponent,
   Tweet,
