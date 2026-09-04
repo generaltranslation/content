@@ -33,6 +33,48 @@ export default defineConfig({
 });
 ```
 
+## Browse translations by locale [#browse-locales]
+
+Sanity normally lists translated documents alongside their source. Use `gtStructureItems` to group each translatable document type into one pane per locale while keeping your other structure items.
+
+```ts title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { structureTool } from 'sanity/structure';
+import { gtPlugin, gtStructureItems } from 'gt-sanity';
+
+export default defineConfig({
+  plugins: [
+    gtPlugin({
+      sourceLocale: 'en',
+      locales: ['es', 'zh', 'ja'],
+      translateDocuments: [{ type: 'article' }, { type: 'page' }],
+    }),
+    structureTool({
+      structure: (S, context) =>
+        S.list()
+          .title('Content')
+          .items([
+            ...gtStructureItems(S, context),
+            S.divider(),
+            ...S.documentTypeListItems(),
+          ]),
+    }),
+  ],
+});
+```
+
+The source-locale pane includes documents with no language field, so content created before the plugin still appears. Types localized in place with internationalized arrays are skipped because their translations stay in the source document.
+
+If the Studio needs only the locale-grouped types, pass the complete `gtStructure()` resolver to `structureTool`:
+
+```ts
+import { gtStructure } from 'gt-sanity';
+
+structureTool({ structure: gtStructure() });
+```
+
+Pass `types` to either helper to override which document types are grouped. Use `sourceTitle` to rename the source pane, or `localeTitle` to build custom target-pane titles. See the [structure helper reference](/docs/integrations/sanity/reference/plugin-configuration#structure-helpers).
+
 ## Set source and target locales [#set-locales]
 
 Use `sourceLocale` for the source language and `locales` for the target languages.
@@ -253,11 +295,11 @@ The plugin reads your API key and project ID from a private Sanity document whos
 ```js title="populateSecrets.js"
 import { getCliClient } from 'sanity/cli';
 
-const client = getCliClient({ apiVersion: '2026-04-06' });
+const client = getCliClient({ apiVersion: '2025-09-15' });
 
 client.createOrReplace({
   _id: 'generaltranslation.secrets',
-  _type: 'generaltranslation.secrets',
+  _type: 'generaltranslationSettings',
   secret: process.env.GT_API_KEY,
   project: process.env.GT_PROJECT_ID,
 });
@@ -270,6 +312,8 @@ GT_API_KEY=your-api-key GT_PROJECT_ID=your-project-id npx sanity exec populateSe
 The `secret` field is used as the API key and the `project` field as the project ID. To read credentials from a different document, set `secretsNamespace` to that document's `_id`.
 
 You can also pass `apiKey` and `projectId` directly to `gtPlugin`, but the secrets document is recommended so credentials stay out of source control. When both are present, the secrets document takes precedence at runtime.
+
+The private document convention prevents unauthenticated public queries; it does not replace Sanity permissions for authenticated Studio users. Restrict dataset access with [Sanity role-based access control](https://www.sanity.io/docs/access-control), and delete the one-off script after creating the document.
 
 ## Add the optional Translations tab [#translations-tab]
 

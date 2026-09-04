@@ -1,7 +1,7 @@
 ---
 
 title: Managing locales
-description: How to let users switch languages and read the active locale with General Translation.
+description: How to configure supported locales, build a React language switcher, and read or change the active locale.
 related:
   links:
     - /docs/react/guides/translating-jsx
@@ -11,11 +11,19 @@ related:
 
 ---
 
-Your app declares which locales it supports, lets users choose one, and reads the active locale to render accordingly. This guide covers each part.
+Locale codes such as `en-US` and `fr` connect a user's language choice to the correct translations and formatting rules.
+
+Declare the locales your app supports, let users choose one, and read the active locale when your UI needs language-specific behavior.
+
+## Understand locale state [#locale-state]
+
+- **Default locale:** the language your source content is written in and the final fallback when no supported locale matches.
+- **Supported locales:** every locale a user can choose, including the default and target locales.
+- **Active locale:** the supported locale selected from the URL, a saved preference, browser settings, or the default.
 
 ## Declare supported locales [#declare]
 
-List your default and target locales in `gt.config.json`. These are the locales your app can switch between.
+Set [`defaultLocale`](/docs/react/reference/config#default-locale) and list your target [`locales`](/docs/react/reference/config#locales) in `gt.config.json`:
 
 ```json title="gt.config.json"
 {
@@ -24,11 +32,19 @@ List your default and target locales in `gt.config.json`. These are the locales 
 }
 ```
 
-In React, TanStack Start, and React Native, pass these values into the initialization call. In Next.js, the `withGTConfig` plugin reads `gt.config.json` automatically, so there is no manual initialization. See [Configuring General Translation](/docs/react/guides/configuring) for each setup.
+In React, TanStack Start, and React Native, pass these values into the initialization call. In Next.js, [`withGTConfig`](/docs/react/nextjs/config) reads `gt.config.json` automatically. See [Configuring General Translation](/docs/react/guides/configuring) for each framework's setup.
 
 ## Add a language switcher [#switcher]
 
-Drop in [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) for a ready-made dropdown of your supported locales. It changes the active locale when the user picks one.
+Choose the simplest approach that fits your interface:
+
+- Use [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) for a ready-made dropdown in React, Next.js, or TanStack Start.
+- Use [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) to build a custom language switcher in any supported framework.
+- Use [`useSetLocale`](/docs/react/reference/hooks/use-set-locale) for a button or another control that changes to a known locale.
+
+### Use the ready-made selector
+
+Render [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) in a client component. With no props, it lists every configured locale and changes the active locale when the user selects one.
 
 <Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
   <Tab value="React">
@@ -56,41 +72,146 @@ Drop in [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) f
   </Tab>
 
   <Tab value="React Native">
-    *Note: React Native does not ship a prebuilt [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) component. Build your own with [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) (or [`useSetLocale`](/docs/react/reference/hooks/use-set-locale) and [`useLocales`](/docs/react/reference/hooks/use-locales)), as shown below.*
+    *Note: React Native does not export [`<LocaleSelector>`](/docs/react/reference/components/locale-selector). Build a custom switcher with [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector), as shown below.*
   </Tab>
 </Tabs>
 
-To build your own switcher, use [`useSetLocale`](/docs/react/reference/hooks/use-set-locale) to change the locale and [`useLocales`](/docs/react/reference/hooks/use-locales) to list the options. These hooks are available in every framework; import them from your framework's package.
+### Build a custom language switcher
+
+[`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) provides the active locale, available locales, a setter, and localized display names in one hook. Use controls from your framework:
+
+<Tabs items={['React', 'Next.js', 'TanStack Start', 'React Native']}>
+  <Tab value="React">
+    ```tsx
+    import { useLocaleSelector } from 'gt-react';
+
+    function Switcher() {
+      const { locale, locales, setLocale, getLocaleProperties } =
+        useLocaleSelector();
+
+      return (
+        <select value={locale} onChange={(e) => setLocale(e.target.value)}>
+          {locales.map((localeCode) => (
+            <option key={localeCode} value={localeCode}>
+              {getLocaleProperties(localeCode).nativeNameWithRegionCode}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab value="Next.js">
+    ```tsx
+    'use client';
+
+    import { useLocaleSelector } from 'gt-next';
+
+    function Switcher() {
+      const { locale, locales, setLocale, getLocaleProperties } =
+        useLocaleSelector();
+
+      return (
+        <select value={locale} onChange={(e) => setLocale(e.target.value)}>
+          {locales.map((localeCode) => (
+            <option key={localeCode} value={localeCode}>
+              {getLocaleProperties(localeCode).nativeNameWithRegionCode}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab value="TanStack Start">
+    ```tsx
+    import { useLocaleSelector } from 'gt-tanstack-start';
+
+    function Switcher() {
+      const { locale, locales, setLocale, getLocaleProperties } =
+        useLocaleSelector();
+
+      return (
+        <select value={locale} onChange={(e) => setLocale(e.target.value)}>
+          {locales.map((localeCode) => (
+            <option key={localeCode} value={localeCode}>
+              {getLocaleProperties(localeCode).nativeNameWithRegionCode}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab value="React Native">
+    ```tsx
+    import { Button, View } from 'react-native';
+    import { useLocaleSelector } from 'gt-react-native';
+
+    function Switcher() {
+      const { locale, locales, setLocale, getLocaleProperties } =
+        useLocaleSelector();
+
+      return (
+        <View>
+          {locales.map((localeCode) => (
+            <Button
+              key={localeCode}
+              title={getLocaleProperties(localeCode).nativeNameWithRegionCode}
+              disabled={localeCode === locale}
+              onPress={() => setLocale(localeCode)}
+            />
+          ))}
+        </View>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+If you only need a direct action in a React web app, call [`useSetLocale`](/docs/react/reference/hooks/use-set-locale):
 
 ```tsx
-import { useLocale, useLocales, useSetLocale } from 'gt-react';
+import { useSetLocale } from 'gt-react';
 
-function Switcher() {
-  const locale = useLocale();
-  const locales = useLocales();
+function FrenchButton() {
   const setLocale = useSetLocale();
-  return (
-    <select value={locale} onChange={(e) => setLocale(e.target.value)}>
-      {locales.map((l) => <option key={l} value={l}>{l}</option>)}
-    </select>
-  );
+  return <button onClick={() => setLocale('fr')}>Français</button>;
 }
 ```
 
-*Note: Changing the locale persists the choice — a cookie on the web (React, Next.js, TanStack Start) or the native store on React Native — and reloads so the new translations render. In TanStack Start with `localeRouting` enabled, it reloads at the corresponding locale pathname.*
+## Persist and route locale choices [#persistence]
+
+Changing the locale through [`<LocaleSelector>`](/docs/react/reference/components/locale-selector), [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector), or [`useSetLocale`](/docs/react/reference/hooks/use-set-locale) persists the choice and applies the new translations differently by framework:
+
+- **React:** stores the locale in a cookie, then reloads the page by default. A custom provider reload callback can replace the full-page reload.
+- **Next.js App Router:** stores the locale in a cookie, then usually refreshes the Server Component tree. With locale routing enabled, switching to the default locale from a URL that resolves to a non-default locale reloads the document so middleware can remove the locale prefix. A URL that already resolves to the default locale only refreshes.
+- **Next.js Pages Router:** stores the locale in a cookie. Configure the provider reload callback to navigate with the Pages Router and fetch the selected locale's page props.
+- **TanStack Start:** stores the locale in a cookie, then reloads the page. With [`localeRouting`](/docs/react/reference/config#locale-routing) enabled, it navigates to the corresponding locale pathname.
+- **React Native:** stores the locale in native storage (or `localStorage` on React Native Web), updates provider state, loads the locale's translations, and rerenders without browser navigation.
+
+For public pages, locale-based URLs make each language version shareable and indexable. Configure routing in the framework-specific guide:
+
+- [Next.js App Router middleware](/docs/react/nextjs/app-router-middleware)
+- [Next.js Pages Router locale routing](/docs/react/nextjs/pages-router-middleware)
+- [TanStack Start locale routing](/docs/react/tanstack-start/setup#locale-routing)
 
 ## Read the active locale [#read]
 
-Use hooks to read locale state in your components:
+Use locale hooks when rendering language-specific UI:
 
 - [`useLocale`](/docs/react/reference/hooks/use-locale) returns the active locale code.
 - [`useDefaultLocale`](/docs/react/reference/hooks/use-default-locale) returns the source locale.
-- [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) returns `'ltr'` or `'rtl'`, for laying out the page.
-- [`useLocaleProperties`](/docs/react/reference/hooks/use-locale-properties) returns display metadata for a locale, such as its name.
+- [`useLocales`](/docs/react/reference/hooks/use-locales) returns every supported locale code.
+- [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) returns `'ltr'` or `'rtl'` for page layout.
+- [`useLocaleProperties`](/docs/react/reference/hooks/use-locale-properties) returns a locale's name, native name, region, script, and other display metadata.
 
 *Note: `gt-tanstack-start` does not currently export [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) or [`useLocaleProperties`](/docs/react/reference/hooks/use-locale-properties). Read locale metadata with [`getLocaleProperties`](/docs/platform/core/reference/utility-functions/locales/get-locale-properties) from `generaltranslation` instead.*
 
-These hooks work in synchronous App Router server components. In async App Router components, use [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) and [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) from `gt-next/server` instead:
+In Next.js, these hooks work in synchronous App Router server components. In async components, call [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) and [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) from `gt-next/server`:
 
 ```tsx
 import { getLocale, getLocaleDirection } from 'gt-next/server';
@@ -102,6 +223,4 @@ async function Layout() {
 }
 ```
 
-*Note: In Next.js, request-time locale detection and persistence run in middleware, covered in the Next.js framework pages.*
-
-See the [Hooks reference](/docs/react/reference/hooks/use-locale) for the full list.
+See the [`useLocale`](/docs/react/reference/hooks/use-locale) Reference page for locale matching and fallback behavior.

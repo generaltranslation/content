@@ -1,0 +1,69 @@
+---
+
+title: TranslationCatalog
+description: Represent every plain-string and rich-content translation for one locale. API reference for TranslationCatalog.
+
+---
+
+The CLI generates this hash-keyed object, and a [`LoadTranslations`](/docs/vue/reference/types/load-translations) callback returns it to a plugin. Application code normally reads catalogs through translation components and composables instead of inspecting them directly.
+
+## Overview [#overview]
+
+```ts
+import type { JsxChildren } from 'generaltranslation/types';
+
+type TranslationCatalog = Record<string, JsxChildren>;
+```
+
+| Member | Description | Type |
+| --- | --- | --- |
+| [`hash`](#hash) | Stable catalog key derived from source content and translation metadata. | `string` |
+| [`value`](#value) | Plain `STRING` translation or serialized rich-content translation. | [`JsxChildren`](/docs/platform/core/reference/types/jsx-children) |
+
+## Members [#members]
+
+### `hash`
+
+**Type** `string` · **Required**
+
+Each property key identifies one extracted source entry. Plain strings include the source string and optional `$context` in their identity. Rich content also includes its structured source and [`<T>`](/docs/vue/reference/components/t) metadata.
+
+Treat hashes as opaque. Let the `gt` CLI generate and update them; changing source content or hash-affecting metadata creates a different key.
+
+### `value`
+
+**Type** [`JsxChildren`](/docs/platform/core/reference/types/jsx-children) · **Required**
+
+A plain `STRING` entry stores a translated string. A rich [`<T>`](/docs/vue/reference/components/t) entry stores the serialized content tree consumed by the Vue renderer.
+
+The public wire type includes the complete scalar shapes used by generated catalogs:
+
+```ts
+type JsxChildren = boolean | null | JsxChild | JsxChild[];
+type JsxChild = string | JsxElement | Variable;
+```
+
+Boolean and `null` values can occur as scalar rich-content values, including nested element and branch content. Authored child arrays use the narrower `JsxChild[]` shape. Do not hand-author serialized element or variable records; their indices and metadata must match the extracted source tree.
+
+## Lookup behavior [#lookup-behavior]
+
+[`useGT()`](/docs/vue/reference/composables/use-gt), [`t()`](/docs/vue/reference/functions/t), and [`useMessages()`](/docs/vue/reference/composables/use-messages) accept only string catalog values for plain-string lookups. A missing key or non-string value falls back to the source string.
+
+[`<T>`](/docs/vue/reference/components/t) consumes rich values and falls back to its source slot when no matching translation is present. The default locale does not need a catalog because its source content is the fallback.
+
+## Example [#example]
+
+Return a generated JSON object as a catalog:
+
+```ts title="src/loadTranslations.ts"
+import type { LoadTranslations, TranslationCatalog } from 'gt-vue';
+
+const loadTranslations: LoadTranslations = async (locale) => {
+  const module = await import(`./_gt/${locale}.json`);
+  return module.default as TranslationCatalog;
+};
+
+export default loadTranslations;
+```
+
+Return `{}` when a locale has no catalog and source content should render instead.

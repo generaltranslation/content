@@ -107,6 +107,80 @@ assertEqual(
   'rejects a lowercase navigation title'
 );
 
+const componentPath = 'react/reference/components/t.mdx';
+const bareComponentTitle = new Map(repositoryFiles);
+bareComponentTitle.set(
+  componentPath,
+  (bareComponentTitle.get(componentPath) ?? '').replace(
+    'title: "<T>"',
+    'title: T'
+  )
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(bareComponentTitle),
+    componentPath,
+    'title must use a quoted component tag'
+  ),
+  true,
+  'rejects a bare React component title'
+);
+
+const incompleteComponentDescription = new Map(repositoryFiles);
+incompleteComponentDescription.set(
+  componentPath,
+  (incompleteComponentDescription.get(componentPath) ?? '').replace(
+    'API reference for the <T> component.',
+    'API reference for T.'
+  )
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(incompleteComponentDescription),
+    componentPath,
+    'description must include "API reference for the <T> component."'
+  ),
+  true,
+  'rejects incomplete React component search metadata'
+);
+
+const vueComponentPath = 'vue/reference/components/t.mdx';
+const bareVueComponentTitle = new Map(repositoryFiles);
+bareVueComponentTitle.set(
+  vueComponentPath,
+  (bareVueComponentTitle.get(vueComponentPath) ?? '').replace(
+    'title: "<T>"',
+    'title: T'
+  )
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(bareVueComponentTitle),
+    vueComponentPath,
+    'title must use a quoted component tag'
+  ),
+  true,
+  'rejects a bare Vue component title'
+);
+
+const incompleteVueComponentDescription = new Map(repositoryFiles);
+incompleteVueComponentDescription.set(
+  vueComponentPath,
+  (incompleteVueComponentDescription.get(vueComponentPath) ?? '').replace(
+    'API reference for the <T> component.',
+    'API reference for T.'
+  )
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(incompleteVueComponentDescription),
+    vueComponentPath,
+    'description must include "API reference for the <T> component."'
+  ),
+  true,
+  'rejects incomplete Vue component search metadata'
+);
+
 const reorderedRoots = replaceMeta(repositoryFiles, 'meta.json', (meta) => {
   const pages = meta.pages as string[];
   [pages[0], pages[1]] = [pages[1]!, pages[0]!];
@@ -115,10 +189,85 @@ assertEqual(
   hasFinding(
     validateDocsStructure(reorderedRoots),
     'meta.json',
-    'Top-level sections must be ./overview, ./platform, ./cli, ./react, ./node, ./python, ./integrations in that order'
+    'Top-level sections must be ./overview, ./platform, ./cli, ./react, ./vue, ./node, ./python, ./integrations in that order'
   ),
   true,
   'rejects reordered top-level sections'
+);
+
+const missingOverviewSection = replaceMeta(
+  repositoryFiles,
+  'overview/meta.json',
+  (meta) => {
+    const pages = meta.pages as string[];
+    const googleDriveIndex = pages.findIndex((page) =>
+      page.startsWith('[Google Drive]')
+    );
+    pages.splice(googleDriveIndex, 1);
+  }
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(missingOverviewSection),
+    'overview/meta.json',
+    'must link to the "Google Drive" section from integrations/meta.json'
+  ),
+  true,
+  'rejects an integration section omitted from Overview'
+);
+
+const reorderedOverviewLinks = replaceMeta(
+  repositoryFiles,
+  'overview/meta.json',
+  (meta) => {
+    const pages = meta.pages as string[];
+    [pages[4], pages[5]] = [pages[5]!, pages[4]!];
+  }
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(reorderedOverviewLinks),
+    'overview/meta.json',
+    'must follow the canonical Frameworks, Platform, and Integrations order'
+  ),
+  true,
+  'rejects reordered Overview hub links'
+);
+
+const reorderedIntegrationSections = replaceMeta(
+  repositoryFiles,
+  'integrations/meta.json',
+  (meta) => {
+    const pages = meta.pages as string[];
+    [pages[1], pages[2]] = [pages[2]!, pages[1]!];
+  }
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(reorderedIntegrationSections),
+    'integrations/meta.json',
+    'Sidebar sections must be Google Drive, Mintlify, Sanity, Storyblok, rrweb'
+  ),
+  true,
+  'rejects reordered integration sections'
+);
+
+const reorderedIntegrationCards = new Map(repositoryFiles);
+reorderedIntegrationCards.set(
+  'integrations/index.mdx',
+  (reorderedIntegrationCards.get('integrations/index.mdx') ?? '')
+    .replace('title="Google Drive"', 'title="__TEMP__"')
+    .replace('title="Mintlify"', 'title="Google Drive"')
+    .replace('title="__TEMP__"', 'title="Mintlify"')
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(reorderedIntegrationCards),
+    'integrations/index.mdx',
+    'Landing cards must be Google Drive, Mintlify, Sanity, Storyblok, rrweb'
+  ),
+  true,
+  'rejects landing cards that drift from sidebar order'
 );
 
 const staleEntry = replaceMeta(

@@ -1,0 +1,74 @@
+---
+
+title: CreateGTOptions
+description: Configure an isolated Vue plugin's initial locale, cookie, and catalog loader. API reference for CreateGTOptions.
+
+---
+
+Pass this object to [`createGT()`](/docs/vue/reference/functions/create-gt). Its fields apply to reactive client plugins and request-scoped server plugins.
+
+## Overview [#overview]
+
+```ts
+type CreateGTOptions = {
+  defaultLocale?: string;
+  loadTranslations?: LoadTranslations;
+  locale?: string;
+  localeCookieName?: string;
+};
+```
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`defaultLocale`](#default-locale) | Source and fallback locale. | `string` | Yes | `en` |
+| [`loadTranslations`](#load-translations) | Asynchronous target-catalog loader. | [`LoadTranslations`](/docs/vue/reference/types/load-translations) | Yes | Empty catalog |
+| [`locale`](#locale) | Explicit initial locale. | `string` | Yes | Cookie, then `defaultLocale` |
+| [`localeCookieName`](#cookie-name) | Browser cookie used to persist locale selection. | `string` | Yes | `generaltranslation.locale` |
+
+## `defaultLocale` [#default-locale]
+
+**Type** `string` · **Optional** · **Default** `en`
+
+The locale of source content and the fallback when no explicit or saved locale exists. Its source text acts as the catalog, so the plugin never calls [`loadTranslations`](/docs/vue/reference/types/load-translations) for this locale.
+
+The value is not canonicalized or restricted by [`createGT()`](/docs/vue/reference/functions/create-gt). Use the same spelling in your CLI configuration, loader paths, and request-locale resolution.
+
+## `loadTranslations` [#load-translations]
+
+**Type** [`LoadTranslations`](/docs/vue/reference/types/load-translations) · **Optional** · **Default** empty catalog
+
+An asynchronous callback that returns the complete [`TranslationCatalog`](/docs/vue/reference/types/translation-catalog) for a target locale. When omitted, every target load resolves to `{}`, so source content remains visible.
+
+Successful results are cached per plugin, and concurrent calls for one locale share a promise. Rejections are logged and rethrown without being cached.
+
+## `locale` [#locale]
+
+**Type** `string` · **Optional** · **Default** browser cookie, then `defaultLocale`
+
+Sets the initial active locale explicitly. On the server, pass the locale resolved for the current request. In the browser, an explicit value wins over a stale locale cookie and is written back to that cookie, keeping hydration consistent.
+
+When omitted in a browser, the saved cookie wins over `defaultLocale`. When omitted on the server, `defaultLocale` is used.
+
+## `localeCookieName` [#cookie-name]
+
+**Type** `string` · **Optional** · **Default** `generaltranslation.locale`
+
+Names the path-wide session cookie used to persist and read the active locale. Override it when routing or server middleware shares a different cookie name.
+
+Direct browser cookie writes are visible to `plugin.getLocale()` and to the next Vue render, but the browser does not emit an event that schedules that render. Use `plugin.setLocale()` or [`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) for reactive changes.
+
+## Example [#example]
+
+```ts
+import type { CreateGTOptions } from 'gt-vue';
+
+const options: CreateGTOptions = {
+  defaultLocale: 'en',
+  locale: requestLocale,
+  localeCookieName: 'my-app.locale',
+  loadTranslations: async (locale) =>
+    (await import(`./_gt/${locale}.json`)).default,
+};
+```
+
+Create a separate options object and plugin for every server request. Sharing either plugin state or a mutable catalog cache outside the plugin can leak locale-specific data between requests.

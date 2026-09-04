@@ -71,6 +71,11 @@ An object with one key per file type to translate. Each type maps to an object o
 | `txt` | Plain text files. | [Plain text](/docs/cli/reference/formats/plain-text-files) |
 | `twilioContentJson` | Twilio Content JSON templates. | — |
 | `lottie` | dotLottie animation files (`.lottie`). | [Lottie](/docs/cli/reference/formats/lottie-files) |
+| `dotStrings` | `.strings` tables, one per locale in a `.lproj` directory. | [.strings](/docs/cli/reference/formats/dot-strings-files) |
+| `dotStringsdict` | `.stringsdict` plural files, one per locale in a `.lproj` directory. | [.stringsdict](/docs/cli/reference/formats/dot-stringsdict-files) |
+| `androidStrings` | Android `strings.xml` resource files. | [Android strings.xml](/docs/cli/reference/formats/android-strings-files) |
+
+`dotStrings` and `dotStringsdict` require `gt` 2.18.1 or later, and `androidStrings` requires `gt` 2.19.0 or later.
 
 ### File type keys
 
@@ -78,7 +83,7 @@ Each file type accepts the following keys.
 
 - `include` — an array of glob patterns matching files to translate. Use the `[locale]` placeholder: the CLI replaces it with `defaultLocale` to find source files, and with each target code to save translations. Required for every type except `gt`.
 - `exclude` — an array of glob patterns to skip. The `[locale]` placeholder is optional here; use `[locales]` to exclude a path across all locales.
-- `transform` — remaps output file names. A string with a `*` wildcard remaps the extension (for example `*.[locale].json`). An object with `match` and `replace` supports regex capture groups and the `{locale}` placeholder.
+- `transform` — remaps output file names. A string with a `*` wildcard remaps the extension (for example `*.[locale].json`). An object with `match` and `replace` supports regex capture groups and the locale placeholders in [Locale placeholders](#locale-placeholders).
 - `transformationFormat` — outputs translated files in a different format than the source. For example, `pot` sources with `"transformationFormat": "PO"` produce `.po` files.
 - `requiresReview` — gates translated files behind human review. Accepts `true`/`false`, or an object with `include` and `exclude` glob arrays where `exclude` takes precedence.
 - `output` — for `gt` files only, the local save path with a `[locale]` placeholder, such as `public/i18n/[locale].json`.
@@ -97,6 +102,42 @@ Each file type accepts the following keys.
     "json": {
       "include": ["resources/[locale]/**/*.json"],
       "exclude": ["resources/[locale]/exclude/**/*.json"]
+    }
+  }
+}
+```
+
+### Locale placeholders [#locale-placeholders]
+
+The `replace` value of an object `transform` accepts `{...}` placeholders that expand to properties of the target locale. Unrecognized names are left in the output as literal text.
+
+| Placeholder | Description | Example for `pt-BR` |
+| --- | --- | --- |
+| `{locale}` | The locale exactly as written in [`locales`](#locales). `{localeCode}` is an alias. | `pt-BR` |
+| `{localeName}` | English name of the locale, including its region. | `Brazilian Portuguese` |
+| `{localeNativeName}` | Native name of the locale, including its region. | `português (Brasil)` |
+| `{languageCode}` | Language subtag on its own. | `pt` |
+| `{regionCode}` | Region subtag on its own. | `BR` |
+| `{scriptCode}` | Script subtag on its own. | `Latn` |
+| `{minimizedCode}` | Shortest unambiguous form of the tag. | `pt` |
+| `{maximizedCode}` | Fully expanded tag, including script. | `pt-Latn-BR` |
+| `{emoji}` | Flag emoji associated with the locale. | 🇧🇷 |
+
+The remaining [`LocaleProperties`](/docs/platform/core/reference/types/locale-properties) fields are also accepted by name, including `languageName`, `nativeLanguageName`, `regionName`, `nativeRegionName`, `scriptName`, `nativeScriptName`, `nameWithRegionCode`, `nativeNameWithRegionCode`, `maximizedName`, `nativeMaximizedName`, `minimizedName`, and `nativeMinimizedName`.
+
+`{locale}` uses the spelling from your configuration rather than the canonical BCP-47 form, so a locale configured as `fr-ca` produces `fr-ca` and not `fr-CA`. This matches the `[locale]` placeholder in `include`, `exclude`, and `output`, so file paths and localized URLs agree. Use `{minimizedCode}`, `{maximizedCode}`, or `{regionCode}` when you need a normalized tag instead.
+
+The one exception is [`androidStrings`](/docs/cli/reference/formats/android-strings-files), where both placeholders expand to an Android resource directory qualifier — `fr-CA` becomes `fr-rCA` — because Android fails the build on a `values-*` directory name it cannot parse.
+
+```json title="gt.config.json"
+{
+  "files": {
+    "json": {
+      "include": ["locales/[locale]/**/*.json"],
+      "transform": {
+        "match": "locales/(.*)/(.*)\\.json",
+        "replace": "locales/{locale}/$2.{languageCode}.json"
+      }
     }
   }
 }
@@ -128,7 +169,7 @@ The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/st
 
 **Type** `boolean` · **Optional** · **Default** `false`
 
-When `true`, translated files are published to the General Translation CDN after [`translate`](/docs/cli/reference/commands/translate), [`upload`](/docs/cli/reference/commands/upload), or [`save-local`](/docs/cli/reference/commands/save-local). See [CDN publishing](#cdn-publishing) for per-file and per-command control.
+When `true`, translated files are published to the General Translation CDN after [`translate`](/docs/cli/reference/commands/translate), [`upload`](/docs/cli/reference/commands/upload), or [`save-local`](/docs/cli/reference/commands/save-local). Lottie translations remain available through API and CLI downloads only; setting `publish` does not make `.lottie` files available from the CDN. See [CDN publishing](#cdn-publishing) for per-file and per-command control.
 
 ```json title="gt.config.json"
 {

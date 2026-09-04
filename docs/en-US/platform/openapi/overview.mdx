@@ -9,38 +9,38 @@ related:
     - /docs/platform/openapi/reference/files/upload-source
     - /docs/platform/openapi/reference/context/generate-context
     - /docs/platform/openapi/reference/translation/translate-runtime
-    - /docs/platform/openapi/reference/project/project-info
+    - /docs/platform/openapi/reference/project/create-project
+
 ---
 
 Use the General Translation API to build custom automation workflows.
 
-The SDK and CLI handle most API calls for you. Call the API directly when you need to upload files, queue translation jobs, download translations, manage branches and tags, or inspect Project and job status from your own system. 
+The SDK and CLI handle most API calls for you. Call the API directly when you need to create Projects, upload files, queue translation jobs, download translations, manage branches and tags, or inspect Project and job status from your own system.
 
 The OpenAPI spec defines these endpoints in machine-readable format.
 
 ## API basics [#api-basics]
 
-### Base URLs
+### Base URL
 
-- Use `https://api2.gtx.dev` for project and file endpoints.
-- Use `https://runtime2.gtx.dev` for runtime translation, including `POST /v2/translate`.
+All endpoints, including runtime translation with `POST /v2/translate`, live under `https://api.gtx.dev`.
 
 
 
 ### Authentication
 
-Send your API key in the `x-gt-api-key` header.
+Every endpoint requires an API key sent as a bearer token in the standard `Authorization` header.
 
 ```bash
-curl https://api2.gtx.dev/v2/project/info/PROJECT_ID \
-  -H "x-gt-api-key: gtx-api-..."
+curl https://api.gtx.dev/v2/project/info/PROJECT_ID \
+  -H "Authorization: Bearer gtx-api-..."
 ```
 
 Use the correct key type:
 
 - **Project (development)** with prefix `gtx-dev-`: for local and preview use, rejected by production-only endpoints
 - **Project (production)** with prefix `gtx-api-`: bound to one Project
-- **Organization** with prefix `gtx-org-`: works across Projects. When using an Organization key on Project-scoped endpoints, you must send `x-gt-project-id`.
+- **Organization** with prefix `gtx-org-`: works across Projects. When using an Organization key on Project-scoped endpoints, send `gt-project-id`. Organization-scoped endpoints, such as `POST /v2/projects`, derive the Organization from the key.
 
 See [API keys](/docs/platform/dashboard/reference/api-keys) for how to create and scope API keys.
 
@@ -50,19 +50,20 @@ Each endpoint requires a permission on the API key. Organization keys configure 
 
 Common permissions:
 
+- `org:projects:create` for creating Projects with `POST /v2/projects`.
 - `project:files:read` for downloading files, reading file info, translation status, branch info, orphaned files, Project info, and job info.
 - `project:files:write` for uploading files and translations, diffs, publishing, creating branches and tags, and moving files.
 - `project:translations:enqueue` for queuing files for translation.
 - `project:translations:generate` for runtime translation.
 - `project:context:read` for reading context generation status.
 - `project:context:write` for generating context.
-- `project:write` for updating Project settings.
+- `project:write` for updating Project settings and enabling CDN delivery during Project creation.
 
 
 
 ### Versioning
 
-Send the optional `gt-api-version` header to pin a response format. 
+Send the optional `gt-api-version` header to pin a response format.
 
 ```bash
 -H "gt-api-version: 2026-03-06.v1"
@@ -77,13 +78,13 @@ Requests are rate limited per API key or client IP over a 60-second window. Limi
 - **Heavy:** 30 requests/minute for queueing translations.
 - **Medium:** 120 requests/minute for uploads, diffs, context, moves, and orphaned files.
 - **Light:** 300 requests/minute for file downloads.
-- **Default:** 200 requests/minute for publish, branches, tags, Project info, job info, file info, translation status, and runtime translation.
+- **Default:** 200 requests/minute for Project creation, publish, branches, tags, Project info, job info, file info, translation status, and runtime translation.
 
 Exceeding a limit returns `429`. Organization token quotas return `402` from `POST /v2/translate`.
 
 ### Errors
 
-Errors return an `error` message. For API version `2026-02-18.v1` and later, the body is JSON; earlier versions, including the default used when no `gt-api-version` header is sent, return the message as plain text.
+Authenticated application errors return an `error` message. For API version `2026-02-18.v1` and later, the body is JSON; earlier versions, including the default used when no `gt-api-version` header is sent, return the message as plain text. Parsing, payload-limit, and rate-limit failures can return plain text before authentication runs.
 
 ```json
 {
@@ -98,8 +99,12 @@ Common status codes:
 - `402` when an Organization token quota is exceeded (`POST /v2/translate`).
 - `403` when the API key lacks permission or the action is not allowed on the current plan.
 - `404` when the resource is not found.
+- `413` when the request body exceeds the endpoint limit.
+- `425` when a requested translated file is still processing.
 - `429` when a rate limit is exceeded.
+- `500` for an internal server error.
+- `503` when the service is temporarily unavailable.
 
 ## OpenAPI spec [#openapi-spec]
 
-A machine-readable OpenAPI 3.1 spec is available at [`/openapi.yaml`](/openapi.yaml). Import it into Postman, Insomnia, or an OpenAPI client to generate requests and types.
+A machine-readable OpenAPI 3.1 spec is available at [`/openapi.json`](/openapi.json). Import it into Postman, Insomnia, or an OpenAPI client to generate requests and types.

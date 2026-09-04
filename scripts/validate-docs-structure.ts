@@ -9,19 +9,55 @@ const EXPECTED_ROOTS = [
   'platform',
   'cli',
   'react',
+  'vue',
   'node',
   'python',
   'integrations',
 ] as const;
 
 const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
-  overview: ['Frameworks', 'Platform'],
+  overview: ['Frameworks', 'Platform', 'Integrations'],
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
   cli: ['Guides', 'Reference'],
   react: ['Guides', 'Reference', 'Frameworks'],
+  vue: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
-  integrations: ['Mintlify', 'Sanity', 'Storyblok', 'Google Drive'],
+  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
+};
+
+const EXPECTED_OVERVIEW_PAGES = [
+  './get-started',
+  './key-concepts',
+  './for-coding-agents',
+  '---Frameworks---',
+  '[React](/docs/react/react-quickstart)',
+  '[React SPA](/docs/react/react-spa-quickstart)',
+  '[Next.js App Router](/docs/react/nextjs-quickstart)',
+  '[Next.js Pages Router](/docs/react/nextjs-pages-router-quickstart)',
+  '[TanStack Start](/docs/react/tanstack-start-quickstart)',
+  '[React Native](/docs/react/react-native-quickstart)',
+  '[Vue](/docs/vue/quickstart)',
+  '[Node.js](/docs/node/quickstart)',
+  '[Python](/docs/python/quickstart)',
+  '[CLI](/docs/cli/quickstart)',
+  '[JSON](/docs/cli/reference/formats/json-files)',
+  '---Platform---',
+  '[Dashboard](/docs/platform/dashboard/get-started)',
+  '[Locadex](/docs/platform/locadex/quickstart)',
+  '[Core](/docs/platform/core/quickstart)',
+  '[OpenAPI](/docs/platform/openapi/overview)',
+  '---Integrations---',
+  '[Google Drive](/docs/integrations/google-drive/quickstart)',
+  '[Mintlify](/docs/integrations/mintlify/quickstart)',
+  '[Sanity](/docs/integrations/sanity/quickstart)',
+  '[Storyblok](/docs/integrations/storyblok/quickstart)',
+  '[rrweb](/docs/integrations/rrweb/quickstart)',
+] as const;
+
+const EXPECTED_LANDING_CARDS: Readonly<Record<string, readonly string[]>> = {
+  platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
+  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
 };
 
 const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
@@ -32,7 +68,9 @@ const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
   functions: 'Functions',
   guides: 'Guides',
   hooks: 'Hooks',
+  composables: 'Composables',
   reference: 'Reference',
+  rrweb: 'rrweb',
   types: 'Types',
 };
 
@@ -48,6 +86,11 @@ const ALLOWED_META_KEYS = new Set([
 export type StructureFinding = Readonly<{
   file: string;
   message: string;
+}>;
+
+type CrossSectionLink = Readonly<{
+  title: string;
+  path: string;
 }>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -77,6 +120,32 @@ function getPages(meta: Record<string, unknown>): readonly string[] | undefined 
     return undefined;
   }
   return meta.pages;
+}
+
+function parseCrossSectionLink(entry: string): CrossSectionLink | undefined {
+  const match = /^\[([^\]]+)\]\((\/docs\/[^)]+)\)$/.exec(entry);
+  if (!match?.[1] || !match[2]) return undefined;
+  return { title: match[1], path: match[2] };
+}
+
+function getFrontmatterValue(
+  content: string,
+  key: string
+): string | undefined {
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1];
+  if (!frontmatter) return undefined;
+
+  const match = new RegExp(`^${key}:\\s*(.+?)\\s*$`, 'm').exec(frontmatter);
+  const value = match?.[1];
+  if (!value) return undefined;
+
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 function findEntryCandidates(
@@ -231,6 +300,34 @@ export function validateDocsStructure(
     }
   }
 
+  for (const [path, content] of files) {
+    if (
+      !/^(?:react|vue)\/(?:.+\/)?reference\/components\/[^/]+\.(?:md|mdx)$/.test(
+        path
+      )
+    ) {
+      continue;
+    }
+
+    const title = getFrontmatterValue(content, 'title');
+    if (!title || !/^<[A-Za-z_$][A-Za-z0-9_$]*>$/.test(title)) {
+      addFinding(
+        path,
+        'Component reference title must use a quoted component tag such as "<T>".'
+      );
+      continue;
+    }
+
+    const description = getFrontmatterValue(content, 'description');
+    const expectedReference = `API reference for the ${title} component.`;
+    if (!description?.includes(expectedReference)) {
+      addFinding(
+        path,
+        `Component description must include "${expectedReference}"`
+      );
+    }
+  }
+
   for (const path of files.keys()) {
     if (!/\.(md|mdx)$/.test(path)) continue;
     const parentDirectory = posix.dirname(path);
@@ -315,6 +412,68 @@ export function validateDocsStructure(
     }
   }
 
+  const overviewMetaPath = 'overview/meta.json';
+  const overviewMeta = metaByPath.get(overviewMetaPath);
+  const overviewPages = overviewMeta && getPages(overviewMeta);
+  if (overviewPages) {
+    if (!sameValues(overviewPages, EXPECTED_OVERVIEW_PAGES)) {
+      addFinding(
+        overviewMetaPath,
+        'Overview sidebar entries must follow the canonical Frameworks, Platform, and Integrations order.'
+      );
+    }
+
+    const overviewLinks = overviewPages
+      .map(parseCrossSectionLink)
+      .filter((link): link is CrossSectionLink => link !== undefined);
+
+    for (const root of ['platform', 'integrations'] as const) {
+      const rootMetaPath = `${root}/meta.json`;
+      const rootMeta = metaByPath.get(rootMetaPath);
+      const rootPages = rootMeta && getPages(rootMeta);
+      if (!rootPages) continue;
+
+      for (const page of rootPages) {
+        if (!page.startsWith('./')) continue;
+        const childBase = resolveEntryBase(rootMetaPath, page);
+        const childMetaPath = `${childBase}/meta.json`;
+        const childMeta = metaByPath.get(childMetaPath);
+        if (!childMeta || typeof childMeta.title !== 'string') continue;
+
+        const expectedPathPrefix = `/docs/${childBase}/`;
+        const hasLink = overviewLinks.some(
+          (link) =>
+            link.title === childMeta.title &&
+            link.path.startsWith(expectedPathPrefix)
+        );
+        if (!hasLink) {
+          addFinding(
+            overviewMetaPath,
+            `Overview sidebar must link to the "${childMeta.title}" section from ${rootMetaPath}.`
+          );
+        }
+      }
+    }
+  }
+
+  for (const [root, expectedTitles] of Object.entries(
+    EXPECTED_LANDING_CARDS
+  )) {
+    const indexPath = `${root}/index.mdx`;
+    const content = files.get(indexPath);
+    if (!content) continue;
+
+    const cardTitles = [...content.matchAll(/<Card\s+title="([^"]+)"/g)]
+      .map((match) => match[1])
+      .filter((title): title is string => title !== undefined);
+    if (!sameValues(cardTitles, expectedTitles)) {
+      addFinding(
+        indexPath,
+        `Landing cards must be ${expectedTitles.join(', ')} in sidebar order.`
+      );
+    }
+  }
+
   for (const [metaPath, meta] of metaByPath) {
     if (meta.root !== true) continue;
     const directory = metadataDirectory(metaPath);
@@ -341,7 +500,7 @@ export function collectDocsFiles(root: string): Map<string, string> {
         const relativePath = relative(root, absolutePath).split(sep).join('/');
         files.set(
           relativePath,
-          entry.name === 'meta.json' ? readFileSync(absolutePath, 'utf8') : ''
+          readFileSync(absolutePath, 'utf8')
         );
       }
     }
