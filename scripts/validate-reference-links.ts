@@ -69,6 +69,21 @@ type NarrowExclusion = {
 // a page.
 const NARROW_EXCLUSIONS: NarrowExclusion[] = [
   {
+    path: 'docs/en-US/integrations/sanity/guides/configuring-sanity.mdx',
+    symbol: 'project',
+    reason: 'This is a field in the Sanity secrets document, not a CLI command.',
+  },
+  {
+    path: 'docs/en-US/integrations/sanity/quickstart.mdx',
+    symbol: 'project',
+    reason: 'This is a field in the Sanity secrets document, not a CLI command.',
+  },
+  {
+    path: 'docs/en-US/integrations/sanity/reference/plugin-configuration.mdx',
+    symbol: 'project',
+    reason: 'This is a field in the Sanity secrets document, not a CLI command.',
+  },
+  {
     path: 'docs/en-US/react/reference/hooks/use-locale-selector.mdx',
     symbol: 'getLocaleProperties',
     reason:

@@ -1,0 +1,77 @@
+---
+
+title: gt api
+description: Send authenticated requests to public General Translation API endpoints. API reference for the gt api command.
+
+---
+
+Use this command for direct API access without writing a client. It sends and returns raw bytes, so it works with JSON and binary responses. The command requires `gt` 2.20.0 or later.
+
+## Overview [#overview]
+
+```bash
+npx gt api [endpoint] [options]
+```
+
+Pass an endpoint relative to `https://api.gtx.dev`, with or without a leading slash. Use `--spec` without an endpoint to print the OpenAPI specification bundled with the installed CLI.
+
+## How it works [#how-it-works]
+
+1. Resolves the API key from `--api-key`, then `GT_API_KEY`.
+2. Resolves the Project ID from `--project-id`, `gt.config.json`, or `GT_PROJECT_ID`. Conflicting configured values stop the request.
+3. Uses `baseUrl` from `gt.config.json`, or `https://api.gtx.dev` by default.
+4. Sends `gt-api-version: 2026-03-06.v1`, the latest API version bundled with `gt` 2.20.0.
+5. Sends the request without retries and applies a 60-second timeout.
+6. Writes the response body to standard output without decoding or reformatting it.
+
+The command does not validate locale or file settings from `gt.config.json`.
+
+<Callout type="warn">
+  Mutating methods run immediately. `gt api` has no confirmation prompt or dry-run mode, so verify the endpoint, method, and body before sending a `POST`, `PUT`, `PATCH`, or `DELETE` request.
+</Callout>
+
+## Flags [#flags]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `-X, --method <method>` | HTTP method: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, or `OPTIONS`. | `string` | Yes | `GET` |
+| `--input <file>` | Read the raw request body from a UTF-8 file. Use `-` to read standard input. | `string` | Yes | — |
+| `-H, --header <header>` | Add a header in `Key: Value` form. Repeat the flag to add more headers. | `string` | Yes | — |
+| `-i, --include` | Write the response status and headers before the body. | `boolean` | Yes | `false` |
+| `--spec` | Print the bundled OpenAPI specification without making a request. | `boolean` | Yes | `false` |
+| `-c, --config <path>` | Read `baseUrl` and `projectId` from this config file. | `string` | Yes | Nearest `gt.config.json` |
+| `--api-key <key>` | API key used as the bearer token. | `string` | Yes | `GT_API_KEY` |
+| `--project-id <id>` | Target Project ID, including for an Organization key. | `string` | Yes | Config, then `GT_PROJECT_ID` |
+
+Prefer `GT_API_KEY` over `--api-key` so the key does not appear in shell history.
+
+## Examples [#examples]
+
+Read Project information:
+
+```bash
+npx gt api "/v2/project/info/$GT_PROJECT_ID"
+```
+
+Send a JSON request body:
+
+```bash
+npx gt api /v2/project/files/info \
+  --method POST \
+  --header "Content-Type: application/json" \
+  --input request.json
+```
+
+Pipe the bundled OpenAPI specification into another tool:
+
+```bash
+npx gt api --spec | jq '.paths | keys'
+```
+
+## Response behavior [#response]
+
+A successful request writes only the response body unless `--include` is set. Binary response bytes are preserved.
+
+Requests with a body use `Content-Type: application/json` unless `--header` overrides it. Requests without a body omit that header.
+
+For a non-2xx response, the command still writes the response body to standard output, writes a status summary to standard error, and exits with status `1`. A network failure or invalid method, header, input path, or configuration also exits with status `1`.
