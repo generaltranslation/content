@@ -190,7 +190,7 @@ Capitalize the scope noun even inside hyphenated compounds (Organization-level, 
 
 ### Product and technology names
 
-Use the official capitalization and spelling for third-party names: **Next.js**, **TypeScript**, **JavaScript**, **ESLint**, **React Native**, **Node.js**. For GT itself: **General Translation**, **Quickstart** (one word, not "Quick Start").
+Use the official capitalization and spelling for third-party names: **Next.js**, **TypeScript**, **JavaScript**, **ESLint**, **React Native**, **Node.js**. Always write **Next.js**, never shorten the product name to "Next." For GT itself: **General Translation**, **Quickstart** (one word, not "Quick Start").
 
 - **Package names always appear in backticks in prose**: `gt-next`, `gt-react`, `gt`, `generaltranslation`. The same applies to config files like `gt.config.json`.
 
@@ -278,7 +278,7 @@ A `meta.json` supports these keys:
 
 - `title` — the folder's sidebar display name using its established casing (see File and folder naming).
 - `description` — the meaning depends on the folder:
-  - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
+  - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`. The Integrations subtitle is always `CMS, Drive, Docs & more`; do not derive it from the current integration list.
   - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
 - `pages` — the ordered list of entries; **this array is the source of truth for page order**.
 - `icon` — a named icon token (e.g. `Terminal`, `React`, `Python`, `Globe`) shown next to the section in the nav. Set it only on the top-level section roots.
@@ -297,7 +297,13 @@ Every immediate child folder listed by a top-level section root becomes a visibl
 
 ### Overview hub
 
-The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Include every published Platform capability and integration section, keep those links in sync with the sections they point to, and only link pages that exist. The structure validator enforces this coverage.
+The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators with **cross-section link entries** to surface the main frameworks, Platform capabilities, and integrations without duplicating their content. Keep these groups and their entries in this order:
+
+- **Frameworks:** React, React SPA, Next.js App Router, Next.js Pages Router, TanStack Start, React Native, Vue, Node.js, Python, CLI, JSON
+- **Platform:** Dashboard, Locadex, Core, OpenAPI
+- **Integrations:** Google Drive, Mintlify, Sanity, Storyblok, rrweb
+
+Treat the Overview sidebar hub, each section's `meta.json`, and the corresponding landing-page card grid as one synchronized navigation surface. Whenever a framework, Platform capability, or integration is added, removed, renamed, or reordered, update all applicable surfaces in the same change and verify every route. Keep the Integrations sidebar and landing page in the order above, with Google Drive first. The structure validator enforces route coverage.
 
 ### Machine-readable outputs
 
@@ -433,6 +439,7 @@ description: How to use labels, notes, and comments to coordinate translation re
 ```
 
 - **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
+- **Blog publication dates use the actual go-live date.** In `blog/**`, set `date` during the final publishing pass to the calendar date when the post is first published, using `YYYY-MM-DD`. Do not retain the draft creation date, and update `date` before merge when publication moves to another day.
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Custom Prompts, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - **React and Vue component reference titles use component tag syntax.** Quote the complete tag in frontmatter (`title: "<T>"`) so the page title and sidebar display `<T>`, not `T`.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:

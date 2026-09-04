@@ -1,0 +1,150 @@
+---
+
+title: Configuring recordings
+description: How to configure gt-rrweb capture, localized overlays, controls, automation, and bundle handling.
+related:
+  links:
+    - /docs/integrations/rrweb/guides/recording-walkthroughs
+    - /docs/integrations/rrweb/guides/replaying-recordings
+
+---
+
+Configure how product walkthroughs are captured, localized from your published catalogs, and stored.
+
+This guide assumes you installed the recorder and enabled translation hashes in the [Quickstart](/docs/integrations/rrweb/quickstart).
+
+## Mount the recorder [#mount]
+
+Mount [`GTRecorder`](/docs/integrations/rrweb/reference/recorder#gt-recorder) once inside your translation provider. Controls elsewhere in the app use [`useRecorder()`](/docs/integrations/rrweb/reference/recorder#use-recorder) to start and stop the same module-level session.
+
+```tsx title="src/RecordingTools.tsx"
+'use client';
+
+import { GTRecorder } from 'gt-rrweb';
+import loadTranslations from './loadTranslations';
+
+export default function RecordingTools() {
+  return (
+    <GTRecorder
+      harvest={{
+        loadTranslations,
+        sourceLocale: 'en',
+      }}
+      onComplete={(bundle) => {
+        // Save or upload the completed bundle.
+        console.log(bundle);
+      }}
+    />
+  );
+}
+```
+
+Set `enabled={false}` when the recorder should not configure capture or render its recording overlay.
+
+## Set the capture region and frame [#capture-region]
+
+The recorder captures the whole document. `contentSelector` identifies the product region framed during playback and defaults to `main, [data-gt-content]`.
+
+```tsx title="src/RecordingTools.tsx"
+<GTRecorder contentSelector="main" frame="16:9" />
+```
+
+Choose a frame based on where you will embed the walkthrough:
+
+- `frame="none"` keeps the selected region's natural dimensions.
+- `frame="16:9"` uses the built-in presentation frame.
+- `frame={{ aspect: 4 / 3 }}` uses a custom width-to-height ratio.
+
+An invalid or non-positive custom ratio behaves like `none`.
+
+## Configure localized replay [#localized-replay]
+
+`gt-rrweb` does not generate translations during capture. [Publish your translations](/docs/cli/guides/generating-translations) first, then configure the recorder to build locale overlays from those catalogs.
+
+### Load published catalogs
+
+Pass a loader through the `harvest` prop. It receives a locale and returns that locale's published catalog.
+
+```tsx title="src/RecordingTools.tsx"
+<GTRecorder
+  harvest={{
+    loadTranslations,
+    sourceLocale: 'en',
+  }}
+/>
+```
+
+The loader can read local files, fetch a content delivery network (CDN), or use the same source as your application. Set `sourceLocale` to the locale visible during capture. If you omit it, harvesting checks the configured locale cookie and then the first locale passed to `start()`. Use `localeCookieName` when your app stores its locale in a custom cookie.
+
+### Choose locales
+
+Pass the recorded locale first, followed by every target locale whose catalog should be loaded:
+
+```tsx title="src/RecordButton.tsx"
+const { start } = useRecorder();
+
+await start({
+  locales: ['en', 'es', 'fr', 'ja'],
+});
+```
+
+Harvesting runs only when `locales` contains at least two entries. A source-only list still produces a valid recording without localized overlays.
+
+### Match translated content
+
+Enable [`_tagIds`](/docs/react/reference/config#tag-ids) so content rendered by [`<T>`](/docs/react/reference/components/t) carries the hash used to match each catalog entry. Variables and value-rendering components keep the value captured during the source recording.
+
+To also cover bare strings rendered by `gt()` or [`useGT()`](/docs/react/reference/hooks/use-gt), pass your application's `hashMessage` function:
+
+```tsx title="src/RecordingTools.tsx"
+<GTRecorder
+  harvest={{
+    loadTranslations,
+    hashMessage,
+    sourceLocale: 'en',
+  }}
+/>
+```
+
+Content remains in the source locale when a translation is missing, a plural or branch has no single rendered form, translated text has a different node structure, or an interpolated bare string does not match its source template hash. A catalog-loading or harvesting failure is non-fatal and leaves the bundle source-only.
+
+## Customize the recording controls [#controls]
+
+The built-in overlay appears during capture and includes the control that stops the session. Use `labels` to replace its recording and stop text.
+
+```tsx title="src/RecordingTools.tsx"
+<GTRecorder
+  labels={{
+    rec: 'Capturing walkthrough',
+    stop: 'Finish recording',
+  }}
+/>
+```
+
+Runtime wording is visual only. Your application can also render its own controls with [`useRecorder()`](/docs/integrations/rrweb/reference/recorder#use-recorder).
+
+## Expose controls to automation [#automation]
+
+Set `expose` when an end-to-end test or browser automation script needs to drive capture. The recorder adds a `window[name]` handle with `start` and `stop`.
+
+```tsx title="src/RecordingTools.tsx"
+<GTRecorder expose="gtRecorder" />
+```
+
+```js title="record.spec.js"
+await page.evaluate(() => window.gtRecorder.start({ locales: ['en', 'es'] }));
+// Drive the product flow.
+const bundle = await page.evaluate(() => window.gtRecorder.stop());
+```
+
+`expose` defaults to `false`. Leave it disabled when browser automation does not need direct access.
+
+## Handle completed bundles [#bundles]
+
+Pass `onComplete` to save or upload each successful recording. The callback runs after locale overlays are harvested and receives the same [`RecorderBundle`](/docs/integrations/rrweb/reference/recorder#recorder-bundle) returned by `stop()`.
+
+The package does not upload or persist recordings. Store the JSON-serializable bundle with your application assets or in storage you control.
+
+<Callout type="warn">
+  Review every bundle before publishing it. Form input values are masked, but the event stream still contains visible page text and application state from the session.
+</Callout>

@@ -1,47 +1,25 @@
 ---
 
 title: Recording walkthroughs
-description: How to capture a product flow with gt-rrweb and assemble a bundle that replays in every locale.
+description: How to capture a product flow with gt-rrweb, review the session, and save its recording bundle.
 related:
   links:
+    - /docs/integrations/rrweb/guides/configuring-recordings
     - /docs/integrations/rrweb/guides/replaying-recordings
 
 ---
 
-Record a product flow once and turn it into a bundle that replays in each of your locales.
+Record a repeatable product flow once, then save it as a bundle you can review, publish, and replay.
 
-A bundle holds three things: the rrweb event stream, the list of locales with the source locale first, and a text overlay built from your published translation catalogs. This guide assumes the recorder is mounted as in the [Quickstart](/docs/integrations/rrweb/quickstart).
+This guide focuses on running a useful capture session. Complete the [Quickstart](/docs/integrations/rrweb/quickstart) first.
 
-## Choose the capture region [#capture-region]
+## Before you start [#before-start]
 
-[`GTRecorder`](/docs/integrations/rrweb/reference/recorder#gt-recorder) captures the whole document. `contentSelector` names the product region that should be framed during playback; it defaults to `main, [data-gt-content]`.
+Before recording:
 
-```tsx title="src/RecordingTools.tsx"
-<GTRecorder contentSelector="main" frame="16:9" />
-```
-
-Pick the frame that fits where the recording will be shown:
-
-- `frame="none"` keeps the region's natural dimensions.
-- `frame="16:9"` reflows the region into the built-in presentation frame.
-- `frame={{ aspect: 4 / 3 }}` uses a custom ratio, expressed as width divided by height.
-
-## Load published translations [#translations]
-
-Pass `harvest.loadTranslations` so the recorder can map recorded text to its translations. It receives a locale and returns that locale's published catalog. Without a loader the recorder still produces a valid source-only bundle.
-
-```tsx title="src/RecordingTools.tsx"
-<GTRecorder
-  harvest={{
-    loadTranslations,
-    sourceLocale: 'en',
-  }}
-/>
-```
-
-Set `sourceLocale` when the recording locale is not read from your app's locale cookie, or pass `localeCookieName` so the harvest reads your custom cookie instead.
-
-Content rendered by [`<T>`](/docs/react/reference/components/t) is matched through the DOM hashes that [`_tagIds`](/docs/react/reference/config#tag-ids) enables. To also translate bare `gt()` or [`useGT()`](/docs/react/reference/hooks/use-gt) strings, pass a `hashMessage` function; interpolated strings whose rendered value differs from their source template stay in the source locale. See [Harvest options](/docs/integrations/rrweb/reference/harvest#harvest-locales).
+- [Configure the recorder](/docs/integrations/rrweb/guides/configuring-recordings) for the product region and playback frame you need.
+- Open the flow in the source locale and reset it to a predictable starting state.
+- Decide which published locales to include. See [Configure localized replay](/docs/integrations/rrweb/guides/configuring-recordings#localized-replay).
 
 ## Start and stop capture [#capture]
 
@@ -56,9 +34,32 @@ const bundle = await stop();
 
 `status` moves from `preparing` to `recording`, returns to `preparing` while translations are harvested, and ends at `idle`. A harvest failure is not fatal: `stop()` still resolves with a source-only bundle.
 
+Leaving the page aborts an active session without harvesting translations or calling `onComplete`. Stop the recording before navigation that unloads the application.
+
+## Capture the product flow [#product-flow]
+
+After `start()` resolves, complete the walkthrough in the same order a viewer should see it. Clicks, navigation, DOM changes, scroll position, and visible page content become part of the event stream.
+
+Keep the session focused:
+
+- Start from a stable page and application state.
+- Pause long enough for async content to render before interacting with it.
+- End after the viewer reaches a clear success state.
+- Avoid exposing sensitive application state.
+
+Form input values are masked and mouse-move telemetry is omitted. Review the finished recording before publishing because other visible text and state remain in the event stream.
+
+Add rrweb's `rr-block` class to operator controls or other elements that should not appear in the recording:
+
+```tsx
+<div className="rr-block">
+  <RecordingControls />
+</div>
+```
+
 ## Drive recordings from automation [#automation]
 
-To script a recording, for example from an end-to-end test, set `expose` to a name. The recorder then adds a `window[name]` handle with the same `start` and `stop` functions.
+To script a recording from an end-to-end test, configure the recorder's `expose` option. The resulting `window[name]` handle provides the same `start` and `stop` functions.
 
 ```tsx title="src/RecordingTools.tsx"
 <GTRecorder expose="gtRecorder" />
@@ -70,11 +71,11 @@ await page.evaluate(() => window.gtRecorder.start({ locales: ['en', 'es'] }));
 const bundle = await page.evaluate(() => window.gtRecorder.stop());
 ```
 
-Leave `expose` off in production builds; it defaults to `false`.
-
 ## Store the bundle [#store-bundle]
 
 Serialize the returned [`RecorderBundle`](/docs/integrations/rrweb/reference/recorder#recorder-bundle) as JSON and keep it with your application assets or in your own storage. The package does not upload recordings anywhere.
+
+You can store the full bundle or only `bundle.events`. Locale and overlay metadata are embedded in the event stream, so the replayer can recover localized playback when an events-only export is later wrapped as `{ events }`.
 
 <Callout type="warn">
   Review a recording before you publish it. Input values are masked, but the event stream still contains the visible page text and application state of the session.

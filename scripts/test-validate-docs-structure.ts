@@ -216,6 +216,60 @@ assertEqual(
   'rejects an integration section omitted from Overview'
 );
 
+const reorderedOverviewLinks = replaceMeta(
+  repositoryFiles,
+  'overview/meta.json',
+  (meta) => {
+    const pages = meta.pages as string[];
+    [pages[4], pages[5]] = [pages[5]!, pages[4]!];
+  }
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(reorderedOverviewLinks),
+    'overview/meta.json',
+    'must follow the canonical Frameworks, Platform, and Integrations order'
+  ),
+  true,
+  'rejects reordered Overview hub links'
+);
+
+const reorderedIntegrationSections = replaceMeta(
+  repositoryFiles,
+  'integrations/meta.json',
+  (meta) => {
+    const pages = meta.pages as string[];
+    [pages[1], pages[2]] = [pages[2]!, pages[1]!];
+  }
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(reorderedIntegrationSections),
+    'integrations/meta.json',
+    'Sidebar sections must be Google Drive, Mintlify, Sanity, Storyblok, rrweb'
+  ),
+  true,
+  'rejects reordered integration sections'
+);
+
+const reorderedIntegrationCards = new Map(repositoryFiles);
+reorderedIntegrationCards.set(
+  'integrations/index.mdx',
+  (reorderedIntegrationCards.get('integrations/index.mdx') ?? '')
+    .replace('title="Google Drive"', 'title="__TEMP__"')
+    .replace('title="Mintlify"', 'title="Google Drive"')
+    .replace('title="__TEMP__"', 'title="Mintlify"')
+);
+assertEqual(
+  hasFinding(
+    validateDocsStructure(reorderedIntegrationCards),
+    'integrations/index.mdx',
+    'Landing cards must be Google Drive, Mintlify, Sanity, Storyblok, rrweb'
+  ),
+  true,
+  'rejects landing cards that drift from sidebar order'
+);
+
 const staleEntry = replaceMeta(
   repositoryFiles,
   'node/guides/meta.json',
