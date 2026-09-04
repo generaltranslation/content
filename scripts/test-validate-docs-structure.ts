@@ -189,7 +189,7 @@ assertEqual(
   hasFinding(
     validateDocsStructure(reorderedRoots),
     'meta.json',
-    'Top-level sections must be ./overview, ./platform, ./cli, ./react, ./vue, ./rrweb, ./node, ./python, ./integrations in that order'
+    'Top-level sections must be ./overview, ./platform, ./cli, ./react, ./vue, ./node, ./python, ./integrations in that order'
   ),
   true,
   'rejects reordered top-level sections'
