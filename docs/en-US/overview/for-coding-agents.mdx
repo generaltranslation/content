@@ -1,7 +1,7 @@
 ---
 
 title: Using coding agents
-description: How to use AI coding agents and LLMs with General Translation by pointing them at the machine-readable docs, the MCP server, and our drop-in agent guide.
+description: How to use AI coding agents and LLMs with General Translation by pointing them at the machine-readable docs, MCP servers, and our drop-in agent guide.
 
 ---
 
@@ -134,6 +134,7 @@ Keep all locale configuration in `gt.config.json` — do not scatter locale list
 | `npx gt auth` | To generate or refresh API credentials. |
 | `npx gt translate` | To translate the project via the General Translation API. Run in CI **before** building for production. |
 | `npx gt generate` | To create translation file templates to translate manually (no API key needed). |
+| `npx gt api --spec` | To inspect the API contract bundled with the installed CLI before making a direct API request. |
 
 Add translation to the production build so translations stay current, for example: `"build": "npx gt translate && next build"`.
 
@@ -176,7 +177,11 @@ To add the docs as context, paste a docs URL or the `llms.txt` link into your ag
 
 ## MCP server [#mcp]
 
-General Translation offers a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that lets agents query the docs directly. It comes in two forms:
+General Translation provides [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers for documentation and authenticated Project data.
+
+### Documentation server
+
+The documentation server lets agents query the docs directly. It comes in two forms:
 
 - **Local (stdio)** — the published [`@generaltranslation/mcp`](https://www.npmjs.com/package/@generaltranslation/mcp) npm package, run on your machine with `npx`. Best for tools that maintain a persistent connection, such as Cursor and Claude Code.
 - **Remote (HTTP/SSE)** — a hosted endpoint at `https://mcp.gtx.dev`. Use the SSE endpoint only if your tool does not support streamable HTTP.
@@ -224,7 +229,40 @@ Configure the connection using whichever transport your tool supports. The confi
   </Tab>
 </Tabs>
 
+The documentation server provides `fetch-docs` for one page and `list-docs` for the short or full machine-readable docs index.
+
 Once connected, ask your agent to use the `generaltranslation` MCP server. *Example: "Use the generaltranslation MCP server to explain how to use a [`<T>`](/docs/react/reference/components/t) component."*
+
+### Project server
+
+The Project server exposes read-only Project information at `https://api.gtx.dev/mcp` over streamable HTTP. It requires a production Project API key with `project:files:read`; development keys are rejected. An Organization key can also connect when the request includes the target `gt-project-id`.
+
+Configure a Project-scoped connection in clients that support custom MCP headers:
+
+```json title=".mcp.json"
+{
+  "mcpServers": {
+    "generaltranslation-project": {
+      "type": "streamable-http",
+      "url": "https://api.gtx.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer <PROJECT_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+Store the key with your client's secret-management feature instead of committing it to `.mcp.json`. See [API keys](/docs/platform/dashboard/reference/api-keys) for key types and permissions.
+
+For an Organization key, add `"gt-project-id": "<PROJECT_ID>"` to `headers`. The server allows 200 requests per minute for each API key.
+
+The server provides:
+
+- `get_project_info` — returns the Project ID, name, Organization ID, source locale, target locales, and auto-approval setting.
+- `get_translation_status` — accepts a `fileId` plus optional `versionId` and `branchId`, then returns source metadata and timestamps for each target locale.
+
+Tool-level failures still use an HTTP `200` MCP response. Check the tool result's `isError` field and JSON error content; failed results do not include `structuredContent`.
 
 ## Editor-specific tips [#editor-tips]
 
