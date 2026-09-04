@@ -91,6 +91,7 @@ const customComponents = {
   CardTitle: StubComponent,
   FumadocsArchitecture: StubComponent,
   GitHub,
+  IntroFeature: StubComponent,
   SupportedLocales: StubComponent,
   Tweet,
   Video,
