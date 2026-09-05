@@ -322,7 +322,7 @@ Do not add hand-written copies to this repository. When you add, rename, remove,
 
 Beyond the machine-readable outputs above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` or `.mdx` to its URL. Use `.mdx` as the canonical machine-readable URL while preserving `.md` compatibility, and link to the logical page path in prose.
+- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` to its URL. Use `.md` as the canonical machine-readable URL while preserving `.mdx` compatibility, and link to the logical page path in prose.
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 

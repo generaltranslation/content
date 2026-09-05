@@ -9,7 +9,6 @@ import defaultMdxComponents from 'fumadocs-ui/mdx';
 
 import { APIPage } from '@/lib/api-page';
 import Video from '@/components/Video';
-import { Mermaid } from '@/components/docs/mdx/mermaid';
 
 import type { MDXComponents } from 'mdx/types';
 import type { ComponentPropsWithoutRef } from 'react';
@@ -83,7 +82,7 @@ const customComponents = {
   LogoCardContainer: StubComponent,
   LogoCardContent: StubComponent,
   LogoCardImage: StubComponent,
-  Mermaid,
+  Mermaid: StubComponent,
   ShadCard: StubComponent,
   CardContent: StubComponent,
   CardDescription: StubComponent,
