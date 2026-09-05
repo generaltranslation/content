@@ -1,0 +1,109 @@
+---
+
+title: Translating content
+description: How to translate Vue template content in place with the <T> component.
+related:
+  links:
+    - /docs/vue/guides/formatting-variables
+    - /docs/vue/guides/handling-plurals-and-branches
+    - /docs/vue/guides/translating-strings
+    - /docs/vue/guides/configuring
+
+---
+
+The [`<T>`](/docs/vue/reference/components/t) component translates its default slot into the active locale. Write the complete phrase in your source language and wrap it so text, nested elements, and formatting can be translated as one unit.
+
+## Wrap template content in `<T>` [#wrap]
+
+Place statically authored, user-facing content in the default slot:
+
+```vue
+<script setup lang="ts">
+import { T } from 'gt-vue';
+</script>
+
+<template>
+  <T>
+    <section>
+      <h1>Welcome back</h1>
+      <p>Your order is on its way.</p>
+    </section>
+  </T>
+</template>
+```
+
+The CLI identifies the entry from its content and structure. Keep runtime values out of ordinary interpolation inside the translation. Wrap them with [`<Var>`](/docs/vue/reference/components/var), [`<Num>`](/docs/vue/reference/components/num), [`<Currency>`](/docs/vue/reference/components/currency), or [`<DateTime>`](/docs/vue/reference/components/datetime).
+
+Do not nest one [`<T>`](/docs/vue/reference/components/t) inside another. Split independent phrases into sibling translations instead.
+
+## Add translation context [#context]
+
+Use the Vue-friendly `context` prop when identical source text can have different meanings:
+
+```vue
+<T context="a bank beside a river">Bank</T>
+```
+
+Context changes the catalog identity and gives the translation system the information needed to choose the intended wording. It does not render in the page.
+
+The optional `max-chars` and `requires-review` props add translation metadata. Keep these values static so the CLI can extract them.
+
+## Translate through a custom component [#components]
+
+Statically authored content in a custom component's default slot participates in the surrounding translation:
+
+```vue title="src/components/HelpPanel.vue"
+<script setup lang="ts">
+import { T } from 'gt-vue';
+import DocsLink from './DocsLink.vue';
+</script>
+
+<template>
+  <T>
+    Read the <DocsLink href="/docs">installation guide</DocsLink> before continuing.
+  </T>
+</template>
+```
+
+The custom component instance, its listeners, and its non-translatable props are preserved while translated content replaces its default slot and supported static text props. `DocsLink` is not replaced with a Fragment, so its state and behavior remain attached to the same boundary. The surrounding [`<T>`](/docs/vue/reference/components/t) keeps a Fragment root in both source and translated renders instead of changing root kind during the update.
+
+Only content passed into the default slot is visible to the outer translation. Text created inside `DocsLink.vue` itself is not part of that entry. Wrap that internal text in its own [`<T>`](/docs/vue/reference/components/t).
+
+Custom component tags inside a translation must resolve at runtime. Import local components or register them normally; an unresolved component warning is a configuration error, not a supported translation source.
+
+## Keep slot boundaries explicit [#slots]
+
+An outer [`<T>`](/docs/vue/reference/components/t) can translate a custom component's ordinary default-slot content. Scoped slots, arbitrary named slots, and runtime-selected components depend on behavior that extraction cannot determine safely.
+
+- Put [`<T>`](/docs/vue/reference/components/t) inside a scoped or named slot when that slot owns the phrase.
+- Wrap an opaque dynamic boundary with [`<Var>`](/docs/vue/reference/components/var) when its output should remain unchanged.
+- Use direct tags for custom components. Selector forms are limited to recognized GT components and supported Vue built-ins that the extractor resolves explicitly; put [`<T>`](/docs/vue/reference/components/t) inside arbitrary custom, runtime-selected, or unresolved selector boundaries.
+
+For [`<Suspense>`](https://vuejs.org/guide/built-ins/suspense), put separate translations in its default and fallback slots:
+
+```vue
+<Suspense>
+  <T>Your dashboard is ready.</T>
+  <template #fallback>
+    <T>Loading your dashboard…</T>
+  </template>
+</Suspense>
+```
+
+When [`<Suspense>`](https://vuejs.org/guide/built-ins/suspense) appears inside an outer [`<T>`](/docs/vue/reference/components/t), its default content can participate, but its fallback is preserved outside that translation. Keeping each slot's phrase in its own translation makes the ownership unambiguous.
+
+## Represent runtime structure safely [#dynamic-structure]
+
+Translations must know every possible phrase at extraction time. Use [`<Plural>`](/docs/vue/reference/components/plural) for count-dependent wording and [`<Branch>`](/docs/vue/reference/components/branch) for other finite alternatives instead of placing runtime conditionals directly in the translated tree.
+
+```vue
+<T>
+  <Branch :branch="status">
+    <template #active>Your subscription is active.</template>
+    <template #paused>Your subscription is paused.</template>
+    <template #default>Your subscription status is unavailable.</template>
+  </Branch>
+</T>
+```
+
+Vue's template compiler controls how indentation and line breaks become text nodes. Write inline phrases in the layout that should appear to the reader, and keep the compiler's whitespace setting static so extraction and rendering use the same structure.

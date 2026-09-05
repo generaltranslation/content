@@ -1,0 +1,79 @@
+---
+
+title: t
+description: Translate a plain string synchronously from the initialized browser SPA runtime. API reference for t.
+
+---
+
+Use `t` for constants and other strings evaluated outside Vue components in a browser-only single-page application. Component code normally uses the reactive [`useGT()`](/docs/vue/reference/composables/use-gt) callback instead.
+
+## Overview [#overview]
+
+```ts
+const t: GTFunction;
+```
+
+The function reads the catalog preloaded by [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa):
+
+```ts title="src/navigation.ts"
+import { t } from 'gt-vue';
+
+export const navigation = [
+  t('Documentation', { $context: 'primary navigation' }),
+  t('Account settings'),
+];
+```
+
+Use literal source strings and a literal `$context` so the CLI can extract the same catalog entry that the runtime hashes.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `message` | Static source string to translate. Braces remain literal. | `string` | No | — |
+| `options` | Context used to disambiguate the catalog hash. | [`GTStringOptions`](/docs/vue/reference/types/gt-string-options) | Yes | `{}` |
+
+`$context` is the only supported option. `t` does not accept interpolation variables, `$format`, `$maxChars`, or `$requiresReview`.
+
+## How it works [#how-it-works]
+
+`t` calculates the plain `STRING` catalog hash from `message` and `$context`, then reads the active SPA catalog synchronously. It returns the source string when the hash is missing or the catalog value is not a string.
+
+The result is a snapshot produced when the call runs. A module-level constant does not participate in Vue reactivity. SPA locale changes therefore reload the document, rerun the bootstrap, preload the new catalog, and evaluate the module again.
+
+This API performs literal string lookup only:
+
+- Braces such as `{name}` are ordinary characters.
+- ICU syntax is not parsed or formatted.
+- Runtime values are not interpolated.
+- Tagged-template syntax such as `` t`Hello` `` is not supported.
+
+Use [`<T>`](/docs/vue/reference/components/t) with [`<Var>`](/docs/vue/reference/components/var) for translatable content containing runtime values.
+
+## Return value [#returns]
+
+**Type** `string`
+
+Returns the matching string translation, or `message` when no string translation exists.
+
+## Failures [#failures]
+
+`t` throws in either of these cases:
+
+- It runs on the server, where browser-global translation state could leak across requests.
+- It runs in the browser before [`initializeGTSPA()`](/docs/vue/reference/functions/initialize-gt-spa) has finished.
+
+Await the initializer in a bootstrap module and dynamically import modules that call `t` afterward. For server rendering, install request-scoped [`createGT({ locale })`](/docs/vue/reference/functions/create-gt#server-rendering) state and translate from a component with [`useGT()`](/docs/vue/reference/composables/use-gt).
+
+## Example [#example]
+
+```ts title="src/status.ts"
+import { t } from 'gt-vue';
+
+export const STATUS_LABELS = {
+  draft: t('Draft', { $context: 'document status' }),
+  published: t('Published', { $context: 'document status' }),
+};
+```
+
+The extractor registers both calls. When the active catalog is unavailable or does not contain either entry, the values are `"Draft"` and `"Published"`.

@@ -190,7 +190,7 @@ Capitalize the scope noun even inside hyphenated compounds (Organization-level, 
 
 ### Product and technology names
 
-Use the official capitalization and spelling for third-party names: **Next.js**, **TypeScript**, **JavaScript**, **ESLint**, **React Native**, **Node.js**. For GT itself: **General Translation**, **Quickstart** (one word, not "Quick Start").
+Use the official capitalization and spelling for third-party names: **Next.js**, **TypeScript**, **JavaScript**, **ESLint**, **React Native**, **Node.js**. Always write **Next.js**, never shorten the product name to "Next." For GT itself: **General Translation**, **Quickstart** (one word, not "Quick Start").
 
 - **Package names always appear in backticks in prose**: `gt-next`, `gt-react`, `gt`, `generaltranslation`. The same applies to config files like `gt.config.json`.
 
@@ -234,11 +234,18 @@ The docs have these top-level sections, in this order:
 2. **Platform** — the Dashboard, Locadex, OpenAPI, and Core capabilities.
 3. **CLI**
 4. **React** — the React ecosystem SDKs (`gt-react`, `gt-next`, TanStack Start, and `gt-react-native`) and the React Core linter, folded into **one multi-framework section** (see React section (multi-framework)).
-5. **Node**
-6. **Python**
-7. **Integrations** — plugins for third-party content platforms (for example, Sanity, Storyblok, and Google Drive).
+5. **Vue** — the Vue 3 SDK (`gt-vue`).
+6. **Node**
+7. **Python**
+8. **Integrations** — plugins and add-ons that attach General Translation to a third-party platform or tool (for example, Sanity, Storyblok, Google Drive, and rrweb).
 
-Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
+### When something gets its own top-level section
+
+Reserve a top-level section for a **framework**: a first-party SDK that developers install into their own application and build on directly — the React ecosystem, Vue, Node, and Python — plus the CLI and the Platform itself. A framework earns a tab because readers arrive already thinking in that framework's terms and need a whole spine (Quickstart → Guides → Reference) shaped around it.
+
+Everything else lives under **Integrations**, as one plugin folder with its own Quickstart → Guides → Reference: content platforms and CMSs (Sanity, Storyblok), storage and docs tools (Google Drive, Mintlify), and libraries that attach to another tool rather than host an app (`gt-rrweb` for rrweb recordings). **When in doubt, put it in Integrations.** Promote a plugin to its own section only when it has grown into a framework SDK in the sense above; that is an information-architecture change, so the top-level list is pinned by CI (`scripts/validate-docs-structure.ts`) and the Overview hub must be updated with it.
+
+Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Vue, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
 
 ### The three-section spine
 
@@ -271,11 +278,11 @@ A `meta.json` supports these keys:
 
 - `title` — the folder's sidebar display name using its established casing (see File and folder naming).
 - `description` — the meaning depends on the folder:
-  - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
+  - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`. The Integrations subtitle is always `CMS, Drive, Docs & more`; do not derive it from the current integration list.
   - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
 - `pages` — the ordered list of entries; **this array is the source of truth for page order**.
 - `icon` — a named icon token (e.g. `Terminal`, `React`, `Python`, `Globe`) shown next to the section in the nav. Set it only on the top-level section roots.
-- `root` — set `"root": true` on the seven top-level sections only; it marks the folder as a navigable section root.
+- `root` — set `"root": true` on the eight top-level sections only; it marks the folder as a navigable section root.
 - `defaultOpen` — optional flag controlling whether the folder starts expanded in the sidebar.
 
 Entries in `pages` take three forms:
@@ -290,7 +297,13 @@ Every immediate child folder listed by a top-level section root becomes a visibl
 
 ### Overview hub
 
-The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Include every published Platform capability and integration section, keep those links in sync with the sections they point to, and only link pages that exist. The structure validator enforces this coverage.
+The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators with **cross-section link entries** to surface the main frameworks, Platform capabilities, and integrations without duplicating their content. Keep these groups and their entries in this order:
+
+- **Frameworks:** React, React SPA, Next.js App Router, Next.js Pages Router, TanStack Start, React Native, Vue, Node.js, Python, CLI, JSON
+- **Platform:** Dashboard, Locadex, Core, OpenAPI
+- **Integrations:** Google Drive, Mintlify, Sanity, Storyblok, rrweb
+
+Treat the Overview sidebar hub, each section's `meta.json`, and the corresponding landing-page card grid as one synchronized navigation surface. Whenever a framework, Platform capability, or integration is added, removed, renamed, or reordered, update all applicable surfaces in the same change and verify every route. Keep the Integrations sidebar and landing page in the order above, with Google Drive first. The structure validator enforces route coverage.
 
 ### Machine-readable outputs
 
@@ -332,14 +345,14 @@ Document only capabilities that exist, and resolve anything uncertain against th
 
 The entry page for a capability is named for its audience:
 
-- **Technical libraries and APIs use** `quickstart.md`**.** Quickstart is the developer-facing tone: install the library or SDK, authenticate, and run the first call. This applies to Core, CLI, React, Node, Python, Locadex, and integration plugins.
+- **Technical libraries and APIs use** `quickstart.md`**.** Quickstart is the developer-facing tone: install the library or SDK, authenticate, and run the first call. This applies to Core, CLI, React, Vue, Node, Python, Locadex, and integration plugins.
 - **The OpenAPI section uses** `overview.md` **(titled "Overview").** The public API is documented as a reference surface rather than an install path, so its entry page orients the reader to base URLs, authentication, versioning, and errors instead of a numbered install flow.
 - **Product/nontechnical capabilities use** `get-started.md`**.** Get Started is the setup-and-orientation tone for product pieces, not a developer install path. This applies to the **Dashboard** and the **Overview** section (whose entry page is `get-started.md` but displays as **Introduction**).
 
 Shape the entry page itself:
 
 - **Default to a single condensed entry page** placed directly in the capability folder: open with what it does and when to use it, then include the steps on the same page (a **Quickstart** for technical capabilities; **Key workflows/Configuration/Navigation** for product capabilities).
-- **For single-part sections (CLI, Node, Python), the section landing page is the Quickstart itself** (`quickstart.md` at the section root); there is no separate section index page.
+- **For single-part sections (CLI, Vue, Node, Python) and for each Integrations plugin, the section landing page is the Quickstart itself** (`quickstart.md` at the section root); there is no separate section index page.
 - **The React section is the exception:** it is multi-framework, so its landing page is **Get Started → Overview**, followed by one **[Framework] Quickstart** per framework (see React section (multi-framework)).
 - **Split into a Get Started section with separate Overview and Quickstart pages only when** the capability needs substantial conceptual grounding before a reader can act — concepts, architecture, or a mental model that would overwhelm a single page (typical of larger frameworks). Small libraries, single APIs, and the current Platform capabilities do not need a split.
   - When split: **Overview** covers what it is, why, when to use it, and the core concepts; **Quickstart** is the numbered path to first success.
@@ -374,7 +387,7 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 
 - **The filetree is the source of truth for order.** Each folder's `meta.json` `pages` array is the canonical order. Set and change page order there; the sidebar navigation follows it.
 - Order Guides along the natural workflow, and order Reference from setup outward.
-- **Single-part technical sections (CLI, React, Node, Python) share one Reference spine:** Configuration → Commands (or API) → File formats, each a subsection with one page per command, function, format, or config area. Order commands from setup outward (`init`/`setup`/`configure`/`auth` → `translate` → the CI building blocks → `generate`/`validate`).
+- **Single-part technical sections (CLI, Vue, Node, Python) share one Reference spine:** Configuration → Commands (or API) → File formats, each a subsection with one page per command, function, format, or config area. Order commands from setup outward (`init`/`setup`/`configure`/`auth` → `translate` → the CI building blocks → `generate`/`validate`).
 - *Examples:*
   - **Dashboard Guides:** generating context → reviewing and editing translations → adding annotations.
   - **CLI Guides:** configuring the CLI (`configuring-cli.md`) → generating translations → managing translations → tracking by branch → …
@@ -406,12 +419,12 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 - **General principle:** name a file for its topic using the **fewest words that stay clear and self-explanatory** when read on their own (in a URL or the sidebar), together with the folder for context. Lowercase, hyphenated, **usually three words or fewer** — never padded, and never truncated to a cryptic stub (`edit-translations.md`, `configure-automations.md`, `vm-image.md`).
 - **Keep a single word only when it is standard or unambiguous in its folder** (`config.md`, `quickstart.md`, `webhooks.md`; `automations.md` under Locadex Reference clearly reads as Locadex Automations). **Expand a vague single word** into two or three words that say what the page actually covers (`translation-context.md`, not `context.md`; `locale-codes.md`, not `locales.md`).
 - Name reference and conceptual pages by topic, not verb phrase (`monorepos.md`, `annotations.md`). **Guides are the exception:** their file name and link slug use the **gerund (-ing) form** matching the guide title (`using-translations.md`, `configuring-automations.md`, `translating-content.md`).
-- **The entry page is** `quickstart.md` **for technical capabilities and** `get-started.md` **for product/nontechnical ones** (see Get Started vs. Quickstart). Core, CLI, React, Node, Python, Locadex, and integration plugins use `quickstart.md`; OpenAPI uses `overview.md`; Dashboard and Overview use `get-started.md` (Overview displays as **Introduction**).
+- **The entry page is** `quickstart.md` **for technical capabilities and** `get-started.md` **for product/nontechnical ones** (see Get Started vs. Quickstart). Core, CLI, React, Vue, Node, Python, Locadex, and integration plugins use `quickstart.md`; OpenAPI uses `overview.md`; Dashboard and Overview use `get-started.md` (Overview displays as **Introduction**).
 - **Configuration reference pages are named and linked simply** `config.md` in most cases (not `configuration.md` or `config-reference.md`).
 - **Command reference pages are named by the command**, lowercase-hyphenated, matching the invoked subcommand (`translate.md`, `save-local.md`, `keyed-metadata.md`).
 - **Consolidate near-identical formats or variants onto one page** (MDX + Markdown → `mdx.md`; TypeScript + JavaScript → `ts.md`). Name the page after the primary variant and cover the sibling on the same page.
-- **Sidebar display names follow the established casing in their section.** Standard spine labels include **Overview**, **Get Started**, **Quickstart**, **Guides**, **Reference**, and **Frameworks**. Reference subsection labels display as **Commands**, **File formats**, **Functions**, **Components**, **Hooks**, and **Types**. Automated style passes must preserve these labels instead of deriving them by lowercasing the folder name.
-- **Proper nouns and product/brand names keep their official casing** as display titles: `CLI`, `React`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `Google Drive`, `React Native`, `TanStack Start`, and the `GT Class` reference group.
+- **Sidebar display names follow the established casing in their section.** Standard spine labels include **Overview**, **Get Started**, **Quickstart**, **Guides**, **Reference**, and **Frameworks**. Reference subsection labels display as **Commands**, **File formats**, **Functions**, **Components**, **Composables**, **Hooks**, and **Types**. Automated style passes must preserve these labels instead of deriving them by lowercasing the folder name.
+- **Proper nouns and product/brand names keep their official casing** as display titles: `CLI`, `React`, `Vue`, `Next.js`, `Node.js`, `Python`, `Dashboard`, `Locadex`, `Core`, `OpenAPI`, `Google Drive`, `React Native`, `TanStack Start`, and the `GT Class` reference group.
 - **Links, filesystem folder names, and URL slugs remain lowercase and hyphenated**, regardless of display-name casing. *Example: the Get Started section is linked as* `/docs/platform/dashboard/get-started`*.*
 
 
@@ -430,15 +443,16 @@ description: How to use labels, notes, and comments to coordinate translation re
 ```
 
 - **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
+- **Blog publication dates use the actual go-live date.** In `blog/**`, set `date` during the final publishing pass to the calendar date when the post is first published, using `YYYY-MM-DD`. Do not retain the draft creation date, and update `date` before merge when publication moves to another day.
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Custom Prompts, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
-- **React component reference titles use JSX syntax.** Quote the complete tag in frontmatter (`title: "<T>"`) so the page title and sidebar display `<T>`, not `T`.
+- **React and Vue component reference titles use component tag syntax.** Quote the complete tag in frontmatter (`title: "<T>"`) so the page title and sidebar display `<T>`, not `T`.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant capability or tool without automatically branding it. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the Dashboard." / "What are locale codes, and how are they used across the translation stack?"
     - **Configuration Guides:** retain `gt`, the package name, or **General Translation** when it identifies which system's configuration the reader is changing. *Example:* "How to configure the General Translation gt-sanity plugin for locales, document filters, and credentials."
   - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
-    - **React components:** name the JSX tag directly (`API reference for the <T> component.`).
+    - **React and Vue components:** name the component tag directly (`API reference for the <T> component.`).
   - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic]` — do not start the sentence with "API reference". *Example: "…across every locale. Reference for supported file formats."*
 
 A few optional fields appear on specific page types:
@@ -483,7 +497,7 @@ Link to it with the anchor: `/docs/platform/core/guides/translate-string#variabl
 The entry page orients the reader and gives them a fast path to first success. Shape it to the capability (see Get Started vs. Quickstart for which name to use):
 
 - **Product/nontechnical capabilities (**`get-started.md`**: Dashboard, Locadex, Overview).** Lead with orientation, not code. Dashboard-style: **Key workflows** → **Configuration** → **Navigation** → **FAQs**. Locadex-style: **How [product] works** → numbered setup steps.
-- **Technical capabilities (**`quickstart.md`**: Core, CLI, React, Node, Python, OpenAPI, integration plugins).** The page title is **Quickstart**. Open with what the library/API does and when to use it, then put the numbered path to first success (install → authenticate → first call) under a dedicated `## Quickstart [#quickstart]` H2 with `### 1. …` steps — title that section **Quickstart**, not "Translate your first app" or similar. Precede the steps with a short paragraph so the reader has context before acting. If there are concrete prerequisites (minimum runtime/library versions, supported platforms, required accounts or keys), list them explicitly up front — a short **Requirements** or **Before you start** section, or a `Note` callout for a single version floor.
+- **Technical capabilities (**`quickstart.md`**: Core, CLI, React, Vue, Node, Python, OpenAPI, integration plugins).** The page title is **Quickstart**. Open with what the library/API does and when to use it, then put the numbered path to first success (install → authenticate → first call) under a dedicated `## Quickstart [#quickstart]` H2 with `### 1. …` steps — title that section **Quickstart**, not "Translate your first app" or similar. Precede the steps with a short paragraph so the reader has context before acting. If there are concrete prerequisites (minimum runtime/library versions, supported platforms, required accounts or keys), list them explicitly up front — a short **Requirements** or **Before you start** section, or a `Note` callout for a single version floor.
 - Do not add a separate conceptual overview page (unless the section is split per Information architecture) or a "Next steps" section (see No next-steps sections).
 
 

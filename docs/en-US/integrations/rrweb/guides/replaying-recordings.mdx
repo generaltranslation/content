@@ -1,0 +1,75 @@
+---
+
+title: Replaying recordings
+description: How to embed a gt-rrweb bundle with the React player or the framework-agnostic player, and control locale switching.
+related:
+  links:
+    - /docs/integrations/rrweb/guides/configuring-recordings
+    - /docs/integrations/rrweb/guides/recording-walkthroughs
+
+---
+
+Embed a recorded walkthrough and let viewers watch it in their own locale.
+
+The player renders the recording with playback controls, a click-based cursor, scrubbing, light and dark themes, full-screen playback, and a locale switcher when the bundle carries more than one locale. Use the React component in React apps and the framework-agnostic function everywhere else; both come from `gt-rrweb/replay`.
+
+## Replay in React [#react]
+
+Render [`GTReplayer`](/docs/integrations/rrweb/reference/replayer#gt-replayer) with the bundle. The player fills its container's width and sets its own aspect ratio, so size the parent or pass `style`.
+
+```tsx title="src/Walkthrough.tsx"
+import { GTReplayer } from 'gt-rrweb/replay';
+import bundle from './walkthrough.json';
+
+export function Walkthrough() {
+  return (
+    <GTReplayer
+      bundle={bundle}
+      initialLocale="fr"
+      switchLocalesAllowed
+    />
+  );
+}
+```
+
+`initialLocale` applies only when that locale appears in `bundle.locales`; otherwise playback starts in the source locale. The component recreates the player when `bundle` or `initialLocale` changes.
+
+If you stored only `bundle.events`, pass those events as a bundle:
+
+```tsx
+<GTReplayer bundle={{ events }} />
+```
+
+Recordings created by `gt-rrweb` embed locale and overlay metadata in the event stream, so an events-only export can still replay localized content.
+
+## Replay without React [#without-react]
+
+Call [`createGTReplayer()`](/docs/integrations/rrweb/reference/replayer#create-gt-replayer) with a DOM element in any browser application. Keep the returned handle and call `destroy()` when the host view goes away.
+
+```ts title="src/walkthrough.ts"
+import { createGTReplayer } from 'gt-rrweb/replay';
+import bundle from './walkthrough.json';
+
+const container = document.querySelector<HTMLElement>('#walkthrough');
+if (!container) throw new Error('Missing walkthrough container');
+
+const player = createGTReplayer(container, bundle, {
+  initialLocale: 'fr',
+});
+
+// When the host view is removed:
+player.destroy();
+```
+
+## Control locale switching [#locale-switching]
+
+Locale controls appear when the bundle includes `locales` and `switchLocalesAllowed` is not `false`. Switching replaces the text overlay in place without rebuilding the rrweb session.
+
+- Set `switchLocalesAllowed={false}` to pin an embed to one locale.
+- A bundle without locale metadata or overlays replays the recorded source as-is.
+
+## Inspect bundles locally [#debug]
+
+Turn on `debug` while developing to drop a recording JSON file onto the player and replace the active bundle. Invalid JSON and files that are not recordings show a notice instead of replacing the session.
+
+Leave `debug` off for ordinary embeds; it defaults to `false`.
