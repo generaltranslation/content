@@ -1,0 +1,71 @@
+---
+
+title: gt api
+description: Make authenticated raw requests to the General Translation API or print its bundled OpenAPI specification. API reference for the gt api command.
+
+---
+
+Use `gt api` when you need direct access to an endpoint without adding an HTTP client to your project. The command writes the unmodified response body to standard output, which makes it suitable for scripts and shell pipelines.
+
+## Overview [#overview]
+
+```bash
+npx gt api [endpoint] [options]
+```
+
+Pass an endpoint path such as `/v2/project/info/PROJECT_ID`, or omit the endpoint when using `--spec`.
+
+## How it works [#how-it-works]
+
+- Reads the API key from `--api-key` or `GT_API_KEY`.
+- Resolves the Project ID from `--project-id`, `gt.config.json`, or `GT_PROJECT_ID`.
+- Sends the request to the configured `baseUrl`, which defaults to `https://api.gtx.dev`.
+- Writes the raw response body to standard output without retrying the request.
+- Writes a summary to standard error and exits with status 1 for a non-2xx response.
+
+If the config, environment, and command flag provide different Project IDs, the command stops before sending the request.
+
+## Flags [#flags]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `-X, --method <method>` | HTTP method: `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, or `OPTIONS`. | `string` | Yes | `GET` |
+| `--input <file>` | Reads the request body from a file, or from standard input when set to `-`. | `string` | Yes | — |
+| `-H, --header <header>` | Adds a `Key: Value` request header. Repeat for multiple headers. | `string` | Yes | — |
+| `-i, --include` | Writes the response status and headers before the body. | `boolean` | Yes | `false` |
+| `--spec` | Prints the bundled OpenAPI 3.1 specification. | `boolean` | Yes | `false` |
+| `-c, --config <path>` | Path to `gt.config.json`. The `.json` suffix may be omitted. | `string` | Yes | Auto-resolved |
+| `--api-key <key>` | API key override. | `string` | Yes | `GT_API_KEY` |
+| `--project-id <id>` | Project ID override. | `string` | Yes | Config or `GT_PROJECT_ID` |
+
+`--spec` does not require an endpoint, API key, or Project ID.
+
+## Examples [#examples]
+
+```bash
+# Save the exact API contract bundled with this CLI release
+npx gt api --spec > openapi.json
+
+# Read Project information with credentials from the environment
+npx gt api /v2/project/info/PROJECT_ID
+
+# Send a JSON request body and include response metadata
+npx gt api /v2/project/info/PROJECT_ID \
+  --method POST \
+  --header "Content-Type: application/json" \
+  --input update.json \
+  --include
+
+# Read a body from standard input
+printf '{"defaultLocale":"fr"}' |
+  npx gt api /v2/project/info/PROJECT_ID \
+    --method POST \
+    --header "Content-Type: application/json" \
+    --input -
+```
+
+## Other notes [#notes]
+
+- `gt api` is available in `gt` 2.20.0 and later.
+- The command skips translation-file and locale validation, so an unrelated config error does not block a raw API request.
+- Use the [OpenAPI reference](/docs/platform/openapi/overview) to find endpoint paths, permissions, request fields, and response schemas.

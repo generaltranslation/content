@@ -1,0 +1,128 @@
+---
+
+title: API client
+description: Create a typed client for the General Translation API and call generated endpoint helpers. API reference for createApiClient.
+
+---
+
+Import the generated TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The client, endpoint helpers, request types, and response types are generated from the public OpenAPI contract.
+
+`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later.
+
+## Overview [#overview]
+
+| Export | Description |
+| --- | --- |
+| [`createApiClient`](#create-client) | Creates an authenticated client with version, retry, and timeout handling. |
+| [`ApiClientConfig`](#client-config) | Configures the client transport and shared request headers. |
+| [`API_VERSION`](#api-version) | Current API contract version sent by default. |
+| [Endpoint helpers](#endpoint-helpers) | Typed functions generated for each public endpoint. |
+| [OpenAPI specification](#openapi-spec) | JSON contract bundled with the package. |
+
+## `createApiClient` [#create-client]
+
+```ts
+function createApiClient(config: ApiClientConfig): Client;
+```
+
+The client adds the configured API version, bearer token, and Project ID to every request. Pass it to a generated endpoint helper:
+
+```ts title="project-info.ts"
+import { createApiClient, getProjectInfo } from 'generaltranslation/api';
+
+const projectId = process.env.GT_PROJECT_ID!;
+const client = createApiClient({
+  apiKey: process.env.GT_API_KEY,
+  baseUrl: 'https://api.gtx.dev',
+  projectId,
+});
+
+const result = await getProjectInfo({
+  client,
+  path: { projectId },
+});
+
+if (result.error) {
+  throw new Error('Could not load Project information');
+}
+
+console.log(result.data);
+```
+
+## `ApiClientConfig` [#client-config]
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`apiKey`](#api-key) | Bearer token sent in the `Authorization` header. | `string` | Yes | — |
+| [`apiVersion`](#api-version-option) | Contract version sent as `gt-api-version`. | `ApiVersion` | Yes | `API_VERSION` |
+| [`baseUrl`](#base-url) | API origin. | `string` | No | — |
+| [`fetch`](#fetch) | Custom Fetch API implementation. | `typeof fetch` | Yes | `globalThis.fetch` |
+| [`projectId`](#project-id) | Project ID sent as `gt-project-id`. | `string` | Yes | — |
+| [`retryPolicy`](#retry-policy) | Retry delay strategy. | `'exponential' \| 'linear' \| 'none'` | Yes | `'exponential'` |
+| [`timeoutMs`](#timeout) | Per-attempt timeout, or `false` to disable the built-in timeout. | `number \| false` | Yes | `60000` |
+
+### `apiKey` [#api-key]
+
+**Type** `string` · **Optional**
+
+API key sent as `Authorization: Bearer <key>`. The client does not read environment variables automatically.
+
+### `apiVersion` [#api-version-option]
+
+**Type** `ApiVersion` · **Optional** · **Default** `API_VERSION`
+
+API contract version sent in the `gt-api-version` header.
+
+### `baseUrl` [#base-url]
+
+**Type** `string` · **Required**
+
+API origin. Use `https://api.gtx.dev` for the hosted General Translation API.
+
+### `fetch` [#fetch]
+
+**Type** `typeof fetch` · **Optional** · **Default** `globalThis.fetch`
+
+Custom Fetch API implementation. Use this for instrumentation, testing, or a runtime without a global fetch implementation.
+
+### `projectId` [#project-id]
+
+**Type** `string` · **Optional**
+
+Project ID sent in the `gt-project-id` header. Organization keys need this header for Project-scoped endpoints.
+
+### `retryPolicy` [#retry-policy]
+
+**Type** `'exponential' | 'linear' | 'none'` · **Optional** · **Default** `'exponential'`
+
+Idempotent requests retry network errors, `429` responses, and `5xx` responses up to three times. Non-idempotent requests retry `429` responses but not network errors or `5xx` responses. Set this to `'none'` when the caller owns retries.
+
+### `timeoutMs` [#timeout]
+
+**Type** `number | false` · **Optional** · **Default** `60000`
+
+Timeout in milliseconds for each request attempt. Set it to `false` when a custom `fetch` implementation owns request timeouts.
+
+## `API_VERSION` [#api-version]
+
+**Type** `ApiVersion`
+
+The current default contract version is `2026-03-06.v1`. Pass a different supported version through `apiVersion` when maintaining an integration against an older response contract.
+
+## Endpoint helpers [#endpoint-helpers]
+
+The module exports a typed helper, data type, response type, and error type for each endpoint in the [OpenAPI reference](/docs/platform/openapi/overview). Helpers accept the shared `client` plus the endpoint's `body`, `headers`, `path`, and `query` fields as applicable.
+
+Use the OpenAPI reference for permissions, rate limits, request schemas, response schemas, and status codes.
+
+## OpenAPI specification [#openapi-spec]
+
+Import the same contract used to generate the client:
+
+```ts
+import openApiSpec from 'generaltranslation/api/openapi.json' with {
+  type: 'json',
+};
+```
+
+The standalone `@generaltranslation/api` package exposes the same SDK and publishes its contract at `@generaltranslation/api/spec/openapi.json`.

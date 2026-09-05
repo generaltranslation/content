@@ -185,7 +185,10 @@ function normalizeSymbol(symbol: string): string {
   if (componentMatch) return componentMatch[1];
 
   if (/^gt\s+[\w-]+(?:\s|$)/.test(normalized)) {
-    return normalized.split(' ').slice(0, 2).join(' ');
+    const parts = normalized.split(' ');
+    return parts[1] === 'project' && parts[2]
+      ? parts.slice(0, 3).join(' ')
+      : parts.slice(0, 2).join(' ');
   }
 
   return normalized.replace(/\(\)$/, '');
@@ -196,7 +199,9 @@ function aliasesForTarget(target: ReferenceTarget): string[] {
   const aliases = [title];
 
   if (/^gt\s+/.test(title)) {
-    aliases.push(`npx ${title}`, title.split(' ')[1]);
+    const parts = title.split(' ');
+    aliases.push(`npx ${title}`);
+    if (parts.length === 2) aliases.push(parts[1]);
   } else if (/^[$A-Za-z_][\w$]*$/.test(title)) {
     aliases.push(`${title}()`);
   }
