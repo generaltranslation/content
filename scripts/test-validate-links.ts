@@ -357,6 +357,10 @@ description: A test
     'Allows a scoped docs index'
   );
   assert(
+    isGeneratedMachineRoute('/docs/vue/llms.txt'),
+    'Allows the Vue docs index'
+  );
+  assert(
     isGeneratedMachineRoute('/en-US/docs/platform/openapi/llms-full.txt'),
     'Allows a locale-prefixed OpenAPI bundle'
   );

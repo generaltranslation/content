@@ -73,6 +73,7 @@ const MACHINE_DOC_SCOPES = [
   'platform/openapi',
   'cli',
   'react',
+  'vue',
   'node',
   'python',
   'integrations',

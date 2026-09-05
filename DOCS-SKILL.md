@@ -312,7 +312,7 @@ The publishing app generates machine-readable maps from the docs source:
 - `llms.txt` — a curated [llmstxt.org](https://llmstxt.org/)-style entry point with the primary Quickstarts and links to scoped indexes.
 - `llms-index.txt` — an exhaustive link index for every published docs page.
 - `llms-full.txt` — full page bodies for tools that can load a large context, excluding the generated OpenAPI reference.
-- `/docs/<section>/llms.txt` — exhaustive section indexes for Overview, Platform, CLI, React, Node, Python, and Integrations. Platform capabilities also have scoped indexes.
+- `/docs/<section>/llms.txt` — exhaustive section indexes for Overview, Platform, CLI, React, Vue, Node, Python, and Integrations. Platform capabilities also have scoped indexes.
 - `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
