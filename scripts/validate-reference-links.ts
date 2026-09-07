@@ -84,23 +84,6 @@ const NARROW_EXCLUSIONS: NarrowExclusion[] = [
     symbol: 'formatCutoff()',
     reason: 'The release note refers to both the method and standalone function.',
   },
-  {
-    path: 'devlog/en-US/gt-i18n_v0_9_0.mdx',
-    symbol: 'getTranslations()',
-    reason: 'The gt-i18n export has no package-specific reference page.',
-  },
-  {
-    path: 'devlog/en-US/gt-i18n_v0_9_0.mdx',
-    symbol: 'loadDictionary()',
-    reason:
-      'This is the gt-node dictionary loader option, not the React standalone function.',
-  },
-  {
-    path: 'devlog/en-US/gt-i18n_v0_9_0.mdx',
-    symbol: 'loadDictionary',
-    reason:
-      'This is the gt-node dictionary loader option, not the React standalone function.',
-  },
 ];
 
 function findMdxFiles(directory: string): string[] {

@@ -19,13 +19,13 @@ const config: NextConfig = {
       },
       {
         source: '/:locale/docs/cli/reference/formats/apple-strings-files',
-        destination: '/:locale/docs/cli/reference/formats/dot-strings-files',
+        destination: '/docs/cli/reference/formats/dot-strings-files',
         permanent: true,
       },
       {
         source: '/:locale/docs/cli/reference/formats/apple-stringsdict-files',
         destination:
-          '/:locale/docs/cli/reference/formats/dot-stringsdict-files',
+          '/docs/cli/reference/formats/dot-stringsdict-files',
         permanent: true,
       },
       {
@@ -51,23 +51,23 @@ const config: NextConfig = {
       },
       {
         source: '/:locale/docs/rrweb',
-        destination: '/:locale/docs/integrations/rrweb/quickstart',
+        destination: '/docs/integrations/rrweb/quickstart',
         permanent: true,
       },
       {
         source: '/:locale/docs/rrweb/guides',
         destination:
-          '/:locale/docs/integrations/rrweb/guides/recording-walkthroughs',
+          '/docs/integrations/rrweb/guides/recording-walkthroughs',
         permanent: true,
       },
       {
         source: '/:locale/docs/rrweb/reference',
-        destination: '/:locale/docs/integrations/rrweb/reference/recorder',
+        destination: '/docs/integrations/rrweb/reference/recorder',
         permanent: true,
       },
       {
         source: '/:locale/docs/rrweb/:path*',
-        destination: '/:locale/docs/integrations/rrweb/:path*',
+        destination: '/docs/integrations/rrweb/:path*',
         permanent: true,
       },
     ];

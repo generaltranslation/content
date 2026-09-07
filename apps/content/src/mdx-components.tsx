@@ -26,7 +26,7 @@ function IntroFeature({
   title: string;
 }) {
   return (
-    <div className='rounded-lg border p-4'>
+    <div className='my-4 rounded-lg border p-4'>
       <strong>{title}</strong>
       <p className='mb-0 mt-2 text-sm text-fd-muted-foreground'>{children}</p>
     </div>
@@ -34,16 +34,12 @@ function IntroFeature({
 }
 
 function Cards({
-  hideArrows = false,
-  className,
+  hideArrows: _hideArrows,
   ...props
 }: React.ComponentProps<typeof FumadocsCards> & { hideArrows?: boolean }) {
-  return (
-    <FumadocsCards
-      {...props}
-      className={`${hideArrows ? '[&_svg]:hidden' : ''} ${className ?? ''}`}
-    />
-  );
+  // The shared MDX also targets the production renderer's arrow-bearing cards.
+  // Fumadocs' cards have no arrows; consume the prop without hiding their icons.
+  return <FumadocsCards {...props} />;
 }
 
 function GitHub() {
