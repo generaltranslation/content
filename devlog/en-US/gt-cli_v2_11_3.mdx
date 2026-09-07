@@ -1,104 +1,31 @@
 ---
 title: gt@2.11.3
-headline: Object and array access for derive()
+headline: CDN publishing from upload and save-local
 date: 2026-03-19
-authors: [ernest]
-tags: ['gt-cli', 'derive', 'objects', 'arrays']
+authors: [fernando]
+tags: ['gt-cli', 'cdn', 'publish', 'upload', 'save-local']
 ---
 
 ## Overview
 
-[`derive()`](/docs/react/reference/functions/derive) now supports object and array access. Previously, [`derive()`](/docs/react/reference/functions/derive) could only resolve function calls — now it can resolve values from objects, arrays, and dictionaries, making it easier to work with lookup patterns.
+[`gt upload`](/docs/cli/reference/commands/upload) and [`gt save-local`](/docs/cli/reference/commands/save-local) now apply configured CDN publishing rules after they sync files. This extends the publishing step that was already part of [`gt translate`](/docs/cli/reference/commands/translate).
 
-This builds on the [`derive()` in tagged templates](/devlog/gt-react_v10_15_0) release from `gt-react@10.15.0`.
+## How it works
 
-## What's new
+- **Upload:** after a successful upload, the CLI publishes or unpublishes files that match the configured rules.
+- **Save local edits:** the CLI runs the publishing step only when it finds and saves local translation changes.
+- **Failure handling:** a CDN publishing failure produces a warning without failing the completed upload or local-edit sync.
 
-### Object access
+Use the [`publish`](/docs/cli/reference/config#publish) configuration or the `--publish` flag to opt into CDN publishing:
 
-Use [`derive()`](/docs/react/reference/functions/derive) with object property lookups. The CLI statically resolves all possible values at extraction time:
+```bash
+# Upload files and apply configured CDN publishing rules
+npx gt upload
 
-```jsx
-const statusMessages = {
-  success: "Your order has been placed.",
-  pending: "Your order is being processed.",
-  error: "Something went wrong with your order.",
-} as const;
-
-export default function OrderBanner({ status }: { status: string }) {
-  return <p>{t`Thanks for shopping! ${derive(statusMessages[status])}`}</p>;
-}
+# Save local edits and publish changed translations
+npx gt save-local --publish
 ```
-
-The CLI extracts a separate translation for each possible value:
-
-- `"Thanks for shopping! Your order has been placed."`
-- `"Thanks for shopping! Your order is being processed."`
-- `"Thanks for shopping! Something went wrong with your order."`
-
-Both static (`statusMessages.success`) and dynamic (`statusMessages[status]`) access are supported.
-
-### Array access
-
-Arrays work the same way:
-
-```jsx
-const steps = [
-  "Create your account",
-  "Verify your email",
-  "Start your first project",
-] as const;
-
-export default function Onboarding({ step }: { step: number }) {
-  return <h2>{t`Step ${step + 1}: ${derive(steps[step])}`}</h2>;
-}
-```
-
-Extracted entries:
-
-- `"Step {step + 1}: Create your account"`
-- `"Step {step + 1}: Verify your email"`
-- `"Step {step + 1}: Start your first project"`
-
-### Nested access
-
-Chain object and array access to any depth:
-
-```jsx
-const content = {
-  greetings: {
-    formal: "Good morning.",
-    casual: "Hey!",
-  },
-} as const;
-
-// derive(content[category][style]) works
-```
-
-### Python support
-
-The same patterns work in Python with [`t()`](/docs/python/reference/functions/t). Use [`derive()`](/docs/python/reference/functions/derive) as the first argument or inside an f-string:
-
-```python
-badges = {
-    "admin": "Administrator",
-    "mod": "Moderator",
-    "user": "Member",
-}
-
-# Standalone derive
-t(derive(badges[role]))
-
-# derive inside f-string for surrounding context
-t(f"Logged in as {derive(badges[role])}")
-```
-
-Extracted entries:
-
-- `"Logged in as Administrator"`
-- `"Logged in as Moderator"`
-- `"Logged in as Member"`
 
 ## Links
 
-- [PR #1137](https://github.com/generaltranslation/gt/pull/1137)
+- [PR #1133](https://github.com/generaltranslation/gt/pull/1133)

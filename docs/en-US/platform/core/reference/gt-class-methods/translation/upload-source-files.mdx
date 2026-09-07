@@ -43,7 +43,7 @@ uploadSourceFiles(
 | [`files`](#files) | Array of source files to upload. | `{ source: FileUpload }[]` | No | — |
 | [`options`](#options) | Configuration options for the upload. | `UploadFilesOptions` | No | — |
 
-### `files` [#files]
+### `files`
 
 **Type** `{ source: FileUpload }[]` · **Required**
 
@@ -53,15 +53,18 @@ The source files to upload. Each entry wraps a `FileUpload` under a `source` key
 | --- | --- | --- | --- |
 | `content` | Raw text content, or base64-encoded binary content for `LOTTIE`. | `string` | No |
 | `fileName` | Unique file identifier, typically the file path plus name. | `string` | No |
-| `fileFormat` | Format of the file. One of `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, `TWILIO_CONTENT_JSON`, or `LOTTIE`. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
-| `transformFormat` | Output format requested for generated translations. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
-| `dataFormat` | Format of the data within the file (ICU, I18NEXT, JSX). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
+| `fileFormat` | Format of the file. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
+| `transformFormat` | Accepted by the shared `FileUpload` type but not sent by this method. Set the output format on the file reference passed to [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files). | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
+| `dataFormat` | Format of the data within the file (`ICU`, `I18NEXT`, `JSX`, or `STRING`). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
 | `locale` | Locale of the source file content. | `string` | No |
 | `branchId` | Branch to upload the file into. Uses the default branch when omitted. | `string` | Yes |
+| `incomingBranchId` | Incoming branch used by branch-aware translation tracking. | `string` | Yes |
+| `checkedOutBranchId` | Checked-out branch used by branch-aware translation tracking. | `string` | Yes |
+| `formatMetadata` | Format-specific metadata stored with the source file. | `GTJsonFormatMetadata \| FormatMetadata` | Yes |
 | `versionId` | Version ID, for advanced use cases. | `string` | Yes |
 | `fileId` | File ID, for advanced use cases. | `string` | Yes |
 
-### `options` [#options]
+### `options`
 
 **Type** `UploadFilesOptions` · **Required**
 
@@ -70,7 +73,7 @@ Configuration for the upload:
 | Field | Description | Type | Optional |
 | --- | --- | --- | --- |
 | `sourceLocale` | The source locale for all uploaded files. | `string` | No |
-| `modelProvider` | AI model provider preference. | `string` | Yes |
+| `modelProvider` | Accepted by the shared options type but not sent by this upload method. Set the provider on [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) instead. | `string` | Yes |
 | `timeout` | Request timeout in milliseconds. | `number` | Yes |
 
 *Note: `branchId` is not an upload option. It is a per-file field on each file object, not part of `UploadFilesOptions`.*
@@ -95,13 +98,15 @@ Each `FileReference` has the shape:
 type FileReference = {
   fileId: string;
   versionId: string;
-  branchId: string;
+  branchId: string; // the current API can omit this for the default branch
   fileName: string;
   fileFormat: FileFormat;
-  transformFormat?: FileFormat; // output format requested for generated translations
+  transformFormat?: FileFormat; // not populated by this upload method
   dataFormat?: DataFormat;
 };
 ```
+
+The library type declares `branchId` as required, but the current API can omit it when it selects the default branch. It also does not populate `transformFormat`; set that field before passing a reference to [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) when you need format conversion.
 
 ## Examples [#examples]
 
@@ -169,7 +174,6 @@ const files = [
 
 const result = await gt.uploadSourceFiles(files, {
   sourceLocale: 'en',
-  modelProvider: 'gpt-4',
   timeout: 30000,
 });
 ```
@@ -221,4 +225,4 @@ const uploadedFiles = await uploadAllJsonFiles();
 - The `locale` field in each file should match the `sourceLocale` option.
 - Large files or many files may require increased timeout values.
 - File references returned from this method are needed for subsequent operations, and include `branchId` for versioning with branch support.
-- Supported file formats are `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, `TWILIO_CONTENT_JSON`, and `LOTTIE` — see [`FileFormat`](/docs/platform/core/reference/types/file-format) for the complete list.
+- See [`FileFormat`](/docs/platform/core/reference/types/file-format) for the complete list of supported file formats.

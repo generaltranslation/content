@@ -1,5 +1,5 @@
 import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
-import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Card, Cards as FumadocsCards } from 'fumadocs-ui/components/card';
 import { File, Files, Folder } from 'fumadocs-ui/components/files';
 import { InlineTOC } from 'fumadocs-ui/components/inline-toc';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
@@ -15,6 +15,35 @@ import type { ComponentPropsWithoutRef } from 'react';
 
 function StubComponent() {
   return null;
+}
+
+function IntroFeature({
+  children,
+  title,
+}: {
+  children: React.ReactNode;
+  icon: 'libraries' | 'platform' | 'locadex';
+  title: string;
+}) {
+  return (
+    <div className='rounded-lg border p-4'>
+      <strong>{title}</strong>
+      <p className='mb-0 mt-2 text-sm text-fd-muted-foreground'>{children}</p>
+    </div>
+  );
+}
+
+function Cards({
+  hideArrows = false,
+  className,
+  ...props
+}: React.ComponentProps<typeof FumadocsCards> & { hideArrows?: boolean }) {
+  return (
+    <FumadocsCards
+      {...props}
+      className={`${hideArrows ? '[&_svg]:hidden' : ''} ${className ?? ''}`}
+    />
+  );
 }
 
 function GitHub() {
@@ -91,7 +120,7 @@ const customComponents = {
   CardTitle: StubComponent,
   FumadocsArchitecture: StubComponent,
   GitHub,
-  IntroFeature: StubComponent,
+  IntroFeature,
   SupportedLocales: StubComponent,
   Tweet,
   Video,

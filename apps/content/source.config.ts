@@ -5,11 +5,13 @@ import {
   frontmatterSchema,
   metaSchema,
 } from 'fumadocs-mdx/config';
+import { remarkGfm, remarkHeading } from 'fumadocs-core/mdx-plugins';
 import { z } from 'zod';
 
 const contentFrontmatterSchema = frontmatterSchema.extend({
   authors: z.array(z.string()).optional(),
   date: z.any().optional(),
+  headline: z.string().min(3).max(60).optional(),
   index: z.boolean().default(false),
   method: z.string().optional(),
   preview: z.string().optional(),
@@ -46,5 +48,6 @@ export const devlog = defineCollections({
 export default defineConfig({
   mdxOptions: {
     preset: 'minimal',
+    remarkPlugins: [remarkGfm, remarkHeading],
   },
 });

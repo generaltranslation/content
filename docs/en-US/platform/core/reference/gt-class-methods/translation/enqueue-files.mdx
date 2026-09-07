@@ -5,7 +5,7 @@ description: Queue uploaded source files for translation into one or more target
 
 ---
 
-Queues translation jobs for previously uploaded source files with General Translation. It takes file references and creates a translation job per target locale.
+Queues translation jobs for previously uploaded source files with General Translation. It takes file references and creates up to one translation job for each source-file and target-locale pair that still requires work.
 
 ## Overview [#overview]
 
@@ -34,7 +34,7 @@ enqueueFiles(
 ## How it works [#how-it-works]
 
 - **Asynchronous jobs.** Translation jobs run asynchronously. Monitor progress with [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data), or wait for completion with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs).
-- **One job per locale.** The response `jobData` is keyed by job ID, with one job created per target locale.
+- **Up to one job per file and locale.** The response `jobData` is keyed by job ID. A source-file and target-locale pair that is already complete does not create a new job unless forced.
 - **Versioning.** File references include `branchId` for versioning with branch support.
 
 ## Parameters [#parameters]
@@ -44,7 +44,7 @@ enqueueFiles(
 | [`files`](#files) | File reference IDs from previously uploaded files. | `FileReferenceIds[]` | No | — |
 | [`options`](#options) | Configuration options for the translation job. | [`EnqueueFilesOptions`](/docs/platform/core/reference/types/enqueue-files-options) | No | — |
 
-### `files` [#files]
+### `files`
 
 **Type** `FileReferenceIds[]` · **Required**
 
@@ -68,11 +68,11 @@ type FileReferenceIds = {
 | `versionId` | Version identifier. | `string` | No |
 | `branchId` | Branch identifier. | `string` | Yes |
 | `fileName` | File name. | `string` | Yes |
-| `fileFormat` | File format. One of `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, `TWILIO_CONTENT_JSON`, or `LOTTIE`. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
+| `fileFormat` | File format. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
 | `transformFormat` | Output format requested for generated translations. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
 | `dataFormat` | Data format within the file (ICU, I18NEXT, JSX, STRING). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
 
-### `options` [#options]
+### `options`
 
 **Type** [`EnqueueFilesOptions`](/docs/platform/core/reference/types/enqueue-files-options) · **Required**
 
@@ -82,7 +82,7 @@ Configuration for the translation job:
 | --- | --- | --- | --- | --- |
 | `sourceLocale` | Source locale for translation. | `string` | Yes | instance `sourceLocale` |
 | `targetLocales` | Target locales to translate into. | `string[]` | No | — |
-| `modelProvider` | Specific AI model provider to use for translation. | `string` | Yes | — |
+| `modelProvider` | Enterprise-only model provider: `ANTHROPIC`, `OPENAI`, `XAI`, or `GOOGLE`. | `string` | Yes | — |
 | `force` | Invalidate cached translations and force re-translation even if translations already exist. | `boolean` | Yes | — |
 | `timeout` | Request timeout in milliseconds. | `number` | Yes | — |
 
@@ -129,7 +129,7 @@ const gt = new GT({
 const fileUpload = {
   content: fileContents,
   fileName: filePath,
-  fileFormat: 'JSON',
+  fileFormat: 'JSON' as const,
   locale: 'en',
 };
 const files = [{ source: fileUpload }];

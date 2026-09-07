@@ -5,11 +5,11 @@ description: Upload existing translated files that correspond to source files. A
 
 ---
 
-Uploads translation files that correspond to previously uploaded source files. Use it with General Translation when you already have translations — for example, migrating existing translations or uploading human-reviewed ones — instead of generating them through the translation service.
+Uploads existing translations for source files that are already in the Project. Use it when migrating translations or uploading human-reviewed ones instead of generating them through the translation service.
 
 ## Overview [#overview]
 
-Call `uploadTranslations` with an array of translation uploads and an options object. Each upload references an existing source file and carries one or more translated files.
+Call `uploadTranslations` with an array of translation uploads and an options object. Each upload includes the complete source content used to identify an already uploaded source file, plus one or more translated files.
 
 ```typescript
 const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
@@ -28,11 +28,11 @@ uploadTranslations(
 ): Promise<UploadFilesResponse>
 ```
 
-*Note: `uploadTranslations` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. You must upload the corresponding source files with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) first.*
+*Note: `uploadTranslations` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
 
 ## How it works [#how-it-works]
 
-- **Source reference.** The `source` object in each entry is a reference to an already-uploaded source file; its content is not needed.
+- **Existing source.** Upload the source first. The `source` object is still a complete `FileUpload`, including content and locale; the API derives missing IDs from that data and uses the resulting IDs to find the existing source version.
 - **Translations.** Each item in the `translations` array must include content and a target locale.
 - **File encoding.** Text content is automatically base64-encoded. Binary `LOTTIE` translations must already contain base64-encoded `.lottie` ZIP data.
 - **Versioning.** Returned file references include `branchId` for versioning with branch support.
@@ -41,43 +41,57 @@ uploadTranslations(
 
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| [`files`](#files) | Array of source file references with their translations. | `{ source: FileUpload; translations: FileUpload[] }[]` | No | — |
+| [`files`](#files) | Array of source files with their translations. | `{ source: FileUpload; translations: FileUpload[] }[]` | No | — |
 | [`options`](#options) | Configuration options for the upload. | `UploadFilesOptions` | No | — |
 
-### `files` [#files]
+### `files`
 
 **Type** `{ source: FileUpload; translations: FileUpload[] }[]` · **Required**
 
-Each entry pairs a source file reference with its translated files:
+Each entry pairs a complete source file with its translated files:
 
 ```typescript
 {
-  source: FileUpload; // reference to an existing source file (no content needed)
+  source: FileUpload; // source content and metadata
   translations: FileUpload[]; // translated files with content
 }
 ```
 
-The `source` reference (a `FileUpload`) uses these fields:
+The `source` value uses these `FileUpload` fields:
 
 | Field | Description | Type | Optional |
 | --- | --- | --- | --- |
+| `content` | Raw source text, or base64-encoded binary content for `LOTTIE`. | `string` | No |
 | `fileName` | File name matching the previously uploaded source file. | `string` | No |
-| `fileFormat` | Format of the file. One of `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, `TWILIO_CONTENT_JSON`, or `LOTTIE`. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
+| `fileFormat` | Format of the file. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
+| `locale` | Locale of the source content. | `string` | No |
+| `dataFormat` | Format of the data within the source file (`ICU`, `I18NEXT`, `JSX`, or `STRING`). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
+| `formatMetadata` | Format-specific metadata accepted with the source descriptor; it does not change the existing source record. | `GTJsonFormatMetadata \| FormatMetadata` | Yes |
+| `branchId` | Branch containing the previously uploaded source. Uses the default branch when omitted. | `string` | Yes |
 | `fileId` | File ID of the source file. | `string` | Yes |
 | `versionId` | Version ID of the source file. | `string` | Yes |
+| `transformFormat` | Accepted by `FileUpload` and validated locally, but not used by this upload endpoint. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
+| `incomingBranchId` | Accepted by `FileUpload` but not sent by this method. | `string` | Yes |
+| `checkedOutBranchId` | Accepted by `FileUpload` but not sent by this method. | `string` | Yes |
 
 Each translation (a `FileUpload`) uses these fields:
 
 | Field | Description | Type | Optional |
 | --- | --- | --- | --- |
 | `content` | Raw translated text, or base64-encoded binary content for `LOTTIE`. | `string` | No |
-| `fileName` | File name for the translation. | `string` | No |
-| `fileFormat` | Format of the file. One of `GTJSON`, `JSON`, `PO`, `POT`, `YAML`, `MDX`, `MD`, `TS`, `JS`, `HTML`, `TXT`, `TWILIO_CONTENT_JSON`, or `LOTTIE`. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
+| `fileName` | Required by `FileUpload`; the stored translation uses the source file name. | `string` | No |
+| `fileFormat` | Format of the file. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
 | `locale` | Target locale of the translation. | `string` | No |
-| `fileId` | File ID. | `string` | Yes |
-| `versionId` | Version ID. | `string` | Yes |
+| `dataFormat` | Format of the translated data (`ICU`, `I18NEXT`, `JSX`, or `STRING`). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
+| `fileId` | Accepted and sent by the client, but ignored by the endpoint; the translation inherits the source file ID. | `string` | Yes |
+| `versionId` | Accepted and sent by the client, but ignored by the endpoint; the translation inherits the source version ID. | `string` | Yes |
+| `branchId` | Accepted and sent by the client, but ignored by the endpoint; the translation inherits the source branch. | `string` | Yes |
+| `transformFormat` | Accepted by `FileUpload` but not sent by this method. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
+| `formatMetadata` | Accepted by `FileUpload` but not sent by this method. | `GTJsonFormatMetadata \| FormatMetadata` | Yes |
+| `incomingBranchId` | Accepted by `FileUpload` but not sent by this method. | `string` | Yes |
+| `checkedOutBranchId` | Accepted by `FileUpload` but not sent by this method. | `string` | Yes |
 
-### `options` [#options]
+### `options`
 
 **Type** `UploadFilesOptions` · **Required**
 
@@ -86,7 +100,7 @@ Configuration for the upload:
 | Field | Description | Type | Optional |
 | --- | --- | --- | --- |
 | `sourceLocale` | The source locale for the files. | `string` | No |
-| `modelProvider` | AI model provider preference. | `string` | Yes |
+| `modelProvider` | Accepted by the shared options type but not sent by this upload method. Set the provider on [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) instead. | `string` | Yes |
 | `timeout` | Request timeout in milliseconds. | `number` | Yes |
 
 *Note: `branchId` is not an upload option. It is a per-file field on each file object, not part of `UploadFilesOptions`.*
@@ -117,14 +131,14 @@ const gt = new GT({
   projectId: 'your-project-id',
 });
 
-// Assume the source file was previously uploaded
 const files = [
   {
+    // This exact source must already have been uploaded.
     source: {
+      content: fs.readFileSync('./locales/en/common.json', 'utf8'),
       fileName: 'common.json',
       fileFormat: 'JSON' as const,
-      fileId: 'source-file-id',
-      versionId: 'source-version-id',
+      locale: 'en',
     },
     translations: [
       {
@@ -180,8 +194,10 @@ const { uploadedFiles } = await gt.uploadSourceFiles(sourceFiles, {
 const translationFiles = [
   {
     source: {
+      content: sourceFiles[0].source.content,
       fileName: uploadedFiles[0].fileName,
       fileFormat: uploadedFiles[0].fileFormat,
+      locale: sourceFiles[0].source.locale,
       fileId: uploadedFiles[0].fileId,
       versionId: uploadedFiles[0].versionId,
     },
@@ -211,28 +227,29 @@ console.log(`Uploaded ${translationResult.count} translations`);
 
 ```typescript
 // Batch upload translations for multiple source files
-import { glob } from 'glob';
-import path from 'path';
+import fs from 'node:fs';
+import { GT } from 'generaltranslation';
+import type { FileUpload } from 'generaltranslation/types';
+
+const gt = new GT({
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id',
+});
 
 async function uploadAllTranslations(
-  sourceRefs: FileReference[],
+  sourceFiles: FileUpload[],
   targetLocales: string[]
 ) {
-  const files = sourceRefs.map((sourceRef) => ({
-    source: {
-      fileName: sourceRef.fileName,
-      fileFormat: sourceRef.fileFormat,
-      fileId: sourceRef.fileId,
-      versionId: sourceRef.versionId,
-    },
+  const files = sourceFiles.map((source) => ({
+    source,
     translations: targetLocales
       .map((locale) => {
-        const translationPath = `./locales/${locale}/${sourceRef.fileName}`;
+        const translationPath = `./locales/${locale}/${source.fileName}`;
         try {
           return {
             content: fs.readFileSync(translationPath, 'utf8'),
-            fileName: sourceRef.fileName,
-            fileFormat: sourceRef.fileFormat,
+            fileName: source.fileName,
+            fileFormat: source.fileFormat,
             locale,
           };
         } catch {
@@ -240,7 +257,7 @@ async function uploadAllTranslations(
           return null;
         }
       })
-      .filter(Boolean),
+      .filter((file): file is FileUpload => file !== null),
   }));
 
   const result = await gt.uploadTranslations(files, {
@@ -254,8 +271,8 @@ async function uploadAllTranslations(
 
 ## Notes [#notes]
 
-- Source files must be uploaded first with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files).
-- The `source` object in each entry references an existing source file — content is not needed there.
+- The `source` object in each entry must include content, file name, file format, and locale.
+- The source version identified by that object must already exist in the Project.
 - Each translation in the `translations` array must include content and a target locale.
 - This method is useful for migrating existing translations or uploading human-reviewed translations.
 - File references include `branchId` for versioning with branch support.

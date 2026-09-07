@@ -8,6 +8,7 @@ import {
   entryHref,
   entrySection,
   entrySummary,
+  entryTitle,
   groupEntries,
   sortDatedEntries,
 } from '@/content';
@@ -199,6 +200,7 @@ export function EntryHeader({
 }) {
   const summary = entrySummary(entry);
   const date = entryDate(entry);
+  const title = entryTitle(collection, entry);
 
   return (
     <div className='mb-8'>
@@ -208,7 +210,7 @@ export function EntryHeader({
         <span>{formatSection(entrySection(entry))}</span>
       </div>
       <h1 className='mt-2 text-4xl font-semibold tracking-tight'>
-        {entry.title}
+        {title}
       </h1>
       {summary ? (
         <p className='text-fd-muted-foreground mt-3 max-w-2xl text-lg'>
@@ -233,13 +235,14 @@ function EntryLink({
 }) {
   const summary = entrySummary(entry);
   const date = entryDate(entry);
+  const title = entryTitle(collection, entry);
 
   return (
     <Link
       className='bg-fd-card text-fd-card-foreground hover:bg-fd-accent flex flex-col gap-1 rounded-lg border p-4 no-underline transition-colors'
       href={entryHref(collection, entry)}
     >
-      <strong>{entry.title}</strong>
+      <strong>{title}</strong>
       {summary ? (
         <span className='text-fd-muted-foreground text-sm'>{summary}</span>
       ) : null}
