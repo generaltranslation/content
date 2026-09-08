@@ -126,8 +126,7 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 
 - Address the reader as "you"; use active voice and imperatives.
 - **Fragment vs. sentence in lists**: use fragments when simply listing pieces or labels (no period needed); use full sentences (including standalone imperatives like "Revoke unused keys.") when describing steps or actions, and end those with a period. Be consistent within a single list. List items that complete a lead-in stem ("From the page, you can:") are fragments and take no period.
-- **Quotation marks for click/choose/select targets.** When an instruction tells the reader to click, choose, or select a named control, put that label in double quotation marks instead of bold — click "Create automation," choose "Generate translations and push," select "Locadex Agent." This covers every grammatical form of those verbs (an admin clicks "Disconnect") and every label in a chained list (choose "Files" or "Components."). Quote only the label itself; surrounding words stay outside (click the "Tag" icon). Keep commas and periods inside the quotation marks.
-- **Bold** every other UI element: breadcrumb paths (**Project > Automations** — never quotation marks), plus pages, fields, columns, toggles, and controls named with other verbs or no verb (**Save**, **Target directory**, turn on **Auto-merge**, the **Source** column).
+- **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **Target directory**). This includes click/choose/select targets — click **Create automation**, choose **Generate translations and push** — never quotation marks.
 - **Inline code** for code identifiers, file names, locale codes, environment variables, key prefixes, and headers (`en-US`, `GT_API_KEY`, `gtx-api-`, `x-gt-api-key`).
 - **Summarize runtime wording; do not quote it verbatim.** Paraphrase interactive prompts, success and log messages, and console output rather than copying exact strings, so the docs stay correct when that wording changes. Reproduce a string exactly only when the value is part of the contract — environment variable names, flags, config keys, file names, commands, and error codes/identifiers. *Example: write "the wizard asks which API key type to generate" rather than quoting the full prompt sentence.*
 
@@ -179,15 +178,17 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 
 ### Product and term casing
 
-Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Custom Prompt** (and **Custom Prompts**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Context Group** (and **Context Groups**), **Glossary**, **Custom Prompt** (and **Custom Prompts**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+
+Write **"project" lowercase in prose** ("your project", "one project per repository", "project API keys"). Capitalize **Project** only where the Dashboard UI does: breadcrumbs and UI labels (**Project > Automations**, **Project ID**, the **Projects** page) and at sentence starts.
 
 *Note: capitalize **Autoderive** only when referring to the feature in prose; the* `gt.config.json` *key stays lowercase in code as* `autoderive`*. Do not write "General Translation Autoderive" — the feature name stands on its own.*
 
-Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as Projects and Context Groups may still be pluralized.
+Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as projects and Context Groups may still be pluralized.
 
 Do not use the **plural of "product"** in reference to the General Translation product itself — no "products", "product suite", or "product line" (it is one full-stack product). *Exception:* other companies' products can take the plural (e.g. "the world's best products should be available to the whole world").
 
-Capitalize the scope noun even inside hyphenated compounds (Organization-level, Project-wide, Project-scoped, Project-specific). Keep it lowercase only inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
+Capitalize the Organization scope noun even inside hyphenated compounds (Organization-level, Organization-wide); project compounds stay lowercase (project-wide, project-scoped, project-specific), as does everything inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
 
 ### Product and technology names
 
@@ -208,7 +209,7 @@ Use the official capitalization and spelling for third-party names: **Next.js**,
 
 ### Grammar and usage
 
-- **Verb vs. noun forms:** "set **up** your Project" (verb) but "the **setup** wizard" (noun); "**check out** the docs" but "the **checkout** page"; "**log in**" but "the **login** page".
+- **Verb vs. noun forms:** "set **up** your project" (verb) but "the **setup** wizard" (noun); "**check out** the docs" but "the **checkout** page"; "**log in**" but "the **login** page".
 - Write **"inline"** as one word (never "in-line").
 - **Articles** follow sound, not spelling: "an HTML element", "an LLM", "an API key"; but "a URL", "a user".
 - Treat **"data" as singular**: "the data is stored", not "the data are stored".
@@ -519,7 +520,7 @@ Only document capabilities that actually exist, and resolve anything uncertain a
 A "common workflow" section is a bulleted roundup that points readers to the main tasks or settings from a landing page (as in the Dashboard get-started **Key workflows** and **Configuration** lists). Each bullet starts with the action, then a short description, then a link:
 
 ```text
-- **Define context and key terms for translation:** use Context Groups to guide terminology and style across Projects. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)).
+- **Define context and key terms for translation:** use Context Groups to guide terminology and style across projects. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)).
 ```
 
 Use common workflow sections on **Get Started pages and other overview/landing pages** to surface the primary tasks, instead of duplicating full how-tos inline. Do not use them mid-guide, where ordered steps belong.
@@ -547,7 +548,7 @@ Anatomy:
 2. Go to the **Context** page.
 3. Create a **Context Group**.
 4. Add a **Glossary** (for terminology) and/or **Custom Prompts** (for style and tone).
-5. **Assign** your Context Group to relevant Project(s).
+5. **Assign** your Context Group to relevant project(s).
 6. Generate translations or apply updates to existing translations.
 ```
 
@@ -696,7 +697,7 @@ Example for role-specific integration setup:
 
 ```mdx
 <Callout type="info">
-  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before Project members continue.
+  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before project members continue.
 </Callout>
 ```
 
@@ -827,10 +828,10 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 - Page order in the filetree (and the sidebar navigation it drives) is logical (workflow order), not alphabetical.
 - Uncertain items are resolved against the codebase; anything that genuinely cannot be verified is omitted rather than guessed.
 - Navigation separators use `>`, not `->`.
-- Click/choose/select targets are in quotation marks (with commas and periods inside); breadcrumbs and other UI names stay bold; standalone "See [X](…)." pointer sentences are parenthesized as "(See [X](…))." with the period outside; no description opens with "Learn how", "Learn what", or "Quickstart to".
+- UI elements, including click/choose/select targets, are bold, never quoted; standalone "See [X](…)." pointer sentences are parenthesized as "(See [X](…))." with the period outside; no description opens with "Learn how", "Learn what", or "Quickstart to".
 - `.md` link suffix usage is consistent within the file.
 - Notes and tips use the established format for their page type and are consistent across sibling pages.
-- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Project, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub).
+- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub); "project" is lowercase in prose, capitalized only in UI labels and at sentence starts.
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
