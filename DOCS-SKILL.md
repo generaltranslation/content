@@ -1,7 +1,9 @@
 ---
 
-## name: General Translation docs internal skill
+name: General Translation docs internal skill
 description: Follow these rules when creating, editing, reviewing, or restructuring General Translation documentation content. Use this style guide when the user asks about docs voice, structure, naming, or formatting conventions.
+
+---
 
 # General Translation docs style guide
 
