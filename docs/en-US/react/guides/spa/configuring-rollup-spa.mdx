@@ -2,6 +2,12 @@
 
 title: Configuring a Rollup SPA
 description: How to configure gt-react in a Rollup-powered single-page React application.
+related:
+  links:
+    - /docs/react/guides/spa/internationalizing-react-spa
+    - /docs/react/guides/developing-spa-translations
+    - /docs/react/guides/storing-translations
+    - /docs/react/guides/managing-locales
 
 ---
 
@@ -30,7 +36,7 @@ The locales already present in the project or supplied to the setup task are aut
 }
 ```
 
-The optional `src` field designates the source files GT scans for inline content; when omitted, it defaults to these JavaScript and TypeScript globs under `src`, `app`, `pages`, and `components`:
+The optional [`src`](/docs/cli/reference/config#src) field designates the source files GT scans for inline content; when omitted, it defaults to these JavaScript and TypeScript globs under `src`, `app`, `pages`, and `components`:
 
 ```json title="gt.config.json"
 {
@@ -100,7 +106,7 @@ void bootstrap();
 
 ## Loading translations [#translations]
 
-By default, the runtime loads translations from the General Translation CDN. To ship catalogs in the application bundle, configure an output path and a matching loader. The steps below use `src/_gt/[locale].json`.
+When [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) is called without a [`loadTranslations`](/docs/react/reference/functions/load-translations) function, the runtime loads translations from the General Translation CDN only when a [`projectId`](/docs/react/reference/config#project-id) is available. To ship catalogs in the application bundle, configure an output path and a matching loader. The steps below use `src/_gt/[locale].json`.
 
 ### 1. Update the config
 
@@ -126,11 +132,14 @@ Typically in a Rollup-powered application, the translations will be stored in th
 
 Create one empty JSON file for each target locale already configured in `gt.config.json`, excluding the default locale. These stubs let imports resolve before translation bundles exist. The `fr` and `zh` files below illustrate the example configuration from this guide; create files for the project's actual configured target locales instead. If no target locales are configured, do not invent locales or create placeholder files.
 
-```bash title="src/_gt"
-src/_gt/
-├── fr.json
-└── zh.json
-```
+<Files>
+  <Folder name="src">
+    <Folder name="_gt">
+      <File name="fr.json" />
+      <File name="zh.json" />
+    </Folder>
+  </Folder>
+</Files>
 
 ```json title="src/_gt/fr.json"
 {}
@@ -156,10 +165,14 @@ export default async function loadTranslations(locale: string) {
   try {
     const loader =
       translationLoaders[locale as keyof typeof translationLoaders];
-    if (!loader) return {};
+    if (!loader) {
+      console.warn(`No translations found for locale "${locale}"`);
+      return {};
+    }
     const translations = await loader();
     return translations.default;
-  } catch {
+  } catch (error) {
+    console.warn(`No translations found for locale "${locale}"`, error);
     return {};
   }
 }

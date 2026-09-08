@@ -21,7 +21,7 @@ const gt = new GT({
 console.log(gt.determineLocale('en-US')); // 'en-US'
 
 // Language fallback
-console.log(gt.determineLocale('en-GB')); // 'en-US' (closest English variant)
+console.log(gt.determineLocale('en-GB')); // 'en-US' (likely-region fallback)
 
 // Multiple preferences (preference order wins)
 console.log(gt.determineLocale(['fr-CA', 'es-MX', 'en-US'])); // 'fr-FR' (closest to first preference)
@@ -44,9 +44,10 @@ determineLocale(
 
 ## How it works [#how-it-works]
 
-- **Exact match first.** Returns the first exact match from the approved locales.
-- **Language fallback.** When an exact region is not available, falls back to language matches.
+- **Exact match first.** Returns an exact approved-locale match for the current user preference.
+- **Derived locale matching.** Checks language-region, language-script, and minimized forms before using the language's likely region and script.
 - **Preference order.** Respects the order of the input array, so a higher-preference language match is chosen over a lower-preference exact match.
+- **Approved locales.** Treats `approvedLocales` as the set of eligible results. Its array order does not choose between same-language candidates.
 - **No match.** Returns `undefined` when no suitable match is found.
 
 ## Parameters [#parameters]
@@ -54,7 +55,7 @@ determineLocale(
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | [`locales`](#locales) | A single locale or array of locales in preference order. | `string \| string[]` | No | — |
-| [`approvedLocales`](#approved-locales) | Array of approved locales in preference order. | `string[]` | Yes | `this.locales` |
+| [`approvedLocales`](#approved-locales) | Locales eligible for matching. | `string[]` | Yes | `this.locales` |
 | [`customMapping`](#custom-mapping) | Custom locale mapping for resolution. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | `this.customMapping` |
 
 ### `locales` [#locales]
@@ -67,7 +68,7 @@ A single locale or an array of locales in preference order (for example, a brows
 
 **Type** `string[]` · **Optional** · **Default** `this.locales`
 
-Array of approved locales in preference order. When omitted, the instance's `locales` are used.
+Locales eligible for matching. When omitted, the instance's `locales` are used. Array order does not determine which same-language locale wins.
 
 ### `customMapping` [#custom-mapping]
 
@@ -98,8 +99,9 @@ console.log(bestMatch); // 'fr-FR' based on preference order
 
 ## Notes [#notes]
 
-- Returns the first exact match from approved locales.
-- Falls back to language matches when the exact region is not available.
+- Checks exact and derived locale codes for each user preference.
+- Uses likely-region and likely-script fallbacks, not arbitrary same-language dialect matching.
 - Respects preference order in the input array.
+- Does not use approved-locale array order as a tie-breaker.
 - Returns `undefined` when no suitable match is found.
 - Essential for implementing locale negotiation in web applications.

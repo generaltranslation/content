@@ -51,11 +51,17 @@ The recorder captures the whole document. `contentSelector` identifies the produ
 
 Choose a frame based on where you will embed the walkthrough:
 
-- `frame="none"` keeps the selected region's natural dimensions.
+- `frame="none"` leaves the document layout unchanged and replays the full recorded viewport.
 - `frame="16:9"` uses the built-in presentation frame.
 - `frame={{ aspect: 4 / 3 }}` uses a custom width-to-height ratio.
 
-An invalid or non-positive custom ratio behaves like `none`.
+Use a finite positive custom ratio. Zero, negative values, and `NaN` behave like `none`.
+
+<Callout type="warn">
+  **Framed capture:** The selected element must use `position: fixed` before
+  recording. Framing static-positioned content can move it outside the
+  viewport. Use `frame="none"` when the application cannot apply that layout.
+</Callout>
 
 ## Configure localized replay [#localized-replay]
 
@@ -74,7 +80,7 @@ Pass a loader through the `harvest` prop. It receives a locale and returns that 
 />
 ```
 
-The loader can read local files, fetch a content delivery network (CDN), or use the same source as your application. Set `sourceLocale` to the locale visible during capture. If you omit it, harvesting checks the configured locale cookie and then the first locale passed to `start()`. Use `localeCookieName` when your app stores its locale in a custom cookie.
+The loader can read local files, fetch a content delivery network (CDN), or use the same source as your application. Set `sourceLocale` to the locale visible during capture. If you omit it, harvesting reads the cookie named by `localeCookieName`, when configured, and then falls back to the first locale passed to `start()`. The resolved source locale must equal `locales[0]`; that first entry is also embedded as the recording's source locale for replay.
 
 ### Choose locales
 
@@ -94,19 +100,9 @@ Harvesting runs only when `locales` contains at least two entries. A source-only
 
 Enable [`_tagIds`](/docs/react/reference/config#tag-ids) so content rendered by [`<T>`](/docs/react/reference/components/t) carries the hash used to match each catalog entry. Variables and value-rendering components keep the value captured during the source recording.
 
-To also cover bare strings rendered by `gt()` or [`useGT()`](/docs/react/reference/hooks/use-gt), pass your application's `hashMessage` function:
+Bare strings rendered by `gt()` or [`useGT()`](/docs/react/reference/hooks/use-gt) require a compatible `hashMessage` function from the same hashing pipeline as the catalog. This is an advanced integration point; `gt-rrweb` does not export that hasher, so ordinary setup should rely on [`<T>`](/docs/react/reference/components/t) hashes.
 
-```tsx title="src/RecordingTools.tsx"
-<GTRecorder
-  harvest={{
-    loadTranslations,
-    hashMessage,
-    sourceLocale: 'en',
-  }}
-/>
-```
-
-Content remains in the source locale when a translation is missing, a plural or branch has no single rendered form, translated text has a different node structure, or an interpolated bare string does not match its source template hash. A catalog-loading or harvesting failure is non-fatal and leaves the bundle source-only.
+Content remains in the source locale when a translation is missing, a plural or branch has no single rendered form, translated text has a different node structure, or an interpolated bare string does not match its source template hash. A catalog-loader failure is isolated to that locale, so completed overlays for other locales remain available. A broader harvesting failure is non-fatal and leaves the bundle source-only.
 
 ## Customize the recording controls [#controls]
 

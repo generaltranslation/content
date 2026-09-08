@@ -1,0 +1,338 @@
+---
+
+title: API client
+description: Create a typed client for the General Translation API and call generated endpoint helpers. API reference for createApiClient.
+
+---
+
+Import the TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The module combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for batching, file-content encoding, and translation-job polling.
+
+`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The same exports are available from the standalone `@generaltranslation/api` package in version 0.1.0 and later.
+
+The generated helpers follow the OpenAPI snapshot bundled with the installed package. That snapshot can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview), so use the public reference when checking which endpoints and file formats are live.
+
+## Overview [#overview]
+
+| Export | Description |
+| --- | --- |
+| [`createApiClient`](#create-client) | Creates an authenticated client with version, retry, and timeout handling. |
+| [`ApiClientConfig`](#client-config) | Configures the client transport and shared request headers. |
+| [`API_VERSION`](#api-version) | Current API contract version sent by default. |
+| [Endpoint helpers](#endpoint-helpers) | Typed functions generated for each operation in the bundled OpenAPI snapshot. |
+| [`awaitJobs`](#job-polling) and [`pollJobs`](#job-polling) | Poll translation jobs until they finish or time out. |
+| [`processBatches`](#batch-processing) and [`DEFAULT_BATCH_SIZE`](#batch-processing) | Process an input array in configurable batches. |
+| [Content encoding helpers](#content-encoding) | Encode and decode strings and API file payloads. |
+| [Generated types](#types-errors) | Describe endpoint data, responses, errors, and client contracts. |
+| [Bundled OpenAPI specification](#openapi-spec) | JSON snapshot used to generate the installed package. |
+
+## `createApiClient` [#create-client]
+
+```ts
+function createApiClient(config: ApiClientConfig): Client;
+```
+
+The client adds the configured API version, bearer token, and Project ID to every request. Pass it to a generated endpoint helper:
+
+```ts title="project-info.ts"
+import { createApiClient, getProjectInfo } from 'generaltranslation/api';
+
+const projectId = process.env.GT_PROJECT_ID!;
+const client = createApiClient({
+  apiKey: process.env.GT_API_KEY,
+  baseUrl: 'https://api.gtx.dev',
+  projectId,
+});
+
+const result = await getProjectInfo({
+  client,
+  path: { projectId },
+});
+
+if (result.error) {
+  throw new Error('Could not load Project information');
+}
+
+console.log(result.data);
+```
+
+The examples below reuse this configured `client`.
+
+## `ApiClientConfig` [#client-config]
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`apiKey`](#apikey) | Bearer token sent in the `Authorization` header. | `string` | Yes | — |
+| [`apiVersion`](#apiversion) | Contract version sent as `gt-api-version`. | `ApiVersion` | Yes | `API_VERSION` |
+| [`baseUrl`](#baseurl) | API origin. | `string` | No | — |
+| [`fetch`](#fetch) | Custom Fetch API implementation. | `typeof fetch` | Yes | `globalThis.fetch` |
+| [`projectId`](#projectid) | Project ID sent as `gt-project-id`. | `string` | Yes | — |
+| [`retryPolicy`](#retrypolicy) | Retry delay strategy. | `'exponential' \| 'linear' \| 'none'` | Yes | `'exponential'` |
+| [`timeoutMs`](#timeoutms) | Per-attempt timeout, or `false` to disable the built-in timeout. | `number \| false` | Yes | `60000` |
+
+### `apiKey`
+
+**Type** `string` · **Optional**
+
+API key sent as `Authorization: Bearer <key>`. The client does not read environment variables automatically.
+
+### `apiVersion`
+
+**Type** `ApiVersion` · **Optional** · **Default** `API_VERSION`
+
+API contract version sent in the `gt-api-version` header.
+
+### `baseUrl`
+
+**Type** `string` · **Required**
+
+API origin. Use `https://api.gtx.dev` for the hosted General Translation API.
+
+### `fetch`
+
+**Type** `typeof fetch` · **Optional** · **Default** `globalThis.fetch`
+
+Custom Fetch API implementation. Use this for instrumentation, testing, or a runtime without a global fetch implementation.
+
+### `projectId`
+
+**Type** `string` · **Optional**
+
+Project ID sent in the `gt-project-id` header. Organization keys need this header for Project-scoped endpoints.
+
+### `retryPolicy`
+
+**Type** `'exponential' | 'linear' | 'none'` · **Optional** · **Default** `'exponential'`
+
+Idempotent requests retry network errors, `429` responses, and `5xx` responses up to three times. Non-idempotent requests retry `429` responses but not network errors or `5xx` responses. Set this to `'none'` when the caller owns retries.
+
+### `timeoutMs`
+
+**Type** `number | false` · **Optional** · **Default** `60000`
+
+Timeout in milliseconds for each request attempt. Set it to `false` when a custom `fetch` implementation owns request timeouts.
+
+## `API_VERSION` [#api-version]
+
+**Type** `ApiVersion`
+
+The current default contract version is `2026-03-06.v1`. Pass a different supported version through `apiVersion` when maintaining an integration against an older response contract.
+
+## Endpoint helpers [#endpoint-helpers]
+
+Generated helpers accept one object with the shared `client` plus the endpoint's `body`, `headers`, `path`, and `query` fields as applicable. They return `{ data, error, request, response }` by default.
+
+```ts title="project-info.ts"
+import { getProjectInfo } from 'generaltranslation/api';
+
+const result = await getProjectInfo({
+  client,
+  path: { projectId: 'your-project-id' },
+  throwOnError: true,
+});
+
+console.log(result.data.name);
+```
+
+Common generated options include:
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `client` | Client returned by `createApiClient`. | `Client` | No | — |
+| `body` | Typed JSON request body. | Endpoint-specific | Varies | — |
+| `path` | Typed path parameters. | Endpoint-specific | Varies | — |
+| `query` | Typed query parameters. | Endpoint-specific | Varies | — |
+| `headers` | Per-call headers that override shared client headers. | Endpoint-specific | Yes | — |
+| `throwOnError` | Throw for an unsuccessful response instead of returning `error`. | `boolean` | Yes | `false` |
+| `responseStyle` | Return all response fields or only parsed data. | `'fields' \| 'data'` | Yes | `'fields'` |
+| `signal` | Cancel the request with a Fetch API signal. | `AbortSignal` | Yes | — |
+| `meta` | Values exposed to custom client integrations. | `Record<string, unknown>` | Yes | — |
+
+The installed 0.1.0 SDK exports these generated operation helpers:
+
+| Function | Operation |
+| --- | --- |
+| `createProject` | Create a Project. |
+| [`uploadSourceFiles`](/docs/platform/openapi/reference/files/upload-source) | Upload source files. |
+| [`uploadTranslations`](/docs/platform/openapi/reference/files/upload-translations) | Upload translated files linked to existing source files. |
+| `uploadAssets` | Upload Project assets. |
+| `submitUserEditDiffs` | Submit local translation edits. |
+| `shouldGenerateProjectContext` | Check whether Project context is stale. |
+| `generateProjectContext` | Generate Project context. |
+| `getProjectContextGenerationStatus` | Read a context-generation job. |
+| `enqueueFileTranslations` | Queue uploaded files for translation. |
+| `publishFiles` | Publish or unpublish files. |
+| [`downloadFile`](/docs/platform/openapi/reference/files/download) | Download one file. |
+| `downloadFiles` | Download multiple files. |
+| `getBranchInfo` | Read branch information. |
+| `createBranch` | Create a branch. |
+| [`createTag`](/docs/platform/openapi/reference/project/upsert-tag) | Create or update a tag. |
+| `getProjectInfo` | Read Project information. |
+| `updateProjectInfo` | Update Project information. |
+| `getTranslationJobInfo` | Read translation-job status. |
+| [`translate`](/docs/platform/openapi/reference/translation/translate-runtime) | Translate content at runtime. |
+| `getFileInfo` | Read file metadata. |
+| `getTranslationStatus` | Read a file's translation status. |
+| `processFileMoves` | Move or rename files. |
+| `getOrphanedFiles` | Find orphaned files. |
+| `createCliWizardSession` | Create a CLI setup-wizard session. |
+| `getCliWizardSession` | Read a CLI setup-wizard session. |
+| `deleteCliWizardSession` | Delete a CLI setup-wizard session. |
+
+Use the [public OpenAPI reference](/docs/platform/openapi/overview) for live endpoint permissions, rate limits, schemas, and status codes. The current public contract also includes Project API-key creation, which is not yet exported as a generated helper in SDK 0.1.0.
+
+The `shouldGenerateProjectContext`, `getProjectContextGenerationStatus`, and [`downloadFile`](/docs/platform/openapi/reference/files/download) helpers call deprecated endpoints. Prefer `generateProjectContext` with `getTranslationJobInfo` for context jobs, and `downloadFiles` for downloads.
+
+## Job polling [#job-polling]
+
+[`awaitJobs`](#job-polling) uses a configured client to call `getTranslationJobInfo` until every requested job is complete, failed, unknown, or missing, or until the overall timeout expires.
+
+```ts
+function awaitJobs(
+  client: Client,
+  jobIds: readonly string[],
+  options?: AwaitJobsOptions
+): Promise<AwaitJobsResult>;
+```
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `pollingIntervalSeconds` | Delay between status requests. | `number` | Yes | `5` |
+| `timeoutSeconds` | Overall polling deadline. | `number` | Yes | `600` |
+
+```ts
+import {
+  awaitJobs,
+  enqueueFileTranslations,
+} from 'generaltranslation/api';
+
+const result = await enqueueFileTranslations({
+  client,
+  body: {
+    files: [{ fileId: 'homepage', versionId: 'version-1' }],
+    sourceLocale: 'en',
+    targetLocales: ['es'],
+  },
+  throwOnError: true,
+});
+
+if (!('jobData' in result.data)) {
+  throw new Error('Expected the current enqueue response');
+}
+
+const jobs = await awaitJobs(client, Object.keys(result.data.jobData));
+
+if (!jobs.complete) {
+  console.warn('Translation jobs did not finish before the timeout');
+}
+```
+
+`AwaitJobsResult` contains `complete`, which is `false` only when polling times out, and `jobs`, which contains the latest result for every requested ID. A missing job receives the `unknown` status. Passing an empty array resolves immediately with `{ complete: true, jobs: [] }`.
+
+An API or status-loader error before the overall deadline rejects the polling promise. If the request fails after the deadline has elapsed, polling returns the latest results with `complete: false`.
+
+`pollJobs` exposes the same polling loop with an injected status loader:
+
+```ts
+function pollJobs(
+  jobIds: readonly string[],
+  getJobStatuses: GetJobStatuses,
+  options?: AwaitJobsOptions
+): Promise<AwaitJobsResult>;
+
+type GetJobStatuses = (
+  jobIds: string[],
+  signal: AbortSignal
+) => Promise<GetTranslationJobInfoResponse>;
+```
+
+Use it when you need custom request or error normalization. The loader receives an abort signal capped by the remaining overall deadline and a 60-second per-poll limit.
+
+## Batch processing [#batch-processing]
+
+`processBatches` splits an input array into chunks, invokes your processor for each chunk, and flattens the returned arrays in batch order.
+
+```ts
+function processBatches<TInput, TOutput>(
+  items: readonly TInput[],
+  processBatch: (batch: TInput[]) => Promise<TOutput[]>,
+  options?: BatchOptions
+): Promise<TOutput[]>;
+```
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `batchSize` | Number of input values in each batch. Supply a value greater than zero. | `number` | Yes | `DEFAULT_BATCH_SIZE` |
+| `parallel` | Process all batches concurrently instead of sequentially. | `boolean` | Yes | `true` |
+
+`DEFAULT_BATCH_SIZE` is `100`.
+
+If a batch processor rejects, `processBatches` rejects. With parallel processing, the other batches that already started continue independently.
+
+```ts
+import {
+  encodeFileContent,
+  processBatches,
+  uploadSourceFiles,
+} from 'generaltranslation/api';
+
+// Generated endpoint helpers expect file content encoded for transport.
+const files = [{
+  source: {
+    content: encodeFileContent('{"greeting":"Hello"}', 'JSON'),
+    fileName: 'en.json',
+    fileFormat: 'JSON' as const,
+    locale: 'en',
+  },
+}];
+
+const results = await processBatches(files, async (batch) => {
+  const result = await uploadSourceFiles({
+    client,
+    body: { data: batch },
+    throwOnError: true,
+  });
+  return result.data.uploadedFiles;
+});
+```
+
+## Content encoding [#content-encoding]
+
+`encodeBase64` and `decodeBase64` convert between UTF-8 strings and base64 in Node.js and browsers.
+
+```ts
+function encodeBase64(data: string): string;
+function decodeBase64(base64: string): string;
+```
+
+`encodeFileContent` and `decodeFileContent` apply the API's file-content convention. `LOTTIE` payloads remain unchanged because the `.lottie` archive is already base64; every other format is encoded or decoded as UTF-8 text.
+
+```ts
+function encodeFileContent(content: string, fileFormat: FileFormat): string;
+function decodeFileContent(content: string, fileFormat: FileFormat): string;
+```
+
+## Types and errors [#types-errors]
+
+The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, and all generated OpenAPI types.
+
+For every generated operation, the package exports:
+
+- `<Operation>Data` for typed body, headers, path, and query input.
+- `<Operation>Errors` for the status-code map of documented errors.
+- `<Operation>Error` for the union of documented errors.
+- `<Operation>Responses` for the status-code map of documented successful responses.
+- `<Operation>Response` for the union of documented successful responses.
+
+With the default `throwOnError: false`, a generated operation returns either `data` or `error` plus the Fetch API `request`. An HTTP response includes `response`; a failure before a response is received leaves it undefined. With `throwOnError: true`, API, network, cancellation, and timeout failures throw.
+
+## OpenAPI specification [#openapi-spec]
+
+Import the snapshot used to generate the installed client:
+
+```ts
+import openApiSpec from 'generaltranslation/api/openapi.json' with {
+  type: 'json',
+};
+```
+
+The standalone `@generaltranslation/api` package exposes the same SDK and publishes its snapshot at `@generaltranslation/api/spec/openapi.json`. The [`gt api --spec`](/docs/cli/reference/commands/api) command prints the snapshot bundled with that CLI's installed Core dependency. For the current hosted contract, use [`/openapi.json`](/openapi.json).

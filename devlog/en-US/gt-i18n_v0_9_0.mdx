@@ -8,7 +8,7 @@ tags: ['gt-i18n', 'gt-node', 'dictionaries', 'getTranslations', 'i18n']
 
 ## Overview
 
-`gt-i18n` now supports dictionary-backed translations via [`getTranslations()`](/docs/node/reference/functions/get-translations). This brings `gt-i18n` in line with `gt-next`, `gt-react`, and other i18n libraries that use dictionaries as their primary translation pattern.
+`gt-i18n` now provides dictionary-backed translations for framework integrations. In Node.js applications, use the public [`getTranslations()`](/docs/node/reference/functions/get-translations) export from `gt-node`; `gt-i18n@0.9.0` does not export it from its package root.
 
 | Package | Version |
 | --- | --- |
@@ -34,17 +34,32 @@ Create a `dictionary.json` file in the root of your project with your source (En
 }
 ```
 
-When you run the GT CLI (`npx gtx translate`), it will automatically detect `dictionary.json` in the project root and translate it for your configured locales.
+When you run the CLI ([`npx gt translate`](/docs/cli/reference/commands/translate)), it detects `dictionary.json` in the project root and translates it for your configured locales.
+
+Configure the Node.js runtime with [`initializeGT`](/docs/node/reference/functions/initialize-gt):
+
+```ts
+import { initializeGT } from 'gt-node';
+import dictionary from './dictionary.json';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es'],
+  dictionary,
+});
+```
 
 <Accordions>
   <Accordion title="Bringing your own dictionaries">
-    If you want to load your own pre-translated dictionaries, you can also pass a [`loadDictionary()`](/docs/react/reference/functions/load-dictionary) async function. You still need to provide the default dictionary explicitly — [`loadDictionary`](/docs/react/reference/functions/load-dictionary) is only for translated locales:
+    If you want to load your own pre-translated dictionaries, pass an async [`loadDictionary`](/docs/node/reference/config#load-dictionary) option when initializing `gt-node`. You still need to provide the default dictionary explicitly — this loader supplies translated locales:
 
     ```ts
     import { initializeGT } from 'gt-node';
     import dictionary from './dictionary.json';
 
     initializeGT({
+      defaultLocale: 'en',
+      locales: ['en', 'es'],
       dictionary,
       loadDictionary: async (locale) => {
         const dict = await import(`./locales/${locale}.json`);
@@ -53,7 +68,7 @@ When you run the GT CLI (`npx gtx translate`), it will automatically detect `dic
     });
     ```
 
-    Translations loaded via `loadDictionary` take precedence over GT-generated translations.
+    This loader supplies your translated dictionaries instead of fetching generated dictionaries.
   </Accordion>
 </Accordions>
 
@@ -62,12 +77,14 @@ When you run the GT CLI (`npx gtx translate`), it will automatically detect `dic
 Given the source dictionary above, call [`getTranslations()`](/docs/node/reference/functions/get-translations) to get a `t` function that resolves entries from your dictionary:
 
 ```ts
-import { getTranslations } from 'gt-i18n';
+import { getTranslations, withGT } from 'gt-node';
 
-const t = await getTranslations();
+await withGT('en', async () => {
+  const t = await getTranslations();
 
-t('greeting.hello'); // "Hello!"
-t('user.welcome', { name: 'Alice' }); // "Welcome, Alice!"
+  t('greeting.hello'); // "Hello!"
+  t('user.welcome', { name: 'Alice' }); // "Welcome, Alice!"
+});
 ```
 
 ### Sub-dictionaries with `t.obj()`
@@ -75,8 +92,7 @@ t('user.welcome', { name: 'Alice' }); // "Welcome, Alice!"
 `t()` returns a single string. `t.obj()` returns an entire subtree of the dictionary as an object:
 
 ```ts
-const t = await getTranslations();
-
+// Inside the withGT callback above:
 t('errors.notFound'); // "Page not found"
 
 const errors = t.obj('errors');
@@ -97,5 +113,5 @@ The second rule assumes that translated dictionaries match the structure of your
 ## Links
 
 - [PR #1359](https://github.com/generaltranslation/gt/pull/1359)
-- [`getTranslations` API reference](/docs/react/reference/functions/get-translations-snapshot)
+- [`getTranslations` API reference](/docs/node/reference/functions/get-translations)
 - [Dictionaries guide](/docs/react/guides/translating-with-dictionaries)

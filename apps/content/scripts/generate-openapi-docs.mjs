@@ -47,6 +47,12 @@ const HTTP_METHODS = new Set([
   'patch',
   'trace',
 ]);
+const GROUP_DESCRIPTIONS = {
+  files: 'Upload, download, publish, and manage Project files.',
+  context: 'Generate and check translation context for a Project.',
+  translation: 'Queue translations, translate at runtime, and check job status.',
+  project: 'Create and manage Projects, API keys, branches, tags, and assets.',
+};
 const DOCS_SLUG_PATTERN =
   /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -226,13 +232,17 @@ ${openapiMetadata}
 
 function writeNavigation() {
   for (const { slug, title, pages } of groups) {
+    const description = GROUP_DESCRIPTIONS[slug];
+    if (!description) {
+      throw new Error(`No reference description configured for "${slug}".`);
+    }
     fs.mkdirSync(path.join(OUTPUT_DIR, slug), { recursive: true });
     fs.writeFileSync(
       path.join(OUTPUT_DIR, slug, 'meta.json'),
       `${JSON.stringify(
         {
           title,
-          description: `Browse OpenAPI ${title} pages.`,
+          description,
           pages: pages.map((page) => `./${page}`),
         },
         null,

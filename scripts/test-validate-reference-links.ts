@@ -99,6 +99,14 @@ const references: ReferenceSource[] = [
     source: '---\ntitle: gt translate\n---\n',
   },
   {
+    path: 'docs/en-US/cli/reference/commands/project-create.mdx',
+    source: '---\ntitle: gt project create\n---\n',
+  },
+  {
+    path: 'docs/en-US/cli/reference/commands/project-status.mdx',
+    source: '---\ntitle: gt project status\n---\n',
+  },
+  {
     path: 'docs/en-US/integrations/rrweb/reference/recorder.mdx',
     source: '---\ntitle: Recorder API\n---\n\n## `GTRecorder` [#gt-recorder]\n',
   },
@@ -168,6 +176,11 @@ const skippedCases = [
     path: 'docs/en-US/react/reference/hooks/use-locale-selector.mdx',
     source:
       'The returned `getLocaleProperties` callback uses the configured custom mapping.',
+  },
+  {
+    name: 'generic project field with nested CLI commands',
+    path: 'docs/en-US/integrations/sanity/reference/example.mdx',
+    source: 'Set the `project` field in the Sanity configuration.',
   },
 ];
 
@@ -287,6 +300,18 @@ const foundCases = [
     path: 'docs/en-US/cli/guides/example.mdx',
     source: 'Run `npx gt translate --locales es` before release.',
     target: '/docs/cli/reference/commands/translate',
+  },
+  {
+    name: 'nested CLI command with arguments',
+    path: 'docs/en-US/cli/guides/example.mdx',
+    source: 'Run `npx gt project create --name Storefront` to create a Project.',
+    target: '/docs/cli/reference/commands/project-create',
+  },
+  {
+    name: 'nested CLI sibling command',
+    path: 'docs/en-US/cli/guides/example.mdx',
+    source: 'Run `gt project status job_123` to inspect the setup job.',
+    target: '/docs/cli/reference/commands/project-status',
   },
   {
     name: 'package context',

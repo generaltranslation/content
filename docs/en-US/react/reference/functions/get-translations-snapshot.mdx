@@ -9,6 +9,8 @@ The `getTranslationsSnapshot` function loads the translations for a locale in th
 
 *Available in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`.*
 
+In `gt-next`, use this function with the Pages Router. The App Router's React Server Component export throws; its server translation setup is managed by `gt-next`.
+
 ## Overview [#overview]
 
 After [initializing](/docs/react/reference/config#initialization) `gt-react`, await `getTranslationsSnapshot` for the active locale and pass the result to the provider.
@@ -17,11 +19,11 @@ After [initializing](/docs/react/reference/config#initialization) `gt-react`, aw
 const translations = await getTranslationsSnapshot(locale);
 ```
 
-*Note: call `getTranslationsSnapshot` after [`initializeGT`](/docs/react/reference/config#initialize) or [`initializeGTSPA`](/docs/react/reference/config#initialize-spa), which populate the translation cache it reads from.*
+*Note: call `getTranslationsSnapshot` after [`initializeGT`](/docs/react/reference/config#initialize) or [`initializeGTSPA`](/docs/react/reference/config#initialize-spa), which create the translation cache it uses.*
 
 ## How it works [#how-it-works]
 
-Initialization loads the translations into the cache; `getTranslationsSnapshot` returns a serializable snapshot of the cached translations for a locale. Passing this snapshot to [`<GTProvider>`](/docs/react/reference/components/gt-provider) lets translated content render synchronously, without a loading flash.
+`getTranslationsSnapshot` asks the configured [`loadTranslations`](/docs/react/reference/functions/load-translations) function to load the locale through the translation cache, then returns a serializable snapshot. Passing this snapshot to [`<GTProvider>`](/docs/react/reference/components/gt-provider) lets translated content render synchronously, without a loading flash.
 
 ## Parameters [#parameters]
 
@@ -40,6 +42,14 @@ The locale whose translations to load, as a BCP 47 code.
 **Type** `Promise<Record<Locale, Record<Hash, Translation>>>`
 
 A promise resolving to the translations snapshot for the locale, in the shape [`<GTProvider>`](/docs/react/reference/components/gt-provider) expects for its `translations` prop.
+
+## Errors [#errors]
+
+In development, if [`loadTranslations`](/docs/react/reference/functions/load-translations) rejects, `getTranslationsSnapshot` logs a warning and resolves to `{}`. The failed locale is omitted, so passing the snapshot to a provider does not seed an empty entry.
+
+In production, the translation cache logs the loader error and returns an empty catalog, so the snapshot contains `{ [locale]: {} }`. The failed load is not cached in the originating cache and a later load can retry, but passing that snapshot to another provider can seed an empty catalog there.
+
+If your loader catches an error and returns `{}`, the cache treats that empty object as a successful load and keeps it until `cacheExpiryTime` expires.
 
 ## Examples [#examples]
 
