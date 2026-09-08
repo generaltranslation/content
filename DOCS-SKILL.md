@@ -184,6 +184,8 @@ Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, 
 
 Write **"project" lowercase in prose** ("your project", "one project per repository", "project API keys"). Capitalize **Project** only where the Dashboard UI does: breadcrumbs and UI labels (**Project > Automations**, **Project ID**, the **Projects** page) and at sentence starts.
 
+*Exception: the OpenAPI endpoint reference pages and their* `meta.json` *files under* `docs/en-US/platform/openapi/reference/` *are generated from* `openapi.json` *(*`pnpm --filter ./apps/content generate-openapi-docs`*), and CI fails on any drift. Their wording — including casing — follows the spec; never hand-edit generated pages. To change their text, change the spec source.*
+
 *Note: capitalize **Autoderive** only when referring to the feature in prose; the* `gt.config.json` *key stays lowercase in code as* `autoderive`*. Do not write "General Translation Autoderive" — the feature name stands on its own.*
 
 Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as projects and Context Groups may still be pluralized.
