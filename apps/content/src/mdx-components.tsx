@@ -9,6 +9,7 @@ import defaultMdxComponents from 'fumadocs-ui/mdx';
 
 import { APIPage } from '@/lib/api-page';
 import Video from '@/components/Video';
+import Walkthrough from '@/components/Walkthrough';
 
 import type { MDXComponents } from 'mdx/types';
 import type { ComponentPropsWithoutRef } from 'react';
@@ -120,6 +121,7 @@ const customComponents = {
   SupportedLocales: StubComponent,
   Tweet,
   Video,
+  Walkthrough,
 } satisfies MDXComponents;
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {

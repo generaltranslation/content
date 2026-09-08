@@ -55,6 +55,25 @@ These mirror the CI jobs in `.github/workflows/run-tests.yml`. `pnpm install` re
 - Use fenced code blocks with a language identifier (e.g. ` ```tsx `).
 - Keep lines reasonably short for readable diffs.
 
+### Product walkthroughs
+
+Dashboard pages embed interactive walkthroughs recorded with [`gt-rrweb`](https://generaltranslation.com/docs/integrations/rrweb/quickstart). A walkthrough is recorded once in the Dashboard's source locale and replays in every locale the recording bundle includes, so it stays in sync with the page's language.
+
+```mdx
+<Walkthrough
+  src="https://assets.gtx.dev/walkthroughs/dashboard/reviewing-translations.json"
+  title="Reviewing and editing translations"
+/>
+```
+
+- `src` is the URL of the recording bundle the recorder's `onComplete` callback returns (or an events-only export). Name the file after the page slug and publish it under `https://assets.gtx.dev/walkthroughs/<section>/`.
+- `title` is the accessible label for the player.
+- `locale` overrides the starting locale; by default the player starts in the page's language when the bundle includes it, and falls back to the recorded source locale.
+- `switchLocales={false}` hides the in-player locale switcher.
+- `height` sets the playback height for recordings made without a capture frame. Framed recordings size themselves.
+
+The component renders nothing until a bundle is published at `src`, so a page reads the same with or without its walkthrough. Place the embed directly after the steps it demonstrates and do not add prose that refers to it.
+
 ## Frontmatter requirements
 
 Every MDX file must include a YAML frontmatter block at the top.
