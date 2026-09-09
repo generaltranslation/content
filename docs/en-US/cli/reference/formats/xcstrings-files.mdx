@@ -1,0 +1,60 @@
+---
+
+title: .xcstrings
+description: Translate Apple String Catalogs with the General Translation CLI. API reference for the .xcstrings file format.
+
+---
+
+The CLI translates `.xcstrings` files, which store source content and every locale in one String Catalog. Support requires `gt` 2.21.0 or later.
+
+## Overview [#overview]
+
+| Topic | Description |
+| --- | --- |
+| [Configuration](#config) | Select catalogs and keep every locale in the same file. |
+| [How it works](#how-it-works) | Slice source content for upload and merge translated locales on download. |
+| [Local edits](#local-edits) | Sync edits without treating other catalog locales as changes. |
+| [Errors](#errors) | Identify invalid catalogs and unsupported path settings. |
+
+## Configuration [#config]
+
+Add an `xcstrings` entry under `files` with an `include` array that points directly to each catalog.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja"],
+  "files": {
+    "xcstrings": {
+      "include": ["Resources/Localizable.xcstrings"]
+    }
+  }
+}
+```
+
+A String Catalog holds every locale in one file and is updated in place. Its `include` patterns must not contain `[locale]`, and the `xcstrings` config does not accept `transform`.
+
+The catalog's `sourceLanguage` must resolve to the same canonical locale as `defaultLocale`. For example, a catalog with `"sourceLanguage": "en"` can use `"defaultLocale": "en"`, but cannot use `"defaultLocale": "fr"`.
+
+## How it works [#how-it-works]
+
+On upload, the CLI reads the catalog and sends a source-only slice to the API. Each entry keeps its source-language localization when one exists; entries that use the key itself as source text stay in the slice without a `localizations` field. Existing target locales are not uploaded as source content.
+
+On download, the CLI merges each target locale back into the catalog on disk. It changes only that locale's localization for matching entries. Other locales, comments, extraction states, substitutions, variations, and unrecognized fields remain in place.
+
+If the downloaded translation contains a key that no longer exists in the local catalog, the CLI skips that key and prints a warning. The downloaded file is serialized as two-space-indented JSON with a trailing newline.
+
+## Local edits [#local-edits]
+
+Download bookkeeping is stored per locale even though every locale shares one file. This prevents an unchanged target locale from being submitted as a local edit after another locale is merged into the catalog.
+
+Use [`gt save-local`](/docs/cli/reference/commands/save-local), [`gt translate --save-local`](/docs/cli/reference/commands/translate), or [`options.saveLocal: true`](/docs/cli/reference/config#save-local) to submit edited target localizations. Local-edit syncing is opt-in.
+
+The Dashboard also opens `.xcstrings` translations in the editable Raw view. A saved edit updates only the selected target locale in the catalog.
+
+## Errors [#errors]
+
+- Invalid JSON, a missing or empty `sourceLanguage`, or a non-object `strings` field causes the CLI to skip the catalog and report the validation problem.
+- A `sourceLanguage` that does not match `defaultLocale` stops the run before files are uploaded.
+- An `include` pattern containing `[locale]` or an `xcstrings.transform` setting stops the run because translated locales must merge into the original catalog.
+- The reserved key `__proto__` is rejected in string and localization maps. Keys named `constructor` or `prototype` are supported.
