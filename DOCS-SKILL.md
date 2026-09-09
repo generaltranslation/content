@@ -1,7 +1,9 @@
 ---
 
-## name: General Translation docs internal skill
+name: General Translation docs internal skill
 description: Follow these rules when creating, editing, reviewing, or restructuring General Translation documentation content. Use this style guide when the user asks about docs voice, structure, naming, or formatting conventions.
+
+---
 
 # General Translation docs style guide
 
@@ -126,7 +128,7 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 
 - Address the reader as "you"; use active voice and imperatives.
 - **Fragment vs. sentence in lists**: use fragments when simply listing pieces or labels (no period needed); use full sentences (including standalone imperatives like "Revoke unused keys.") when describing steps or actions, and end those with a period. Be consistent within a single list. List items that complete a lead-in stem ("From the page, you can:") are fragments and take no period.
-- **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **Target directory**).
+- **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **Target directory**). This includes click/choose/select targets — click **Create automation**, choose **Generate translations and push** — never quotation marks.
 - **Inline code** for code identifiers, file names, locale codes, environment variables, key prefixes, and headers (`en-US`, `GT_API_KEY`, `gtx-api-`, `x-gt-api-key`).
 - **Summarize runtime wording; do not quote it verbatim.** Paraphrase interactive prompts, success and log messages, and console output rather than copying exact strings, so the docs stay correct when that wording changes. Reproduce a string exactly only when the value is part of the contract — environment variable names, flags, config keys, file names, commands, and error codes/identifiers. *Example: write "the wizard asks which API key type to generate" rather than quoting the full prompt sentence.*
 
@@ -178,15 +180,19 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 
 ### Product and term casing
 
-Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Custom Prompt** (and **Custom Prompts**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Context Group** (and **Context Groups**), **Glossary**, **Custom Prompt** (and **Custom Prompts**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+
+Write **"project" lowercase in prose** ("your project", "one project per repository", "project API keys"). Capitalize **Project** only where the Dashboard UI does: breadcrumbs and UI labels (**Project > Automations**, **Project ID**, the **Projects** page) and at sentence starts.
+
+*Exception: the OpenAPI endpoint reference pages and their* `meta.json` *files under* `docs/en-US/platform/openapi/reference/` *are generated from* `openapi.json` *(*`pnpm --filter ./apps/content generate-openapi-docs`*), and CI fails on any drift. Their wording — including casing — follows the spec; never hand-edit generated pages. To change their text, change the spec source.*
 
 *Note: capitalize **Autoderive** only when referring to the feature in prose; the* `gt.config.json` *key stays lowercase in code as* `autoderive`*. Do not write "General Translation Autoderive" — the feature name stands on its own.*
 
-Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as Projects and Context Groups may still be pluralized.
+Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as projects and Context Groups may still be pluralized.
 
 Do not use the **plural of "product"** in reference to the General Translation product itself — no "products", "product suite", or "product line" (it is one full-stack product). *Exception:* other companies' products can take the plural (e.g. "the world's best products should be available to the whole world").
 
-Capitalize the scope noun even inside hyphenated compounds (Organization-level, Project-wide, Project-scoped, Project-specific). Keep it lowercase only inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
+Capitalize the Organization scope noun even inside hyphenated compounds (Organization-level, Organization-wide); project compounds stay lowercase (project-wide, project-scoped, project-specific), as does everything inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
 
 ### Product and technology names
 
@@ -207,7 +213,7 @@ Use the official capitalization and spelling for third-party names: **Next.js**,
 
 ### Grammar and usage
 
-- **Verb vs. noun forms:** "set **up** your Project" (verb) but "the **setup** wizard" (noun); "**check out** the docs" but "the **checkout** page"; "**log in**" but "the **login** page".
+- **Verb vs. noun forms:** "set **up** your project" (verb) but "the **setup** wizard" (noun); "**check out** the docs" but "the **checkout** page"; "**log in**" but "the **login** page".
 - Write **"inline"** as one word (never "in-line").
 - **Articles** follow sound, not spelling: "an HTML element", "an LLM", "an API key"; but "a URL", "a user".
 - Treat **"data" as singular**: "the data is stored", not "the data are stored".
@@ -445,7 +451,7 @@ description: How to use labels, notes, and comments to coordinate translation re
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant capability or tool without automatically branding it. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the Dashboard." / "What are locale codes, and how are they used across the translation stack?"
     - **Configuration Guides:** retain `gt`, the package name, or **General Translation** when it identifies which system's configuration the reader is changing. *Example:* "How to configure the General Translation gt-sanity plugin for locales, document filters, and credentials."
-  - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
+  - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period, opening with a strong verb ("Use…", "Connect…", "Translate…", "Call…", "Find…"). Never open a description with "Learn how", "Learn what", or "Quickstart to" — name the action itself.
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
     - **React and Vue components:** name the component tag directly (`API reference for the <T> component.`).
@@ -518,7 +524,7 @@ Only document capabilities that actually exist, and resolve anything uncertain a
 A "common workflow" section is a bulleted roundup that points readers to the main tasks or settings from a landing page (as in the Dashboard get-started **Key workflows** and **Configuration** lists). Each bullet starts with the action, then a short description, then a link:
 
 ```text
-- **Define context and key terms for translation:** use Context Groups to guide terminology and style across Projects. See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations).
+- **Define context and key terms for translation:** use Context Groups to guide terminology and style across projects. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)).
 ```
 
 Use common workflow sections on **Get Started pages and other overview/landing pages** to surface the primary tasks, instead of duplicating full how-tos inline. Do not use them mid-guide, where ordered steps belong.
@@ -546,7 +552,7 @@ Anatomy:
 2. Go to the **Context** page.
 3. Create a **Context Group**.
 4. Add a **Glossary** (for terminology) and/or **Custom Prompts** (for style and tone).
-5. **Assign** your Context Group to relevant Project(s).
+5. **Assign** your Context Group to relevant project(s).
 6. Generate translations or apply updates to existing translations.
 ```
 
@@ -656,6 +662,7 @@ Populate `related.links` by page type, ordered by **what the reader most likely 
 - **Link paths are always lowercase and hyphenated**, even when they point to a capitalized folder or section (**Get Started** → `/docs/platform/dashboard/get-started`). Preserve lowercase in links regardless of how the folder or section name is displayed.
 - Link to the **logical page path, not the file path**: omit any `en-US/` locale segment and the file extension (`.md`/`.mdx`) in Markdown links. Note that `meta.json` `pages` entries use extensionless relative references (`"./quickstart"`), since those are structural file locations.
 - Link punctuation goes **outside** the brackets: `[Annotations](…).`, not `[Annotations.](…)`.
+- **Parenthesize standalone "See" pointer sentences.** A trailing sentence that only routes the reader — "See [Locales](…)." — becomes a parenthetical: "(See [Locales](…))." Keep "See" capitalized and put the period **outside** the closing parenthesis. This applies to any sentence that starts with "See", including compound ones ("(See [Locales](…) and the shared [Managing languages](…) guide)."). Mid-sentence lowercase "see" links ("for details, see [Config](…)") are unchanged.
 - **Backticks go inside the link text, never around the whole link.** For API/code references, code-format the identifier inside the link text — `[useTranslations](…)` — which renders correctly. Do not wrap the entire link in backticks (`[GT](…)` renders literally).
 - **Link every occurrence of a component, function, hook, class, or method in prose** to its reference page (`[useTranslations](/docs/react/reference/hooks/use-translations)`). Do not link occurrences inside headings. Skip self-links on the symbol's own reference page.
 - **Verify the target exists before linking.** If a page does not exist yet, omit the link or note it as "coming soon".
@@ -694,7 +701,7 @@ Example for role-specific integration setup:
 
 ```mdx
 <Callout type="info">
-  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before Project members continue.
+  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before project members continue.
 </Callout>
 ```
 
@@ -825,9 +832,10 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 - Page order in the filetree (and the sidebar navigation it drives) is logical (workflow order), not alphabetical.
 - Uncertain items are resolved against the codebase; anything that genuinely cannot be verified is omitted rather than guessed.
 - Navigation separators use `>`, not `->`.
+- UI elements, including click/choose/select targets, are bold, never quoted; standalone "See [X](…)." pointer sentences are parenthesized as "(See [X](…))." with the period outside; no description opens with "Learn how", "Learn what", or "Quickstart to".
 - `.md` link suffix usage is consistent within the file.
 - Notes and tips use the established format for their page type and are consistent across sibling pages.
-- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Project, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub).
+- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub); "project" is lowercase in prose, capitalized only in UI labels and at sentence starts.
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
