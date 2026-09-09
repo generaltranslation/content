@@ -3,7 +3,7 @@
   "info": {
     "title": "General Translation API",
     "version": "2026-03-06.v1",
-    "description": "The public General Translation API. Use it to upload source content and translated files, download translations, queue and translate content, create projects, manage branches and tags, and read project and job status.\n\nMost endpoints operate on a single project. All endpoints live under `https://api.gtx.dev`.\n\nAuthenticate every request with an API key as a bearer token in the standard `Authorization: Bearer <key>` header. Project keys (`gtx-api-`, `gtx-dev-`) are bound to one project. Organization keys (`gtx-org-`) work across projects but must include the target project in the `gt-project-id` header for project-scoped routes. Organization-scoped routes, such as `POST /v2/projects`, derive the organization from the key and do not use a `gt-project-id` header.",
+    "description": "The public General Translation API. Use it to upload source content and translated files, download translations, queue and translate content, create projects, manage branches and tags, and read project and job status.\n\nMost endpoints operate on a single project. All endpoints live under `https://api.gtx.dev`.\n\nAuthenticate every request with an API key as a bearer token in the standard `Authorization: Bearer <key>` header. Project keys (`gtx-api-`, `gtx-dev-`) are bound to one project. Organization keys (`gtx-org-`) work across projects but must include the target project in the `gt-project-id` header for project-scoped routes. Organization-scoped routes, such as `POST /v2/orgs/{orgId}/projects`, require the target organization in the `orgId` path parameter. The credential must have access to that organization.",
     "contact": {
       "name": "General Translation Support",
       "email": "support@generaltranslation.com",
@@ -38,7 +38,14 @@
     "securitySchemes": {
       "BearerAuth": {
         "type": "http",
-        "scheme": "bearer"
+        "scheme": "bearer",
+        "description": "Project or organization API key."
+      },
+      "UserBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "OAuth 2.1 user access token."
       }
     },
     "schemas": {
@@ -312,17 +319,29 @@
     "parameters": {}
   },
   "paths": {
-    "/v2/projects": {
+    "/v2/orgs/{orgId}/projects": {
       "post": {
         "operationId": "createProject",
         "summary": "Create a Project",
-        "description": "Create a Project in the Organization associated with an Organization API key. The key must have the `org:projects:create` permission. Project keys cannot use this endpoint. Enabling CDN delivery also requires `project:write`.",
+        "description": "Create a Project in the Organization selected by the orgId path parameter. Requires org:projects:create. Enabling CDN delivery also requires project:write.",
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "orgId",
+            "in": "path"
+          },
           {
             "schema": {
               "type": "string",
@@ -521,10 +540,13 @@
       "post": {
         "operationId": "createProjectApiKey",
         "summary": "Create a Project API Key",
-        "description": "Create an API key for a Project with an Organization API key. The Organization key must have the `project:api_keys:write` permission and can only delegate Project permissions it already holds. Project keys cannot use this endpoint.",
+        "description": "Create an API key for the selected Project. Requires project:api_keys:write and delegates only Project permissions held by the request identity.",
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -750,6 +772,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -772,10 +797,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -1077,6 +1102,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -1099,10 +1127,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -1480,6 +1508,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -1502,10 +1533,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -1729,6 +1760,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -1751,10 +1785,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -1950,6 +1984,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -1972,10 +2009,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -2104,6 +2141,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -2126,10 +2166,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -2349,6 +2389,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -2380,10 +2423,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -2540,6 +2583,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -2562,10 +2608,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -3021,6 +3067,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -3043,10 +3092,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -3264,6 +3313,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -3319,10 +3371,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -3476,6 +3528,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -3498,10 +3553,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -3740,6 +3795,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -3762,10 +3820,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -3930,6 +3988,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -3952,10 +4013,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -4122,6 +4183,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -4144,10 +4208,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -4356,6 +4420,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -4387,10 +4454,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -4553,6 +4620,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -4584,10 +4654,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -4742,6 +4812,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -4764,10 +4837,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -5035,6 +5108,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -5057,10 +5133,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -5231,6 +5307,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -5253,10 +5332,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -5587,6 +5666,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -5634,10 +5716,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -5877,6 +5959,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -5899,10 +5984,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
@@ -6139,6 +6224,9 @@
         "security": [
           {
             "BearerAuth": []
+          },
+          {
+            "UserBearerAuth": []
           }
         ],
         "parameters": [
@@ -6161,10 +6249,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key)."
+              "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project."
             },
             "required": false,
-            "description": "Target project ID. Required when authenticating with an organization API key; ignored with project-scoped API keys (the project is resolved from the key).",
+            "description": "Target project ID when no project ID is present in the path. Project API keys default to their bound project. If supplied, the header must match both the path target and the key’s bound project.",
             "name": "gt-project-id",
             "in": "header"
           }
