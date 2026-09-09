@@ -8,6 +8,16 @@ const config: NextConfig = {
   async redirects() {
     return [
       {
+        source: '/docs/react/guides/developing-spa-translations',
+        destination: '/docs/react/guides/previewing-spa-translations',
+        permanent: true,
+      },
+      {
+        source: '/:locale/docs/react/guides/developing-spa-translations',
+        destination: '/docs/react/guides/previewing-spa-translations',
+        permanent: true,
+      },
+      {
         source: '/docs/cli/reference/formats/apple-strings-files',
         destination: '/docs/cli/reference/formats/dot-strings-files',
         permanent: true,
