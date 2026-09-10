@@ -338,7 +338,7 @@ Structure it in this order:
 2. **Setup** — install the right package, create `gt.config.json`, and set the API key environment variables.
 3. **Core usage** — the canonical patterns the agent should follow (for example, wrap user-facing strings in `<T>`, use `useGT()` for dynamic strings, keep locale configuration in one place). Show minimal, commented code.
 4. **Commands** — a short cheat-sheet of the CLI commands the agent will run (`npx gt configure`, `npx gt translate`, and so on) and when to run each.
-5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, hand-edit generated translation files).
+5. **Verify your work** — the feedback loop the agent runs after changes (`gt validate`, then `gt translate` and a build, then a locale switch in the running app), with the hard guardrails folded in where they bite (never hardcode translated strings or hand-edit generated files). Do not write a standalone do/don't list; fold each guardrail into the setup, usage, or verification step it protects.
 6. **Links** — point to `llms.txt`, `sitemap.xml`, and the most useful pages for deeper detail.
 
 Document only capabilities that exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement). This file is written by an agent connected to the product codebase; this guide defines its **shape**, not its exact contents.

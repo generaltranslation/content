@@ -60,7 +60,7 @@ Then create `gt.config.json` in the project root — this is the single source o
 
 - `defaultLocale` — the language the source is written in.
 - `locales` — the languages to translate into.
-- `files.gt.output` — where the CLI writes translation files (`[locale]` is replaced per language). Add this directory to `.gitignore`; the files are generated.
+- `files.gt.output` — where the CLI writes translation files (`[locale]` is replaced per language). Add this directory to `.gitignore` — the files are generated and the CLI overwrites them, so never edit them by hand.
 
 Set API credentials as environment variables (in `.env.local` for Next.js, `.env` otherwise):
 
@@ -73,7 +73,7 @@ Never commit `GT_API_KEY`, expose it to the browser, or prefix it with `NEXT_PUB
 
 ## Core usage
 
-Wrap user-facing JSX in `<T>`. Write source copy directly — no translation keys needed:
+Wrap user-facing JSX in `<T>` as you write it. Source copy goes directly in the component — no translation keys needed:
 
 ```tsx
 import { T } from 'gt-next'; // or 'gt-react'
@@ -123,6 +123,12 @@ initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'fr'] });
 // wrap handlers in withGT(locale, ...); then `const gt = await getGT()` inside them
 ```
 
+Always translate the source copy — never hardcode translated strings or add per-language `if` branches. When a short string is ambiguous on its own, add a `context` prop so it translates correctly:
+
+```tsx
+<T context="Button label for publishing a blog post">Post</T>
+```
+
 Keep all locale configuration in `gt.config.json` — do not scatter locale lists across the codebase.
 
 ## Commands
@@ -141,30 +147,25 @@ Keep all locale configuration in `gt.config.json` — do not scatter locale list
 
 Add translation to the production build so translations stay current, for example: `"build": "npx gt translate && next build"`.
 
-## Rules — do and don't
+## Verify your work
 
-Do:
+After adding or changing translatable content:
 
-- Wrap every new piece of user-facing copy in `<T>` (or `useGT()`/`getGT()` for standalone strings) as you write it.
-- Run `npx gt translate` before committing or building for production so new copy is translated.
-- Keep the locale list in `gt.config.json` only.
-- Wrap dynamic and private values in `<Var>`, and add `context` when a string is ambiguous.
+1. Run `npx gt validate` — it scans `<T>` components, `useGT()` calls, and dictionaries for syntax that would break translation, without calling the API. It exits non-zero on errors, so it also works as a CI gate.
+2. Run `npx gt translate`, then build. Translation files for every locale in `gt.config.json` should appear at the configured output path.
+3. Start the app and switch to a non-default locale — new copy should render translated. With a development key (`gtx-dev-`), untranslated strings are translated on demand while you develop.
 
-Don't:
-
-- Hardcode already-translated strings in the source, or add per-language `if`/`switch` branches — translate the source copy instead.
-- Hand-edit generated translation files (the CLI overwrites them).
-- Commit `GT_API_KEY` or expose it to the client.
-- Duplicate the locale configuration outside `gt.config.json`.
+Fix what `validate` flags at the source — never work around an error by hardcoding a translated string or hand-editing a generated translation file.
 
 ## Links
 
-- [`llms.txt`](/llms.txt) — short, machine-readable docs index.
-- [`llms-full.txt`](/llms-full.txt) — full docs content for tools that can load a larger context.
-- [`sitemap.xml`](/sitemap.xml) — map of every published page.
-- Quickstarts: [React](/docs/react/react-quickstart), [Vue](/docs/vue/quickstart), [Node](/docs/node/quickstart), [Core library](/docs/platform/core/quickstart), and the [CLI](/docs/cli/quickstart).
-- [Key concepts](/docs/overview/key-concepts) — locales, context, and static vs. dynamic content.
-- CLI reference: [`gt api`](/docs/cli/reference/commands/api), [`gt project create`](/docs/cli/reference/commands/project-create), and [`gt project status`](/docs/cli/reference/commands/project-status).
+- [llms.txt](https://generaltranslation.com/llms.txt) — short, machine-readable docs index.
+- [llms-full.txt](https://generaltranslation.com/llms-full.txt) — full docs content for tools that can load a larger context.
+- [sitemap.md](https://generaltranslation.com/sitemap.md) — the docs map as markdown ([sitemap.xml](https://generaltranslation.com/sitemap.xml) for crawlers).
+- Quickstarts: [React](https://generaltranslation.com/docs/react/react-quickstart), [Vue](https://generaltranslation.com/docs/vue/quickstart), [Node](https://generaltranslation.com/docs/node/quickstart), [Core library](https://generaltranslation.com/docs/platform/core/quickstart), and the [CLI](https://generaltranslation.com/docs/cli/quickstart).
+- [Key concepts](https://generaltranslation.com/docs/overview/key-concepts) — locales, context, and static vs. dynamic content.
+- CLI reference: [gt api](https://generaltranslation.com/docs/cli/reference/commands/api), [gt project create](https://generaltranslation.com/docs/cli/reference/commands/project-create), and [gt project status](https://generaltranslation.com/docs/cli/reference/commands/project-status).
+- Append `.mdx` to any docs URL for raw markdown, or send an `Accept: text/markdown` header.
 ````
 
 ## Point agents at the docs [#point-agents]
@@ -173,9 +174,10 @@ Give your agent direct access to the docs so its answers stay accurate. General 
 
 - [`llms.txt`](/llms.txt) — a short, [llmstxt.org](https://llmstxt.org/)-style index of the docs.
 - [`llms-full.txt`](/llms-full.txt) — the full docs content in one file, excluding the generated OpenAPI reference.
-- [`sitemap.xml`](/sitemap.xml) — a machine-readable map of every published page.
+- [`AGENTS.md`](/AGENTS.md) — the [drop-in agent guide](#agent-guide) above, served as a file agents can fetch directly.
+- [`sitemap.md`](/sitemap.md) — a section-grouped markdown map of the docs; [`sitemap.xml`](/sitemap.xml) is the crawler equivalent for every published page.
 
-The docs host also serves these files at `/docs/llms.txt` and `/docs/llms-full.txt`. Every docs page is available as **raw Markdown**: append `.md` or `.mdx` to any page URL (for example, `/docs/cli/quickstart.mdx`) to fetch the clean source instead of parsing rendered HTML.
+The docs host also serves these files at `/docs/llms.txt` and `/docs/llms-full.txt`. Every docs page is available as **raw Markdown**: append `.md` or `.mdx` to any page URL (for example, `/docs/cli/quickstart.mdx`) to fetch the clean source instead of parsing rendered HTML. The same URLs also negotiate content — a request with an `Accept: text/markdown` header returns the markdown mirror, and recognized AI crawlers receive markdown automatically.
 
 To add the docs as context, paste a docs URL or the `llms.txt` link into your agent's context, or add the docs as a source in tools that support documentation indexing.
 
