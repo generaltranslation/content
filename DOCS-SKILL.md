@@ -313,24 +313,35 @@ Treat the Overview sidebar hub, each section's `meta.json`, and the correspondin
 
 ### Machine-readable outputs
 
-The publishing app generates two machine-readable maps from the docs source:
+The publishing app generates every machine-readable surface from the docs source; never add hand-written copies to this repository:
 
-- `llms.txt` — an [llmstxt.org](https://llmstxt.org/)-style index for LLMs and agents, grouped by section.
-- `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
+- `llms.txt` — a curated [llmstxt.org](https://llmstxt.org/)-style index of the pages agents want first, capped at 60 links.
+- `llms-index.txt` — the exhaustive index: every page, grouped by section.
+- `llms-scope.txt/<scope>` — a per-section index for each top-level scope (for example, `llms-scope.txt/react`).
+- `llms-full.txt` — the full docs content in one file, excluding the generated OpenAPI reference.
+- `sitemap.xml` — the standard sitemap with `lastmod` dates for every published page, including localized URLs.
+- `sitemap.md` — the exhaustive section-grouped index served as a markdown map.
+- `AGENTS.md` — the drop-in agent guide, extracted verbatim from the **For coding agents** page (see Drop-in AGENTS.md guide).
+- `openapi.json` and `openapi.yaml` — the machine-readable API contract, linked from every OpenAPI endpoint page.
 
-Do not add hand-written copies to this repository. When you add, rename, remove, or reorder pages, keep the `meta.json` filetree valid so the publishing app generates current output. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
+When you add, rename, remove, or reorder pages, keep the `meta.json` filetree valid so the publishing app generates current output. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
 
 ### Agent-navigable by default
 
-Beyond the two maps above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
+Beyond the indexes above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` to its URL. Never remove this affordance, and link to the logical page path in prose (the build serves the `.md` variant).
+- **Raw Markdown for every page.** Every page is served as raw Markdown by appending `.md` or `.mdx` to its URL, prerendered for every locale. Markdown responses carry a `Link: rel="canonical"` header naming the HTML page, a `Docs index:` pointer to `llms.txt`, and a trailing sitemap link. The same URLs also negotiate content: a request with an `Accept: text/markdown` header — or from a recognized AI crawler — returns the markdown mirror. Never remove these affordances, and link to the logical page path in prose (the build serves the markdown variants).
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 
 ### Drop-in AGENTS.md guide
 
 Embed a copyable `AGENTS.md` guide on the **For coding agents** page, aimed at the **coding agents of developers who use General Translation** — *not* at agents editing this docs repo. A developer drops its contents into their own project so their agent knows how to add and run General Translation correctly. Keep it self-contained, imperative, and short enough to fit an agent's context window.
+
+The publishing app extracts this block and serves it verbatim at `/AGENTS.md`, which makes two authoring rules contracts:
+
+- **Keep the fence shape exactly** ` ````markdown title="AGENTS.md" ` with a closing four-backtick fence — a publishing-app test reads the real page and fails when the block is reshaped.
+- **Use absolute URLs for every link inside the guide.** The file is pasted into other repositories and fetched from the site root, where root-relative links break.
 
 Structure it in this order:
 
@@ -512,8 +523,8 @@ Cover, in this order (drop any part that does not yet exist rather than inventin
 
 1. **Intro** — one or two sentences on why General Translation is built to be agent- and LLM-friendly (open-source libraries, predictable configuration, machine-readable docs).
 2. **Drop-in agent guide** — the full agent guide (what to use, setup, core usage, commands, do/don't, links) embedded in a **single copyable code block** so a developer can paste it straight into their project's `AGENTS.md`, `CLAUDE.md`, or tool instructions. Use a fenced block with a `title="AGENTS.md"` and a wider outer fence (four backticks) so the guide's own inner code fences render as literal text.
-3. **Point agents at the docs** — link the machine-readable entry points (`llms.txt` and `sitemap.xml`) and show how to add the docs as context in an agent.
-4. **MCP server and agent skills** — if a General Translation MCP server or agent skill exists, show how to install and use it; otherwise omit this part.
+3. **Point agents at the docs** — link the machine-readable entry points (`llms.txt`, `llms-full.txt`, `AGENTS.md`, and `sitemap.md`), note the `.mdx` suffix and `Accept: text/markdown` negotiation for per-page markdown, and show how to add the docs as context in an agent.
+4. **MCP server** — document the three connection forms with a copyable config per transport: the published `@generaltranslation/mcp` npm package (local stdio), the hosted endpoint at `https://mcp.gtx.dev` (streamable HTTP, with an `/sse` variant for SSE-only tools), and the project-scoped endpoint at `https://api.gtx.dev/mcp`, authenticated with an API key, for live project data. If a General Translation agent skill exists, cover it here too; otherwise omit that part.
 5. **Editor-specific tips** — short, parallel bullets for the common agents (Cursor, Claude Code, Copilot), only where the guidance genuinely differs. Use tabs when the shape is identical (see Code blocks).
 6. **Best practices** — a short decision list of what to hand an agent versus what to verify by hand (for example, let it wire up `<T>` components, but always review generated translation context and locale configuration).
 
@@ -839,5 +850,5 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).
-- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, so the publishing app can generate current `llms.txt` and `sitemap.xml` output.
+- **Machine-readable outputs are in sync:** every entry in each `meta.json` `pages` array resolves to a real file, so the publishing app can generate current output for every generated surface (the llms.txt tiers, sitemap.xml, sitemap.md, AGENTS.md, and the per-page markdown mirrors).
 - No typos; body prose sentences end with periods, and so do descriptions (a description that is a question ends with `?`; section-root tab subtitles take no period).
