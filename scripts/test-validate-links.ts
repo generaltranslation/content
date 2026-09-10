@@ -369,8 +369,16 @@ description: A test
     'Allows the exhaustive root index'
   );
   assert(
+    isGeneratedMachineRoute('/AGENTS.md'),
+    'Allows the drop-in agent guide'
+  );
+  assert(
     isGeneratedMachineRoute('/openapi.yaml'),
     'Allows the canonical OpenAPI specification'
+  );
+  assert(
+    isGeneratedMachineRoute('/sitemap.md'),
+    'Allows the Markdown sitemap'
   );
   assert(
     !isGeneratedMachineRoute('/llms-typo.txt'),
@@ -379,6 +387,14 @@ description: A test
   assert(
     isMachineRouteCandidate('/llms-typo.txt'),
     'Recognizes an invalid root machine route for error reporting'
+  );
+  assert(
+    isMachineRouteCandidate('/AGENTS-typo.md'),
+    'Recognizes an invalid agent guide route for error reporting'
+  );
+  assert(
+    isMachineRouteCandidate('/sitemap-typo.md'),
+    'Recognizes an invalid Markdown sitemap route for error reporting'
   );
 
   // Test 8: Fixture setup
