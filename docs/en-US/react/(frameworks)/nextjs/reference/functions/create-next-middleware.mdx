@@ -48,7 +48,8 @@ It then sets a locale cookie and, when `localeRouting` is enabled, redirects or 
 | [`localeRouting`](#locale-routing) | Enable locale-based routing. | `boolean` | Yes | `true` |
 | [`prefixDefaultLocale`](#prefix-default-locale) | Prefix the default locale in the URL too. | `boolean` | Yes | `false` |
 | [`ignoreSourceMaps`](#ignore-source-maps) | Skip Next.js source-map requests. | `boolean` | Yes | `true` |
-| [`pathConfig`](#path-config) | Localized path overrides. | `object` | Yes | `{}` |
+| [`pathConfig`](#path-config) | Localized path aliases. | `object` | Yes | `{}` |
+| [`routeOverrides`](#route-overrides) | Use a locale-specific page implementation without changing its public URL. | `RouteOverrides` | Yes | `{}` |
 
 *Note: to restrict which pathnames the middleware runs on, set [`pathRegex`](/docs/react/nextjs/config#path-regex) in `withGTConfig` — it is not a middleware option. The `matcher` in your exported `config` is what Next.js uses to decide when the middleware runs at all.*
 
@@ -74,22 +75,96 @@ When `true`, requests for Next.js source maps are passed through untouched.
 
 **Type** `object` · **Optional** · **Default** `{}`
 
-Maps shared paths to localized paths, so a route can have a different URL per locale. Each key is the shared path; each value is either a single localized path or a per-locale map. Dynamic segments such as `[id]` are preserved.
+Maps shared paths to localized paths, so a route can have a different URL per locale. Each key is the shared path; each value is either a single localized path or a per-locale map.
 
 ```ts title="proxy.ts"
 export default createNextMiddleware({
   pathConfig: {
-    // English: /products, Chinese: /zh/产品
+    // English: /products, French: /fr/produits
     '/products': {
-      zh: '/产品',
+      fr: '/produits',
     },
-    // Dynamic routes: /product/123, /zh/产品/123
+    // Dynamic: /product/123, /fr/produit/123
     '/product/[id]': {
-      zh: '/产品/[id]',
+      fr: '/produit/[id]',
+    },
+    // Required catch-all: /blog/2026/launch, /fr/articles/2026/launch
+    '/blog/[...slug]': {
+      fr: '/articles/[...slug]',
+    },
+    // Optional catch-all: /news or /news/latest, /fr/actualites or /fr/actualites/latest
+    '/news/[[...slug]]': {
+      fr: '/actualites/[[...slug]]',
     },
   },
 });
 ```
+
+### `routeOverrides` [#route-overrides]
+
+**Type** `RouteOverrides` · **Optional** · **Default** `{}`
+
+Maps a locale to shared route patterns that have a locale-specific page implementation. The public URL still uses the shared route or its [`pathConfig`](#path-config) alias, while the middleware rewrites the request to a route with a second, static locale segment.
+
+For example, this file structure gives French visitors custom implementations of a static page, a dynamic product page, and a family of blog pages:
+
+<Files>
+  <Folder name="app">
+    <Folder name="[locale]">
+      <Folder name="home">
+        <File name="page.tsx" />
+      </Folder>
+      <Folder name="fr">
+        <Folder name="home">
+          <File name="page.tsx" />
+        </Folder>
+        <Folder name="product">
+          <Folder name="[id]">
+            <File name="page.tsx" />
+          </Folder>
+        </Folder>
+        <Folder name="blog">
+          <File name="page.tsx" />
+          <Folder name="authors">
+            <File name="page.tsx" />
+          </Folder>
+          <Folder name="posts">
+            <File name="page.tsx" />
+            <Folder name="[...slug]">
+              <File name="page.tsx" />
+            </Folder>
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+  </Folder>
+</Files>
+
+Configure each override with its shared route pattern:
+
+```ts title="proxy.ts"
+export default createNextMiddleware({
+  routeOverrides: {
+    fr: [
+      '/home', // Static route
+      '/product/[id]', // Dynamic param
+      '/blog/[[...slug]]', // Route and all child paths
+    ],
+  },
+});
+```
+
+- `/home` uses `app/[locale]/fr/home/page.tsx` for French and the shared `app/[locale]/home/page.tsx` for other locales.
+- `/product/[id]` adds a product page only for French while preserving the dynamic `id`.
+- `/blog/[[...slug]]` adds a blog family only for French, including `/blog`, `/blog/authors`, `/blog/posts`, and `/blog/posts/[...slug]`.
+
+Overrides are ignored when `localeRouting` is `false`. Locale keys are standardized when General Translation services are enabled.
+
+<Callout type="info">
+  Cache and layout APIs see the internal route. Pass the rewrite destination, such as `/fr/fr/home`, to Next.js `revalidatePath`. From the `[locale]` layout, `useSelectedLayoutSegments` also includes the override's static locale segment.
+</Callout>
+
+Use [`<Link>`](/docs/react/nextjs/link) from `gt-next/link` for internal navigation so locale-prefixed routes are generated before navigation without an extra middleware redirect.
 
 ## Example [#example]
 

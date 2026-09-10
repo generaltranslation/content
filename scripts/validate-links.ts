@@ -86,10 +86,12 @@ const GENERATED_DOC_ROUTES = new Set([
   ...MACHINE_DOC_SCOPES.map((scope) => `/docs/${scope}/llms.txt`),
 ]);
 const GENERATED_ROOT_ROUTES = new Set([
+  '/AGENTS.md',
   '/llms.txt',
   '/llms-index.txt',
   '/llms-full.txt',
   '/openapi.yaml',
+  '/sitemap.md',
   '/sitemap.xml',
 ]);
 
@@ -297,8 +299,9 @@ export function isGeneratedMachineRoute(path: string): boolean {
 export function isMachineRouteCandidate(path: string): boolean {
   const normalized = stripLocale(path);
   return (
+    /^\/agents[^/]*\.md$/i.test(normalized) ||
     /^\/llms[^/]*\.txt$/.test(normalized) ||
-    /^\/(?:openapi[^/]*\.ya?ml|sitemap[^/]*\.xml)$/.test(normalized) ||
+    /^\/(?:openapi[^/]*\.ya?ml|sitemap[^/]*\.(?:md|xml))$/.test(normalized) ||
     /^\/docs\/(?:.+\/)?llms[^/]*\.txt$/.test(normalized)
   );
 }

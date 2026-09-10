@@ -320,6 +320,8 @@ The publishing app generates machine-readable maps from the docs source:
 - `llms-full.txt` — full page bodies for tools that can load a large context, excluding the generated OpenAPI reference.
 - `/docs/<section>/llms.txt` — exhaustive section indexes for Overview, Platform, CLI, React, Vue, Node, Python, and Integrations. Platform capabilities also have scoped indexes.
 - `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
+- `/AGENTS.md` — the default-language drop-in agent guide from the **For coding agents** page.
+- `sitemap.md` — a default-language Markdown index of every docs page and blog post.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
 Do not add hand-written copies to this repository. When you add, rename, remove, or reorder pages, keep the `meta.json` filetree valid so the publishing app generates current output. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
@@ -328,7 +330,7 @@ Do not add hand-written copies to this repository. When you add, rename, remove,
 
 Beyond the machine-readable outputs above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` to its URL. Use `.md` as the canonical machine-readable URL while preserving `.mdx` compatibility, and link to the logical page path in prose.
+- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 
@@ -342,8 +344,8 @@ Structure it in this order:
 2. **Setup** — install the right package, create `gt.config.json`, and set the API key environment variables.
 3. **Core usage** — the canonical patterns the agent should follow (for example, wrap user-facing strings in `<T>`, use `useGT()` for dynamic strings, keep locale configuration in one place). Show minimal, commented code.
 4. **Commands** — a short cheat-sheet of the CLI commands the agent will run (`npx gt configure`, `npx gt translate`, and so on) and when to run each.
-5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, hand-edit generated translation files).
-6. **Links** — point to `llms.txt`, `sitemap.xml`, and the most useful pages for deeper detail.
+5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, edit generated translation files without syncing those edits).
+6. **Links** — point to `llms.txt`, `sitemap.md`, `sitemap.xml`, and the most useful pages for deeper detail.
 
 Document only capabilities that exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement). This file is written by an agent connected to the product codebase; this guide defines its **shape**, not its exact contents.
 
