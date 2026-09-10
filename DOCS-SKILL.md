@@ -684,7 +684,7 @@ Use a callout when the information should stay adjacent but should not interrupt
 - **Risk.** Use a Warning when an action can overwrite work, delete or expose data, incur an unexpected cost, break a build, or be difficult to reverse.
 - **Version changes.** Use a Note led by `Changed in vN:` for breaking or behavior-changing updates on maintenance-facing pages (see Version and change notes).
 
-Use `type="info"` for Notes and Tips so the default icon is blue. Use `type="warn"` for Warnings so the warning icon remains orange.
+The Fumadocs `Callout` component accepts these `type` values: `info` (the default when `type` is omitted), `warn` (an alias of `warning`), `error`, and `success`, plus `tip` as an alias of `info`. Nothing validates these in CI — Fumadocs is stable, so pick from this list; an unknown type does not error, it just renders with muted styling and no icon. In these docs: use `type="info"` for Notes and Tips so the default icon is blue, and `type="warn"` for Warnings so the warning icon stays orange. `error` and `success` are valid but rarely fit docs prose; prefer a Warning or plain prose.
 
 Keep each callout focused on one audience, condition, or consequence. One to three short sentences is typical; a short list is acceptable when one role must complete several related actions. Place the callout immediately after the step or paragraph it qualifies.
 
