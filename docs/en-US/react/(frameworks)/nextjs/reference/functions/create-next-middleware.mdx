@@ -77,18 +77,24 @@ When `true`, requests for Next.js source maps are passed through untouched.
 
 Maps shared paths to localized paths, so a route can have a different URL per locale. Each key is the shared path; each value is either a single localized path or a per-locale map.
 
-The matcher supports static segments, dynamic segments such as `[id]`, required catch-all segments such as `[...slug]`, and optional catch-all segments such as `[[...slug]]`. Static routes take precedence over dynamic and catch-all routes. Redirects and rewrites preserve encoded parameter values, query strings, base paths, and trailing slashes.
-
 ```ts title="proxy.ts"
 export default createNextMiddleware({
   pathConfig: {
-    // English: /products, Chinese: /zh/产品
+    // English: /products, French: /fr/produits
     '/products': {
-      zh: '/产品',
+      fr: '/produits',
     },
-    // Dynamic routes: /product/123, /zh/产品/123
+    // Dynamic: /product/123, /fr/produit/123
     '/product/[id]': {
-      zh: '/产品/[id]',
+      fr: '/produit/[id]',
+    },
+    // Required catch-all: /blog/2026/launch, /fr/articles/2026/launch
+    '/blog/[...slug]': {
+      fr: '/articles/[...slug]',
+    },
+    // Optional catch-all: /news or /news/latest, /fr/actualites or /fr/actualites/latest
+    '/news/[[...slug]]': {
+      fr: '/actualites/[[...slug]]',
     },
   },
 });
@@ -100,53 +106,46 @@ export default createNextMiddleware({
 
 Maps a locale to shared route patterns that have a locale-specific page implementation. The public URL still uses the shared route or its [`pathConfig`](#path-config) alias, while the middleware rewrites the request to a route with a second, static locale segment.
 
-For example, this file structure keeps the shared implementation for every locale except French:
+For example, this file structure gives `/home` a French-specific page while every other locale uses the shared page:
 
 <Files>
   <Folder name="app">
     <Folder name="[locale]">
-      <Folder name="products">
-        <Folder name="[id]">
-          <File name="page.tsx" />
-        </Folder>
+      <Folder name="home">
+        <File name="page.tsx" />
       </Folder>
       <Folder name="fr">
-        <Folder name="products">
-          <Folder name="[id]">
-            <File name="page.tsx" />
-          </Folder>
+        <Folder name="home">
+          <File name="page.tsx" />
         </Folder>
       </Folder>
     </Folder>
   </Folder>
 </Files>
 
-Configure the override with the shared route pattern, even when the public route is localized:
+Configure each override with its shared route pattern:
 
 ```ts title="proxy.ts"
 export default createNextMiddleware({
-  pathConfig: {
-    '/products/[id]': {
-      fr: '/produits/[productId]',
-    },
-  },
   routeOverrides: {
-    fr: ['/products/[id]'],
+    fr: [
+      '/home', // Static route
+      '/products/[id]', // Single dynamic parameter
+      '/blog/[[...slug]]', // Route and all child paths
+    ],
   },
 });
 ```
 
-A request for `/fr/produits/sku-123` rewrites internally to `/fr/fr/products/sku-123`, which renders `app/[locale]/fr/products/[id]/page.tsx`. Static, dynamic, required catch-all, and optional catch-all patterns are supported. A static pattern such as `/blog` does not match `/blog/archive`.
+A French request for `/fr/home` renders `app/[locale]/fr/home/page.tsx`. Other locales render `app/[locale]/home/page.tsx`. The dynamic and catch-all patterns work the same way for their matching pages.
 
 Overrides are ignored when `localeRouting` is `false`. Locale keys are standardized when General Translation services are enabled.
 
 <Callout type="info">
-  Cache and layout APIs see the internal route. Pass the rewrite destination, such as `/fr/fr/products/sku-123`, to Next.js `revalidatePath`. From the `[locale]` layout, `useSelectedLayoutSegments` also includes the override's static locale segment.
+  Cache and layout APIs see the internal route. Pass the rewrite destination, such as `/fr/fr/home`, to Next.js `revalidatePath`. From the `[locale]` layout, `useSelectedLayoutSegments` also includes the override's static locale segment.
 </Callout>
 
-<Callout type="warn">
-  Next.js 16.3.x can repeatedly request prefetched links whose public URLs redirect. An [upstream fix](https://github.com/vercel/next.js/issues/97329#issuecomment-5515713671) is available in a 16.4 canary but has not yet been verified with `gt-next`.
-</Callout>
+Use [`<Link>`](/docs/react/nextjs/link) from `gt-next/link` for internal navigation so locale-prefixed routes are generated before navigation without an extra middleware redirect.
 
 ## Example [#example]
 
