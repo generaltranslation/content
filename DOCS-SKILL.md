@@ -315,14 +315,14 @@ Treat the Overview sidebar hub, each section's `meta.json`, and the correspondin
 
 The publishing app generates machine-readable maps from the docs source:
 
-- `llms.txt` — a curated [llmstxt.org](https://llmstxt.org/)-style entry point with the primary Quickstarts and links to scoped indexes.
-- `llms-index.txt` — an exhaustive link index for every published docs page.
-- `llms-full.txt` — full page bodies for tools that can load a large context, excluding the generated OpenAPI reference.
+- `/llms.txt` — a curated [llmstxt.org](https://llmstxt.org/)-style entry point with the primary Quickstarts and links to scoped indexes.
+- `/llms-index.txt` — an exhaustive link index for every published docs page.
+- `/llms-full.txt` — full page bodies for tools that can load a large context, excluding the generated OpenAPI reference.
 - `/docs/<section>/llms.txt` — exhaustive section indexes for Overview, Platform, CLI, React, Vue, Node, Python, and Integrations. Platform capabilities also have scoped indexes.
 - `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
 - `/AGENTS.md` — the default-language drop-in agent guide from the **For coding agents** page.
-- `sitemap.md` — a default-language Markdown index of every docs page and blog post.
-- `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
+- `/sitemap.md` — a default-language Markdown index of every docs page and blog post.
+- `/sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
 Do not add hand-written copies to this repository. When you add, rename, remove, or reorder pages, keep the `meta.json` filetree valid so the publishing app generates current output. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
 
