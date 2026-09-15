@@ -20,7 +20,7 @@ Docs communicate a product and its scaffolding. They should help a user **build 
 
 We decided to rebuild our docs from scratch with a deliberate eye to the reader experience for both humans and agents. **The initial refactor touched 900 files** (+31,868 / −32,249 lines). We created a 13,000-word style guide with rules for audience, page anatomy, and style and grammar. The docs are now maintained by a daily cloud agent that lints against the style guide.
 
-For agent readability, we also serve [`llms.txt`](https://generaltranslation.com/llms.txt) and [`llms-full.txt`](https://generaltranslation.com/llms-full.txt) for machine-readable discovery and retrieval, and serve every docs page as raw Markdown by appending `.md` or `.mdx` to its URL. We ship a docs page [for coding agents](https://generaltranslation.com/en-US/docs/overview/for-coding-agents) with a drop-in `AGENTS.md` that tells an agent how to set up, use, and translate correctly, alongside our MCP server and machine-readable OpenAPI spec.
+For agent readability, we also serve [`llms.txt`](https://generaltranslation.com/llms.txt) and [`llms-full.txt`](https://generaltranslation.com/llms-full.txt) to index the site, and serve every docs page as raw Markdown by appending `.md` to its URL. We ship a docs page [for coding agents](https://generaltranslation.com/en-US/docs/overview/for-coding-agents) with a drop-in `AGENTS.md` that tells an agent how to set up, use, and translate correctly, alongside our MCP server and machine-readable OpenAPI spec.
 
 This post covers the changes we made and our learnings.
 
@@ -53,7 +53,7 @@ Docs should help the user build a mental model of the product and how it works. 
 
 ![The docs sidebar before and after the redesign, reorganized around the Overview, Platform, frameworks, and Integrations sections](/static/blogs/rewriting-docs-sidebar.png?v=20260914-1722)
 
-**b) Related pages.** Each page guides users to next steps, with related links updated by logical proximity. Entry pages point to as many as four relevant Guides, and each Guide points to related Guides. Links live in the frontmatter rather than body text so the site can resolve them against the page tree.
+**b) Related pages.** Each page guides users to next steps, with related links updated by logical proximity. Quickstart goes to the most commonly viewed four Guide pages, and each Guide page goes to related Guides or References. Links live in the frontmatter rather than body text so the build can check targets against the page tree.
 
 ![The Next steps component, linking a page to its four most related guides](/static/blogs/rewriting-docs-next-steps.png?v=20260914-1722)
 
@@ -108,13 +108,13 @@ We’ve designed our agent-readiness with Vercel’s [Agent Readability spec](ht
 
 Key parts of our implementation include:
 
-- [`llms.txt`](https://generaltranslation.com/llms.txt): an index of the docs following the [llmstxt.org](https://llmstxt.org) standard, with additional layers: [`llms-index.txt`](https://generaltranslation.com/llms-index.txt) (every page), [section indexes](https://generaltranslation.com/docs/react/llms.txt), and [`llms-full.txt`](https://generaltranslation.com/llms-full.txt) (the full corpus for tools that can load a larger context)
+- [`llms.txt`](https://generaltranslation.com/llms.txt): an index of the docs following the [llmstxt.org](https://llmstxt.org) standard, with additional layers: [`llms-index.txt`](https://generaltranslation.com/llms-index.txt) (every page), [`llms-scope.txt/<section>`](https://generaltranslation.com/en-US/llms-scope.txt/react) (per-section indexes), and [`llms-full.txt`](https://generaltranslation.com/llms-full.txt) (the full corpus for tools that can load a larger context)
 - [`sitemap.xml`](https://generaltranslation.com/sitemap.xml) and [`sitemap.md`](https://generaltranslation.com/sitemap.md): machine-readable maps of every page
 - Raw Markdown for every page: append `.md` or `.mdx` to any docs URL. Recognized AI crawlers and agents that send `Accept: text/markdown` get Markdown automatically
-- An MCP (Model Context Protocol) server: the [`@generaltranslation/mcp`](https://www.npmjs.com/package/@generaltranslation/mcp) npm package for local standard input and output, and an authenticated hosted endpoint at [`https://api.gtx.dev/mcp`](https://api.gtx.dev/mcp) using streamable HTTP
+- An MCP (Model Context Protocol) server: the [`@generaltranslation/mcp`](https://www.npmjs.com/package/@generaltranslation/mcp) npm package for local stdio use, a hosted endpoint at [`https://mcp.gtx.dev`](https://mcp.gtx.dev) (streamable HTTP, with an SSE variant), and a project-scoped endpoint at [`https://api.gtx.dev/mcp`](https://api.gtx.dev/mcp) authenticated with an API key
 - A machine-readable OpenAPI spec at [`/openapi.json`](https://generaltranslation.com/openapi.json) (and [`/openapi.yaml`](https://generaltranslation.com/openapi.yaml)) linked from every endpoint reference page
 - Content structured in chunks for RAG (retrieval-augmented generation), with each section containing a complete thought and consistent heading hierarchies
-- A permissive [`robots.txt`](https://generaltranslation.com/robots.txt) that lets AI crawlers access every public page
+- A permissive [`robots.txt`](https://generaltranslation.com/robots.txt): AI crawlers are never blocked
 
 ## Process, maintenance, and style guide
 
