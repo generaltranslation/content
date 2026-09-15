@@ -13,6 +13,10 @@ Rules for authoring and updating the General Translation docs. Follow these to p
 
 General Translation is **one full-stack product**, and every top-level docs section is a capability of it. They all follow the same **Get Started/Quickstart/Introduction → Guides → Reference** spine. A few rules are specific to the Platform section (Dashboard, Locadex, OpenAPI, Core) and are marked *(Platform-specific)*.
 
+### Preserve published blog posts
+
+Treat published posts under `blog/**` as historical editorial records. Do not include them in routine docs audits, style passes, product-sync updates, link cleanup, or broad rewrites. Edit a published post only when its content is blatantly incorrect; make the smallest correction needed and preserve its original wording, links, and historical framing everywhere else.
+
 ## Before you write: understand the system first
 
 Good docs come from understanding, not paraphrasing. Before applying any formatting rule below — especially on a first rewrite with access to the codebase — work in this order:
