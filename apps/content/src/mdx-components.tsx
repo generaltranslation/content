@@ -6,6 +6,7 @@ import { Step, Steps } from 'fumadocs-ui/components/steps';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import { TypeTable } from 'fumadocs-ui/components/type-table';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
+import * as icons from 'lucide-react';
 
 import { APIPage } from '@/lib/api-page';
 import Video from '@/components/Video';
@@ -124,6 +125,8 @@ const customComponents = {
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
+    // Matches the production renderer: every lucide icon is usable in MDX.
+    ...(icons as unknown as MDXComponents),
     ...defaultMdxComponents,
     img: MdxImage,
     Accordion,
