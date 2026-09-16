@@ -50,6 +50,7 @@ It then sets a locale cookie and, when `localeRouting` is enabled, redirects or 
 | [`ignoreSourceMaps`](#ignore-source-maps) | Skip Next.js source-map requests. | `boolean` | Yes | `true` |
 | [`pathConfig`](#path-config) | Localized path aliases. | `object` | Yes | `{}` |
 | [`routeOverrides`](#route-overrides) | Use a locale-specific page implementation without changing its public URL. | `RouteOverrides` | Yes | `{}` |
+| [`localeRoutes`](#locale-routes) | Limit the shared paths available in each locale. | `LocaleRoutes` | Yes | `{}` |
 
 *Note: to restrict which pathnames the middleware runs on, set [`pathRegex`](/docs/react/nextjs/config#path-regex) in `withGTConfig` — it is not a middleware option. The `matcher` in your exported `config` is what Next.js uses to decide when the middleware runs at all.*
 
@@ -165,6 +166,33 @@ Overrides are ignored when `localeRouting` is `false`. Locale keys are standardi
 </Callout>
 
 Use [`<Link>`](/docs/react/nextjs/link) from `gt-next/link` for internal navigation so locale-prefixed routes are generated before navigation without an extra middleware redirect.
+
+### `localeRoutes` [#locale-routes]
+
+**Type** `LocaleRoutes` · **Optional** · **Default** `{}`
+
+Lists the shared paths available for each locale. Each key is a locale, and its value is an array of shared route patterns. Locales omitted from this option can serve every route. An empty array prevents a locale from serving any routes.
+
+```ts title="proxy.ts"
+export default createNextMiddleware({
+  pathConfig: {
+    '/pricing': {
+      'en-GB': '/prices',
+    },
+  },
+  routeOverrides: {
+    'en-GB': ['/pricing'],
+  },
+  localeRoutes: {
+    'en-GB': ['/pricing', '/blog/[[...slug]]'],
+    fr: [],
+  },
+});
+```
+
+In this example, visitors using `en-GB` can view the pricing page and the blog, including its child routes. `/en-GB/prices` still uses the localized alias from `pathConfig` and the locale-specific page implementation from `routeOverrides`. Visitors using French fall back to the default locale for every route, while locales not listed in `localeRoutes` remain unrestricted.
+
+`localeRoutes` always uses shared paths, not localized aliases. It controls routing availability only; it does not check whether content exists in your CMS or other data source. When a requested route is unavailable, the middleware redirects to the corresponding default-locale public URL, preserving configured aliases, route overrides, route parameters, query strings, base paths, and trailing-slash style. The default locale is the final fallback, and a missing default-locale page uses your application's normal Next.js 404 handling.
 
 ## Example [#example]
 
