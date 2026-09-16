@@ -5,9 +5,9 @@ description: Create a typed client for the General Translation API and call gene
 
 ---
 
-Import the TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The module combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for batching, file-content encoding, and translation-job polling.
+Import the TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The module combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for batching and translation-job polling.
 
-`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The same exports are available from the standalone `@generaltranslation/api` package in version 0.1.0 and later.
+`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.4.0 and the equivalent standalone `@generaltranslation/api` 0.3.0 package.
 
 The generated helpers follow the OpenAPI snapshot bundled with the installed package. That snapshot can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview), so use the public reference when checking which endpoints and file formats are live.
 
@@ -21,7 +21,6 @@ The generated helpers follow the OpenAPI snapshot bundled with the installed pac
 | [Endpoint helpers](#endpoint-helpers) | Typed functions generated for each operation in the bundled OpenAPI snapshot. |
 | [`awaitJobs`](#job-polling) and [`pollJobs`](#job-polling) | Poll translation jobs until they finish or time out. |
 | [`processBatches`](#batch-processing) and [`DEFAULT_BATCH_SIZE`](#batch-processing) | Process an input array in configurable batches. |
-| [Content encoding helpers](#content-encoding) | Encode and decode strings and API file payloads. |
 | [Generated types](#types-errors) | Describe endpoint data, responses, errors, and client contracts. |
 | [Bundled OpenAPI specification](#openapi-spec) | JSON snapshot used to generate the installed package. |
 
@@ -147,7 +146,7 @@ Common generated options include:
 | `signal` | Cancel the request with a Fetch API signal. | `AbortSignal` | Yes | — |
 | `meta` | Values exposed to custom client integrations. | `Record<string, unknown>` | Yes | — |
 
-The installed 0.2.1 SDK exports these generated operation helpers:
+The installed 0.3.0 SDK provides generated helpers for these public operations:
 
 | Function | Operation |
 | --- | --- |
@@ -173,11 +172,10 @@ The installed 0.2.1 SDK exports these generated operation helpers:
 | `getTranslationStatus` | Read a file's translation status. |
 | `processFileMoves` | Move or rename files. |
 | `getOrphanedFiles` | Find orphaned files. |
-| `createCliWizardSession` | Create a CLI setup-wizard session. |
-| `getCliWizardSession` | Read a CLI setup-wizard session. |
-| `deleteCliWizardSession` | Delete a CLI setup-wizard session. |
 
 <Callout type="info">
+  **Changed in v0.3.0:** `encodeBase64`, `decodeBase64`, `encodeFileContent`, and `decodeFileContent` are no longer exported. Encode file content before passing it to a generated upload helper.
+
   **Changed in v0.2.1:** [`createProject`](/docs/platform/openapi/reference/project/create-project) now requires `path.orgId` and calls `POST /v2/orgs/{orgId}/projects`. This release also added [`createProjectApiKey`](/docs/platform/openapi/reference/project/create-api-key) and removed `shouldGenerateProjectContext` and `getProjectContextGenerationStatus`.
 </Callout>
 
@@ -272,16 +270,17 @@ function processBatches<TInput, TOutput>(
 If a batch processor rejects, `processBatches` rejects. With parallel processing, the other batches that already started continue independently.
 
 ```ts
+import { Buffer } from 'node:buffer';
 import {
-  encodeFileContent,
   processBatches,
   uploadSourceFiles,
 } from 'generaltranslation/api';
 
 // Generated endpoint helpers expect file content encoded for transport.
+const content = Buffer.from('{"greeting":"Hello"}', 'utf8').toString('base64');
 const files = [{
   source: {
-    content: encodeFileContent('{"greeting":"Hello"}', 'JSON'),
+    content,
     fileName: 'en.json',
     fileFormat: 'JSON' as const,
     locale: 'en',
@@ -298,27 +297,11 @@ const results = await processBatches(files, async (batch) => {
 });
 ```
 
-## Content encoding [#content-encoding]
-
-`encodeBase64` and `decodeBase64` convert between UTF-8 strings and base64 in Node.js and browsers.
-
-```ts
-function encodeBase64(data: string): string;
-function decodeBase64(base64: string): string;
-```
-
-`encodeFileContent` and `decodeFileContent` apply the API's file-content convention. `LOTTIE` payloads remain unchanged because the `.lottie` archive is already base64; every other format is encoded or decoded as UTF-8 text.
-
-```ts
-function encodeFileContent(content: string, fileFormat: FileFormat): string;
-function decodeFileContent(content: string, fileFormat: FileFormat): string;
-```
-
 ## Types and errors [#types-errors]
 
-The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, and all generated OpenAPI types.
+The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, and the generated OpenAPI types for the public operations listed above.
 
-For every generated operation, the package exports:
+For each public operation listed above, the package exports:
 
 - `<Operation>Data` for typed body, headers, path, and query input.
 - `<Operation>Errors` for the status-code map of documented errors.

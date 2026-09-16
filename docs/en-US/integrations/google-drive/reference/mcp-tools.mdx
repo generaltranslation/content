@@ -1,0 +1,101 @@
+---
+
+title: Google Drive MCP tools
+description: Translate Google Docs and Google Slides through the authenticated hosted MCP server. API reference for the Google Drive MCP tools.
+
+---
+
+The hosted server at `https://api.gtx.dev/mcp` exposes three tools for finding connected projects, starting translations, and polling their progress. These tools use the same Google Drive connections and translated copies as the Dashboard integration.
+
+## Overview [#overview]
+
+| Tool | Description | Permission |
+| --- | --- | --- |
+| [Authentication and access](#access) | Choose credentials and a Google Drive connection mode. | — |
+| [`get_google_drive_context`](#drive-context) | Lists accessible connected projects and resolves optional file context. | `project:files:read` |
+| [`translate_google_drive_file`](#translate-drive-file) | Synchronizes and translates one Google Doc or Google Slides presentation. | `project:files:write` and `project:translations:enqueue` |
+| [`get_google_drive_translation_status`](#drive-status) | Returns translation progress, layout progress, and translated-copy URLs. | `project:files:read` |
+
+## Authentication and access [#access]
+
+Connect to the [hosted MCP server](/docs/overview/for-coding-agents#mcp) with OAuth or an accepted API key:
+
+- **OAuth:** the tools can use your linked personal Google account or the project's Organization shared drive connection. A legacy personal connection with only `drive.file` access can reach Dashboard-selected files, but it must be reconnected with full Drive access before a tool can translate another file.
+- **Production or development project API key:** the key must include the permissions required by the tool, and the project must use an Organization shared drive connection.
+- **Organization API key:** the key must include the permissions required by the tool and target a project that uses an Organization shared drive connection.
+- **Locadex:** the project must use an Organization shared drive connection.
+
+An API-key caller cannot use a personal Google account for Drive access. The Organization needs the project integrations feature, and Organization shared drive access also requires its separate Enterprise feature. Configure both connection modes in the [Connection reference](/docs/integrations/google-drive/reference/connection).
+
+MCP and API calls enforce the permission listed for each tool. Dashboard file actions require `project:files:write` and `project:translations:enqueue`, while the page separately checks `translations:content:write` before showing personal-account controls.
+
+## `get_google_drive_context` [#drive-context]
+
+**Read-only** · **Permission** `project:files:read`
+
+Call this tool first to list the projects the current credential can access and obtain their project IDs and locale settings. You can also resolve the source and locale context for a Google Drive file.
+
+### Inputs
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `fileId` | Google Drive file ID from the Docs or Slides URL after `/d/`. | `string` | Yes | — |
+| `hostApp` | Google editor that owns the file. | `'DOCS' \| 'SLIDES'` | Yes | — |
+
+Omit both inputs to list connected projects. Provide both to inspect a source file or a translated copy managed by the integration.
+
+### Returns
+
+The result includes:
+
+- `linked` and `user.email`; successful responses currently return `linked: true`, and `user.email` can be `null`. Neither field indicates whether a personal Google account is connected.
+- Supported locales.
+- Accessible projects with their IDs, names, default source locales, current locales, locale allowlists, and integration status.
+- Source and target locale context when the requested file is linked or is a managed translated copy.
+
+Projects whose connection mode the caller cannot use are omitted.
+
+## `translate_google_drive_file` [#translate-drive-file]
+
+**Mutating** · **Permissions** `project:files:write` and `project:translations:enqueue`
+
+Synchronizes a Google Doc or Google Slides presentation, imports edits from existing translated copies, queues translation work, and applies completed translations to the managed copies.
+
+### Inputs
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `projectId` | Project ID returned by `get_google_drive_context`. | `string` | No | — |
+| `fileId` | Google Drive file ID from the Docs or Slides URL after `/d/`. | `string` | No | — |
+| `hostApp` | Google editor that owns the file. | `'DOCS' \| 'SLIDES'` | No | — |
+| `targetLocales` | One to 100 project locale codes. | `string[]` | No | — |
+| `sourceLocale` | Source locale. Falls back to the stored file locale, then the project default. | `string` | Yes | Stored locale or project default |
+| `force` | Retranslates existing content instead of reusing it. | `boolean` | Yes | `false` |
+
+When `fileId` identifies a managed translated copy, the tool resolves its original source and uses only that copy's target locale. Its original source locale also overrides `sourceLocale`.
+
+### Returns
+
+The result contains `accepted`, the resolved `sourceLocale` and `targetLocales`, counts in `enqueued` and `failed`, and an `errors` array. Inspect all three outcome fields because one target locale can fail while others are queued.
+
+This tool may consume translation credits and update existing translated copies. Forced translation can overwrite translated text and layout changes.
+
+## `get_google_drive_translation_status` [#drive-status]
+
+**Read-only** · **Permission** `project:files:read`
+
+Poll this tool after `translate_google_drive_file` to read translation and layout progress for every requested locale.
+
+### Inputs
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `projectId` | Project ID returned by `get_google_drive_context`. | `string` | No | — |
+| `fileId` | Google Drive file ID from the Docs or Slides URL after `/d/`. | `string` | No | — |
+| `hostApp` | Google editor that owns the file. | `'DOCS' \| 'SLIDES'` | No | — |
+
+### Returns
+
+Each locale result contains its locale details, nullable `translationProgress` and `layoutProgress` values, and a `done` boolean. Once a managed copy is available, `targetCopy` contains its Google Drive file ID and URL.
+
+When `fileId` identifies a managed translated copy, the tool resolves its source and returns status for that copy's target locale.
