@@ -18,6 +18,32 @@ function StubComponent() {
   return null;
 }
 
+// The production blog renders <Carousel> as a scroll-snap gallery; the
+// preview only needs the images to show, so they stack in reading order.
+function Carousel({
+  label,
+  children,
+}: {
+  label?: string;
+  width?: number | string;
+  height?: number | string;
+  interval?: number | string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <figure aria-label={label} style={{ display: 'grid', gap: 12, margin: '2rem 0' }}>
+      {children}
+    </figure>
+  );
+}
+
+function CarouselItem({ src, alt }: { src: string; alt?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- static blog asset
+    <img src={src} alt={alt ?? ''} style={{ width: '100%', height: 'auto', borderRadius: 6 }} />
+  );
+}
+
 function IntroFeature({
   children,
   title,
@@ -104,6 +130,8 @@ function TOC({
 const customComponents = {
   AllLogoCards: StubComponent,
   AuthorSpotlight: StubComponent,
+  Carousel,
+  CarouselItem,
   LogoCard: StubComponent,
   LogoCardContainer: StubComponent,
   LogoCardContent: StubComponent,
