@@ -1,0 +1,113 @@
+---
+title: generaltranslation@9.2.0 / gt@2.18.0
+headline: One API contract from server to client
+date: 2026-08-28
+authors: [cyan]
+tags: ['generaltranslation', '9.2.0', 'gt', '2.18.0', '@generaltranslation/api', '0.1.0', 'openapi', 'cli']
+---
+
+## Overview
+
+**generaltranslation 9.2.0** and **gt 2.18.0** rebuild the GT API surface around **@generaltranslation/api 0.1.0**, a client generated directly from the GT OpenAPI specification.
+
+The CLI, core runtime, and Sanity integration now share one contract from server to client. Server schemas generate the SDK types, and those types flow into core's published API instead of being copied by hand. This removes roughly 5,000 lines of handwritten HTTP client and polling code while making API changes easier to discover and safer to adopt.
+
+For most users, existing commands and `GT` class methods continue to work as before. This release also adds direct API access from the CLI, project-management commands, public SDK and diagnostics entry points, and more reliable job polling.
+
+---
+
+## Direct API access from the CLI
+
+The new `gt api` command sends authenticated requests to any GT API endpoint. It uses your existing GT configuration and credentials, validates the HTTP method, streams the response, and surfaces non-successful status codes.
+
+Think of it as curl for the GT API, with authentication already handled:
+
+```bash title="List your projects"
+npx gt api /v2/projects
+```
+
+Pass `--spec` to print the bundled OpenAPI specification and discover available endpoints:
+
+```bash title="Inspect the GT OpenAPI specification"
+npx gt api --spec
+```
+
+You can also choose a method, provide request input, add headers, or include response metadata when you need lower-level access for scripts and debugging.
+
+---
+
+## Project commands
+
+**gt 2.18.0** adds two focused project commands:
+
+- `gt project create` creates a project from your local configuration.
+- `gt project status` checks project setup and translation job status.
+
+These commands use the same generated API client as the rest of the CLI, so authentication, errors, and response types behave consistently across workflows.
+
+---
+
+## More reliable polling
+
+Translation workflows now share one sequential job poller instead of maintaining separate polling loops. This fixes several failure cases that could make long-running commands confusing:
+
+- Authentication failures stop immediately instead of retrying until the overall timeout.
+- A polling timeout reports failure instead of success.
+- Poll requests no longer overlap.
+- Each request receives its own abort signal and deadline.
+
+Progress output and spinner behavior stay the same, but failures arrive earlier and reflect what actually happened.
+
+---
+
+## A public generated SDK
+
+**generaltranslation 9.2.0** exposes the full generated client from `generaltranslation/api`, including the OpenAPI specification at `generaltranslation/api/openapi.json`.
+
+Use it when you need a typed operation that is not part of the higher-level `GT` class:
+
+```ts title="Call a generated API operation"
+import { createApiClient, getProjectInfo } from 'generaltranslation/api'
+
+const client = createApiClient({
+  apiKey: process.env.GT_API_KEY,
+  baseUrl: 'https://api2.gtx.dev',
+})
+
+const result = await getProjectInfo({
+  client,
+  path: { projectId: 'your-project-id' },
+})
+```
+
+The underlying **@generaltranslation/api 0.1.0** package is standalone and has no runtime dependencies on other GT workspace packages. It includes an idempotency-aware retry policy and a sequential job poller with an `onPoll` hook for progress reporting.
+
+---
+
+## Smaller diagnostics imports
+
+Diagnostic formatting helpers are now available from the dependency-free `generaltranslation/diagnostics` subpath. The entry point is approximately 400 bytes brotli, so command-line tools and integrations can format consistent GT errors without pulling in the rest of core.
+
+Existing imports from `generaltranslation/internal` remain available for compatibility.
+
+---
+
+## Stronger runtime boundaries
+
+The public signatures of `GT` class methods are unchanged, but their requests now run through the generated SDK. Responses are validated where the OpenAPI contract permits multiple data shapes, so malformed server payloads become structured errors instead of being accepted through type assertions.
+
+Model-provider settings are also validated before a request is sent. Unsupported values now fail immediately with a diagnostic rather than reaching the server only to be rejected there.
+
+The Sanity integration picks up the same generated client and polling plumbing in its patch release. No configuration changes are required.
+
+---
+
+## Behavior changes
+
+This release includes three small but observable corrections:
+
+- POST requests are no longer retried automatically after rate-limit or server failures. Retries are now idempotency-aware, avoiding accidental duplicate writes.
+- Unsupported model providers throw a client-side diagnostic before a request is sent.
+- The never-populated `deduped` field has been removed from font upload results.
+
+Together, these releases make the OpenAPI contract the single source of truth for GT API requests, responses, and public types, while keeping the high-level interfaces familiar.
