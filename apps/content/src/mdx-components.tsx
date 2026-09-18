@@ -37,6 +37,18 @@ function Carousel({
   );
 }
 
+function HitList({ label, children }: { label?: string; children?: React.ReactNode }) {
+  return (
+    <ul aria-label={label} style={{ display: 'grid', gap: '10px 40px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', listStyle: 'none', padding: 0, margin: '1.5rem 0' }}>
+      {children}
+    </ul>
+  );
+}
+
+function HitItem({ children }: { children?: React.ReactNode }) {
+  return <li>✕ {children}</li>;
+}
+
 function CarouselItem({ src, alt }: { src: string; alt?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- static blog asset
@@ -132,6 +144,8 @@ const customComponents = {
   AuthorSpotlight: StubComponent,
   Carousel,
   CarouselItem,
+  HitList,
+  HitItem,
   LogoCard: StubComponent,
   LogoCardContainer: StubComponent,
   LogoCardContent: StubComponent,
