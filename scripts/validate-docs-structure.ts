@@ -30,18 +30,7 @@ const EXPECTED_OVERVIEW_PAGES = [
   './get-started',
   './key-concepts',
   './for-coding-agents',
-  '---Frameworks---',
-  '[React](/docs/react/react-quickstart)',
-  '[React SPA](/docs/react/react-spa-quickstart)',
-  '[Next.js App Router](/docs/react/nextjs-quickstart)',
-  '[Next.js Pages Router](/docs/react/nextjs-pages-router-quickstart)',
-  '[TanStack Start](/docs/react/tanstack-start-quickstart)',
-  '[React Native](/docs/react/react-native-quickstart)',
-  '[Vue](/docs/vue/quickstart)',
-  '[Node.js](/docs/node/quickstart)',
-  '[Python](/docs/python/quickstart)',
-  '[CLI](/docs/cli/quickstart)',
-  '[JSON](/docs/cli/reference/formats/json-files)',
+  './(frameworks)',
   '---Platform---',
   '[Dashboard](/docs/platform/dashboard/get-started)',
   '[Locadex](/docs/platform/locadex/quickstart)',
@@ -54,6 +43,24 @@ const EXPECTED_OVERVIEW_PAGES = [
   '[Storyblok](/docs/integrations/storyblok/quickstart)',
   '[rrweb](/docs/integrations/rrweb/quickstart)',
 ] as const;
+
+const EXPECTED_OVERVIEW_GROUP_PAGES: Readonly<
+  Record<string, readonly string[]>
+> = {
+  'overview/(frameworks)/meta.json': [
+    '[React](/docs/react/react-quickstart)',
+    '[React SPA](/docs/react/react-spa-quickstart)',
+    '[Next.js App Router](/docs/react/nextjs-quickstart)',
+    '[Next.js Pages Router](/docs/react/nextjs-pages-router-quickstart)',
+    '[TanStack Start](/docs/react/tanstack-start-quickstart)',
+    '[React Native](/docs/react/react-native-quickstart)',
+    '[Vue](/docs/vue/quickstart)',
+    '[Node.js](/docs/node/quickstart)',
+    '[Python](/docs/python/quickstart)',
+    '[CLI](/docs/cli/quickstart)',
+    '[JSON](/docs/cli/reference/formats/json-files)',
+  ],
+};
 
 const EXPECTED_LANDING_CARDS: Readonly<Record<string, readonly string[]>> = {
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
@@ -426,6 +433,26 @@ export function validateDocsStructure(
     const overviewLinks = overviewPages
       .map(parseCrossSectionLink)
       .filter((link): link is CrossSectionLink => link !== undefined);
+    for (const [groupMetaPath, expectedPages] of Object.entries(
+      EXPECTED_OVERVIEW_GROUP_PAGES
+    )) {
+      const groupMeta = metaByPath.get(groupMetaPath);
+      const groupPages = groupMeta && getPages(groupMeta);
+      if (!groupPages) continue;
+
+      if (!sameValues(groupPages, expectedPages)) {
+        addFinding(
+          groupMetaPath,
+          'Overview group entries must follow the canonical order.'
+        );
+      }
+
+      overviewLinks.push(
+        ...groupPages
+          .map(parseCrossSectionLink)
+          .filter((link): link is CrossSectionLink => link !== undefined)
+      );
+    }
 
     for (const root of ['platform', 'integrations'] as const) {
       const rootMetaPath = `${root}/meta.json`;

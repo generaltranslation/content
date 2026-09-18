@@ -294,8 +294,10 @@ A `meta.json` supports these keys:
 Entries in `pages` take three forms:
 
 - **A child page or folder** — a relative reference: `"./quickstart"`, `"./guides"`, `"./(frameworks)"`.
-- **A section separator** — a label wrapped in triple dashes: `"---Frameworks---"`, `"---Platform---"`. This renders a labeled divider in the sidebar; use it to group entries within one section.
+- **A section separator** — a label wrapped in triple dashes: `"---Platform---"`, `"---Integrations---"`. This renders a labeled divider in the sidebar; use it to group entries within one section.
 - **A cross-section link** — a Markdown link to another page: `"[Dashboard](/docs/platform/dashboard/get-started)"`. Use these to point out of the current section (see Overview hub).
+
+The Overview hub keeps **Frameworks** in the `(frameworks)` route group so its sidebar label comes from the translatable folder `title`. Keep **Platform** and **Integrations** as separators; the publishing app translates those registered metadata labels without rewriting the structural `pages` array.
 
 Every immediate child folder listed by a top-level section root becomes a visible sidebar section. The allowed section names and order are pinned by CI. Do not add, remove, or reorder one unless the task explicitly calls for an information-architecture change.
 
@@ -303,7 +305,7 @@ Every immediate child folder listed by a top-level section root becomes a visibl
 
 ### Overview hub
 
-The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators with **cross-section link entries** to surface the main frameworks, Platform capabilities, and integrations without duplicating their content. Keep these groups and their entries in this order:
+The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then the `(frameworks)` route group, the **Platform** separator and links, and the **Integrations** separator and links. The route group gives **Frameworks** a translatable folder title without adding a URL segment. Keep these groups and their entries in this order:
 
 - **Frameworks:** React, React SPA, Next.js App Router, Next.js Pages Router, TanStack Start, React Native, Vue, Node.js, Python, CLI, JSON
 - **Platform:** Dashboard, Locadex, Core, OpenAPI

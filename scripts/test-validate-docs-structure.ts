@@ -218,17 +218,17 @@ assertEqual(
 
 const reorderedOverviewLinks = replaceMeta(
   repositoryFiles,
-  'overview/meta.json',
+  'overview/(frameworks)/meta.json',
   (meta) => {
     const pages = meta.pages as string[];
-    [pages[4], pages[5]] = [pages[5]!, pages[4]!];
+    [pages[0], pages[1]] = [pages[1]!, pages[0]!];
   }
 );
 assertEqual(
   hasFinding(
     validateDocsStructure(reorderedOverviewLinks),
-    'overview/meta.json',
-    'must follow the canonical Frameworks, Platform, and Integrations order'
+    'overview/(frameworks)/meta.json',
+    'Overview group entries must follow the canonical order'
   ),
   true,
   'rejects reordered Overview hub links'
