@@ -37,19 +37,20 @@ curl https://api.gtx.dev/v2/project/info/PROJECT_ID \
   -H "Authorization: Bearer gtx-api-..."
 ```
 
-Use the correct key type:
+Use the correct key scope:
 
-- **Project (development)** with prefix `gtx-dev-`: for local and preview use, rejected by production-only endpoints
-- **Project (production)** with prefix `gtx-api-`: bound to one project
+- **Project** with prefix `gtx-api-`: bound to one project and usable in any environment
 - **Organization** with prefix `gtx-org-`: works across projects. Most project-scoped endpoints require `gt-project-id`. `GET /v2/project/info/{projectId}` still requires that header and checks that the two IDs match. `POST /v2/projects/{projectId}/api-keys` uses its path parameter instead. Organization-scoped endpoints such as `POST /v2/orgs/{orgId}/projects` use the Organization in the path and require the credential to have access to it.
 
 (See [API keys](/docs/platform/dashboard/reference/api-keys) for how to create and scope API keys).
 
 OAuth applications use the Authorization Code flow with Proof Key for Code Exchange (PKCE). Discover the authorization server at `https://dash.generaltranslation.com/.well-known/oauth-authorization-server/api/auth`, request only the scopes your application needs, and send the resulting user access token in the same bearer header. The token is limited by both its granted scopes and the user's current access to the target Organization or project.
 
+The authorization server reserves the `gt:*` wildcard scope for registered first-party clients. Dynamically registered applications must request individual permission scopes and cannot request `gt:*`.
+
 ### Permissions
 
-Each endpoint requires a permission on the request identity. Organization keys configure permissions explicitly. Project keys created in the Dashboard use the defaults for their key type; keys created through the Organization API can have fewer permissions because they are limited to those the request identity can delegate. OAuth user access tokens must include the matching scope, and the signed-in user must still hold that permission.
+Each endpoint requires a permission on the request identity. Organization and project keys created in the Dashboard can use **All** grantable permissions or a **Custom** set. Project keys created through `POST /v2/projects/{projectId}/api-keys` receive the default project permission bundle, limited to permissions the request identity can delegate. OAuth user access tokens must include the matching scope, and the signed-in user must still hold that permission.
 
 Common permissions:
 
@@ -82,14 +83,19 @@ Set `fileFormat` to `MD` or `MDX` to translate a whole document supplied as a st
 
 ### Rate limits
 
-Requests are rate limited per API key or client IP over a 60-second window. Limits vary by endpoint:
+Rate limiting uses 60-second windows at two layers:
+
+- **Before authentication:** each presented credential can make 600 attempts per minute, including requests that fail authentication. Requests without a credential skip this layer. Exceeding the limit returns `429` with `Retry-After: 60` and no `RateLimit-*` headers.
+- **After authentication:** each route group limits requests by authenticated actor, including API keys, OAuth users, and Locadex sessions. Limited routes without an authenticated actor use the client IP. Related operations can share a route-group counter.
+
+Post-authentication limits vary by operation:
 
 - **Heavy:** 30 requests/minute for queueing translations.
 - **Medium:** 120 requests/minute for uploads, diffs, context, moves, orphaned files, and publishing.
 - **Light:** 300 requests/minute for file downloads.
 - **Default:** 200 requests/minute for project and project API-key creation, branches, tags, project info, job info, file info, translation status, and runtime translation.
 
-Exceeding a limit returns `429`. Organization token quotas return `402` from `POST /v2/translate`.
+Exceeding a post-authentication limit returns `429` with `RateLimit-*` headers. Organization token quotas return `402` from `POST /v2/translate`.
 
 ### Errors
 
