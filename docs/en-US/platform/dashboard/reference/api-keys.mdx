@@ -1,77 +1,90 @@
 ---
 
 title: API keys
-description: Create and manage project and Organization API keys for apps, local development, and automation. Reference for API keys.
+description: Create and manage Project and Organization API keys for apps, local development, and automation.
 
 ---
 
-API keys authenticate your apps, CLI, and automation with General Translation. Use the narrowest key scope that fits the workflow.
+API keys authenticate your apps, CLI, and automation with General Translation. Use the narrowest key scope and permission set that fits the workflow.
 
 ## Key scopes [#key-scopes]
 
 General Translation supports two API key scopes:
 
-- **Organization keys** for Organization-level automation. Use them for org-level automation or workflows that need to operate across projects in the Organization.
-- **Project keys** for a single project. Use them for deployed apps, local development, previews, and project-scoped tooling.
+- **Project keys** for a single Project. Use them for deployed apps, local development, previews, CI, and Project-scoped tooling. Project keys use the `gtx-api-` prefix.
+- **Organization keys** for automation that operates across Projects in the Organization. Organization keys use the `gtx-org-` prefix.
 
-Organization keys and project keys have different creation flows. Project keys are created as production or development keys. Organization keys use a permission selector.
+A key is not tied to an environment. The same Project key works in local development, previews, CI, and production. The environment variable you set it in decides how the SDKs use it. (See [Environment variables](#environment-variables)).
 
-## Create Organization keys [#create-organization-keys]
+## Permissions [#permissions]
 
-Create Organization keys from **Organization > Developer > API Keys**. Organization keys use the `gtx-org-` prefix and can be configured with a custom permission set.
-
-Permissions are configured per resource. `Write` includes `Read`.
+Both scopes use the same permission selector. Choose **All** to grant every permission the key can hold, or **Custom** to pick an access level per resource. `Write` includes `Read`.
 
 | Resource                | Read                                  | Write or enabled                                      |
 | ----------------------- | ------------------------------------- | ----------------------------------------------------- |
-| **Project creation**    | Not applicable                        | Create new projects in the Organization               |
-| **Project API keys**    | View API keys for projects             | View and create project API keys                      |
-| **Files**               | Read project files and translations   | Upload source content and write translated files      |
-| **Context**             | Read project and Organization context | Manage Context Groups, Glossary, and Custom Prompts    |
+| **Files**               | Read Project files and translations   | Upload source content and write translated files      |
+| **Context**             | Read Project and Organization context | Manage context groups, glossary, and directives       |
 | **Runtime translation** | Not applicable                        | Translate content on demand                           |
 | **Translation queue**   | Not applicable                        | Queue file translation jobs for background processing |
-| **Project settings**    | Not applicable                        | Update project settings such as the default locale and CDN delivery |
+| **Project settings**    | Not applicable                        | Update Project settings such as the default locale    |
+| **Project creation**    | Not applicable                        | Create new Projects in the Organization               |
+| **Project API keys**    | List Project API keys                 | Create Project API keys                               |
 
-Enable **Project creation** for automation that calls the [Create a project](/docs/platform/openapi/reference/project/create-project) endpoint. Also enable **Project settings** when that automation creates projects with CDN delivery enabled. Grant each key only the permissions it needs.
+**Project creation** and **Project API keys** are available only on Organization keys. Project keys read and manage Project context only.
 
-Set **Project API keys** to **Write** for automation that calls [Create a project API Key](/docs/platform/openapi/reference/project/create-api-key). The endpoint accepts a name and an optional production or development key type; it does not accept custom permissions. The created key receives the defaults for its type, limited to the project permissions held by the request identity. The request identity can be an Organization key or an OAuth user access token; project keys cannot hold the required `project:api_keys:write` permission.
+A key can hold only permissions you hold yourself. **Create Key** is disabled when you have no permissions to grant.
 
-## Create project keys [#create-project-keys]
+Grant each key only the permissions it needs. *Example: a key exposed to browser code for on-demand translation in development needs only **Runtime translation**.*
 
-Create project keys from **Project > API Keys**. Copy the full key immediately and store it in environment variables, a secrets manager, or another secure store.
+## Create a key [#create-a-key]
 
-- **Production keys** start with `gtx-api-`.
-  - Use them for file uploads, translation jobs, and production automation. Keys created in the Dashboard have the default project permissions; an Organization API-created key may have fewer delegated permissions.
-- **Development keys** start with `gtx-dev-`.
-  - Use them for on-demand translation during local development. Their default permission is runtime translation; production-only endpoints reject them.
-  - Do not use development keys in production.
+1. Open **Project > API Keys** or **Organization > Developer > API Keys**.
+2. Select **Create Key** and enter a descriptive name.
+3. Choose **All** or **Custom** permissions. With **Custom**, select at least one permission.
+4. Select **Create** and copy the key.
 
-In most SDK and CLI workflows, use the key with your project ID:
+The full key is shown once, in the creation dialog, together with a ready-made environment variable snippet. After you close the dialog, only a truncated preview is available. Store the key in environment variables, a secrets manager, or another secure store.
+
+## Environment variables [#environment-variables]
+
+Use a Project key together with your Project ID:
 
 ```bash
-GT_API_KEY=gtx-api-...
 GT_PROJECT_ID=...
+GT_API_KEY=gtx-api-...
 ```
+
+The SDKs choose their behavior from the variable name, not from the key:
+
+- `GT_API_KEY` is read by the CLI and by server-side code. `gt-next` and `gt-node` use it for runtime translation in production.
+- `GT_DEV_API_KEY` enables on-demand translation and hot reload while `NODE_ENV` is `development`. Frameworks that run in the browser read a public equivalent such as `NEXT_PUBLIC_GT_DEV_API_KEY`, `VITE_GT_DEV_API_KEY`, or `EXPO_PUBLIC_GT_DEV_API_KEY`.
+
+You can set the same key in both variables. When the development variable is exposed to browser code, create a separate key with only **Runtime translation** enabled for it.
+
 ## Manage keys [#manage-keys]
 
 Use descriptive names so keys are easy to identify later.
 
-Open the key list for the project or Organization to review existing keys. The key list shows:
+Open the key list for the Project or Organization to review existing keys. The key list shows:
 
-- **Name** and **Key**, including a truncated key for identification
-- **Permissions**, for Organization keys
+- **Name**, the name you gave the key
+- **Key**, a truncated version of the key for identification
+- **Permissions**, whether the key has all permissions or a custom set
 - **Created**, when the key was generated
 - **Last Used**, when the key was last used
+- **Edit**, to rename the key or change its permissions
+- **Delete**, to revoke a key you no longer need
 
-With permission to manage keys, use **Edit key** to rename a key or update an Organization key's permissions, and **Delete** to revoke it. The full secret is shown only when the key is created.
+Permission changes apply to new requests immediately. Revoke keys that are no longer used, and create replacements when rotating credentials.
 
-Revoke keys that are no longer used, and create replacements when rotating credentials.
+*Note: keys created before the scopes were unified may use the `gtx-dev-` prefix. They keep working and hold the standard Project permissions unless you edit them. The CLI does not accept `gtx-dev-` keys, so create a new key for CI.*
 
 ## Security practices [#security-practices]
 
 - Never commit keys to source control.
 - Store keys in environment variables or a secrets manager.
-- Use separate keys for development, staging, and production.
+- Use separate keys for development, staging, and production so you can rotate or revoke one without affecting the others.
+- Give keys that reach the browser only **Runtime translation**.
 - Rotate keys periodically.
 - Revoke unused keys.
-- Prefer the narrowest scope that works for the integration.
+- Prefer the narrowest scope and permission set that works for the integration.
