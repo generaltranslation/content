@@ -7,12 +7,14 @@ description: Configure the General Translation CLI with the gt.config.json file.
 
 The `gt.config.json` file configures what the CLI translates and where results are saved. Place it at the root of your project. Create it with [`gt init`](/docs/cli/reference/commands/init) or [`gt configure`](/docs/cli/reference/commands/configure), or write it by hand.
 
-*Note: Add the [JSON Schema](https://assets.gtx.dev/config-schema.json) with a `$schema` key for editor validation and autocompletion. The published schema does not yet include the `lottie` and `fonts` keys added in `gt` 2.16.0, so editors may flag those valid settings until the schema is refreshed.*
+*Note: Add the [JSON Schema](https://assets.gtx.dev/config-schema.json) with a `$schema` key for editor validation and autocompletion. The published schema lags some valid file keys, including `pot`, `html`, `txt`, `twilioContentJson`, `lottie`, `dotStrings`, `dotStringsdict`, `androidStrings`, and `xcstrings`, and also omits `fonts` and `options.saveLocal`. Editors may flag unsupported schema fields until the schema is refreshed.*
 
 ## Options [#options]
 
 | Option | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
+| [`projectId`](#project-id) | project used for API and translation workflows. | `string` | Yes | `GT_PROJECT_ID` |
+| [`baseUrl`](#base-url) | Base URL for General Translation API requests. | `string` | Yes | `https://api.gtx.dev` |
 | [`defaultLocale`](#default-locale) | Locale your source content is written in. | `string` | Yes | `en` |
 | [`locales`](#locales) | Target locales to translate into. | `string[]` | Yes | — |
 | [`files`](#files) | Which files to translate and where to save them. | `object` | Yes | — |
@@ -20,16 +22,41 @@ The `gt.config.json` file configures what the CLI translates and where results a
 | [`publish`](#publish) | Publish translated files to the CDN. | `boolean` | Yes | `false` |
 | [`stageTranslations`](#stage) | Use the staged workflow before downloading translations. | `boolean` | Yes | `false` |
 | [`requiresReview`](#requires-review) | Default review-gating policy for all translated files. | `boolean` | Yes | `false` |
-| [`src`](#src) | Glob patterns for source files scanned for inline content. | `string[]` | Yes | See [`src`](#src) |
+| [`src`](#src) | Glob patterns for source files scanned for inline content. | `string[]` | Yes | Framework-specific |
 | [`dictionary`](#dictionary) | Path to a dictionary file. | `string` | Yes | — |
 | [`branchOptions`](#branch-options) | Branch-based translation tracking settings. | `object` | Yes | — |
 | [`customMapping`](#custom-mapping) | Locale aliases and property overrides. | `object` | Yes | — |
+| [`options.saveLocal`](#save-local) | Detect and submit local translation edits before enqueueing. | `boolean` | Yes | `false` |
+
+## `projectId` [#project-id]
+
+**Type** `string` · **Optional** · **Default** `GT_PROJECT_ID`
+
+The project used for API and translation workflows. A `--project-id` flag overrides the environment value, but it must match `projectId` when the config includes one.
+
+```json title="gt.config.json"
+{
+  "projectId": "project-id"
+}
+```
+
+## `baseUrl` [#base-url]
+
+**Type** `string` · **Optional** · **Default** `https://api.gtx.dev`
+
+The API origin used by CLI requests, including [`gt api`](/docs/cli/reference/commands/api). Set this only when your workflow uses a custom General Translation API endpoint.
+
+```json title="gt.config.json"
+{
+  "baseUrl": "https://api.gtx.dev"
+}
+```
 
 ## `defaultLocale` [#default-locale]
 
 **Type** `string` · **Optional** · **Default** `en`
 
-The locale your source content is written in. This is the locale the CLI translates from, and the fallback locale when you use `gt-next` or `gt-react`.
+The locale your source content is written in. This is the locale the CLI translates from, and the fallback locale when you use `gt-next`, `gt-react`, or `gt-vue`.
 
 ```json title="gt.config.json"
 {
@@ -41,7 +68,7 @@ The locale your source content is written in. This is the locale the CLI transla
 
 **Type** `string[]` · **Optional** · **Default** —
 
-The target locales to translate into. See [supported locales](/docs/platform/dashboard/reference/supported-locales) for accepted codes. When you use `gt-next` or `gt-react`, these are also the locales your app supports.
+The target locales to translate into. See [supported locales](/docs/platform/dashboard/reference/supported-locales) for accepted codes. Framework initializers that accept a locale list also use these as the locales your app supports.
 
 ```json title="gt.config.json"
 {
@@ -59,7 +86,7 @@ An object with one key per file type to translate. Each type maps to an object o
 
 | Key | File type | Reference |
 | --- | --- | --- |
-| `gt` | General Translation files for `gt-next`, `gt-react`, and `gt-react-native`. | [GT](/docs/cli/reference/formats/gt-jsx-files) |
+| `gt` | General Translation files for `gt-next`, `gt-react`, `gt-react-native`, `gt-tanstack-start`, and `gt-vue`. | [GT](/docs/cli/reference/formats/gt-jsx-files) |
 | `json` | JSON files. | [JSON](/docs/cli/reference/formats/json-files) |
 | `yaml` | YAML files (`.yaml` and `.yml`). | [YAML](/docs/cli/reference/formats/yaml-files) |
 | `pot` | PO/POT gettext files. | [PO / POT](/docs/cli/reference/formats/po-pot-files) |
@@ -71,6 +98,16 @@ An object with one key per file type to translate. Each type maps to an object o
 | `txt` | Plain text files. | [Plain text](/docs/cli/reference/formats/plain-text-files) |
 | `twilioContentJson` | Twilio Content JSON templates. | — |
 | `lottie` | dotLottie animation files (`.lottie`). | [Lottie](/docs/cli/reference/formats/lottie-files) |
+| `xcstrings` | Apple String Catalogs (`.xcstrings`). | [.xcstrings](/docs/cli/reference/formats/xcstrings-files) |
+| `dotStrings` | `.strings` tables, one per locale in a `.lproj` directory. | [.strings](/docs/cli/reference/formats/dot-strings-files) |
+| `dotStringsdict` | `.stringsdict` plural files, one per locale in a `.lproj` directory. | [.stringsdict](/docs/cli/reference/formats/dot-stringsdict-files) |
+| `androidStrings` | Android `strings.xml` resource files. | [Android strings.xml](/docs/cli/reference/formats/android-strings-files) |
+
+`dotStrings` and `dotStringsdict` require `gt` 2.18.1 or later, `androidStrings` requires `gt` 2.19.0 or later, and `xcstrings` requires `gt` 2.21.0 or later.
+
+<Callout type="info">
+  **Changed in v2.18.1:** The Apple file keys changed from `strings` and `stringsdict` to `dotStrings` and `dotStringsdict`. The earlier keys are not recognized in current releases.
+</Callout>
 
 ### File type keys
 
@@ -81,7 +118,7 @@ Each file type accepts the following keys.
 - `transform` — remaps output file names. A string with a `*` wildcard remaps the extension (for example `*.[locale].json`). An object with `match` and `replace` supports regex capture groups and the locale placeholders in [Locale placeholders](#locale-placeholders).
 - `transformationFormat` — outputs translated files in a different format than the source. For example, `pot` sources with `"transformationFormat": "PO"` produce `.po` files.
 - `requiresReview` — gates translated files behind human review. Accepts `true`/`false`, or an object with `include` and `exclude` glob arrays where `exclude` takes precedence.
-- `output` — for `gt` files only, the local save path with a `[locale]` placeholder, such as `public/i18n/[locale].json`.
+- `output` — for `gt` files only, the local save path with a `[locale]` placeholder, such as `public/i18n/[locale].json`. This is required when a Locadex workflow uses **Preserve local edits** without top-level CDN publishing; see [Locadex preserve local edits](#locadex-requirements).
 - `parsingFlags` — for `gt` files only, flags that control inline content parsing. See [`autoderive`](/docs/cli/guides/using-autoderive) and [automatic JSX injection](/docs/cli/guides/using-auto-jsx).
 
 ```json title="gt.config.json"
@@ -122,6 +159,8 @@ The remaining [`LocaleProperties`](/docs/platform/core/reference/types/locale-pr
 
 `{locale}` uses the spelling from your configuration rather than the canonical BCP-47 form, so a locale configured as `fr-ca` produces `fr-ca` and not `fr-CA`. This matches the `[locale]` placeholder in `include`, `exclude`, and `output`, so file paths and localized URLs agree. Use `{minimizedCode}`, `{maximizedCode}`, or `{regionCode}` when you need a normalized tag instead.
 
+The one exception is [`androidStrings`](/docs/cli/reference/formats/android-strings-files), where both placeholders expand to an Android resource directory qualifier — `fr-CA` becomes `fr-rCA` — because Android fails the build on a `values-*` directory name it cannot parse.
+
 ```json title="gt.config.json"
 {
   "files": {
@@ -156,7 +195,7 @@ Font files to upload before translation jobs run. Use `include` and optional `ex
 }
 ```
 
-The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt translate`](/docs/cli/reference/commands/translate) runs that enqueue new work. When `stageTranslations` is enabled, [`gt translate`](/docs/cli/reference/commands/translate) only downloads the staged version and does not sync fonts. A failed font sync emits a warning but does not stop translation; Lottie processing continues with fallback fonts. See [Upload Project assets](/docs/platform/openapi/reference/project/upload-assets) for font validation and storage behavior.
+The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt translate`](/docs/cli/reference/commands/translate) runs that enqueue new work. When `stageTranslations` is enabled, [`gt translate`](/docs/cli/reference/commands/translate) only downloads the staged version and does not sync fonts. A failed font sync emits a warning but does not stop translation; Lottie processing continues with fallback fonts. See [Upload project assets](/docs/platform/openapi/reference/project/upload-assets) for font validation and storage behavior.
 
 ## `publish` [#publish]
 
@@ -174,7 +213,7 @@ When `true`, translated files are published to the General Translation CDN after
 
 **Type** `boolean` · **Optional** · **Default** `false`
 
-When `true`, the CLI downloads only versions submitted with [`gt stage`](/docs/cli/reference/commands/stage). The CLI sets this automatically the first time you run [`gt stage`](/docs/cli/reference/commands/stage). Use the staged workflow for human review and for asynchronous formats such as [Lottie](/docs/cli/reference/formats/lottie-files); the Project's review settings determine whether completed translations also require approval.
+When `true`, the CLI downloads only versions submitted with [`gt stage`](/docs/cli/reference/commands/stage). The CLI sets this automatically the first time you run [`gt stage`](/docs/cli/reference/commands/stage). Use the staged workflow for human review and for asynchronous formats such as [Lottie](/docs/cli/reference/formats/lottie-files); the project's review settings determine whether completed translations also require approval.
 
 ## `requiresReview` [#requires-review]
 
@@ -190,9 +229,9 @@ The project-wide default for review gating: when `true`, translated artifacts re
 
 ## `src` [#src]
 
-**Type** `string[]` · **Optional** · **Default** `src`, `app`, `pages`, `components` globs
+**Type** `string[]` · **Optional** · **Default** Framework-specific source globs
 
-An array of glob patterns for the source files scanned for inline content when you use `gt-next`, `gt-react`, or `gt-react-native`.
+An array of glob patterns for source files scanned for inline content. React-family projects scan JavaScript and TypeScript under `src`, `app`, `pages`, and `components` by default. Vue projects also scan root `*.vue` files plus JavaScript, TypeScript, and Vue files in conventional Vue and Nuxt directories such as `composables`, `layouts`, `plugins`, `server`, `stores`, `utils`, and `views`.
 
 ```json title="gt.config.json"
 {
@@ -225,7 +264,7 @@ Configures branch-based translation tracking. See [Tracking translations by bran
 
 | Property | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| `enabled` | Enable branching for the Project. | `boolean` | Yes | `false` |
+| `enabled` | Enable branching for the project. | `boolean` | Yes | `false` |
 | `currentBranch` | Override the detected branch name. | `string` | Yes | — |
 | `autoDetectBranches` | Detect incoming and checked-out branch relationships. | `boolean` | Yes | `true` |
 | `remoteName` | Git remote used for branch detection. | `string` | Yes | `origin` |
@@ -247,8 +286,12 @@ Configures branch-based translation tracking. See [Tracking translations by bran
 
 Aliases a locale to a different code, and optionally overrides its properties. For example, alias `cn` to the official code `zh`.
 
+When you use an alias, set `defaultLocale` and entries in `locales` to the alias name (`cn`), not the canonical name (`zh`).
+
 ```json title="gt.config.json"
 {
+  "defaultLocale": "cn",
+  "locales": ["cn", "fr", "en"],
   "customMapping": {
     "cn": {
       "code": "zh",
@@ -258,9 +301,29 @@ Aliases a locale to a different code, and optionally overrides its properties. F
 }
 ```
 
+## `options.saveLocal` [#save-local]
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+Detects edits in previously downloaded local translation files and submits their diffs before [`gt translate`](/docs/cli/reference/commands/translate) or [`gt stage`](/docs/cli/reference/commands/stage) enqueues new work. Set it under the top-level `options` object. The `--save-local` and `--no-save-local` flags override this setting for one run.
+
+```json title="gt.config.json"
+{
+  "options": {
+    "saveLocal": true
+  }
+}
+```
+
+### Version history
+
+| Version | Changes |
+| --- | --- |
+| `2.20.3` | Local edits became opt-in; set this key to `true` or pass `--save-local` to enable the step. |
+
 ## CDN publishing [#cdn-publishing]
 
-By default the CLI does not publish to the CDN. When the CDN is enabled in your Project settings, you can control publishing globally, per file, or per command.
+By default the CLI does not publish to the CDN. When the CDN is enabled in your project settings, you can control publishing globally, per file, or per command.
 
 - **Global:** set top-level [`publish`](#publish) to `true`, or pass `--publish` to [`translate`](/docs/cli/reference/commands/translate), [`upload`](/docs/cli/reference/commands/upload), or [`save-local`](/docs/cli/reference/commands/save-local).
 - **GT files only:** set `publish: true` under `files.gt`.
@@ -280,6 +343,22 @@ By default the CLI does not publish to the CDN. When the CDN is enabled in your 
 ```
 
 For any file, the CLI resolves publishing in this order: an explicit `"publish": false` opt-out, then an explicit `"publish": true` opt-in, then the global `publish` setting. If no publish configuration exists at any level, the publish step is skipped.
+
+## Locadex preserve local edits [#locadex-requirements]
+
+When a Locadex automation has **Preserve local edits** enabled, configure either top-level `"publish": true` or `files.gt.output`. Locadex validates this before it runs translation.
+
+```json title="gt.config.json"
+{
+  "files": {
+    "gt": {
+      "output": "public/i18n/[locale].json"
+    }
+  }
+}
+```
+
+Per-file and `files.gt.publish` settings do not satisfy this check. Without top-level CDN publishing, `files.gt.output` tells the workflow where local GTJSON translations are stored so it can preserve edits.
 
 ## Example configuration [#example]
 

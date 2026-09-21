@@ -1,7 +1,7 @@
 ---
 
 title: EntryMetadata
-description: Metadata for adding context to string translation entries. API reference for EntryMetadata type.
+description: Add context and processing controls to runtime translation entries. API reference for EntryMetadata and RuntimeFileFormat.
 
 ---
 
@@ -18,6 +18,7 @@ type EntryMetadata = {
   context?: string;
   maxChars?: number;
   dataFormat?: DataFormat;
+  fileFormat?: RuntimeFileFormat;
   actionType?: ActionType;
 };
 ```
@@ -35,8 +36,9 @@ type ActionType = 'fast';
 | [`id`](#id) | Unique identifier for the entry. | `string` | Yes |
 | [`hash`](#hash) | Content hash for caching and deduplication. | `string` | Yes |
 | [`context`](#context) | Context hint for translators. | `string` | Yes |
-| [`maxChars`](#max-chars) | Maximum character limit for the translation. | `number` | Yes |
+| [`maxChars`](#max-chars) | Requested maximum length for generated translations. | `number` | Yes |
 | [`dataFormat`](#data-format) | Content format specification. | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
+| [`fileFormat`](#file-format) | Marks a whole Markdown or MDX document for format-aware translation. | [`RuntimeFileFormat`](#runtime-file-format) | Yes |
 | [`actionType`](#action-type) | Translation model preference. | `ActionType` | Yes |
 
 ### `id` [#id]
@@ -61,13 +63,23 @@ Context hint for translators, such as `"Button text"` or `"Navigation menu"`.
 
 **Type** `number` · **Optional**
 
-Maximum character limit for the translation.
+Requests a positive-integer maximum character count from the translation service. Other numeric values do not apply a limit. The Core library does not truncate the returned translation.
 
 ### `dataFormat` [#data-format]
 
-**Type** [`DataFormat`](/docs/platform/core/reference/types/data-format) · **Optional**
+**Type** [`DataFormat`](/docs/platform/core/reference/types/data-format) · **Optional** · **Default** `'STRING'`
 
-Content format specification: `'JSX'`, `'ICU'`, `'I18NEXT'`, or `'STRING'`. See [`DataFormat`](/docs/platform/core/reference/types/data-format).
+Content format specification: `'JSX'`, `'ICU'`, `'I18NEXT'`, or `'STRING'`. Defaults to `'STRING'` when omitted. (See [`DataFormat`](/docs/platform/core/reference/types/data-format)).
+
+### `fileFormat` [#file-format]
+
+**Type** `RuntimeFileFormat` · **Optional**
+
+Set this to `'MD'` or `'MDX'` when `source` contains a whole Markdown or MDX document. At runtime, the service requires document entries to use the `STRING` data format and omit `maxChars`.
+
+The service parses the document into chunks and adds the entry's `context` to each chunk. It returns one structure-preserving string. If any chunk fails or the final document is invalid, the entry fails instead of returning partial output.
+
+`fileFormat` is part of the request identity, so otherwise identical plain text, Markdown, and MDX entries use separate cached translations.
 
 ### `actionType` [#action-type]
 
@@ -75,10 +87,17 @@ Content format specification: `'JSX'`, `'ICU'`, `'I18NEXT'`, or `'STRING'`. See 
 
 Translation model preference. Currently the only accepted value is `'fast'`, which selects the mini model.
 
+## `RuntimeFileFormat` [#runtime-file-format]
+
+**Type** `'MD' | 'MDX'`
+
+Import this type from `generaltranslation/types`. It contains only the document formats accepted by runtime [`translate`](/docs/platform/core/reference/gt-class-methods/translation/translate) and [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) calls.
+
 ## Example [#example]
 
 ```typescript
-import { GT, TranslateManyEntry } from 'generaltranslation';
+import { GT } from 'generaltranslation';
+import type { TranslateManyEntry } from 'generaltranslation/types';
 
 const entry: TranslateManyEntry = {
   source: 'Save',
@@ -101,4 +120,19 @@ const entry: TranslateManyEntry = {
     context: 'Item count'
   }
 };
+```
+
+```typescript
+// Translate a complete Markdown document while preserving its structure.
+const document: TranslateManyEntry = {
+  source: '# Welcome\n\nRead the [guide](/guide).',
+  metadata: {
+    fileFormat: 'MD',
+  },
+};
+
+const [result] = await gt.translateMany([document], {
+  sourceLocale: 'en',
+  targetLocale: 'es',
+});
 ```

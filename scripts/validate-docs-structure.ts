@@ -16,14 +16,55 @@ const EXPECTED_ROOTS = [
 ] as const;
 
 const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
-  overview: ['Frameworks', 'Platform'],
+  overview: ['Frameworks', 'Platform', 'Integrations'],
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
   cli: ['Guides', 'Reference'],
   react: ['Guides', 'Reference', 'Frameworks'],
   vue: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
-  integrations: ['Mintlify', 'Sanity', 'Storyblok', 'Google Drive'],
+  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
+};
+
+const EXPECTED_OVERVIEW_PAGES = [
+  './get-started',
+  './key-concepts',
+  './for-coding-agents',
+  './(frameworks)',
+  '---Platform---',
+  '[Dashboard](/docs/platform/dashboard/get-started)',
+  '[Locadex](/docs/platform/locadex/quickstart)',
+  '[Core](/docs/platform/core/quickstart)',
+  '[OpenAPI](/docs/platform/openapi/overview)',
+  '---Integrations---',
+  '[Google Drive](/docs/integrations/google-drive/quickstart)',
+  '[Mintlify](/docs/integrations/mintlify/quickstart)',
+  '[Sanity](/docs/integrations/sanity/quickstart)',
+  '[Storyblok](/docs/integrations/storyblok/quickstart)',
+  '[rrweb](/docs/integrations/rrweb/quickstart)',
+] as const;
+
+const EXPECTED_OVERVIEW_GROUP_PAGES: Readonly<
+  Record<string, readonly string[]>
+> = {
+  'overview/(frameworks)/meta.json': [
+    '[React](/docs/react/react-quickstart)',
+    '[React SPA](/docs/react/react-spa-quickstart)',
+    '[Next.js App Router](/docs/react/nextjs-quickstart)',
+    '[Next.js Pages Router](/docs/react/nextjs-pages-router-quickstart)',
+    '[TanStack Start](/docs/react/tanstack-start-quickstart)',
+    '[React Native](/docs/react/react-native-quickstart)',
+    '[Vue](/docs/vue/quickstart)',
+    '[Node.js](/docs/node/quickstart)',
+    '[Python](/docs/python/quickstart)',
+    '[CLI](/docs/cli/quickstart)',
+    '[JSON](/docs/cli/reference/formats/json-files)',
+  ],
+};
+
+const EXPECTED_LANDING_CARDS: Readonly<Record<string, readonly string[]>> = {
+  platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
+  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
 };
 
 const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
@@ -36,6 +77,7 @@ const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
   hooks: 'Hooks',
   composables: 'Composables',
   reference: 'Reference',
+  rrweb: 'rrweb',
   types: 'Types',
 };
 
@@ -381,9 +423,36 @@ export function validateDocsStructure(
   const overviewMeta = metaByPath.get(overviewMetaPath);
   const overviewPages = overviewMeta && getPages(overviewMeta);
   if (overviewPages) {
+    if (!sameValues(overviewPages, EXPECTED_OVERVIEW_PAGES)) {
+      addFinding(
+        overviewMetaPath,
+        'Overview sidebar entries must follow the canonical Frameworks, Platform, and Integrations order.'
+      );
+    }
+
     const overviewLinks = overviewPages
       .map(parseCrossSectionLink)
       .filter((link): link is CrossSectionLink => link !== undefined);
+    for (const [groupMetaPath, expectedPages] of Object.entries(
+      EXPECTED_OVERVIEW_GROUP_PAGES
+    )) {
+      const groupMeta = metaByPath.get(groupMetaPath);
+      const groupPages = groupMeta && getPages(groupMeta);
+      if (!groupPages) continue;
+
+      if (!sameValues(groupPages, expectedPages)) {
+        addFinding(
+          groupMetaPath,
+          'Overview group entries must follow the canonical order.'
+        );
+      }
+
+      overviewLinks.push(
+        ...groupPages
+          .map(parseCrossSectionLink)
+          .filter((link): link is CrossSectionLink => link !== undefined)
+      );
+    }
 
     for (const root of ['platform', 'integrations'] as const) {
       const rootMetaPath = `${root}/meta.json`;
@@ -411,6 +480,24 @@ export function validateDocsStructure(
           );
         }
       }
+    }
+  }
+
+  for (const [root, expectedTitles] of Object.entries(
+    EXPECTED_LANDING_CARDS
+  )) {
+    const indexPath = `${root}/index.mdx`;
+    const content = files.get(indexPath);
+    if (!content) continue;
+
+    const cardTitles = [...content.matchAll(/<Card\s+title="([^"]+)"/g)]
+      .map((match) => match[1])
+      .filter((title): title is string => title !== undefined);
+    if (!sameValues(cardTitles, expectedTitles)) {
+      addFinding(
+        indexPath,
+        `Landing cards must be ${expectedTitles.join(', ')} in sidebar order.`
+      );
     }
   }
 

@@ -1,0 +1,122 @@
+---
+
+title: Recorder API
+description: Capture an rrweb event stream and localized text overlay. API reference for the gt-rrweb recorder.
+
+---
+
+Import recorder values from `gt-rrweb`. Recording requires `react`, `react-dom`, and `@rrweb/types`, plus the optional `@rrweb/record` peer dependency.
+
+## Overview [#overview]
+
+| API | Description |
+| --- | --- |
+| [`GTRecorder`](#gt-recorder) | Mounts recorder configuration and the recording overlay. |
+| [`GTRecorderProps`](#gt-recorder-props) | Props accepted by `GTRecorder`. |
+| [`useRecorder`](#use-recorder) | Starts and stops the module-level recorder. |
+| [`UseRecorder`](#use-recorder-result) | Recorder controls and current status returned by `useRecorder`. |
+| [`RecordingOverlay`](#recording-overlay) | Renders the built-in stop control in a portal. |
+| [`RecordingOverlayProps`](#overlay-props) | Props accepted by `RecordingOverlay`. |
+| [`RecorderBundle`](#recorder-bundle) | Completed event stream, locale list, and overlay. |
+| [`RecorderConfig`](#recorder-config) | Source-first locale list passed to `start()`. |
+| [`RecorderStatus`](#recorder-status) | Recorder lifecycle state. |
+| [`FrameOption`](#frame-option) | Capture frame configuration. |
+| [Styles and fonts](#styles-fonts) | Stylesheet and font behavior during capture and replay. |
+| [`DEFAULT_CONTENT_SELECTOR`](#content-selector) | Default framed content selector. |
+| [`GT_EVENT`](#gt-event) | Custom rrweb event tags embedded in the stream. |
+
+## `GTRecorder` [#gt-recorder]
+
+Mount `GTRecorder` once near the application root. It renders nothing while idle and shows `RecordingOverlay` while recording.
+
+```tsx
+<GTRecorder
+  harvest={{ loadTranslations, sourceLocale: 'en' }}
+  onComplete={saveBundle}
+/>
+```
+
+Recorder configuration is snapshotted when a session starts. Prop changes during capture do not change that session's frame, harvest options, or completion callback.
+
+## `GTRecorderProps` [#gt-recorder-props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `enabled` | Enables recorder configuration and rendering. | `boolean` | Yes | `true` |
+| `contentSelector` | Selects the region to frame. | `string` | Yes | `DEFAULT_CONTENT_SELECTOR` |
+| `frame` | Reflows the selected region into a capture frame. | `FrameOption` | Yes | `'none'` |
+| `expose` | Adds a `window[name]` handle with `start` and `stop` for automation. | `string \| false` | Yes | `false` |
+| `onComplete` | Receives the finished bundle after each successful stop. | `(bundle: RecorderBundle) => void` | Yes | — |
+| `harvest` | Configures locale overlay generation. | `HarvestOptions` | Yes | `{}` |
+| `labels` | Overrides the recording and stop labels. | `{ rec?: string; stop?: string }` | Yes | Built-in labels |
+
+Unloading the page aborts the active session. An aborted session does not harvest translations or call `onComplete`.
+
+## `useRecorder` [#use-recorder]
+
+`useRecorder()` subscribes to the module-level recorder and returns [`UseRecorder`](#use-recorder-result).
+
+Concurrent `start()` calls are ignored. Calling `stop()` without an active recording returns `null`; calling it while startup is preparing cancels the pending session and returns `null`.
+
+## `UseRecorder` [#use-recorder-result]
+
+| Value | Description | Type |
+| --- | --- | --- |
+| `status` | Current lifecycle state. | `RecorderStatus` |
+| `isRecording` | Whether `status` is `recording`. | `boolean` |
+| `start` | Starts a session after fonts are embedded. | `(config: RecorderConfig) => Promise<void>` |
+| `stop` | Stops capture, harvests translations, and returns the bundle. | `() => Promise<RecorderBundle \| null>` |
+
+## `RecordingOverlay` [#recording-overlay]
+
+`RecordingOverlay` is the portal-based control used by `GTRecorder`. It accepts [`RecordingOverlayProps`](#overlay-props). Most applications do not mount it directly.
+
+## `RecordingOverlayProps` [#overlay-props]
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `onStop` | Handles the stop button. | `() => void` | No | — |
+| `aspect` | Sets the capture-frame aspect ratio; `null` preserves natural dimensions. | `number \| null` | Yes | `null` |
+| `labels` | Overrides the recording and stop labels. | `{ rec?: string; stop?: string }` | Yes | Built-in labels |
+
+## `RecorderBundle` [#recorder-bundle]
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `events` | rrweb events, including embedded locale and overlay events. | `eventWithTime[]` | No | — |
+| `locales` | Traced locales with the source locale first. | `string[]` | No | — |
+| `overlay` | Locale to rrweb node-id translation maps. | `Record<string, Record<number, string>>` | No | — |
+
+The bundle is JSON-serializable. An unconfigured harvest leaves `overlay` empty without invalidating the event stream. A catalog-loader failure affects only that locale; a broader harvest failure returns an empty overall overlay. The locale list and overlay are also embedded as custom events, so an events-only export retains localized playback metadata for the `gt-rrweb` replayer.
+
+## `RecorderConfig` [#recorder-config]
+
+`RecorderConfig` contains one required field, `locales: readonly string[]`. Put the locale visible during capture first; subsequent locales are harvested after capture stops. The recorder runs harvesting only when the list contains at least two locales.
+
+## `RecorderStatus` [#recorder-status]
+
+`RecorderStatus` is `'idle' | 'recording' | 'preparing'`. `preparing` covers both font preparation before capture and locale harvesting after capture.
+
+## `FrameOption` [#frame-option]
+
+`FrameOption` is `'none' | '16:9' | { aspect: number }`. Use a finite positive custom aspect expressed as width divided by height. Zero, negative values, and `NaN` behave like no frame.
+
+`'none'` leaves the document layout unchanged and replays the full recorded viewport; `contentSelector` does not crop an unframed recording. For `'16:9'` or a custom aspect, apply `position: fixed` to the selected element before recording; framing static-positioned content can move it outside the viewport.
+
+## Styles and fonts [#styles-fonts]
+
+The recorder keeps stylesheet links instead of serializing their CSS. Replays can therefore depend on the original stylesheet host remaining reachable.
+
+Before capture, the recorder embeds font files referenced by readable `@font-face` rules. It skips unreadable stylesheets, failed or empty font files, and individual font files larger than 5 MiB. Skipped fonts fall back according to the replay environment.
+
+## `DEFAULT_CONTENT_SELECTOR` [#content-selector]
+
+`DEFAULT_CONTENT_SELECTOR` is `main, [data-gt-content]`.
+
+## `GT_EVENT` [#gt-event]
+
+| Field | Tag | Purpose |
+| --- | --- | --- |
+| `nav` | `gt-nav` | Records SPA navigation. |
+| `locales` | `gt-locales` | Records the traced locale list and source locale. |
+| `i18n` | `gt-i18n` | Stores the harvested overlay after the full snapshot. |

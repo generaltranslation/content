@@ -1,7 +1,9 @@
 ---
 
-## name: General Translation docs internal skill
+name: General Translation docs internal skill
 description: Follow these rules when creating, editing, reviewing, or restructuring General Translation documentation content. Use this style guide when the user asks about docs voice, structure, naming, or formatting conventions.
+
+---
 
 # General Translation docs style guide
 
@@ -126,7 +128,7 @@ Model the docs after the Next.js docs: short intros, clear sections, and practic
 
 - Address the reader as "you"; use active voice and imperatives.
 - **Fragment vs. sentence in lists**: use fragments when simply listing pieces or labels (no period needed); use full sentences (including standalone imperatives like "Revoke unused keys.") when describing steps or actions, and end those with a period. Be consistent within a single list. List items that complete a lead-in stem ("From the page, you can:") are fragments and take no period.
-- **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **Target directory**).
+- **Bold** UI elements the user interacts with: buttons, page names, fields, toggles (**Save**, **Translate**, **Target directory**). This includes click/choose/select targets — click **Create automation**, choose **Generate translations and push** — never quotation marks.
 - **Inline code** for code identifiers, file names, locale codes, environment variables, key prefixes, and headers (`en-US`, `GT_API_KEY`, `gtx-api-`, `x-gt-api-key`).
 - **Summarize runtime wording; do not quote it verbatim.** Paraphrase interactive prompts, success and log messages, and console output rather than copying exact strings, so the docs stay correct when that wording changes. Reproduce a string exactly only when the value is part of the contract — environment variable names, flags, config keys, file names, commands, and error codes/identifiers. *Example: write "the wizard asks which API key type to generate" rather than quoting the full prompt sentence.*
 
@@ -178,19 +180,23 @@ Use a bolded breadcrumb with `>`: **Project > Automations**, **Project > Context
 
 ### Product and term casing
 
-Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Project** (and **Projects**), **Context Group** (and **Context Groups**), **Glossary**, **Custom Prompt** (and **Custom Prompts**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+Always capitalize these as product terms: **Dashboard**, **Locadex**, **Core**, **Google Drive**, **Context Group** (and **Context Groups**), **Glossary**, **Custom Prompt** (and **Custom Prompts**), and **Autoderive** (the CLI feature). Also capitalize the product scopes **Organization** and **Enterprise**, and **GitHub**. Lowercase "group" when they are not part of the proper term.
+
+Write **"project" lowercase in prose** ("your project", "one project per repository", "project API keys"). Capitalize **Project** only where the Dashboard UI does: breadcrumbs and UI labels (**Project > Automations**, **Project ID**, the **Projects** page) and at sentence starts.
+
+*Exception: the OpenAPI endpoint reference pages and their* `meta.json` *files under* `docs/en-US/platform/openapi/reference/` *are generated from* `openapi.json` *(*`pnpm --filter ./apps/content generate-openapi-docs`*), and CI fails on any drift. Their wording — including casing — follows the spec; never hand-edit generated pages. To change their text, change the spec source.*
 
 *Note: capitalize **Autoderive** only when referring to the feature in prose; the* `gt.config.json` *key stays lowercase in code as* `autoderive`*. Do not write "General Translation Autoderive" — the feature name stands on its own.*
 
-Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as Projects and Context Groups may still be pluralized.
+Always refer to a **product name in the singular**, never plural: "General Translation" (not "General Translations"), "the Dashboard" (not "Dashboards"). Countable objects such as projects and Context Groups may still be pluralized.
 
 Do not use the **plural of "product"** in reference to the General Translation product itself — no "products", "product suite", or "product line" (it is one full-stack product). *Exception:* other companies' products can take the plural (e.g. "the world's best products should be available to the whole world").
 
-Capitalize the scope noun even inside hyphenated compounds (Organization-level, Project-wide, Project-scoped, Project-specific). Keep it lowercase only inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
+Capitalize the Organization scope noun even inside hyphenated compounds (Organization-level, Organization-wide); project compounds stay lowercase (project-wide, project-scoped, project-specific), as does everything inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
 
 ### Product and technology names
 
-Use the official capitalization and spelling for third-party names: **Next.js**, **TypeScript**, **JavaScript**, **ESLint**, **React Native**, **Node.js**. For GT itself: **General Translation**, **Quickstart** (one word, not "Quick Start").
+Use the official capitalization and spelling for third-party names: **Next.js**, **TypeScript**, **JavaScript**, **ESLint**, **React Native**, **Node.js**. Always write **Next.js**, never shorten the product name to "Next." For GT itself: **General Translation**, **Quickstart** (one word, not "Quick Start").
 
 - **Package names always appear in backticks in prose**: `gt-next`, `gt-react`, `gt`, `generaltranslation`. The same applies to config files like `gt.config.json`.
 
@@ -207,7 +213,7 @@ Use the official capitalization and spelling for third-party names: **Next.js**,
 
 ### Grammar and usage
 
-- **Verb vs. noun forms:** "set **up** your Project" (verb) but "the **setup** wizard" (noun); "**check out** the docs" but "the **checkout** page"; "**log in**" but "the **login** page".
+- **Verb vs. noun forms:** "set **up** your project" (verb) but "the **setup** wizard" (noun); "**check out** the docs" but "the **checkout** page"; "**log in**" but "the **login** page".
 - Write **"inline"** as one word (never "in-line").
 - **Articles** follow sound, not spelling: "an HTML element", "an LLM", "an API key"; but "a URL", "a user".
 - Treat **"data" as singular**: "the data is stored", not "the data are stored".
@@ -237,7 +243,13 @@ The docs have these top-level sections, in this order:
 5. **Vue** — the Vue 3 SDK (`gt-vue`).
 6. **Node**
 7. **Python**
-8. **Integrations** — plugins for third-party content platforms (for example, Sanity, Storyblok, and Google Drive).
+8. **Integrations** — plugins and add-ons that attach General Translation to a third-party platform or tool (for example, Sanity, Storyblok, Google Drive, and rrweb).
+
+### When something gets its own top-level section
+
+Reserve a top-level section for a **framework**: a first-party SDK that developers install into their own application and build on directly — the React ecosystem, Vue, Node, and Python — plus the CLI and the Platform itself. A framework earns a tab because readers arrive already thinking in that framework's terms and need a whole spine (Quickstart → Guides → Reference) shaped around it.
+
+Everything else lives under **Integrations**, as one plugin folder with its own Quickstart → Guides → Reference: content platforms and CMSs (Sanity, Storyblok), storage and docs tools (Google Drive, Mintlify), and libraries that attach to another tool rather than host an app (`gt-rrweb` for rrweb recordings). **When in doubt, put it in Integrations.** Promote a plugin to its own section only when it has grown into a framework SDK in the sense above; that is an information-architecture change, so the top-level list is pinned by CI (`scripts/validate-docs-structure.ts`) and the Overview hub must be updated with it.
 
 Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Vue, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
 
@@ -272,7 +284,7 @@ A `meta.json` supports these keys:
 
 - `title` — the folder's sidebar display name using its established casing (see File and folder naming).
 - `description` — the meaning depends on the folder:
-  - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`.
+  - **On top-level section roots (**`"root": true`**)** it is a very short **tab subtitle** shown under the section name in the nav — a few words or a package name, **not a full sentence**, and it does not need to spell out "General Translation." *Examples:* CLI = `gt`, Overview = `Quickstarts`, React = `Next.js, TanStack & more`, Python = `Flask, FastAPI`. The Integrations subtitle is always `CMS, Drive, Docs & more`; do not derive it from the current integration list.
   - **On subsection folders** (`guides`, `reference`, `commands`, …) it is a one-line summary of the folder ending with a period, like every description (these folders have no landing page, so it is not rendered as page content). The short tab subtitles on section roots above are the only `description` values that omit the period.
 - `pages` — the ordered list of entries; **this array is the source of truth for page order**.
 - `icon` — a named icon token (e.g. `Terminal`, `React`, `Python`, `Globe`) shown next to the section in the nav. Set it only on the top-level section roots.
@@ -282,8 +294,10 @@ A `meta.json` supports these keys:
 Entries in `pages` take three forms:
 
 - **A child page or folder** — a relative reference: `"./quickstart"`, `"./guides"`, `"./(frameworks)"`.
-- **A section separator** — a label wrapped in triple dashes: `"---Frameworks---"`, `"---Platform---"`. This renders a labeled divider in the sidebar; use it to group entries within one section.
+- **A section separator** — a label wrapped in triple dashes: `"---Platform---"`, `"---Integrations---"`. This renders a labeled divider in the sidebar; use it to group entries within one section.
 - **A cross-section link** — a Markdown link to another page: `"[Dashboard](/docs/platform/dashboard/get-started)"`. Use these to point out of the current section (see Overview hub).
+
+The Overview hub keeps **Frameworks** in the `(frameworks)` route group so its sidebar label comes from the translatable folder `title`. Keep **Platform** and **Integrations** as separators; the publishing app translates those registered metadata labels without rewriting the structural `pages` array.
 
 Every immediate child folder listed by a top-level section root becomes a visible sidebar section. The allowed section names and order are pinned by CI. Do not add, remove, or reorder one unless the task explicitly calls for an information-architecture change.
 
@@ -291,22 +305,34 @@ Every immediate child folder listed by a top-level section root becomes a visibl
 
 ### Overview hub
 
-The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then uses separators (`---Frameworks---`, `---Platform---`) with **cross-section link entries** to surface the main frameworks and Platform capabilities without duplicating their content. Include every published Platform capability and integration section, keep those links in sync with the sections they point to, and only link pages that exist. The structure validator enforces this coverage.
+The **overview** section doubles as a **landing hub**: its `meta.json` lists the overview pages (introduction, key concepts, for coding agents) directly, then the `(frameworks)` route group, the **Platform** separator and links, and the **Integrations** separator and links. The route group gives **Frameworks** a translatable folder title without adding a URL segment. Keep these groups and their entries in this order:
+
+- **Frameworks:** React, React SPA, Next.js App Router, Next.js Pages Router, TanStack Start, React Native, Vue, Node.js, Python, CLI, JSON
+- **Platform:** Dashboard, Locadex, Core, OpenAPI
+- **Integrations:** Google Drive, Mintlify, Sanity, Storyblok, rrweb
+
+Treat the Overview sidebar hub, each section's `meta.json`, and the corresponding landing-page card grid as one synchronized navigation surface. Whenever a framework, Platform capability, or integration is added, removed, renamed, or reordered, update all applicable surfaces in the same change and verify every route. Keep the Integrations sidebar and landing page in the order above, with Google Drive first. The structure validator enforces route coverage.
 
 ### Machine-readable outputs
 
-The publishing app generates two machine-readable maps from the docs source:
+The publishing app generates machine-readable maps from the docs source:
 
-- `llms.txt` — an [llmstxt.org](https://llmstxt.org/)-style index for LLMs and agents, grouped by section.
+- `llms.txt` — a curated [llmstxt.org](https://llmstxt.org/)-style entry point with the primary Quickstarts and links to scoped indexes.
+- `llms-index.txt` — an exhaustive link index for every published docs page.
+- `llms-full.txt` — full page bodies for tools that can load a large context, excluding the generated OpenAPI reference.
+- `/docs/<section>/llms.txt` — exhaustive section indexes for Overview, Platform, CLI, React, Vue, Node, Python, and Integrations. Platform capabilities also have scoped indexes.
+- `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
+- `/AGENTS.md` — the default-language drop-in agent guide from the **For coding agents** page.
+- `sitemap.md` — a default-language Markdown index of every docs page and blog post.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
 Do not add hand-written copies to this repository. When you add, rename, remove, or reorder pages, keep the `meta.json` filetree valid so the publishing app generates current output. **Only include pages that actually exist** — omit in-progress sections and manifest-only stubs, and keep every link resolvable.
 
 ### Agent-navigable by default
 
-Beyond the two maps above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
+Beyond the machine-readable outputs above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` to its URL. Never remove this affordance, and link to the logical page path in prose (the build serves the `.md` variant).
+- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 
@@ -320,8 +346,8 @@ Structure it in this order:
 2. **Setup** — install the right package, create `gt.config.json`, and set the API key environment variables.
 3. **Core usage** — the canonical patterns the agent should follow (for example, wrap user-facing strings in `<T>`, use `useGT()` for dynamic strings, keep locale configuration in one place). Show minimal, commented code.
 4. **Commands** — a short cheat-sheet of the CLI commands the agent will run (`npx gt configure`, `npx gt translate`, and so on) and when to run each.
-5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, hand-edit generated translation files).
-6. **Links** — point to `llms.txt`, `sitemap.xml`, and the most useful pages for deeper detail.
+5. **Rules — do and don't** — explicit guardrails: what to always do (wrap new copy, run `gt translate` before committing) and what never to do (hardcode translated strings, edit generated translation files without syncing those edits).
+6. **Links** — point to `llms.txt`, `sitemap.md`, `sitemap.xml`, and the most useful pages for deeper detail.
 
 Document only capabilities that exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement). This file is written by an agent connected to the product codebase; this guide defines its **shape**, not its exact contents.
 
@@ -336,7 +362,7 @@ The entry page for a capability is named for its audience:
 Shape the entry page itself:
 
 - **Default to a single condensed entry page** placed directly in the capability folder: open with what it does and when to use it, then include the steps on the same page (a **Quickstart** for technical capabilities; **Key workflows/Configuration/Navigation** for product capabilities).
-- **For single-part sections (CLI, Vue, Node, Python), the section landing page is the Quickstart itself** (`quickstart.md` at the section root); there is no separate section index page.
+- **For single-part sections (CLI, Vue, Node, Python) and for each Integrations plugin, the section landing page is the Quickstart itself** (`quickstart.md` at the section root); there is no separate section index page.
 - **The React section is the exception:** it is multi-framework, so its landing page is **Get Started → Overview**, followed by one **[Framework] Quickstart** per framework (see React section (multi-framework)).
 - **Split into a Get Started section with separate Overview and Quickstart pages only when** the capability needs substantial conceptual grounding before a reader can act — concepts, architecture, or a mental model that would overwhelm a single page (typical of larger frameworks). Small libraries, single APIs, and the current Platform capabilities do not need a split.
   - When split: **Overview** covers what it is, why, when to use it, and the core concepts; **Quickstart** is the numbered path to first success.
@@ -427,12 +453,13 @@ description: How to use labels, notes, and comments to coordinate translation re
 ```
 
 - **Frontmatter is YAML, not plain prose.** Parse every touched page after bulk frontmatter edits. Quote or rewrite scalar values containing YAML-significant punctuation, especially a colon followed by a space (`: `), a leading special character, or an inline `#`; visual inspection and a successful Markdown render are not sufficient.
+- **Blog publication dates use the actual go-live date.** In `blog/**`, set `date` during the final publishing pass to the calendar date when the post is first published, using `YYYY-MM-DD`. Do not retain the draft creation date, and update `date` before merge when publication moves to another day.
 - `title`: **sentence case** — capitalize only the first word, except proper/product names (Dashboard, Locadex, Core, Organization, Project, Enterprise, Context Group, Glossary, Custom Prompts, GitHub). No trailing spaces. The docs layout renders this value as the page H1, so do not repeat it as a `#` heading in the body.
 - **React and Vue component reference titles use component tag syntax.** Quote the complete tag in frontmatter (`title: "<T>"`) so the page title and sidebar display `<T>`, not `T`.
 - `description`: no backticks, and **end with a period** (a question ends with `?` instead) — the description is used verbatim as the HTML meta description and in machine-readable indexes (`llms.txt`), where backticks render as literal characters. Refer to a component by its angle-bracket tag with no backticks (`<T>`, `<Plural>`), not the bare word; where the same description appears in a `<Card>` body, escape the tag as `<T>` so the MDX still parses. Name the relevant capability directly; do not add **General Translation** when the section, title, or feature name already makes ownership clear. If the product name is genuinely needed, spell out **General Translation**, never GT. Phrasing depends on page type:
   - **Guides** lead with **"How to…"** for SEO. Write **one concise sentence** that states what the reader will accomplish and names the relevant capability or tool without automatically branding it. Add enough scope to distinguish the description from the title, but **do not** restate the title, enumerate every subsection, or append a `: this guide covers …` checklist. For a guide that explains a concept rather than a task, use a question instead. *Examples:* "How to upload, translate, and download files with the generaltranslation library." / "How to review translations, make manual edits, and compare locales in the Dashboard." / "What are locale codes, and how are they used across the translation stack?"
     - **Configuration Guides:** retain `gt`, the package name, or **General Translation** when it identifies which system's configuration the reader is changing. *Example:* "How to configure the General Translation gt-sanity plugin for locales, document filters, and credentials."
-  - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period ("Configure…", "Review…", "Learn…").
+  - **Other pages** (Quickstart, Get Started, hubs) use one action-oriented sentence ending with a period, opening with a strong verb ("Use…", "Connect…", "Translate…", "Call…", "Find…"). Never open a description with "Learn how", "Learn what", or "Quickstart to" — name the action itself.
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
     - **React and Vue components:** name the component tag directly (`API reference for the <T> component.`).
@@ -505,7 +532,7 @@ Only document capabilities that actually exist, and resolve anything uncertain a
 A "common workflow" section is a bulleted roundup that points readers to the main tasks or settings from a landing page (as in the Dashboard get-started **Key workflows** and **Configuration** lists). Each bullet starts with the action, then a short description, then a link:
 
 ```text
-- **Define context and key terms for translation:** use Context Groups to guide terminology and style across Projects. See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations).
+- **Define context and key terms for translation:** use Context Groups to guide terminology and style across projects. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)).
 ```
 
 Use common workflow sections on **Get Started pages and other overview/landing pages** to surface the primary tasks, instead of duplicating full how-tos inline. Do not use them mid-guide, where ordered steps belong.
@@ -533,7 +560,7 @@ Anatomy:
 2. Go to the **Context** page.
 3. Create a **Context Group**.
 4. Add a **Glossary** (for terminology) and/or **Custom Prompts** (for style and tone).
-5. **Assign** your Context Group to relevant Project(s).
+5. **Assign** your Context Group to relevant project(s).
 6. Generate translations or apply updates to existing translations.
 ```
 
@@ -643,6 +670,7 @@ Populate `related.links` by page type, ordered by **what the reader most likely 
 - **Link paths are always lowercase and hyphenated**, even when they point to a capitalized folder or section (**Get Started** → `/docs/platform/dashboard/get-started`). Preserve lowercase in links regardless of how the folder or section name is displayed.
 - Link to the **logical page path, not the file path**: omit any `en-US/` locale segment and the file extension (`.md`/`.mdx`) in Markdown links. Note that `meta.json` `pages` entries use extensionless relative references (`"./quickstart"`), since those are structural file locations.
 - Link punctuation goes **outside** the brackets: `[Annotations](…).`, not `[Annotations.](…)`.
+- **Parenthesize standalone "See" pointer sentences.** A trailing sentence that only routes the reader — "See [Locales](…)." — becomes a parenthetical: "(See [Locales](…))." Keep "See" capitalized and put the period **outside** the closing parenthesis. This applies to any sentence that starts with "See", including compound ones ("(See [Locales](…) and the shared [Managing languages](…) guide)."). Mid-sentence lowercase "see" links ("for details, see [Config](…)") are unchanged.
 - **Backticks go inside the link text, never around the whole link.** For API/code references, code-format the identifier inside the link text — `[useTranslations](…)` — which renders correctly. Do not wrap the entire link in backticks (`[GT](…)` renders literally).
 - **Link every occurrence of a component, function, hook, class, or method in prose** to its reference page (`[useTranslations](/docs/react/reference/hooks/use-translations)`). Do not link occurrences inside headings. Skip self-links on the symbol's own reference page.
 - **Verify the target exists before linking.** If a page does not exist yet, omit the link or note it as "coming soon".
@@ -681,7 +709,7 @@ Example for role-specific integration setup:
 
 ```mdx
 <Callout type="info">
-  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before Project members continue.
+  **Organization admins:** Open **Organization > Connections**, add the connection, and verify access before project members continue.
 </Callout>
 ```
 
@@ -812,9 +840,10 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 - Page order in the filetree (and the sidebar navigation it drives) is logical (workflow order), not alphabetical.
 - Uncertain items are resolved against the codebase; anything that genuinely cannot be verified is omitted rather than guessed.
 - Navigation separators use `>`, not `->`.
+- UI elements, including click/choose/select targets, are bold, never quoted; standalone "See [X](…)." pointer sentences are parenthesized as "(See [X](…))." with the period outside; no description opens with "Learn how", "Learn what", or "Quickstart to".
 - `.md` link suffix usage is consistent within the file.
 - Notes and tips use the established format for their page type and are consistent across sibling pages.
-- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Project, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub).
+- Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub); "project" is lowercase in prose, capitalized only in UI labels and at sentence starts.
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - `related.links` follow the page-type rule: quickstart/entry pages point to four of that section's guides (or all if the section has fewer than four); guide pages link **all** the section's other guides, trimming to the four most relevant only when there are more than four others; neither links reference pages or quickstarts (the guide-less OpenAPI section is the only exception).

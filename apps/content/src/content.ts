@@ -48,6 +48,16 @@ export function entrySummary(entry: ContentEntry) {
   return entry.description ?? entry.summary ?? '';
 }
 
+export function entryTitle(
+  collection: ContentCollection,
+  entry: ContentEntry
+) {
+  if (collection !== 'devlog' || !('headline' in entry) || !entry.headline) {
+    return entry.title;
+  }
+  return `${formatReleaseTitle(entry.title)}: ${entry.headline}`;
+}
+
 export function entryDate(entry: ContentEntry) {
   if (!('date' in entry) || !entry.date) return '';
   return String(entry.date);
@@ -78,6 +88,17 @@ export function groupEntries(entries: ContentEntry[]) {
     groups[section].push(entry);
     return groups;
   }, {});
+}
+
+function formatReleaseTitle(title: string) {
+  return title
+    .split(/\s+\/\s+/)
+    .map((segment) => {
+      const separatorIndex = segment.lastIndexOf('@');
+      if (separatorIndex <= 0) return segment;
+      return `${segment.slice(0, separatorIndex)} ${segment.slice(separatorIndex + 1)}`;
+    })
+    .join(' / ');
 }
 
 function slugToCandidates(slug: string[] = []) {

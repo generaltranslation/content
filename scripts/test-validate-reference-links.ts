@@ -99,6 +99,26 @@ const references: ReferenceSource[] = [
     source: '---\ntitle: gt translate\n---\n',
   },
   {
+    path: 'docs/en-US/cli/reference/commands/project-create.mdx',
+    source: '---\ntitle: gt project create\n---\n',
+  },
+  {
+    path: 'docs/en-US/cli/reference/commands/project-status.mdx',
+    source: '---\ntitle: gt project status\n---\n',
+  },
+  {
+    path: 'docs/en-US/integrations/rrweb/reference/recorder.mdx',
+    source: '---\ntitle: Recorder API\n---\n\n## `GTRecorder` [#gt-recorder]\n',
+  },
+  {
+    path: 'docs/en-US/integrations/rrweb/reference/harvest.mdx',
+    source: '---\ntitle: Harvest API\n---\n\n## `harvestLocales` [#harvest-locales]\n',
+  },
+  {
+    path: 'docs/en-US/integrations/rrweb/reference/replayer.mdx',
+    source: '---\ntitle: Replayer API\n---\n\n## `GTReplayer` [#gt-replayer]\n',
+  },
+  {
     path:
       'docs/en-US/platform/core/reference/utility-functions/locales/get-locale-properties.mdx',
     source: '---\ntitle: getLocaleProperties\n---\n',
@@ -156,6 +176,11 @@ const skippedCases = [
     path: 'docs/en-US/react/reference/hooks/use-locale-selector.mdx',
     source:
       'The returned `getLocaleProperties` callback uses the configured custom mapping.',
+  },
+  {
+    name: 'generic project field with nested CLI commands',
+    path: 'docs/en-US/integrations/sanity/reference/example.mdx',
+    source: 'Set the `project` field in the Sanity configuration.',
   },
 ];
 
@@ -277,10 +302,40 @@ const foundCases = [
     target: '/docs/cli/reference/commands/translate',
   },
   {
+    name: 'nested CLI command with arguments',
+    path: 'docs/en-US/cli/guides/example.mdx',
+    source: 'Run `npx gt project create --name Storefront` to create a Project.',
+    target: '/docs/cli/reference/commands/project-create',
+  },
+  {
+    name: 'nested CLI sibling command',
+    path: 'docs/en-US/cli/guides/example.mdx',
+    source: 'Run `gt project status job_123` to inspect the setup job.',
+    target: '/docs/cli/reference/commands/project-status',
+  },
+  {
     name: 'package context',
     path: 'docs/en-US/node/guides/example.mdx',
     source: 'In `gt-node`, call `getGT()` before translating.',
     target: '/docs/node/reference/functions/get-gt',
+  },
+  {
+    name: 'rrweb recorder section',
+    path: 'docs/en-US/integrations/rrweb/guides/example.mdx',
+    source: 'Mount `GTRecorder` once before recording.',
+    target: '/docs/integrations/rrweb/reference/recorder#gt-recorder',
+  },
+  {
+    name: 'rrweb harvest section',
+    path: 'docs/en-US/integrations/rrweb/guides/example.mdx',
+    source: 'Call `harvestLocales()` after capture.',
+    target: '/docs/integrations/rrweb/reference/harvest#harvest-locales',
+  },
+  {
+    name: 'rrweb replayer section',
+    path: 'docs/en-US/integrations/rrweb/guides/example.mdx',
+    source: 'Render `GTReplayer` with the saved bundle.',
+    target: '/docs/integrations/rrweb/reference/replayer#gt-replayer',
   },
   {
     name: 'standalone utility outside the narrow exclusion',

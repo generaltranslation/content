@@ -1,0 +1,70 @@
+---
+
+title: .strings
+description: Translate .strings files with the General Translation CLI. API reference for the .strings file format.
+
+---
+
+The CLI translates `.strings` files, the key/value text tables an app loads from one `<locale>.lproj` directory per locale. Translations keep each entry's key, escapes, and format specifiers, and the comment above an entry is passed to the translation engine as context.
+
+*Note: `.strings` and `.stringsdict` are the legacy Apple localization layout. Xcode's String Catalog migration folds the `.lproj` files into a single [`.xcstrings` catalog](/docs/cli/reference/formats/xcstrings-files) and deletes them, so a project uses one layout or the other.*
+
+## Configuration [#config]
+
+Add a `dotStrings` entry under `files` with an `include` array of glob patterns. Put the `[locale]` placeholder in the `.lproj` directory name so the CLI can find source tables and save translations to the right path.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja", "ar"],
+  "files": {
+    "dotStrings": {
+      "include": [
+        "Resources/[locale].lproj/Localizable.strings",
+        "Resources/[locale].lproj/InfoPlist.strings"
+      ]
+    }
+  }
+}
+```
+
+With this config, the CLI reads the tables in `Resources/en.lproj/` and writes `Resources/es.lproj/`, `Resources/ja.lproj/`, and `Resources/ar.lproj/`. See the [configuration reference](/docs/cli/reference/config#files) for all file keys.
+
+The `dotStrings` key requires `gt` 2.18.1 or later.
+
+## File encoding [#encoding]
+
+The CLI detects UTF-8, UTF-16, and UTF-32 byte order marks when it reads a `.strings` file. It sends decoded text to the API, then writes each translation in the source file's original encoding. A file without a byte order mark is treated as UTF-8.
+
+If the source file was moved or deleted after upload, the CLI uses the existing translated file's encoding when one is available.
+
+<Callout type="info">
+  **Changed in v2.20.0:** The CLI now hashes decoded text and preserves the source encoding. Existing `.strings` files receive new version IDs because earlier releases hashed base64 bytes, so they can translate once more after upgrading even when their text has not changed.
+</Callout>
+
+## Output behavior [#output]
+
+When a translated table has no entries, the CLI writes an empty property-list dictionary instead of a zero-byte file so Foundation can load it.
+
+## Multiple tables per locale [#tables]
+
+Most apps ship more than one table per locale, so a config that lists only `Localizable.strings` silently leaves the rest untranslated. The two common tables are:
+
+- `Localizable.strings` — interface text loaded through `NSLocalizedString`
+- `InfoPlist.strings` — the system-facing values in `Info.plist`, such as `CFBundleDisplayName` and the usage descriptions shown in permission prompts
+
+List each table in `include`, or match them all with a single glob:
+
+```json title="gt.config.json"
+{
+  "files": {
+    "dotStrings": {
+      "include": ["Resources/[locale].lproj/*.strings"]
+    }
+  }
+}
+```
+
+## Plurals [#plurals]
+
+A `.strings` entry holds one string per key and cannot express plural forms. Apple keeps plural rules in a companion `.stringsdict` file in the same `.lproj` directory, which is a separate config key. See [`.stringsdict`](/docs/cli/reference/formats/dot-stringsdict-files) to translate them alongside your tables.

@@ -1,0 +1,73 @@
+---
+
+title: .stringsdict
+description: Translate .stringsdict files with the General Translation CLI. API reference for the .stringsdict file format.
+
+---
+
+The CLI translates `.stringsdict` files, the XML property lists that carry an app's plural rules. Each locale has its own file alongside its `.strings` tables in a `<locale>.lproj` directory. Translations keep the plist structure, the format keys, and the format specifiers, and rebuild the plural forms for each target locale.
+
+*Note: `.stringsdict` is part of the legacy Apple localization layout, paired with [`.strings`](/docs/cli/reference/formats/dot-strings-files). Xcode's String Catalog migration folds both into a single [`.xcstrings` catalog](/docs/cli/reference/formats/xcstrings-files) and deletes them, so a project uses one layout or the other.*
+
+## Configuration [#config]
+
+Add a `dotStringsdict` entry under `files` with an `include` array of glob patterns. Put the `[locale]` placeholder in the `.lproj` directory name so the CLI can find the source file and save translations to the right path.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["pl", "ar", "zh"],
+  "files": {
+    "dotStringsdict": {
+      "include": ["Resources/[locale].lproj/Localizable.stringsdict"]
+    }
+  }
+}
+```
+
+With this config, the CLI reads `Resources/en.lproj/Localizable.stringsdict` and writes the translated file into `Resources/pl.lproj/`, `Resources/ar.lproj/`, and `Resources/zh.lproj/`. See the [configuration reference](/docs/cli/reference/config#files) for all file keys.
+
+The `dotStringsdict` key requires `gt` 2.18.1 or later.
+
+## File encoding [#encoding]
+
+The CLI detects UTF-8, UTF-16, and UTF-32 byte order marks when it reads a `.stringsdict` file. It sends decoded XML to the API, then writes each translation in the source file's original encoding. A file without a byte order mark is treated as UTF-8.
+
+If the source file was moved or deleted after upload, the CLI uses the existing translated file's encoding when one is available.
+
+<Callout type="info">
+  **Changed in v2.20.0:** The CLI now preserves the source encoding instead of rewriting a UTF-16 file as UTF-8 or sending its encoded bytes to the XML parser.
+</Callout>
+
+## Output behavior [#output]
+
+The CLI preserves carriage returns in property-list keys and values with XML character references.
+
+## Translate alongside your .strings tables [#pairing]
+
+A `.stringsdict` file only covers the keys that need plural rules; the rest of the locale's text stays in its `.strings` tables. Configure both keys so one run covers the whole `.lproj` directory:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["pl", "ar", "zh"],
+  "files": {
+    "dotStrings": {
+      "include": ["Resources/[locale].lproj/*.strings"]
+    },
+    "dotStringsdict": {
+      "include": ["Resources/[locale].lproj/*.stringsdict"]
+    }
+  }
+}
+```
+
+## Plural categories [#plurals]
+
+A translated file carries the plural categories the target language actually uses, which is rarely the same set as the source. English selects between `one` and `other`, but Polish uses three forms for an integer count, Arabic uses six, and Chinese uses one. The CLI rebuilds each format variable against the target language's CLDR rules rather than copying the source's categories:
+
+- Categories the target language uses are always present, so a Polish translation gains the forms English never had.
+- Categories the target language never selects are dropped, so a Chinese translation collapses to a single `other` form.
+- An explicit `zero` in the source is kept even for a language whose CLDR rules omit one, because Foundation renders it at count 0 regardless.
+
+Because the category set changes, do not expect the translated file to have the same keys as the source. Compare rendered output at representative counts instead.

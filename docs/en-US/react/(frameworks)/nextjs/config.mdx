@@ -39,16 +39,16 @@ export default withGTConfig(nextConfig, {
 
 ## Credentials [#credentials]
 
-Set your Project ID and API keys as environment variables, never as plugin options:
+Set your project ID and API keys as environment variables, never as plugin options:
 
 | Variable | Description |
 | --- | --- |
-| `GT_PROJECT_ID` (or `NEXT_PUBLIC_GT_PROJECT_ID`) | Your General Translation Project ID. |
-| `GT_API_KEY` | Production API key (prefixed `gtx-api-`), used by the CLI and production builds. |
-| `GT_DEV_API_KEY` (or `NEXT_PUBLIC_GT_DEV_API_KEY`) | Development API key (prefixed `gtx-dev-`), for on-demand translation in development. |
+| `GT_PROJECT_ID` (or `NEXT_PUBLIC_GT_PROJECT_ID`) | Your General Translation project ID. |
+| `GT_API_KEY` | Project API key (prefixed `gtx-api-`), used by the CLI and production builds. |
+| `GT_DEV_API_KEY` (or `NEXT_PUBLIC_GT_DEV_API_KEY`) | Project API key (prefixed `gtx-api-`) with runtime translation permission, for development hot reload. |
 
 <Callout type="warn">
-  **Warning:** Never prefix a production API key with `NEXT_PUBLIC_`, and do not include a development key in production. The build throws if `GT_DEV_API_KEY` is present with `NODE_ENV=production`.
+  **Warning:** Never include any API key in deployed client bundles. Full-access project keys work for local development, but we recommend a separate key with only **Runtime translation** enabled to minimize risk. The build throws if `GT_DEV_API_KEY` or `NEXT_PUBLIC_GT_DEV_API_KEY` is set with `NODE_ENV=production`.
 </Callout>
 
 ## Options [#options]
@@ -69,8 +69,8 @@ All options are optional. Locale options are most commonly set in `gt.config.jso
 
 | Option | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| [`runtimeUrl`](#runtime-url) | Base URL for the General Translation API. Empty string disables runtime translation. | `string \| null` | Yes | GT runtime |
-| [`cacheUrl`](#cache-url) | URL for cached translations. | `string \| null` | Yes | GT CDN |
+| [`runtimeUrl`](#runtime-url) | Base URL for the General Translation API. Empty string disables runtime translation. | `string \| null` | Yes | `https://api.gtx.dev` |
+| [`cacheUrl`](#cache-url) | URL for cached translations. | `string \| null` | Yes | `https://cdn.gtx.dev` |
 | [`cacheExpiryTime`](#cache-expiry-time) | Milliseconds before locally cached translations expire. | `number` | Yes | `60000` |
 | [`loadTranslationsPath`](#load-translations-path) | Path to a custom [`loadTranslations`](/docs/react/reference/functions/load-translations) file. | `string` | Yes | Auto-resolved |
 | [`loadDictionaryPath`](#load-dictionary-path) | Path to a custom [`loadDictionary`](/docs/react/reference/functions/load-dictionary) file. | `string` | Yes | Auto-resolved |
@@ -97,7 +97,7 @@ All options are optional. Locale options are most commonly set in `gt.config.jso
 | --- | --- | --- | --- | --- |
 | [`experimentalCompilerOptions`](#compiler-options) | Compiler plugin settings. | `object` | Yes | See below |
 | [`headersAndCookies`](#headers-and-cookies) | Custom locale header and cookie names. | `object` | Yes | See below |
-| [`getLocalePath`](#request-function-paths) | Path to a custom [`getLocale`](/docs/node/reference/functions/get-locale) function. | `string` | Yes | — |
+| [`getLocalePath`](#request-function-paths) | Path to a custom [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) function. | `string` | Yes | — |
 | [`getRegionPath`](#request-function-paths) | Path to a custom [`getRegion`](/docs/react/nextjs/reference/functions/get-region) function. | `string` | Yes | — |
 | [`pathRegex`](#path-regex) | Restrict i18n middleware to matching pathnames. | `string` | Yes | — |
 | [`_tagIds`](#tag-ids) | Expose each [`<T>`](/docs/react/reference/components/t) translation hash as a `data-_gt-hash` attribute. | `boolean` | Yes | `false` |
@@ -137,13 +137,13 @@ A natural-language description of your app. It is sent as context to improve tra
 
 ### `runtimeUrl` [#runtime-url]
 
-**Type** `string | null` · **Optional** · **Default** General Translation runtime
+**Type** `string | null` · **Optional** · **Default** `https://api.gtx.dev`
 
 Base URL for the General Translation API used for on-demand translation. Set it to an empty string to disable runtime translation entirely.
 
 ### `cacheUrl` [#cache-url]
 
-**Type** `string | null` · **Optional** · **Default** General Translation CDN
+**Type** `string | null` · **Optional** · **Default** `https://cdn.gtx.dev`
 
 URL where cached translations are served from. Point it at a custom cache host, or set it to `null` to disable remote loading.
 
@@ -151,7 +151,7 @@ URL where cached translations are served from. Point it at a custom cache host, 
 
 **Type** `number` · **Optional** · **Default** `60000`
 
-Milliseconds before locally cached translations expire. This default applies to production remote loading without a development key.
+Milliseconds before locally cached translations expire. This default applies to production remote loading without `devApiKey`.
 
 ### `loadTranslationsPath` [#load-translations-path]
 
@@ -303,7 +303,7 @@ export default withGTConfig(nextConfig, {
 });
 ```
 
-See the shared [`_tagIds` reference](/docs/react/reference/config#tag-ids) for supported frameworks, exact markup behavior, and the React Native exclusion.
+(See the shared [`_tagIds` reference](/docs/react/reference/config#tag-ids) for supported frameworks, exact markup behavior, and the React Native exclusion).
 
 ### ESLint options [#eslint-options]
 
@@ -311,7 +311,7 @@ See the shared [`_tagIds` reference](/docs/react/reference/config#tag-ids) for s
 - `eslintSeverity` (`'error' | 'warn'`, default `'warn'`) — severity level for the generated rules.
 - `overwriteESLintConfig` (`boolean`, default `false`) — allow overwriting an existing `eslint.config.mjs`.
 
-See [Linting your code](/docs/react/guides/linting-your-code) for the rules themselves.
+(See [Linting your code](/docs/react/guides/linting-your-code) for the rules themselves).
 
 ## Local vs. CDN translations [#translations]
 
@@ -334,4 +334,4 @@ export default async function loadTranslations(locale: string) {
 
 ## Returns [#returns]
 
-`withGTConfig` returns a `NextConfig` object enhanced with the General Translation settings. It throws at build time when the configuration conflicts, when a required API key is missing, when an invalid locale is used with General Translation services, or when a development key is present in production.
+`withGTConfig` returns a `NextConfig` object enhanced with the General Translation settings. It throws at build time when the configuration conflicts, when a required API key is missing, when an invalid locale is used with General Translation services, or when `devApiKey` is configured in production.
