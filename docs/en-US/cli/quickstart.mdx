@@ -35,7 +35,7 @@ Use the CLI when you want to:
 - Keep translations in version control alongside your source content.
 
 ## Quickstart [#quickstart]
-Install `gt`, configure your project, and run your first translation. You need an existing project with a `package.json` and Node.js installed.
+Install `gt`, configure your project, and run your first translation. You need an existing project with a `package.json` and Node.js 20 or later installed. Prefer a currently supported Node.js LTS release. Hosted setup needs a General Translation account with project access, or permission to create a project in an Organization. Install Git so the wizard can check credential files before writing them.
 
 ### 1. Install `gt`
 
@@ -69,7 +69,7 @@ Install the CLI as a dev dependency.
 
 ### 2. Configure your project
 
-Run the setup wizard to detect your framework, create a `gt.config.json`, and generate credentials when the selected setup needs them.
+Run [`gt init`](/docs/cli/reference/commands/init) to detect your framework, create `gt.config.json`, and select or create a project when needed. The wizard starts sign-in if needed; you do not need to log in first.
 
 ```bash
 npx gt init
@@ -81,20 +81,19 @@ In a monorepo, run the command from the app you want to localize. The wizard sto
   [`gt init`](/docs/cli/reference/commands/init) is an interactive wizard and needs a terminal. In CI or another non-interactive shell it may wait for input, fail validation, or exit early without creating `gt.config.json` or writing credentials. For those environments, use [Non-interactive setup for CI](#ci-setup).
 </Callout>
 
-The wizard sets your default locale and target locales and chooses where translations are stored. When the selected setup needs credentials, it can write your API key and project ID to `.env.local`. See [Configuring the CLI](/docs/cli/guides/configuring) to set this up in detail, or [`gt init`](/docs/cli/reference/commands/init) for the full command.
+The wizard sets your default and target locales and chooses where translations are stored. It can provision a generate-only development runtime key and write it with the project ID to ignored `.env.local`, using framework-specific variable names. It does not provision a tooling key or replace `GT_API_KEY`. See [Configuring the CLI](/docs/cli/guides/configuring#credentials) for authentication and [`gt init`](/docs/cli/reference/commands/init) for provisioning permissions and file protections.
 
-*Note: You should now have a `gt.config.json` at your project root. If the wizard generated credentials, `.env.local` contains `GT_API_KEY` and `GT_PROJECT_ID`. The bundled-local Vite setup skips credentials, so add them in the next step before translating.*
+*Note: You should now have a `gt.config.json`. Bundled-local Vite setup makes live development credentials opt-in (default no); declining skips project discovery and key creation. A later local write failure does not roll back a remote project/key or earlier setup edits.*
 
-### 3. Add your project API key
+### 3. Check your project binding
 
-The [`translate`](/docs/cli/reference/commands/translate) command requires a project API key and project ID. The wizard can generate these for you, or create them on the [API Keys page](https://generaltranslation.com/dashboard). Set them as environment variables so the CLI can read them. For a [custom key](/docs/platform/dashboard/reference/api-keys#create-project-keys), grant **Files > Write** and **Translation queue > Enabled**. Add **Context > Write** if you generate context.
+The [`translate`](/docs/cli/reference/commands/translate) command needs a project ID and either your saved login or an explicit tooling key. If setup did not bind a project, add [`projectId`](/docs/cli/reference/config#project-id) to your existing config or set it in the environment:
 
 ```bash title=".env.local"
-GT_API_KEY=your-api-key
 GT_PROJECT_ID=your-project-id
 ```
 
-*Note: Set your API key as an environment variable — never add it to `gt.config.json`.*
+Use [`gt whoami`](/docs/cli/reference/commands/whoami) to check your account. Login does not select a project or supply runtime SDK credentials. An existing explicit tooling key takes precedence and never falls back to login on failure. Never add API keys to `gt.config.json`.
 
 ### 4. Translate your project
 
@@ -131,7 +130,7 @@ To translate standalone files instead, add a file type such as `json` or `mdx` w
 
 ### 2. Set your credentials
 
-Set your project API key and project ID as environment variables in your CI provider's secret settings, not in a committed file. Create them on the [API Keys page](https://generaltranslation.com/dashboard).
+Set your project API key and project ID as environment variables in your CI provider's secret settings, not in a committed file. Create a suitably scoped key in the [Dashboard](/docs/platform/dashboard/reference/api-keys) or with [`gt api-key create`](/docs/cli/reference/commands/api-key-create). Include permissions for the whole workflow, including file reads/writes, translation enqueueing, and context access when used; the wizard's generate-only key is not enough. Neither [`gt login`](/docs/cli/reference/commands/login) nor its device-authorization mode is an unattended CI substitute.
 
 ```bash
 GT_API_KEY=your-api-key
