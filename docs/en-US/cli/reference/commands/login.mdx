@@ -25,9 +25,9 @@ npx gt login [options]
 
 ## How it works [#how-it-works]
 
-- Opens browser authorization using Proof Key for Code Exchange (PKCE) with S256, state validation, and an ephemeral `127.0.0.1` callback. The public native client is `gt-cli`; no client secret or per-install registration is needed.
-- Requests `openid profile offline_access gt:*`. You must approve consent, and access remains bounded by your account permissions.
-- Uses device authorization with `--no-browser`, or when the loopback listener cannot bind. It displays a verification URL and code to approve on another device, using the prefilled URL when available.
+- Opens your browser so you can approve CLI access to your account. No client registration is needed.
+- Your account permissions determine which projects and operations you can access.
+- Uses device authorization with `--no-browser`, or if it cannot listen for the browser callback on this machine. It displays a verification URL and code to approve on another device.
 - Does not automatically detect SSH or switch to device authorization merely because browser launching fails. Open the displayed authorization URL yourself, or rerun with `--no-browser`.
 - Saves an account session, not a project selection. It does not create API keys or write `.env.local`. Runtime SDKs do not load CLI sessions.
 
@@ -55,10 +55,10 @@ After approval, check the account with [`gt whoami`](/docs/cli/reference/command
 
 ## Storage and troubleshooting [#storage]
 
-Sessions are stored at `$XDG_STATE_HOME/gt/credentials.json` when `XDG_STATE_HOME` is absolute, otherwise at `~/.local/state/gt/credentials.json`. Relative XDG values are ignored. Entries are keyed by authorization issuer and record the API resource they authorize.
+Sessions are stored at `$XDG_STATE_HOME/gt/credentials.json` when `XDG_STATE_HOME` is absolute, otherwise at `~/.local/state/gt/credentials.json`. Relative XDG values are ignored. Sessions are specific to the authorization server and API you signed in to.
 
-New directories use mode `0700`; credential files use `0600` and atomic replacement. These POSIX mode protections are platform-dependent, not an OS keychain or encrypted storage. There is no migration from an older XDG config location. Rerun login for obsolete credentials; malformed file envelopes are preserved as `.corrupt-<timestamp>` backups.
+Credentials use owner-only file permissions where supported; they are not encrypted or stored in an OS keychain. Older saved-login formats are not migrated automatically. Sign in again if your saved credentials are outdated or invalid. Corrupt credential files are preserved as `.corrupt-<timestamp>` backups.
 
-Tokens refresh lazily within 30 seconds of expiration. Authenticated API requests can retry once after a 401 with a refreshed user token. Refresh is coordinated within one process, not by a cross-process lock.
+The CLI refreshes your session automatically when needed. Avoid updating the same saved login from multiple CLI processes at once.
 
 `GT_AUTH_URL` selects the issuer, defaulting to the Dashboard's `/api/auth` URL. Login binds tokens to the configured [`baseUrl`](/docs/cli/reference/config#base-url), or the normal API default; `GT_API_URL` overrides the login resource only. It is not a universal CLI transport override. A token bound to another API is rejected: align the API configuration and rerun login.
