@@ -1,0 +1,63 @@
+---
+
+title: generaltranslation@9.5.0 / gt@2.22.0
+headline: Sign in and set up projects from the CLI
+summary: Sign in with your account, set up a project, and create keys with explicit permissions from the CLI.
+date: 2026-09-24
+authors: [cyan]
+tags: ['generaltranslation', '9.5.0', 'gt', '2.22.0', '@generaltranslation/api', '0.4.0', 'cli']
+
+---
+
+`gt@2.22.0` brings account sign-in, project selection, and scoped key creation into the terminal. `generaltranslation@9.5.0`, `@generaltranslation/api@0.4.0`, and `gt-sanity@4.0.19` share more of the request and polling implementation behind their existing workflows.
+
+## Sign in from the CLI
+
+Use [`gt login`](/docs/cli/reference/commands/login) to authenticate CLI requests with your account instead of creating a tooling API key:
+
+```bash
+npx gt login
+npx gt init
+```
+
+Login opens your browser for approval. If you need to approve on another device, use [`npx gt login --no-browser`](/docs/cli/reference/commands/login#flags) to get a verification URL and code. This still requires human approval; it is not an unattended CI login.
+
+[`gt whoami`](/docs/cli/reference/commands/whoami) checks your signed-in identity, and [`gt logout`](/docs/cli/reference/commands/logout) removes the saved session and attempts to revoke its refresh token. Your account's permissions still determine which projects and operations you can access.
+
+An explicit `--api-key` or loaded `GT_API_KEY` takes precedence over the saved login. A rejected key does not fall back to your account. Keep scoped API keys in your CI provider's secret store for unattended workflows.
+
+## Set up a project and choose key permissions
+
+[`gt init`](/docs/cli/reference/commands/init) can sign you in, let you choose an accessible project, or create one in an Organization where you have permission. It can then save the project ID and a development runtime key in `.env.local`, using the environment variable names for your framework.
+
+That key has only `project:translations:generate`. It is for local runtime translations, not the CLI's upload, enqueue, or download workflow. Init leaves an existing `GT_API_KEY` untouched and does not create a production or CI tooling key. Local Vite setups can decline live development translations and skip credential provisioning.
+
+Use [`gt api-key create`](/docs/cli/reference/commands/api-key-create) when you want to create an additional project key with permissions you choose:
+
+```bash
+npx gt api-key create --project-id your-project-id \
+  --name "Runtime translations" \
+  --permission project:translations:generate
+```
+
+The command requires a name and explicit permissions. You need permission to create keys and delegate every requested grant. It prints the new secret once to stdout, sends diagnostics to stderr, and does not edit your environment files. Store the secret securely. For CI, choose permissions for the whole workflow rather than reusing this generate-only example.
+
+Local file writes and remote provisioning are not one transaction: a later local write failure can leave a newly created project or key behind. Never include API keys in deployed browser or mobile bundles, regardless of their permissions.
+
+## One request contract across tools
+
+The public generated SDK introduced in earlier releases remains available through [`generaltranslation/api`](/docs/platform/core/reference/api-client). This release connects more Core, CLI, and Sanity requests to the shared implementation while retaining the supported `GT` class.
+
+The SDK includes paginated project and Organization discovery. Applications can supply a refreshable `userTokenProvider` to the SDK or Core instead of an API key. That provider belongs to your application: the SDK does not read the CLI's saved session or perform login for you.
+
+Shared polling runs requests sequentially instead of overlapping them and tracks the remaining deadline. Low-level polling returns `complete: false` when it runs out of time; completion does not mean every job succeeded. Check job results before downloading translations.
+
+Diagnostic formatting is now available from the public [`generaltranslation/diagnostics`](/docs/platform/core/reference/diagnostics) entry point. Tools can format actionable messages without importing the full Core entry point.
+
+## Upgrading
+
+- **Replace `gt auth` and `--key-type`.** Use login for account authentication, init for guided project setup, and explicit key creation for additional credentials. [`gt configure`](/docs/cli/reference/commands/configure) is not a side-effect-free substitute: depending on your setup, it can install dependencies and provision credentials.
+- **Keep runtime and tooling credentials separate.** `GT_DEV_API_KEY` remains a framework runtime setting. Signing in does not populate it or authenticate runtime SDKs. Earlier saved-login formats are not migrated automatically; sign in again if needed.
+- **Check retry assumptions.** Management POST requests do not automatically retry network or server failures, but 429 responses can still retry when retries are enabled. Core runtime translation bypasses that generic retry policy. Avoid blindly repeating project or key creation: each successful request creates another resource.
+- **Retain supported compatibility APIs.** Core's `devApiKey` fallback and [`getProjectData`](/docs/platform/core/reference/gt-class-methods/translation/get-project-data) remain available but deprecated. Use `apiKey` or `userTokenProvider`, and prefer [`getProjectInfo`](/docs/platform/core/reference/gt-class-methods/project/project-management#get-project-info) for new project-info calls.
+- **Handle validation and result changes.** Unsupported model-provider values fail before a request is sent. Font upload results no longer include the never-populated `deduped` field.
