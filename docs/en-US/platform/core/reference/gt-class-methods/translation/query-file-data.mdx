@@ -31,14 +31,14 @@ queryFileData(
 ): Promise<FileDataResult>
 ```
 
-*Note: `queryFileData` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+*Note: `queryFileData` requires an API key (including the deprecated `devApiKey` alias) or a [token provider](/docs/platform/core/reference/api-client#usertokenprovider), plus `projectId` on the GT instance.*
 
 ## How it works [#how-it-works]
 
 - **Completion.** A translation is complete when its `completedAt` is not `null`.
 - **Lifecycle.** A completed translation may still require approval (`approvedAt`) before it is published (`publishedAt`).
 - **Batch monitoring.** Query many files at once for efficient status checking across multiple translation jobs.
-- **Locale resolution.** Translation query locales are resolved to the supported locale used for storage. The response preserves the locale from each request, so equivalent codes requested separately, such as `ja` and `ja-JP`, each receive a result when they match the same stored translation.
+- **Locale resolution.** Translation queries canonicalize locales at the service boundary. Response locales recover [configured identities](/docs/platform/core/reference/gt-class/constructor#how-it-works); the first matching identity wins when aliases are ambiguous. Do not expect a distinct response label for every equivalent requested spelling.
 - **Versioning.** All file queries require `branchId` for versioning with branch support.
 
 ## Parameters [#parameters]
@@ -128,6 +128,12 @@ type FileDataResult = {
 ## Examples [#examples]
 
 ```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+import type { FileUpload } from 'generaltranslation/types';
+
+const fileContents = '{"greeting":"Hello"}';
+const filePath = 'en.json';
+
 // (1) Create a GT instance
 const targetLocales = ['es', 'fr', 'de'];
 const gt = new GT({
@@ -136,7 +142,7 @@ const gt = new GT({
 });
 
 // (2) Upload the file
-const fileUpload = {
+const fileUpload: FileUpload = {
   content: fileContents,
   fileName: filePath,
   fileFormat: 'JSON',
@@ -160,27 +166,19 @@ const translatedFileQueries = targetLocales.map((locale) => ({
   locale,
 }));
 
-while (true) {
-  const result = await gt.queryFileData({
-    translatedFiles: translatedFileQueries,
-  });
-
-  const allCompleted = result.translatedFiles?.every((file) => file.completedAt !== null);
-
-  if (allCompleted) {
-    break;
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+const jobs = await gt.awaitJobs(enqueueResult, { timeoutSeconds: 300 });
+if (!jobs.complete || jobs.jobs.some((job) => job.status !== 'completed')) {
+  throw new Error('Translation jobs did not complete successfully');
+}
+const status = await gt.queryFileData({ translatedFiles: translatedFileQueries });
+if (status.translatedFiles?.length !== translatedFileQueries.length ||
+    status.translatedFiles.some((file) => file.completedAt === null)) {
+  throw new Error('Translations are not ready to download');
 }
 
 // (5) Download the files
 const downloadResult = await gt.downloadFileBatch(
-  translatedFileQueries.map(({ fileId, branchId, locale }) => ({
-    fileId,
-    branchId,
-    locale,
-  }))
+  translatedFileQueries
 );
 ```
 

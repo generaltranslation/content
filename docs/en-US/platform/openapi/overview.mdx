@@ -30,7 +30,7 @@ All endpoints, including runtime translation with `POST /v2/translate`, live und
 
 ### Authentication
 
-Every endpoint requires a bearer credential in the standard `Authorization` header. The endpoint reference shows whether an operation accepts an API key, an OAuth 2.1 user access token, or both.
+Authenticate with a bearer credential in the standard `Authorization` header. The endpoint reference shows whether an operation accepts an API key, an OAuth 2.1 user access token, or both. API keys identify automation; OAuth tokens identify users. Dashboard session cookies are not public API credentials.
 
 ```bash
 curl https://api.gtx.dev/v2/project/info/PROJECT_ID \
@@ -40,7 +40,11 @@ curl https://api.gtx.dev/v2/project/info/PROJECT_ID \
 Choose the key scope that matches your workflow:
 
 - **Project** with prefix `gtx-api-`: bound to one project and usable in any environment, subject to its permissions
-- **Organization** with prefix `gtx-org-`: works across projects. Most project-scoped endpoints require `gt-project-id`. `GET /v2/project/info/{projectId}` still requires that header and checks that the two IDs match. `POST /v2/projects/{projectId}/api-keys` uses its path parameter instead. Organization-scoped endpoints such as `POST /v2/orgs/{orgId}/projects` use the Organization in the path and require the credential to have access to it.
+- **Organization** with prefix `gtx-org-`: works across projects in its bound Organization, subject to its permissions
+
+For project info (`GET` and `POST /v2/project/info/{projectId}`) and key creation (`POST /v2/projects/{projectId}/api-keys`), the path selects the project. No project header is required; an optional `gt-project-id` must match the path or the request fails with `403`. On project-scoped routes without a path target, project keys default to their bound project; Organization keys and OAuth users must send `gt-project-id`. Discovery needs no project target. Organization-scoped routes use the Organization in the path. All targets remain subject to the credential's access.
+
+Legacy API-key headers remain supported and take precedence over the bearer header. Send OAuth tokens only as bearer credentials. Keep API keys and user access tokens out of deployed browser and mobile bundles.
 
 (See [API keys](/docs/platform/dashboard/reference/api-keys) for how to create and scope API keys).
 
@@ -48,18 +52,28 @@ OAuth applications use the Authorization Code flow with Proof Key for Code Excha
 
 ### Permissions
 
-Each endpoint requires a permission on the request identity. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. Keys created through the project API-key endpoint receive the project permissions the request identity can delegate. OAuth user access tokens must include the matching scope, and the signed-in user must still hold that permission.
+Each endpoint requires a permission on the request identity. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. The [project API-key endpoint](/docs/platform/openapi/reference/project/create-api-key) accepts an optional, nonempty `permissions` array. Invalid selections return `400`; valid but unavailable grants return `403` without creating a key. Omitting the array grants all effective, delegable project permissions—not unrestricted access. Explicit HTTP Write grants do not implicitly include Read.
+
+OAuth user access tokens must include the matching scope, and the signed-in user must still hold that permission. This applies to both key creation and each delegated permission. Third-party applications request individual scopes; the first-party `gt:*` scope does not bypass membership permissions and is not a valid API-key grant.
 
 Common permissions:
 
-- `org:projects:create` for creating projects with `POST /v2/orgs/{orgId}/projects`.
+- `org:projects:create` for listing create-capable Organizations and creating projects, including creation with CDN delivery enabled.
 - `project:api_keys:write` for creating project API keys with `POST /v2/projects/{projectId}/api-keys`.
-- `project:files:read` for downloading files, reading file info, translation status, branch info, orphaned files, project info, and job info.
+- `project:files:read` for listing projects, downloading files, reading file info, translation status, branch info, orphaned files, project info, and job info.
 - `project:files:write` for uploading files, translations, and assets; submitting diffs; publishing; creating branches and tags; and moving files.
 - `project:translations:enqueue` for queuing files for translation.
 - `project:translations:generate` for runtime translation.
+- `project:context:read` for reading project context.
 - `project:context:write` for generating context.
-- `project:write` for updating project settings.
+- `project:write` for updating an existing project's settings.
+
+### Project and Organization discovery
+
+- [`GET /v2/projects`](/docs/platform/openapi/reference/project/list-projects) returns projects the caller can read with `project:files:read`. OAuth results respect token scopes, current project permissions, and access to the parent Organization. Organization keys see only eligible projects in their bound Organization; project keys see only their bound project. Deleted projects and projects in deleted Organizations are excluded. Each result contains `id`, `name`, `orgId`, and `orgName`, not settings.
+- [`GET /v2/orgs`](/docs/platform/openapi/reference/project/list-orgs) accepts OAuth user tokens only and requires `org:projects:create`. It returns `{ id, name }` entries for Organizations where the user can create projects, not every membership. Missing scope returns `403`; a scoped user with no eligible memberships receives an empty page.
+
+Both endpoints return results in ascending ID order, with a `projects` or `orgs` array and `nextCursor`. Use optional `limit` (integer 1–100, default 50), then pass a non-null `nextCursor` as `cursor` to fetch the next page. The cursor must be nonempty and represents an ID boundary, not an offset; `null` ends pagination. Neither endpoint requires `gt-project-id` or supports an `orgId` query filter.
 
 ### Versioning
 
@@ -81,14 +95,16 @@ Set `fileFormat` to `MD` or `MDX` to translate a whole document supplied as a st
 
 ### Rate limits
 
-Requests are rate limited per API key or client IP over a 60-second window. Limits vary by endpoint:
+Authenticated limits use the endpoint's limiter group and actor identity: API key ID or user ID. Refreshing an OAuth token does not reset the user's endpoint bucket. Client IP is the fallback when no authenticated caller is present. Limits use a 60-second window and vary by endpoint:
 
 - **Heavy:** 30 requests/minute for queueing translations.
 - **Medium:** 120 requests/minute for uploads, diffs, context, moves, orphaned files, and publishing.
 - **Light:** 300 requests/minute for file downloads.
-- **Default:** 200 requests/minute for project and project API-key creation, branches, tags, project info, job info, file info, translation status, and runtime translation.
+- **Default:** 200 requests/minute for project and Organization discovery, project and project API-key creation, branches, tags, project info, job info, file info, translation status, and runtime translation.
 
-Exceeding a limit returns `429`. Organization token quotas return `402` from `POST /v2/translate`.
+Discovery and project/key creation share one limiter group. A separate pre-authentication limit allows 600 attempts per credential per 60 seconds, counting every outcome; requests without credentials are not counted by that limit.
+
+Exceeding a limit returns `429`, which can have a non-JSON body regardless of API version. Organization token quotas return `402` from `POST /v2/translate`.
 
 ### Errors
 
@@ -107,6 +123,7 @@ Common status codes:
 - `402` when an Organization token quota is exceeded (`POST /v2/translate`).
 - `403` when the request identity lacks permission or the action is not allowed on the current plan.
 - `404` when the resource is not found.
+- `409` when project creation exceeds the Organization's project limit.
 - `413` when the request body exceeds the endpoint limit.
 - `425` when a requested translated file is still processing.
 - `429` when a rate limit is exceeded.

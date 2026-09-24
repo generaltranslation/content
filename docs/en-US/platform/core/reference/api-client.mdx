@@ -7,7 +7,7 @@ description: Create a typed client for the General Translation API and call gene
 
 Import the TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The module combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for batching and translation-job polling.
 
-`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.4.0 and the equivalent standalone `@generaltranslation/api` 0.3.0 package.
+`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.5.0 and the equivalent standalone `@generaltranslation/api` 0.4.0 package.
 
 The generated helpers follow the OpenAPI snapshot bundled with the installed package. That snapshot can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview), so use the public reference when checking which endpoints and file formats are live.
 
@@ -61,6 +61,7 @@ The examples below reuse this configured `client`.
 | Option | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | [`apiKey`](#apikey) | API key or OAuth user access token sent in the `Authorization` header. | `string` | Yes | — |
+| [`userTokenProvider`](#usertokenprovider) | Application-owned access-token acquisition and refresh. | `UserTokenProvider` | Yes | — |
 | [`apiVersion`](#apiversion) | Contract version sent as `gt-api-version`. | `ApiVersion` | Yes | `API_VERSION` |
 | [`baseUrl`](#baseurl) | API origin. | `string` | No | — |
 | [`fetch`](#fetch) | Custom Fetch API implementation. | `typeof fetch` | Yes | `globalThis.fetch` |
@@ -73,6 +74,31 @@ The examples below reuse this configured `client`.
 **Type** `string` · **Optional**
 
 API key or OAuth 2.1 user access token sent as `Authorization: Bearer <credential>`. The client does not read environment variables automatically.
+
+### `userTokenProvider`
+
+**Type** `UserTokenProvider` · **Optional** · **Default** —
+
+Without an explicit `apiKey`, the client lazily obtains a bearer token from this provider. A `401` response triggers one refresh and replay. If refresh returns `undefined`, the original response is retained; a second `401` ends the replay. Provider errors propagate. An explicit API key takes precedence. A per-request `Authorization` header also bypasses provider acquisition and refresh.
+
+The SDK neither implements OAuth login nor reads sessions saved by [`gt login`](/docs/cli/reference/commands/login). Your application owns the token lifecycle:
+
+```ts title="user-client.ts"
+import { createApiClient, type UserTokenProvider } from 'generaltranslation/api';
+
+export function createUserClient(userTokenProvider: UserTokenProvider) {
+  // Supply callbacks backed by your application's authenticated session.
+  return createApiClient({
+    baseUrl: 'https://api.gtx.dev',
+    userTokenProvider: {
+      getAccessToken: () => userTokenProvider.getAccessToken(),
+      refreshAccessToken: () => userTokenProvider.refreshAccessToken(),
+    },
+  });
+}
+```
+
+`UserTokenProvider` requires `getAccessToken: () => Promise<string>` and `refreshAccessToken: () => Promise<string | undefined>`. A static token passed as `apiKey` does not gain automatic refresh.
 
 ### `apiVersion`
 
@@ -102,13 +128,19 @@ Project ID sent in the `gt-project-id` header. Organization keys and OAuth user 
 
 **Type** `'exponential' | 'linear' | 'none'` · **Optional** · **Default** `'exponential'`
 
-Idempotent requests retry network errors, `429` responses, and `5xx` responses up to three times. Non-idempotent requests retry `429` responses but not network errors or `5xx` responses. Set this to `'none'` when the caller owns retries.
+GET, HEAD, OPTIONS, PUT, and DELETE retry network errors and `5xx` responses up to three times after the first attempt. POST does not retry these failures, even for logically read-only operations. All methods can retry `429` responses. Set this to `'none'` to disable transport retries.
+
+For `429`, the delay comes from `Retry-After` (seconds or an HTTP date), then `RateLimit-Reset` (seconds), then a 60-second fallback. Other exponential delays are 500, 1000, and 2000 ms; linear delays are 500, 1000, and 1500 ms. Retry sleeps are not abort-aware, so cancellation is not guaranteed to interrupt a wait immediately.
+
+Class runtime translation disables these transport retries, including `429`; token-provider `401` replay remains separate. The generated runtime-translation helper uses the supplied client's retry policy instead.
 
 ### `timeoutMs`
 
 **Type** `number | false` · **Optional** · **Default** `60000`
 
-Timeout in milliseconds for each request attempt. Set it to `false` when a custom `fetch` implementation owns request timeouts.
+Timeout in milliseconds for each request attempt. Omission selects 60000; `0` is literal zero. Set it to `false` to disable the built-in timer, not caller or custom-fetch cancellation. This is not a whole-operation deadline covering retries, token callbacks, and response processing. Fetch implementations must honor the supplied signal.
+
+These settings are not constructor options for [`GT`](/docs/platform/core/reference/gt-class/constructor). Its runtime-translation methods take a numeric third argument, where `0` selects the default. (See [Translation configuration](/docs/platform/core/reference/types/translation-config)).
 
 ## `API_VERSION` [#api-version]
 
@@ -146,10 +178,12 @@ Common generated options include:
 | `signal` | Cancel the request with a Fetch API signal. | `AbortSignal` | Yes | — |
 | `meta` | Values exposed to custom client integrations. | `Record<string, unknown>` | Yes | — |
 
-The installed 0.3.0 SDK provides generated helpers for these public operations:
+The installed 0.4.0 SDK provides generated helpers for these 24 public operations:
 
 | Function | Operation |
 | --- | --- |
+| [`listProjects`](/docs/platform/openapi/reference/project/list-projects) | List one page of projects readable by the credentials. |
+| [`listOrgs`](/docs/platform/openapi/reference/project/list-orgs) | List one page of Organizations where the user can create projects. |
 | [`createProject`](/docs/platform/openapi/reference/project/create-project) | Create a project in a selected Organization. |
 | [`createProjectApiKey`](/docs/platform/openapi/reference/project/create-api-key) | Create a project API key with permissions delegated by the caller. |
 | [`uploadSourceFiles`](/docs/platform/openapi/reference/files/upload-source) | Upload source files. |
@@ -183,6 +217,51 @@ Use `generateProjectContext` with `getTranslationJobInfo` for context jobs. The 
 
 Use the [public OpenAPI reference](/docs/platform/openapi/overview) for live endpoint permissions, rate limits, schemas, and status codes.
 
+### Discovery and provisioning
+
+Generated discovery calls return one page, not all results. Follow `nextCursor` to collect every project. Organization discovery requires a user token and lists create-capable Organizations, not every membership.
+
+```ts title="list-projects.ts"
+import { createApiClient, listProjects } from 'generaltranslation/api';
+
+const client = createApiClient({
+  baseUrl: 'https://api.gtx.dev',
+  apiKey: process.env.GT_API_KEY,
+});
+let cursor: string | undefined;
+do {
+  const { data } = await listProjects({
+    client,
+    query: { cursor, limit: 100 },
+    throwOnError: true,
+  });
+  for (const project of data.projects) console.log(project.id, project.name);
+  cursor = data.nextCursor ?? undefined;
+} while (cursor);
+```
+
+The Organization helper accepts the same optional `query: { cursor, limit }` and returns `orgs` and `nextCursor`. Project creation takes `path: { orgId }` and `body: { name, defaultLocale, cdnEnabled? }`.
+
+Select explicit least-privilege grants when creating a key:
+
+```ts title="create-key.ts"
+import { createApiClient, createProjectApiKey } from 'generaltranslation/api';
+
+const client = createApiClient({
+  baseUrl: 'https://api.gtx.dev',
+  apiKey: process.env.GT_API_KEY,
+});
+const { data } = await createProjectApiKey({
+  client,
+  path: { projectId: process.env.GT_PROJECT_ID! },
+  body: { name: 'Translation reader', permissions: ['project:files:read'] },
+  throwOnError: true,
+});
+// Store the returned secret securely; do not log it.
+```
+
+Omitting `permissions` requests all delegable project permissions held by the caller. Every selected permission must be held; duplicates are ignored. The legacy key `type` input is deprecated and ignored. These generated discovery and creation helpers are not methods on [`GT`](/docs/platform/core/reference/gt-class/constructor). (See [Create project API key](/docs/platform/openapi/reference/project/create-api-key) for grants and provisioning constraints).
+
 ## Job polling [#job-polling]
 
 [`awaitJobs`](#job-polling) uses a configured client to call `getTranslationJobInfo` until every requested job is complete, failed, unknown, or missing, or until the overall timeout expires.
@@ -199,6 +278,7 @@ function awaitJobs(
 | --- | --- | --- | --- | --- |
 | `pollingIntervalSeconds` | Delay between status requests. | `number` | Yes | `5` |
 | `timeoutSeconds` | Overall polling deadline. | `number` | Yes | `600` |
+| `onPoll` | Receives each successful raw status response before terminal bookkeeping. | `(statuses: GetTranslationJobInfoResponse) => void` | Yes | — |
 
 ```ts
 import {
@@ -246,7 +326,9 @@ type GetJobStatuses = (
 ) => Promise<GetTranslationJobInfoResponse>;
 ```
 
-Use it when you need custom request or error normalization. The loader receives an abort signal capped by the remaining overall deadline and a 60-second per-poll limit.
+Use it when you need custom request or error normalization. Polls are sequential and request only pending IDs. The loader receives an abort signal capped by the remaining overall deadline and a 60-second per-poll limit. Late results are discarded; timeout returns the last accepted statuses, which can still be queued, processing, or initially unknown. A loader that ignores the signal can delay resolution.
+
+`complete: true` means no pending jobs, not that every job succeeded. Inspect each status before using results. Both API polling helpers accept `onPoll`; the class [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs) options do not. No polling option exposes a caller signal, and stopping local polling does not cancel remote jobs.
 
 ## Batch processing [#batch-processing]
 
@@ -299,7 +381,7 @@ const results = await processBatches(files, async (batch) => {
 
 ## Types and errors [#types-errors]
 
-The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, and the generated OpenAPI types for the public operations listed above.
+The module exports `Client`, `Options`, `ApiClientConfig`, `UserTokenProvider`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, and the generated OpenAPI types for the public operations listed above.
 
 For each public operation listed above, the package exports:
 
@@ -310,6 +392,20 @@ For each public operation listed above, the package exports:
 - `<Operation>Response` for the union of documented successful responses.
 
 With the default `throwOnError: false`, a generated operation returns either `data` or `error` plus the Fetch API `request`. An HTTP response includes `response`; a failure before a response is received leaves it undefined. With `throwOnError: true`, API, network, cancellation, and timeout failures throw.
+
+### Core `ApiError`
+
+Class HTTP failures use `ApiError` from `generaltranslation/errors`, with `name: 'ApiError'`, numeric `code`, and `message`. This differs from generated helpers' returned error fields. Network, configuration, cancellation, and timeout failures can reject the entire class call; they are not necessarily per-item translation failures.
+
+```ts
+import { ApiError } from 'generaltranslation/errors';
+
+export function describeFailure(error: unknown): string {
+  return error instanceof ApiError
+    ? `${error.code}: ${error.message}`
+    : String(error);
+}
+```
 
 ## OpenAPI specification [#openapi-spec]
 

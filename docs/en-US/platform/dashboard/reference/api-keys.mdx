@@ -14,13 +14,13 @@ General Translation supports two API key scopes:
 - **Organization keys** for Organization-level automation. Use them for org-level automation or workflows that need to operate across projects in the Organization.
 - **Project keys** for a single project. Use them in server environments, local development, and project-scoped tooling. Never include them in deployed browser or mobile app bundles.
 
-Both scopes support **All** or **Custom** permissions. **All** grants every permission you can delegate within that scope. **Custom** lets you select a smaller set; select at least one permission. You can only grant permissions you hold.
+In the Dashboard, both scopes support **All** or **Custom** permissions. **All** grants every permission you can delegate within that scope. **Custom** lets you select a smaller set; select at least one permission. You can only grant permissions you hold.
 
 ## Create Organization keys [#create-organization-keys]
 
 Create Organization keys from **Organization > Developer > API Keys**. Organization keys use the `gtx-org-` prefix and can be configured with a custom permission set.
 
-Permissions are configured per resource. `Write` includes `Read`.
+In these Dashboard controls, permissions are configured per resource. `Write` includes `Read`.
 
 | Resource                | Read                                  | Write or enabled                                      |
 | ----------------------- | ------------------------------------- | ----------------------------------------------------- |
@@ -32,9 +32,15 @@ Permissions are configured per resource. `Write` includes `Read`.
 | **Translation queue**   | Not applicable                        | Queue file translation jobs for background processing |
 | **Project settings**    | Not applicable                        | Update project settings such as the default locale and CDN delivery |
 
-Enable **Project creation** for automation that calls the [Create a project](/docs/platform/openapi/reference/project/create-project) endpoint. Also enable **Project settings** when that automation creates projects with CDN delivery enabled. Grant each key only the permissions it needs.
+Enable **Project creation** for automation that calls the [Create a project](/docs/platform/openapi/reference/project/create-project) endpoint. Its `org:projects:create` permission also allows creation with CDN delivery enabled; **Project settings** (`project:write`) is needed only for later settings updates. Grant each key only the permissions it needs.
 
-Set **Project API keys** to **Write** for automation that calls [Create a project API Key](/docs/platform/openapi/reference/project/create-api-key). The endpoint accepts a name and creates a project key with the project permissions held by the request identity; it does not accept custom permissions. Its optional `type` field is deprecated and ignored. The request identity can be an Organization key or an OAuth user access token; project keys cannot hold the required `project:api_keys:write` permission.
+Set **Project API keys** to **Write** for automation that calls [Create a project API Key](/docs/platform/openapi/reference/project/create-api-key). The request identity can be an Organization key targeting its own Organization's project or an OAuth user access token with access to the project. Project keys cannot hold the required `project:api_keys:write` permission and cannot create other keys.
+
+The HTTP endpoint accepts a required `name` (trimmed, 1–255 characters) and an optional, nonempty `permissions` array of canonical project permission strings. Duplicates are ignored. Invalid selections—including unknown permissions, Organization permissions, `project:api_keys:write`, `gt:*`, or an empty array—return `400`. If any valid selection is unavailable to the caller, the request returns `403` without creating a partial key. OAuth callers need both the creation scope and each delegated scope, together with the corresponding current membership permissions.
+
+Omitting `permissions` grants all effective project permissions the caller can delegate; it does not grant unrestricted access. If none are available, the request returns `403`. Unlike the Dashboard controls, explicit HTTP Write grants do not add Read: include both `project:files:write` and `project:files:read` when you need both.
+
+The optional `type` field (`production` or `development`) is deprecated and ignored. New keys use `gtx-api-`; the response's deprecated `type` remains `production` for compatibility. The `201` response includes the secret but does not echo permissions. Save the secret securely; repeating the request creates another key.
 
 ## Create project keys [#create-project-keys]
 
@@ -65,6 +71,9 @@ In most SDK and CLI workflows, use the key with your project ID:
 GT_API_KEY=gtx-api-...
 GT_PROJECT_ID=...
 ```
+
+For account-based CLI access, use [`gt login`](/docs/cli/reference/commands/login). To create a project key from the CLI, use [`gt api-key create`](/docs/cli/reference/commands/api-key-create). Unlike the HTTP endpoint, the CLI requires a name and explicit canonical permissions through `--permission`. It prints the secret once to stdout and does not write it to environment or configuration files.
+
 ## Manage keys [#manage-keys]
 
 Use descriptive names so keys are easy to identify later.

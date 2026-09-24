@@ -26,12 +26,12 @@ Signature:
 
 ```typescript
 setupProject(
-  files: FileReference[],
+  files: SetupProjectFileReference[],
   options?: SetupProjectOptions
 ): Promise<SetupProjectResult>
 ```
 
-*Note: `setupProject` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. You must upload the files with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) first.*
+*Note: `setupProject` requires an API key (including the deprecated `devApiKey` alias) or a [token provider](/docs/platform/core/reference/api-client#usertokenprovider), plus `projectId` on the GT instance. You must upload the files with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) first.*
 
 ## How it works [#how-it-works]
 
@@ -44,28 +44,24 @@ setupProject(
 
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| [`files`](#files) | File references from previously uploaded source files. | `FileReference[]` | No | — |
+| [`files`](#files) | File references from previously uploaded source files. | `SetupProjectFileReference[]` | No | — |
 | [`options`](#options) | Settings for the setup job. | `SetupProjectOptions` | Yes | — |
 
 ### `files` [#files]
 
-**Type** `FileReference[]` · **Required**
+**Type** `SetupProjectFileReference[]` · **Required**
 
-The file references returned by [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files):
+Import `SetupProjectFileReference` from `generaltranslation/types`. Pass the IDs returned by [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files):
 
 ```typescript
-type FileReference = {
+type SetupProjectFileReference = {
   fileId: string;
   versionId: string;
   branchId: string;
-  fileName: string;
-  fileFormat: FileFormat;
-  transformFormat?: FileFormat; // output format requested for generated translations
-  dataFormat?: DataFormat;
 };
 ```
 
-Both `fileName` and `fileFormat` are required on `FileReference`; `transformFormat` and `dataFormat` are optional.
+The class requires all three IDs. File names and formats are unnecessary and stripped from the request. Only the generated `generateProjectContext` helper permits an omitted branch ID.
 
 ### `options` [#options]
 
@@ -73,7 +69,7 @@ Both `fileName` and `fileFormat` are required on `FileReference`; `transformForm
 
 | Field | Description | Type | Optional |
 | --- | --- | --- | --- |
-| `force` | Force re-setup by invalidating existing cached translations. | `boolean` | Yes |
+| `force` | Force project context generation; this is not a translation-cache invalidation option. | `boolean` | Yes |
 | `locales` | Target locales for the project. | `string[]` | Yes |
 | `timeoutMs` | Timeout in milliseconds for the API request. | `number` | Yes |
 
@@ -113,15 +109,11 @@ const fileRefs = [
     fileId: 'file-123',
     versionId: 'version-456',
     branchId: 'branch-789',
-    fileName: 'app.json',
-    fileFormat: 'JSON',
   },
   {
     fileId: 'file-789',
     versionId: 'version-012',
     branchId: 'branch-789',
-    fileName: 'content.md',
-    fileFormat: 'MD',
   },
 ];
 
@@ -130,9 +122,11 @@ const setupResult = await gt.setupProject(fileRefs);
 if (setupResult.status === 'queued') {
   console.log(`Setup initiated with job ID: ${setupResult.setupJobId}`);
 
-  // Monitor job status (checkJobStatus returns a flat array)
-  const jobStatus = await gt.checkJobStatus([setupResult.setupJobId]);
-  console.log(`Job status: ${jobStatus[0].status}`);
+  // Wait for setup with a bounded deadline.
+  const result = await gt.awaitJobs([setupResult.setupJobId], { timeoutSeconds: 300 });
+  if (!result.complete || result.jobs.some((job) => job.status !== 'completed')) {
+    throw new Error('Project setup did not complete successfully');
+  }
 } else {
   console.log('Project is already set up — no setup job needed');
 }

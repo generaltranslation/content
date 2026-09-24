@@ -106,7 +106,7 @@ const enqueueResult = await gt.enqueueFiles(
 );
 ```
 
-The response returns a result with job information.
+The result contains job information. The wrapper synthesizes `locales` and the summary `message`; do not depend on the message's exact wording.
 
 ```ts title="Output"
 {
@@ -128,10 +128,14 @@ The response returns a result with job information.
 
 ## 3. Check file status [#status]
 
-Use [queryFileData](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to check whether the translated file is complete and ready for download.
+Wait for jobs with a bounded [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs) deadline, then use [queryFileData](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to confirm the requested version is ready. Stop on incomplete, failed, or unknown jobs; an empty job list can mean no new work was needed.
 
 ```typescript title="src/index.ts"
 const { fileId, versionId, branchId } = uploadedFiles[0];
+const jobs = await gt.awaitJobs(enqueueResult, { timeoutSeconds: 300 });
+if (!jobs.complete || jobs.jobs.some((job) => job.status !== 'completed')) {
+  throw new Error('Translation jobs did not complete successfully');
+}
 
 const status = await gt.queryFileData({
   translatedFiles: [
@@ -143,6 +147,10 @@ const status = await gt.queryFileData({
     },
   ],
 });
+const translatedFile = status.translatedFiles?.[0];
+if (!translatedFile || translatedFile.completedAt === null) {
+  throw new Error('The requested translation is not ready to download');
+}
 ```
 
 If the file is still being translated, `completedAt` is `null`. When complete, it contains a timestamp:
@@ -174,7 +182,7 @@ const content = await gt.downloadFile({
 });
 ```
 
-The response returns the translated file content. This example returns:
+Text formats return decoded UTF-8; binary `LOTTIE` content remains base64. An empty successful download response returns `''`, which alone does not establish success. This JSON example returns:
 
 ```json title="Output"
 {
