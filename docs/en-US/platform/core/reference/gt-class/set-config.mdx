@@ -32,11 +32,11 @@ setConfig(params: GTConstructorParams): void
 
 ## How it works [#how-it-works]
 
-- **Locale standardization then validation.** Each provided locale code (`sourceLocale`, `targetLocale`, and every entry in `locales`) is first standardized to its canonical BCP 47 form, then validated. The **stored values are the standardized/normalized forms**, not the raw strings you passed. `setConfig` throws for invalid codes.
-- **Custom mapping applies to `sourceLocale`/`targetLocale` but not to `locales`.** `sourceLocale` and `targetLocale` are validated **with** the `customMapping`, so a custom alias is accepted for them. Each entry of `locales` is validated **without** the mapping, so a `customMapping` alias is rejected if it appears inside `locales`.
+- **Configured identities.** Locale spellings are preserved. All provided locale fields, including `locales`, validate against the effective custom mapping. Invalid codes throw. Returned locale codes follow the [constructor rules](/docs/platform/core/reference/gt-class/constructor#how-it-works).
+- **Changing credentials.** Use this method to switch credentials or project settings. Direct property assignment is not supported for these changes.
 - **Configuration merge.** New values merge with the configuration passed to the constructor. A `customMapping`, however, completely replaces any existing mapping rather than merging.
 - **No environment re-read.** Environment variables (`GT_API_KEY`, `GT_DEV_API_KEY`, `GT_PROJECT_ID`) are not re-read when calling `setConfig`.
-- **Not atomic.** If validation fails partway through (for example, on the second locale), earlier properties may already be set.
+- **Failed updates.** If an update fails, some settings may already have changed.
 
 ## Parameters [#parameters]
 
@@ -46,6 +46,7 @@ setConfig(params: GTConstructorParams): void
 | --- | --- | --- | --- | --- |
 | [`apiKey`](#api-key) | Project API key for the translation service. | `string` | Yes | — |
 | [`devApiKey`](#dev-api-key) | Alternate project API key, used when `apiKey` is unset. | `string` | Yes | — |
+| [`userTokenProvider`](#user-token-provider) | Application-owned token acquisition and refresh. | `UserTokenProvider` | Yes | — |
 | [`projectId`](#project-id) | Unique project identifier. | `string` | Yes | — |
 | [`sourceLocale`](#source-locale) | Default source locale for translations. | `string` | Yes | — |
 | [`targetLocale`](#target-locale) | Default target locale for translations. | `string` | Yes | — |
@@ -65,7 +66,13 @@ Project API key for the translation service.
 
 **Type** `string` · **Optional**
 
-Alternate project API key. Used when `apiKey` is unset, regardless of environment.
+Deprecated compatibility alias for `apiKey`. Used when `apiKey` is unset, regardless of environment.
+
+### `userTokenProvider` [#user-token-provider]
+
+**Type** `UserTokenProvider` · **Optional** · **Default** unchanged
+
+Application-owned [token acquisition and refresh callbacks](/docs/platform/core/reference/api-client#usertokenprovider), used only without an API key. Passing `undefined` or empty strings does not clear credentials or the provider; construct a new instance to switch to provider-only authentication from a keyed instance.
 
 ### `projectId` [#project-id]
 
@@ -77,19 +84,19 @@ Unique project identifier.
 
 **Type** `string` · **Optional**
 
-Default source locale for translations. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+Default source locale for translations. Its spelling is preserved and validated with the effective `customMapping`, including aliases.
 
 ### `targetLocale` [#target-locale]
 
 **Type** `string` · **Optional**
 
-Default target locale for translations. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+Default target locale for translations. Its spelling is preserved and validated with the effective `customMapping`, including aliases.
 
 ### `locales` [#locales]
 
 **Type** `string[]` · **Optional**
 
-Array of supported locale codes. Each code is standardized to its canonical form and stored in that normalized form, then validated **without** the `customMapping` — so a `customMapping` alias that is valid for `sourceLocale`/`targetLocale` is rejected if it appears inside `locales`.
+Array of supported locale identities. Each code is preserved and validated with the effective `customMapping`; custom aliases are accepted.
 
 ### `baseUrl` [#base-url]
 
@@ -126,9 +133,9 @@ gt.setConfig({
 ## Notes [#notes]
 
 - Configuration changes take effect immediately for subsequent method calls.
-- Every locale code is standardized to its canonical form before being stored (the stored value is the normalized form), then validated.
-- `sourceLocale` and `targetLocale` are validated with the `customMapping`; each entry of `locales` is validated without it.
+- Configured locale identities are preserved and validated with the effective custom mapping, including entries in `locales`.
+- Empty strings or `undefined` do not clear credentials or the token provider.
 - Environment variables are not re-read when calling `setConfig`.
 - Custom mappings completely replace existing mappings (they are not merged).
-- The update is **not atomic** — if validation fails partway through, earlier properties may already be set.
+- If an update fails, some settings may already have changed.
 - The method is synchronous and returns `void`.

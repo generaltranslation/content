@@ -38,14 +38,14 @@ translateMany(
 ): Promise<Record<string, TranslationResult>>
 ```
 
-*Note: `translateMany` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+*Note: `translateMany` requires an API key (including the deprecated `devApiKey` alias) or a [token provider](/docs/platform/core/reference/api-client#usertokenprovider), plus `projectId` on the GT instance.*
 
 ## How it works [#how-it-works]
 
-- **Array vs. record.** With an array, entries are hashed internally and results are returned in input order. With a record, the keys are treated as hashes and the response is a record with the same keys.
+- **Array vs. record.** Array results follow input order. For a record, use entry hashes as keys; results retain those keys.
 - **Independent results.** Individual translation failures do not stop the batch — each result reports success or failure on its own, so partial success is fully supported.
 - **Options shorthand.** Passing a string for `options` is shorthand for `{ targetLocale: string }`, so `gt.translateMany(['Hello'], 'es')` and `gt.translateMany(['Hello'], { targetLocale: 'es' })` are equivalent.
-- **Whole documents.** Set [`metadata.fileFormat`](/docs/platform/core/reference/types/entry-metadata#file-format) to `'MD'` or `'MDX'` to parse and translate a complete document while preserving its structure. The document must be a string with `dataFormat: 'STRING'`, which is the default, and cannot use `maxChars`. A document entry fails instead of returning partial output when a chunk fails or the translated document is invalid.
+- **Whole documents.** Set [`metadata.fileFormat`](/docs/platform/core/reference/types/entry-metadata#file-format) to `'MD'` or `'MDX'` to parse and translate a complete document while preserving its structure. The document must be a string with `dataFormat: 'STRING'`, which is the default, and cannot use `maxChars`. If translation fails or the resulting document is invalid, the entry fails rather than returning partial output.
 
 ## Parameters [#parameters]
 
@@ -77,15 +77,18 @@ A target locale string such as `'es'`, or an options object:
 type TranslateOptions = {
   targetLocale: string; // locale to translate into
   sourceLocale?: string; // overrides the instance sourceLocale
-  modelProvider?: string; // optional model provider hint
+  modelProvider?: string; // validated before fetch
+  [key: string]: unknown; // extension metadata, not transport options
 };
 ```
+
+Import [`TranslateOptions`](/docs/platform/core/reference/types/translation-config#translate-options) from `generaltranslation/types`. A provided `modelProvider` must be `ANTHROPIC`, `OPENAI`, `XAI`, or `GOOGLE`; other values reject before fetch. Service [provider entitlements](/docs/platform/core/reference/types/enqueue-files-options#modelprovider) still apply.
 
 ### `timeout` [#timeout]
 
 **Type** `number` · **Optional**
 
-Request timeout in milliseconds. When omitted, the instance default is used.
+Request timeout in milliseconds. Omission or `0` selects the runtime default of 60000 ms. The class accepts only a number, not `false`, and has no constructor timeout option. It exposes neither caller `signal` nor custom `fetch`; extension metadata does not configure cancellation.
 
 ## Returns [#returns]
 
@@ -94,7 +97,7 @@ Request timeout in milliseconds. When omitted, the instance default is used.
 - **Array input** resolves to a [`TranslateManyResult`](/docs/platform/core/reference/types/translate-many-result) (an array of [`TranslationResult`](/docs/platform/core/reference/types/translation-result) objects), in the same order as the input.
 - **Record input** resolves to a `Record<string, TranslationResult>`, keyed by the same hashes as the input.
 
-Narrow each result on `success` before reading its translation.
+Narrow each result on `success` before reading its translation. Runtime translation disables transport retries, including `429`; token-provider `401` replay remains separate. Configuration, authentication, HTTP, network, cancellation, and timeout failures can reject the whole batch. Results retain the service locale rather than restoring configured aliases. (See [Errors](/docs/platform/core/reference/api-client#types-errors)).
 
 ## Examples [#examples]
 
@@ -145,7 +148,10 @@ const results = await gt.translateMany(
   'es'
 );
 
-console.log(results['greeting-hash'].translation);
+const greeting = results['greeting-hash'];
+if (greeting?.success) {
+  console.log(greeting.translation);
+}
 ```
 
 ## Notes [#notes]
