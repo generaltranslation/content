@@ -5,7 +5,7 @@ description: Download one translated file after translation is complete. API ref
 
 ---
 
-Downloads the content of a single file as a UTF-8 string with General Translation. Depending on whether you pass a locale, it returns either the source file or the corresponding translation.
+Downloads a single file as decoded UTF-8 text, or base64 for binary `LOTTIE` data. Depending on whether you pass a locale, it returns either the source file or the corresponding translation.
 
 ## Overview [#overview]
 
@@ -44,14 +44,14 @@ downloadFile(
 ): Promise<string>
 ```
 
-*Note: `downloadFile` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. When downloading translations, it only works with completed translations — verify status with [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) first.*
+*Note: `downloadFile` requires an API key (including the deprecated `devApiKey` alias) or a [token provider](/docs/platform/core/reference/api-client#usertokenprovider), plus `projectId` on the GT instance. When downloading translations, it only works with completed translations — verify status with [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) first.*
 
 ## How it works [#how-it-works]
 
 - **Source vs. translation.** When a `locale` is provided, the file must have a completed translation for the resolved supported locale. When no `locale` is provided, the source file is returned.
 - **Locale resolution.** The requested locale is resolved to the supported locale used for storage. For example, `ja-JP` resolves to `ja`; distinct supported locales such as `en-GB` remain unchanged.
 - **Format preserved.** The returned string is in the same format as the original source file; for translations, all translatable text is converted to the target locale.
-- **Failure.** The call fails if the file is not found.
+- **Empty result.** The class delegates to batch download and returns `''` if no file is returned. HTTP or transport errors still reject. It does not expose pending-file details.
 
 ## Parameters [#parameters]
 
@@ -86,11 +86,17 @@ Identifies the file to download:
 
 **Type** `Promise<string>`
 
-Resolves to the file content as a UTF-8 string, in the same format as the original source file. For translations, all translatable text is converted to the target locale.
+Resolves to the first returned file's decoded UTF-8 data, or base64 for binary `LOTTIE` data. Returns `''` if the response contains no file, so an empty string alone does not establish download success. The class method remains supported; it is not the deprecated generated single-file HTTP helper. Use generated `downloadFiles` through the [API client](/docs/platform/core/reference/api-client#endpoint-helpers) when you need pending-file details; that response uses transport/base64-shaped content.
 
 ## Examples [#examples]
 
 ```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+import type { FileUpload } from 'generaltranslation/types';
+
+const fileContents = '{"greeting":"Hello"}';
+const filePath = 'en.json';
+
 // (1) Create a GT instance
 const targetLocales = ['es', 'fr', 'de'];
 const gt = new GT({
@@ -99,7 +105,7 @@ const gt = new GT({
 });
 
 // (2) Upload the file
-const fileUpload = {
+const fileUpload: FileUpload = {
   content: fileContents,
   fileName: filePath,
   fileFormat: 'JSON',
@@ -116,15 +122,16 @@ const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
 
 // (4) Wait for all translations to be completed
 const { fileId, versionId, branchId } = uploadedFiles[0];
-const result = await gt.awaitJobs(enqueueResult);
+const result = await gt.awaitJobs(enqueueResult, { timeoutSeconds: 300 });
 
-if (!result.complete) {
-  console.error('Some jobs did not finish in time');
+if (!result.complete || result.jobs.some((job) => job.status !== 'completed')) {
+  throw new Error('Translations are not ready to download');
 }
 
 // (5) Download a single file
 const spanishContent = await gt.downloadFile({
   fileId,
+  versionId,
   branchId,
   locale: 'es',
 });
@@ -134,7 +141,7 @@ console.log('Spanish translation:', spanishContent);
 
 ## Notes [#notes]
 
-- Retrieves the downloaded file as a UTF-8 string.
+- Returns UTF-8 text, or base64 for binary `LOTTIE` content.
 - When a locale is provided, the file must have a completed translation for its resolved supported locale.
 - When no locale is provided, the source file is returned.
-- The call fails if the file is not found.
+- An empty successful response returns `''`; HTTP and transport errors reject.

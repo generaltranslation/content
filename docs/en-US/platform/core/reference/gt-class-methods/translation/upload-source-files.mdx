@@ -28,7 +28,7 @@ uploadSourceFiles(
 ): Promise<UploadFilesResponse>
 ```
 
-*Note: `uploadSourceFiles` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance.*
+*Note: `uploadSourceFiles` requires an API key (including the deprecated `devApiKey` alias) or a [token provider](/docs/platform/core/reference/api-client#usertokenprovider), plus `projectId` on the GT instance.*
 
 ## How it works [#how-it-works]
 
@@ -54,7 +54,7 @@ The source files to upload. Each entry wraps a `FileUpload` under a `source` key
 | `content` | Raw text content, or base64-encoded binary content for `LOTTIE`. | `string` | No |
 | `fileName` | Unique file identifier, typically the file path plus name. | `string` | No |
 | `fileFormat` | Format of the file. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
-| `transformFormat` | Accepted by the shared `FileUpload` type but not sent by this method. Set the output format on the file reference passed to [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files). | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
+| `transformFormat` | Serialized from the shared `FileUpload` input, but not a supported source-upload endpoint field. Set the output format on the file reference passed to [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files). | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
 | `dataFormat` | Format of the data within the file (`ICU`, `I18NEXT`, `JSX`, or `STRING`). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
 | `locale` | Locale of the source file content. | `string` | No |
 | `branchId` | Branch to upload the file into. Uses the default branch when omitted. | `string` | Yes |
@@ -87,8 +87,8 @@ Resolves to an `UploadFilesResponse` containing the uploaded file references and
 ```typescript
 type UploadFilesResponse = {
   uploadedFiles: FileReference[]; // references for subsequent operations
-  count: number; // number of files successfully uploaded
-  message: string; // status message from the API
+  count: number; // wrapper-derived count of uploaded references
+  message: string; // wrapper-generated summary, not raw server wording
 };
 ```
 
@@ -98,7 +98,7 @@ Each `FileReference` has the shape:
 type FileReference = {
   fileId: string;
   versionId: string;
-  branchId: string; // the current API can omit this for the default branch
+  branchId: string; // resolved branch ID
   fileName: string;
   fileFormat: FileFormat;
   transformFormat?: FileFormat; // not populated by this upload method
@@ -106,7 +106,7 @@ type FileReference = {
 };
 ```
 
-The library type declares `branchId` as required, but the current API can omit it when it selects the default branch. It also does not populate `transformFormat`; set that field before passing a reference to [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) when you need format conversion.
+The response includes the resolved `branchId`, including when the request selects the default branch. It does not populate `transformFormat`; set that field before passing a reference to [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) when you need format conversion.
 
 ## Examples [#examples]
 

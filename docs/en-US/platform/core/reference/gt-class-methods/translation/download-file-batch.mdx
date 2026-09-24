@@ -1,11 +1,11 @@
 ---
 
 title: downloadFileBatch
-description: Download multiple translated files in one request. API reference for downloadFileBatch.
+description: Download multiple translated files in batches. API reference for downloadFileBatch.
 
 ---
 
-Fetch several source or translation files in one request instead of making many individual [`downloadFile`](/docs/platform/core/reference/gt-class-methods/translation/download-file) calls, which reduces network overhead.
+Fetch source or translation files in batches of up to 100 instead of making many individual [`downloadFile`](/docs/platform/core/reference/gt-class-methods/translation/download-file) calls, which reduces network overhead.
 
 ## Overview [#overview]
 
@@ -30,13 +30,13 @@ downloadFileBatch(
 ): Promise<DownloadFileBatchResult>
 ```
 
-*Note: `downloadFileBatch` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. It downloads multiple files in a single API call, which is more efficient than repeated [`downloadFile`](/docs/platform/core/reference/gt-class-methods/translation/download-file) calls.*
+*Note: `downloadFileBatch` requires an API key (including the deprecated `devApiKey` alias) or a [token provider](/docs/platform/core/reference/api-client#usertokenprovider), plus `projectId` on the GT instance. Batches run concurrently by default.*
 
 ## How it works [#how-it-works]
 
 - **Order.** Match each result to its request by its `fileId`, `branchId`, `versionId`, and `locale` rather than by its position in the response.
-- **Locale resolution.** Each requested locale is resolved to the supported locale used for storage. Equivalent codes can resolve to one stored translation; if you request both `ja` and `ja-JP`, each request produces a result labeled with the locale you passed.
-- **Partial success.** A failed individual download within the batch does not cause the whole batch to fail.
+- **Locale resolution.** Requests use canonical service locales. An exact requested identity is restored when one unambiguous request matches; otherwise the response uses [configured-identity recovery](/docs/platform/core/reference/gt-class/constructor#how-it-works). Multiple indistinguishable aliases do not guarantee distinct response labels.
+- **Partial success.** A successful response can contain fewer files than requested. A rejected batch request rejects the aggregate, without rolling back or stopping batches already started.
 - **Readiness.** Use [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to verify files are ready before downloading.
 - **Binary formats.** Text formats return decoded UTF-8 data. `LOTTIE` remains base64-encoded so callers can reconstruct the binary `.lottie` file without corrupting its bytes.
 
@@ -83,7 +83,7 @@ type DownloadFileBatchRequest = {
 
 **Type** `Promise<DownloadFileBatchResult>`
 
-Resolves to a `DownloadFileBatchResult` containing the downloaded files and a count:
+Resolves to a `DownloadFileBatchResult` containing only downloaded files and a count. The class does not expose `pending`. Use generated `downloadFiles` through the [API client](/docs/platform/core/reference/api-client#endpoint-helpers) for pending-file details; its content remains transport/base64-shaped:
 
 ```typescript
 type DownloadFileBatchResult = {
@@ -121,6 +121,12 @@ type DownloadedFile = {
 ## Examples [#examples]
 
 ```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+import type { FileUpload } from 'generaltranslation/types';
+
+const fileContents = '{"greeting":"Hello"}';
+const filePath = 'en.json';
+
 // (1) Create a GT instance
 const targetLocales = ['es', 'fr', 'de'];
 const gt = new GT({
@@ -129,7 +135,7 @@ const gt = new GT({
 });
 
 // (2) Upload the file
-const fileUpload = {
+const fileUpload: FileUpload = {
   content: fileContents,
   fileName: filePath,
   fileFormat: 'JSON',
@@ -146,16 +152,17 @@ const enqueueResult = await gt.enqueueFiles(uploadedFiles, {
 
 // (4) Wait for all translations to be completed
 const { fileId, versionId, branchId } = uploadedFiles[0];
-const result = await gt.awaitJobs(enqueueResult);
+const result = await gt.awaitJobs(enqueueResult, { timeoutSeconds: 300 });
 
-if (!result.complete) {
-  console.error('Some jobs did not finish in time');
+if (!result.complete || result.jobs.some((job) => job.status !== 'completed')) {
+  throw new Error('Translations are not ready to download');
 }
 
 // (5) Download all translations in a batch
 const downloadResult = await gt.downloadFileBatch(
   targetLocales.map((locale) => ({
     fileId,
+    versionId,
     branchId,
     locale,
   }))
@@ -171,4 +178,4 @@ downloadResult.files.forEach((file) => {
 - Text files are returned as UTF-8 strings. Decode `LOTTIE` data from base64 to write the binary `.lottie` file.
 - Use [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to verify files are ready for download first.
 - Match results to requests by their file, version, branch, and locale identifiers rather than by position.
-- Failed individual file downloads within the batch do not cause the entire batch to fail.
+- Partial successful responses differ from request failures: a rejected batch request rejects the aggregate.

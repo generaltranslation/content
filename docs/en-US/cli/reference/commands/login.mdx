@@ -1,0 +1,64 @@
+---
+
+title: gt login
+description: Sign in to your account for hosted CLI workflows. API reference for the gt login command.
+
+---
+
+Login authenticates the CLI as you; it does not create a project or runtime key. For guided project setup, use [`gt init`](/docs/cli/reference/commands/init); to create a scoped key deliberately, use [`gt api-key create`](/docs/cli/reference/commands/api-key-create).
+
+## Overview [#overview]
+
+Requires [Node.js 20 or later](/docs/cli/quickstart#quickstart); prefer a currently supported LTS release.
+
+```bash
+npx gt login [options]
+```
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`--no-browser`](#flags) | Use device authorization instead of a local browser callback. | `boolean` | Yes | `false` |
+
+<Callout type="info">
+  **Changed in v2.22:** the former auth command and its key-type flag are removed, not aliases. Login replaces account sign-in; init and explicit key creation handle provisioning. Existing API keys remain usable.
+</Callout>
+
+## How it works [#how-it-works]
+
+- Opens browser authorization using Proof Key for Code Exchange (PKCE) with S256, state validation, and an ephemeral `127.0.0.1` callback. The public native client is `gt-cli`; no client secret or per-install registration is needed.
+- Requests `openid profile offline_access gt:*`. You must approve consent, and access remains bounded by your account permissions.
+- Uses device authorization with `--no-browser`, or when the loopback listener cannot bind. It displays a verification URL and code to approve on another device, using the prefilled URL when available.
+- Does not automatically detect SSH or switch to device authorization merely because browser launching fails. Open the displayed authorization URL yourself, or rerun with `--no-browser`.
+- Saves an account session, not a project selection. It does not create API keys or write `.env.local`. Runtime SDKs do not load CLI sessions.
+
+For project binding, explicit-key precedence, and CI credentials, use [Configuring the CLI](/docs/cli/guides/configuring#credentials).
+
+## Flags [#flags]
+
+**`--no-browser`** · **Type** `boolean` · **Optional** · **Default** `false`
+
+Uses device authorization without opening a browser. Human approval is still required; this is not unattended CI authentication.
+
+The [global options](/docs/cli/reference/global-options) also apply. Login has no command-specific config, project-ID, API-key, or JSON-output flag.
+
+## Examples [#examples]
+
+```bash
+# Sign in using a browser on this machine
+npx gt login
+
+# Approve sign-in on another device
+npx gt login --no-browser
+```
+
+After approval, check the account with [`gt whoami`](/docs/cli/reference/commands/whoami). Use [`gt logout`](/docs/cli/reference/commands/logout) to remove the saved session.
+
+## Storage and troubleshooting [#storage]
+
+Sessions are stored at `$XDG_STATE_HOME/gt/credentials.json` when `XDG_STATE_HOME` is absolute, otherwise at `~/.local/state/gt/credentials.json`. Relative XDG values are ignored. Entries are keyed by authorization issuer and record the API resource they authorize.
+
+New directories use mode `0700`; credential files use `0600` and atomic replacement. These POSIX mode protections are platform-dependent, not an OS keychain or encrypted storage. There is no migration from an older XDG config location. Rerun login for obsolete credentials; malformed file envelopes are preserved as `.corrupt-<timestamp>` backups.
+
+Tokens refresh lazily within 30 seconds of expiration. Authenticated API requests can retry once after a 401 with a refreshed user token. Refresh is coordinated within one process, not by a cross-process lock.
+
+`GT_AUTH_URL` selects the issuer, defaulting to the Dashboard's `/api/auth` URL. Login binds tokens to the configured [`baseUrl`](/docs/cli/reference/config#base-url), or the normal API default; `GT_API_URL` overrides the login resource only. It is not a universal CLI transport override. A token bound to another API is rejected: align the API configuration and rerun login.

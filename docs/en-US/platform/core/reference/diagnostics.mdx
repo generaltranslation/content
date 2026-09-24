@@ -1,0 +1,83 @@
+---
+
+title: Diagnostics
+description: Format diagnostic text without logging or reporting it. API reference for createDiagnosticMessage and formatDiagnosticErrorDetails.
+
+---
+
+Import these functions and types from `generaltranslation/diagnostics`. They produce strings only; they do not log, report exceptions, emit telemetry, or redact secrets.
+
+| Export | Description |
+| --- | --- |
+| [`createDiagnosticMessage`](#create-message) | Combine diagnostic text into a message. |
+| [`DiagnosticMessageInput`](#message-input) | Message fields and optional context. |
+| [`DiagnosticSeverity`](#severity) | Supported severity labels. |
+| [`formatDiagnosticErrorDetails`](#error-details) | Convert an unknown error to optional text. |
+
+## `createDiagnosticMessage` [#create-message]
+
+**Signature** `(input: DiagnosticMessageInput) => string`
+
+Combines the supplied fields in this order: what happened and why, reassurance, fix and way out, details, and documentation URL. It trims sentence text and adds punctuation where needed. Optional source and severity form the prefix; a lowercase `wayOut` can join the fix sentence.
+
+```ts
+import { createDiagnosticMessage } from 'generaltranslation/diagnostics';
+
+const message = createDiagnosticMessage({
+  source: 'Importer',
+  severity: 'Warning',
+  whatHappened: 'The file was skipped',
+  fix: 'Choose a supported format',
+});
+// Returns a string; nothing is logged automatically.
+console.log(message);
+```
+
+## `DiagnosticMessageInput` [#message-input]
+
+**Type** object · **Required** input to the message formatter
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `whatHappened` | Main explanation. | `string` | No | — |
+| `source` | Prefix identifying the caller. | `string` | Yes | — |
+| `severity` | Prefix label. | `DiagnosticSeverity` | Yes | — |
+| `reassurance` | What remains safe or unchanged. | `string` | Yes | — |
+| `why` | Cause, joined to the main explanation. | `string` | Yes | — |
+| `fix` | Suggested corrective action. | `string` | Yes | — |
+| `wayOut` | Alternative action. | `string` | Yes | — |
+| `details` | Additional details; arrays join with commas. | `string \| string[]` | Yes | — |
+| `docsUrl` | Documentation URL appended to the message. | `string` | Yes | — |
+
+Only `whatHappened` is required; omitted optional fields contribute no text. Supply clauses with their intended in-sentence casing. Do not include secrets in `details` or other fields: the formatter performs no redaction.
+
+```ts
+import type { DiagnosticMessageInput } from 'generaltranslation/diagnostics';
+
+const input: DiagnosticMessageInput = { whatHappened: 'No files matched' };
+```
+
+## `DiagnosticSeverity` [#severity]
+
+**Type** `'Error' | 'Warning'`
+
+This controls the optional text label, not logging level or exception behavior. Omitting severity adds no severity prefix.
+
+```ts
+import type { DiagnosticSeverity } from 'generaltranslation/diagnostics';
+
+const severity: DiagnosticSeverity = 'Warning';
+```
+
+## `formatDiagnosticErrorDetails` [#error-details]
+
+**Signature** `(error: unknown) => string | undefined`
+
+Returns `undefined` for `null` or `undefined`; otherwise returns `String(error)`. It does not extract structured error fields or redact their content.
+
+```ts
+import { formatDiagnosticErrorDetails } from 'generaltranslation/diagnostics';
+
+console.log(formatDiagnosticErrorDetails(new Error('Invalid file'))); // Error: Invalid file
+console.log(formatDiagnosticErrorDetails(null)); // undefined
+```
