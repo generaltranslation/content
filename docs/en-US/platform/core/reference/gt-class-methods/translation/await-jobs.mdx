@@ -5,7 +5,7 @@ description: Poll queued translation jobs until they complete, fail, or time out
 
 ---
 
-Polls the status of translation jobs and resolves once every job reaches a terminal state (`completed`, `failed`, or `unknown`) or a timeout is reached. It uses the shared sequential [polling loop](/docs/platform/core/reference/api-client#job-polling) for translation and setup jobs.
+Waits until every job is `completed`, `failed`, or `unknown`, or the timeout is reached. Supports translation and setup jobs.
 
 ## Overview [#overview]
 
@@ -43,7 +43,7 @@ awaitJobs(
 
 - **Automatic polling.** Replaces manual polling loops — you do not need to call [`checkJobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status) in a `while` loop yourself.
 - **Terminal states.** Resolves when every job is `completed`, `failed`, or `unknown`. Jobs the API cannot find are treated as `'unknown'`.
-- **Deadline.** Polls do not overlap and request only pending IDs. Each status request receives an abort signal capped at the smaller of the remaining deadline and 60 seconds. Late results are discarded. At timeout, the last accepted statuses return with `complete: false`; they can still be queued, processing, or initially unknown. A fetch implementation that ignores the signal can delay resolution.
+- **Deadline.** Each status request has a timeout of at most 60 seconds, shortened to the remaining overall time. At timeout, the last known statuses return with `complete: false`; they can still be queued, processing, or unknown. Custom fetch implementations must honor cancellation to stop promptly.
 - **Errors.** Status errors before the deadline reject. Errors after the deadline return incomplete results instead. Stopping polling does not cancel remote jobs.
 - **Empty input.** After validating credentials and project ID, empty input resolves with `{ complete: true, jobs: [] }`.
 
