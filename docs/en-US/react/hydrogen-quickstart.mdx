@@ -1,0 +1,281 @@
+---
+title: Shopify Hydrogen Quickstart
+description: Add multilingual server-rendered pages to a Shopify Hydrogen storefront with gt-react.
+related:
+  links:
+    - /docs/react/react-quickstart
+    - /docs/react/guides/translating-jsx
+    - /docs/react/guides/translating-strings
+    - /docs/react/guides/managing-locales
+---
+
+Shopify Hydrogen renders React Router pages on the server. Use `gt-react` to load translations in Hydrogen's root loader, pass them to [`<GTProvider>`](/docs/react/reference/components/gt-provider), and let shoppers choose a language.
+
+**Prerequisites:**
+
+- A Shopify Hydrogen storefront
+- Node.js 22 or 24
+
+This guide uses the official Hydrogen quickstart. If you already have a storefront, start with the package installation and apply the same changes to your existing `app/root.jsx`.
+
+## Quickstart [#quickstart]
+
+### Step 1: Create a Hydrogen storefront and install the packages
+
+Create a storefront with Shopify's quickstart command. It uses Mock.shop sample data, so you can follow this guide without connecting a store:
+
+```bash
+npm create @shopify/hydrogen@latest -- --quickstart
+cd hydrogen-quickstart
+```
+
+Install `gt-react` for translations and the `gt` CLI to prepare translation files:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-react
+    npm install --save-dev gt
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-react
+    yarn add --dev gt
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add gt-react
+    bun add --dev gt
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-react
+    pnpm add --save-dev gt
+    ```
+  </Tab>
+</Tabs>
+
+### Step 2: Configure your languages
+
+Create `gt.config.json` in the storefront root. The output path places translation files under Hydrogen's `app/` directory so the translation loader can import them:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "app/_gt/[locale].json"
+    }
+  }
+}
+```
+
+`defaultLocale` is the language of your source code. Add the languages you want to translate into under `locales`.
+
+### Step 3: Load translation files
+
+Create a loader that imports the file for the requested locale. The [`gt` CLI](/docs/cli/reference/commands/translate) writes these files when you translate your project:
+
+```js title="app/loadTranslations.js"
+export default async function loadTranslations(locale) {
+  try {
+    const translations = await import(`./_gt/${locale}.json`);
+    return translations.default;
+  } catch {
+    return {};
+  }
+}
+```
+
+Returning an empty object lets the storefront render source text before translation files exist.
+
+### Step 4: Initialize `gt-react` and extend the root loader
+
+Add these imports and the initializer at module scope in `app/root.jsx`. Hydrogen loads this route on both the server and the client:
+
+```jsx title="app/root.jsx"
+import {
+  GTProvider,
+  LocaleSelector,
+  getTranslationsSnapshot,
+  initializeGT,
+  parseLocale,
+} from 'gt-react';
+import gtConfig from '../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: gtConfig.locales,
+  loadTranslations,
+});
+```
+
+In the existing root `loader`, resolve the locale from the request and load a translation snapshot. Keep Hydrogen's generated storefront queries and add `locale` and `translations` to its return value:
+
+```jsx title="app/root.jsx"
+export async function loader(args) {
+  const locale = parseLocale(args.request);
+  const translations = await getTranslationsSnapshot(locale);
+
+  const deferredData = loadDeferredData(args);
+  const criticalData = await loadCriticalData(args);
+  const { storefront, env } = args.context;
+
+  return {
+    ...deferredData,
+    ...criticalData,
+    locale,
+    translations,
+    publicStoreDomain: env.PUBLIC_STORE_DOMAIN,
+    shop: getShopAnalytics({
+      storefront,
+      publicStorefrontId: env.PUBLIC_STOREFRONT_ID,
+    }),
+    consent: {
+      checkoutDomain: env.PUBLIC_CHECKOUT_DOMAIN,
+      storefrontAccessToken: env.PUBLIC_STOREFRONT_API_TOKEN,
+      withPrivacyBanner: false,
+      country: storefront.i18n.country,
+      language: storefront.i18n.language,
+    },
+  };
+}
+```
+
+The snapshot gives the server render and browser hydration the same translations.
+
+### Step 5: Wrap the storefront with `GTProvider`
+
+In the generated `App` component, place [`<GTProvider>`](/docs/react/reference/components/gt-provider) around the existing Hydrogen layout. Keep the generated `Analytics.Provider`, `PageLayout`, and `<Outlet />`:
+
+```jsx title="app/root.jsx"
+export default function App() {
+  const data = useRouteLoaderData('root');
+
+  if (!data) return <Outlet />;
+
+  return (
+    <GTProvider locale={data.locale} translations={data.translations}>
+      <Analytics.Provider
+        cart={data.cart}
+        shop={data.shop}
+        consent={data.consent}
+      >
+        <PageLayout {...data}>
+          <LocaleSelector />
+          <Outlet />
+        </PageLayout>
+      </Analytics.Provider>
+    </GTProvider>
+  );
+}
+```
+
+In the generated `Layout` component, set the document language from the root loader. Keep its existing `<head>`, styles, scripts, and other children:
+
+```jsx title="app/root.jsx"
+export function Layout({ children }) {
+  const nonce = useNonce();
+  const locale = useRouteLoaderData('root')?.locale ?? gtConfig.defaultLocale;
+
+  return (
+    <html lang={locale}>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <link rel="stylesheet" href={resetStyles}></link>
+        <link rel="stylesheet" href={appStyles}></link>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        {children}
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
+      </body>
+    </html>
+  );
+}
+```
+
+Hydrogen now renders the selected locale on the server and hydrates the same content in the browser. [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) saves the selection in the `generaltranslation.locale` cookie and reloads the page.
+
+### Step 6: Mark content for translation
+
+Wrap storefront text with [`<T>`](/docs/react/reference/components/t). For plain strings such as input placeholders, use [`useGT`](/docs/react/reference/hooks/use-gt):
+
+```jsx title="app/components/Welcome.jsx"
+import { T, useGT } from 'gt-react';
+
+export function Welcome() {
+  const gt = useGT();
+
+  return (
+    <section>
+      <T>
+        <h2>Welcome to our store</h2>
+        <p>Find something you love.</p>
+      </T>
+      <input type="search" placeholder={gt('Search products')} />
+    </section>
+  );
+}
+```
+
+Render `<Welcome />` from a Hydrogen route, such as `app/routes/_index.jsx`.
+
+### Step 7: Run the storefront
+
+Start Hydrogen's development server and open the local URL it prints:
+
+```bash
+npm run dev
+```
+
+The page renders in your default locale. Choose another language with [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) and reload to confirm the choice persists. Until translation files exist, source text remains visible in every locale.
+
+### Step 8: Generate translations and build
+
+Run the CLI after marking your content:
+
+```bash
+npx gt translate
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) requires `GT_PROJECT_ID` and `GT_API_KEY` in your build environment. Add translation generation before Hydrogen's build command so deployed pages use pre-generated files:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "gt translate && shopify hydrogen build --codegen"
+  }
+}
+```
+
+Keep the production key on the server or in the build environment. Do not expose `GT_API_KEY` in client code.
+
+<Callout type="info">
+  **Without API credentials:** The locale selector still changes the active locale. Content stays in its source language until translation files are generated.
+</Callout>
+
+## Common issues [#common-issues]
+
+<Accordions>
+  <Accordion title="Why does the selected language still show English text?">
+    Check that `gt.config.json` lists the locale, `app/_gt/[locale].json` exists, and [`loadTranslations`](/docs/react/reference/functions/load-translations) imports that path. Run [`npx gt translate`](/docs/cli/reference/commands/translate) after changing translatable content.
+  </Accordion>
+  <Accordion title="Why does the language switch back after navigation?">
+    Keep `locale` and `translations` in the root loader result, and pass both to [`<GTProvider>`](/docs/react/reference/components/gt-provider). The selector must render inside the provider.
+  </Accordion>
+</Accordions>
+
+## Next steps
+
+- [React Quickstart](/docs/react/react-quickstart) - Review the framework-independent server-rendered setup
+- [Translating JSX](/docs/react/guides/translating-jsx) - Translate storefront components with [`<T>`](/docs/react/reference/components/t)
+- [Managing locales](/docs/react/guides/managing-locales) - Customize language selection and locale behavior
