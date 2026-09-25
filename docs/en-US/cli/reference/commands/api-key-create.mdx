@@ -1,0 +1,67 @@
+---
+
+title: gt api-key create
+description: Create a project API key with explicit permissions. API reference for the gt api-key create command.
+
+---
+
+Use this command to provision a key for CI, a server, or another non-interactive workflow. The secret is returned once and is never written to an environment file.
+
+## Overview [#overview]
+
+```bash
+npx gt api-key create \
+  --name <name> \
+  --permission <permissions...> \
+  [options]
+```
+
+The command uses the project selected by `--project-id`, `gt.config.json`, or `GT_PROJECT_ID`.
+
+## How it works [#how-it-works]
+
+1. Authenticates as the signed-in user, or with `--api-key` or `GT_API_KEY` when one is set.
+2. Trims the key name and validates that it is non-empty, then validates the requested project permissions. Duplicate permissions are ignored.
+3. Creates one project API key with exactly the requested permissions.
+4. Writes the new secret to standard output exactly once. Project details, warnings, and errors go to standard error.
+
+The server grants the complete permission set or creates no key. A project API key cannot create another key.
+The API rejects a trimmed key name longer than 255 characters.
+
+## Flags [#flags]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--name <name>` | Name for the new key, 1–255 characters after trimming. | `string` | No | — |
+| `--permission <permissions...>` | One or more project permissions to grant. | `string[]` | No | — |
+| `-c, --config <path>` | Path to `gt.config.json`. | `string` | Yes | Auto-resolved |
+| `--api-key <key>` | Organization API key override. | `string` | Yes | `GT_API_KEY` |
+| `--project-id <id>` | Project that the new key can access. | `string` | Yes | Config or `GT_PROJECT_ID` |
+
+Accepted permissions are:
+
+- `project:write`
+- `project:context:read`
+- `project:context:write`
+- `project:files:read`
+- `project:files:write`
+- `project:translations:generate`
+- `project:translations:enqueue`
+
+## Example [#example]
+
+```bash
+# Capture only the new secret
+npx gt api-key create \
+  --name "Translation CI" \
+  --permission project:files:read project:files:write project:translations:enqueue \
+  > gt-api-key.txt
+```
+
+## Other notes [#notes]
+
+- The signed-in user or Organization key needs `project:api_keys:write` and must be allowed to delegate every selected permission.
+- A `projectId` in `gt.config.json` must match the flag or environment value. When only `--project-id` and an environment variable conflict, the flag takes precedence.
+- The CLI also reads framework-prefixed project ID variables such as `NEXT_PUBLIC_GT_PROJECT_ID`, `VITE_GT_PROJECT_ID`, and `EXPO_PUBLIC_GT_PROJECT_ID`.
+- Store the returned secret immediately. The command cannot display it again.
+- `gt api-key create` is available in `gt` 2.22.0 and later.
