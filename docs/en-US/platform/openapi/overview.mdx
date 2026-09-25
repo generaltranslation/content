@@ -30,7 +30,7 @@ All endpoints, including runtime translation with `POST /v2/translate`, live und
 
 ### Authentication
 
-Authenticate with a bearer credential in the standard `Authorization` header. The endpoint reference shows whether an operation accepts an API key, an OAuth 2.1 user access token, or both. API keys identify automation; OAuth tokens identify users. Dashboard session cookies are not public API credentials.
+Every endpoint requires a bearer credential in the standard `Authorization` header. The endpoint reference shows whether an operation accepts an API key, an OAuth 2.1 user access token, or both.
 
 ```bash
 curl https://api.gtx.dev/v2/project/info/PROJECT_ID \
@@ -42,7 +42,7 @@ Choose the key scope that matches your workflow:
 - **Project** with prefix `gtx-api-`: bound to one project and usable in any environment, subject to its permissions
 - **Organization** with prefix `gtx-org-`: works across projects in its bound Organization, subject to its permissions
 
-For project info (`GET` and `POST /v2/project/info/{projectId}`) and key creation (`POST /v2/projects/{projectId}/api-keys`), the path selects the project. No project header is required; an optional `gt-project-id` must match the path or the request fails with `403`. On project-scoped routes without a path target, project keys default to their bound project; Organization keys and OAuth users must send `gt-project-id`. Discovery needs no project target. Organization-scoped routes use the Organization in the path. All targets remain subject to the credential's access.
+For project-scoped endpoints with a project ID in the path, that ID selects the project. An optional `gt-project-id` must match or the request fails with `403`. Without a path target, project keys use their bound project; Organization keys and OAuth users must send `gt-project-id`. Discovery needs no project target. Organization-scoped routes use the Organization in the path.
 
 Legacy API-key headers remain supported and take precedence over the bearer header. Send OAuth tokens only as bearer credentials. Keep API keys and user access tokens out of deployed browser and mobile bundles.
 
@@ -52,13 +52,11 @@ OAuth applications use the Authorization Code flow with Proof Key for Code Excha
 
 ### Permissions
 
-Each endpoint requires a permission on the request identity. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. The [project API-key endpoint](/docs/platform/openapi/reference/project/create-api-key) accepts an optional, nonempty `permissions` array. Invalid selections return `400`; valid but unavailable grants return `403` without creating a key. Omitting the array grants all effective, delegable project permissions—not unrestricted access. Explicit HTTP Write grants do not implicitly include Read.
-
-For OAuth access, request the scopes your application needs. You must also have permission to perform each operation. Creating an API key requires both key-creation access and permission to grant every selected permission.
+Each endpoint requires a permission on the request identity. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. The [project API-key endpoint](/docs/platform/openapi/reference/project/create-api-key) lets you select permissions or omit the selection to grant all delegable project permissions. Explicit HTTP Write grants do not implicitly include Read. OAuth user access tokens must include the matching scope, and the signed-in user must still hold that permission.
 
 Common permissions:
 
-- `org:projects:create` for listing create-capable Organizations and creating projects, including creation with CDN delivery enabled.
+- `org:projects:create` for listing Organizations where you can create projects and for creating projects.
 - `project:api_keys:write` for creating project API keys with `POST /v2/projects/{projectId}/api-keys`.
 - `project:files:read` for listing projects, downloading files, reading file info, translation status, branch info, orphaned files, project info, and job info.
 - `project:files:write` for uploading files, translations, and assets; submitting diffs; publishing; creating branches and tags; and moving files.
@@ -67,13 +65,6 @@ Common permissions:
 - `project:context:read` for reading project context.
 - `project:context:write` for generating context.
 - `project:write` for updating an existing project's settings.
-
-### Project and Organization discovery
-
-- [`GET /v2/projects`](/docs/platform/openapi/reference/project/list-projects) lists projects you can access. Requires `project:files:read`. Each result contains `id`, `name`, `orgId`, and `orgName`.
-- [`GET /v2/orgs`](/docs/platform/openapi/reference/project/list-orgs) lists Organizations where you can create projects. Requires an OAuth user token with `org:projects:create`. Each result contains `id` and `name`. Missing scope returns `403`; no eligible Organizations returns an empty page.
-
-Both endpoints return results in ascending ID order, with a `projects` or `orgs` array and `nextCursor`. Use optional `limit` (integer 1–100, default 50), then pass a non-null `nextCursor` unchanged as `cursor` to fetch the next page; `null` ends pagination. Neither endpoint requires `gt-project-id` or supports an `orgId` query filter.
 
 ### Versioning
 
@@ -104,7 +95,7 @@ Rate limits apply over a 60-second window and vary by endpoint:
 
 Project and Organization discovery and project/key creation share a request limit. Refreshing an OAuth token does not reset your rate limit. Authentication attempts may also be rate-limited.
 
-Exceeding a limit returns `429`, which can have a non-JSON body regardless of API version. Organization token quotas return `402` from `POST /v2/translate`.
+Exceeding a limit returns `429`. Organization token quotas return `402` from `POST /v2/translate`.
 
 ### Errors
 
