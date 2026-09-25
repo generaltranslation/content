@@ -9,7 +9,7 @@ Import the TypeScript client from `generaltranslation/api` when you need endpoin
 
 `generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.5.0 and the equivalent standalone `@generaltranslation/api` 0.4.0 package.
 
-The generated helpers follow the OpenAPI snapshot bundled with the installed package. That snapshot can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview), so use the public reference when checking which endpoints and file formats are live.
+The generated helpers reflect the installed package version, which can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview). Use the public reference when checking which endpoints and file formats are live.
 
 ## Overview [#overview]
 
@@ -18,11 +18,11 @@ The generated helpers follow the OpenAPI snapshot bundled with the installed pac
 | [`createApiClient`](#create-client) | Creates an authenticated client with version, retry, and timeout handling. |
 | [`ApiClientConfig`](#client-config) | Configures the client transport and shared request headers. |
 | [`API_VERSION`](#api-version) | Current API contract version sent by default. |
-| [Endpoint helpers](#endpoint-helpers) | Typed functions generated for each operation in the bundled OpenAPI snapshot. |
+| [Endpoint helpers](#endpoint-helpers) | Typed functions for the public operations listed below. |
 | [`awaitJobs`](#job-polling) and [`pollJobs`](#job-polling) | Poll translation jobs until they finish or time out. |
 | [`processBatches`](#batch-processing) and [`DEFAULT_BATCH_SIZE`](#batch-processing) | Process an input array in configurable batches. |
 | [Generated types](#types-errors) | Describe endpoint data, responses, errors, and client contracts. |
-| [Bundled OpenAPI specification](#openapi-spec) | JSON snapshot used to generate the installed package. |
+| [Public OpenAPI specification](#openapi-spec) | Current hosted API contract. |
 
 ## `createApiClient` [#create-client]
 
@@ -30,7 +30,7 @@ The generated helpers follow the OpenAPI snapshot bundled with the installed pac
 function createApiClient(config: ApiClientConfig): Client;
 ```
 
-The client adds the configured API version, bearer token, and project ID to every request. Pass it to a generated endpoint helper:
+The client adds the configured API version, API key, and project ID to every request. Pass it to a generated endpoint helper:
 
 ```ts title="project-info.ts"
 import { createApiClient, getProjectInfo } from 'generaltranslation/api';
@@ -60,8 +60,7 @@ The examples below reuse this configured `client`.
 
 | Option | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| [`apiKey`](#apikey) | API key or OAuth user access token sent in the `Authorization` header. | `string` | Yes | — |
-| [`userTokenProvider`](#usertokenprovider) | Application-owned access-token acquisition and refresh. | `UserTokenProvider` | Yes | — |
+| [`apiKey`](#apikey) | API key sent in the `Authorization` header. | `string` | Yes | — |
 | [`apiVersion`](#apiversion) | Contract version sent as `gt-api-version`. | `ApiVersion` | Yes | `API_VERSION` |
 | [`baseUrl`](#baseurl) | API origin. | `string` | No | — |
 | [`fetch`](#fetch) | Custom Fetch API implementation. | `typeof fetch` | Yes | `globalThis.fetch` |
@@ -73,32 +72,7 @@ The examples below reuse this configured `client`.
 
 **Type** `string` · **Optional**
 
-API key or OAuth 2.1 user access token sent as `Authorization: Bearer <credential>`. The client does not read environment variables automatically.
-
-### `userTokenProvider`
-
-**Type** `UserTokenProvider` · **Optional** · **Default** —
-
-Without an explicit `apiKey`, the client lazily obtains a bearer token from this provider. A `401` response triggers one refresh and replay. If refresh returns `undefined`, the original response is retained; a second `401` ends the replay. Provider errors propagate. An explicit API key takes precedence. A per-request `Authorization` header also bypasses provider acquisition and refresh.
-
-The SDK does not sign you in or read saved CLI sessions. Your application owns the token lifecycle:
-
-```ts title="user-client.ts"
-import { createApiClient, type UserTokenProvider } from 'generaltranslation/api';
-
-export function createUserClient(userTokenProvider: UserTokenProvider) {
-  // Supply callbacks backed by your application's authenticated session.
-  return createApiClient({
-    baseUrl: 'https://api.gtx.dev',
-    userTokenProvider: {
-      getAccessToken: () => userTokenProvider.getAccessToken(),
-      refreshAccessToken: () => userTokenProvider.refreshAccessToken(),
-    },
-  });
-}
-```
-
-`UserTokenProvider` requires `getAccessToken: () => Promise<string>` and `refreshAccessToken: () => Promise<string | undefined>`. A static token passed as `apiKey` does not gain automatic refresh.
+API key sent as `Authorization: Bearer <api-key>`. The client does not read environment variables automatically.
 
 ### `apiVersion`
 
@@ -122,7 +96,7 @@ Custom Fetch API implementation. Use this for instrumentation, testing, or a run
 
 **Type** `string` · **Optional**
 
-Project ID sent in the `gt-project-id` header. Organization keys and OAuth user access tokens need this header for project-scoped endpoints that do not carry the project ID in the path.
+Project ID sent in the `gt-project-id` header. Organization keys need this header for project-scoped endpoints that do not carry the project ID in the path.
 
 ### `retryPolicy`
 
@@ -132,13 +106,13 @@ GET, HEAD, OPTIONS, PUT, and DELETE retry network errors and `5xx` responses up 
 
 For `429`, the delay comes from `Retry-After` (seconds or an HTTP date), then `RateLimit-Reset` (seconds), then a 60-second fallback. Other exponential delays are 500, 1000, and 2000 ms; linear delays are 500, 1000, and 1500 ms. Retry sleeps are not abort-aware, so cancellation is not guaranteed to interrupt a wait immediately.
 
-Class runtime translation disables these transport retries, including `429`; token-provider `401` replay remains separate. The generated runtime-translation helper uses the supplied client's retry policy instead.
+Class runtime translation disables these transport retries, including `429`. The generated runtime-translation helper uses the supplied client's retry policy instead.
 
 ### `timeoutMs`
 
 **Type** `number | false` · **Optional** · **Default** `60000`
 
-Timeout in milliseconds for each request attempt. Omission selects 60000; `0` is literal zero. Set it to `false` to disable the built-in timer, not caller or custom-fetch cancellation. This is not a whole-operation deadline covering retries, token callbacks, and response processing. Fetch implementations must honor the supplied signal.
+Timeout in milliseconds for each request attempt. Omission selects 60000; `0` is literal zero. Set it to `false` to disable the built-in timer, not caller or custom-fetch cancellation. This is not a whole-operation deadline covering retries and response processing. Fetch implementations must honor the supplied signal.
 
 These settings are not constructor options for [`GT`](/docs/platform/core/reference/gt-class/constructor). Its runtime-translation methods take a numeric third argument, where `0` selects the default. (See [Translation configuration](/docs/platform/core/reference/types/translation-config)).
 
@@ -178,12 +152,11 @@ Common generated options include:
 | `signal` | Cancel the request with a Fetch API signal. | `AbortSignal` | Yes | — |
 | `meta` | Values exposed to custom client integrations. | `Record<string, unknown>` | Yes | — |
 
-The installed 0.4.0 SDK provides generated helpers for these 24 public operations:
+The installed 0.4.0 SDK provides generated helpers for these 23 public operations:
 
 | Function | Operation |
 | --- | --- |
 | [`listProjects`](/docs/platform/openapi/reference/project/list-projects) | List one page of projects readable by the credentials. |
-| [`listOrgs`](/docs/platform/openapi/reference/project/list-orgs) | List one page of Organizations where the user can create projects. |
 | [`createProject`](/docs/platform/openapi/reference/project/create-project) | Create a project in a selected Organization. |
 | [`createProjectApiKey`](/docs/platform/openapi/reference/project/create-api-key) | Create a project API key with permissions delegated by the caller. |
 | [`uploadSourceFiles`](/docs/platform/openapi/reference/files/upload-source) | Upload source files. |
@@ -219,7 +192,7 @@ Use the [public OpenAPI reference](/docs/platform/openapi/overview) for live end
 
 ### Discovery and provisioning
 
-Generated discovery calls return one page, not all results. Follow `nextCursor` to collect every project. Organization discovery requires a user token and lists create-capable Organizations, not every membership.
+Project discovery returns one page of projects readable by your API key, not all results. Follow `nextCursor` to collect every project.
 
 ```ts title="list-projects.ts"
 import { listProjects } from 'generaltranslation/api';
@@ -236,7 +209,7 @@ do {
 } while (cursor);
 ```
 
-The Organization helper accepts the same optional `query: { cursor, limit }` and returns `orgs` and `nextCursor`. Project creation takes `path: { orgId }` and `body: { name, defaultLocale, cdnEnabled? }`.
+Project creation takes `path: { orgId }` and `body: { name, defaultLocale, cdnEnabled? }`.
 
 Select explicit least-privilege grants when creating a key:
 
@@ -373,7 +346,7 @@ const results = await processBatches(files, async (batch) => {
 
 ## Types and errors [#types-errors]
 
-The module exports `Client`, `Options`, `ApiClientConfig`, `UserTokenProvider`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, and the generated OpenAPI types for the public operations listed above.
+The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, and the generated OpenAPI types for the public operations listed above.
 
 For each public operation listed above, the package exports:
 
@@ -401,12 +374,4 @@ export function describeFailure(error: unknown): string {
 
 ## OpenAPI specification [#openapi-spec]
 
-Import the snapshot used to generate the installed client:
-
-```ts
-import openApiSpec from 'generaltranslation/api/openapi.json' with {
-  type: 'json',
-};
-```
-
-The standalone `@generaltranslation/api` package exposes the same SDK and publishes its snapshot at `@generaltranslation/api/spec/openapi.json`. The [`gt api --spec`](/docs/cli/reference/commands/api) command prints the snapshot bundled with that CLI's installed Core dependency. For the current hosted contract, use [`/openapi.json`](/openapi.json).
+Use [`/openapi.json`](/openapi.json) for the current hosted public API contract. The [OpenAPI reference](/docs/platform/openapi/overview) documents endpoint permissions, request schemas, and responses.

@@ -83,7 +83,7 @@ If a detail is unverified, either omit it or write it as a normal `_Note:_` desc
 
 ## Document the complete public surface
 
-Reference docs must cover the **entire public API**, not a curated subset. When you document a library, CLI, or API:
+First apply the [public documentation boundary in AGENTS.md](AGENTS.md). Within that approved scope, reference docs must cover the **entire public API**, not a curated subset. An exported symbol or working endpoint alone does not establish its intended documentation audience. When you document a library, CLI, or API:
 
 - **Capture every undocumented public surface.** Diff the code's public exports (classes, methods, functions, options, config keys, flags, endpoints, and types) against the existing pages, and add a page or section for anything public that is missing. Do not silently skip a public symbol because it is advanced, low-level, or tooling-oriented — document it (grouping several related low-traffic symbols onto one reference page is fine; omitting them is not). Add crosslinks between related symbols (for example, a method and its inverse, or a flat vs. parts variant) so readers can navigate between them.
 - **Never expose anything marked internal.** If the code marks a symbol as internal — a JSDoc `@internal` tag, a leading-underscore private implementation, a `# private` member, an `__all__` omission, or an equivalent "not public" signal — do **not** document it, do not link to it, and do not reference the internal implementation. Document only the public wrapper that the internal function backs. When it is ambiguous whether a symbol is public, verify against the code and, if still unclear, treat it as internal (omit it) rather than exposing it.
