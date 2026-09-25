@@ -1,0 +1,58 @@
+---
+
+title: SRT files
+description: Translate SubRip subtitle cue text while preserving timing and structure. Reference for SRT files.
+
+---
+
+Configure `.srt` files under the `srt` key. The CLI uploads the document as the `SRT` format, and the translation pipeline changes cue text without retiming the subtitles.
+
+## Overview [#overview]
+
+| Item | Description |
+| --- | --- |
+| [Configuration](#config) | Match source and translated `.srt` paths. |
+| [Translation behavior](#behavior) | Preserve cue numbers, timing lines, separators, and subtitle markup. |
+| [Encoding](#encoding) | Decode and restore byte-order-marked text encodings. |
+| [Validation](#validation) | Skip empty files and reject documents without a valid cue. |
+
+## Configuration [#config]
+
+Add an `srt` entry under `files` with an `include` array of glob patterns. Use the `[locale]` placeholder so the CLI can find source files and save translations to the corresponding locale path.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": {
+    "srt": {
+      "include": ["subtitles/[locale]/**/*.srt"]
+    }
+  }
+}
+```
+
+Use [`transform`](/docs/cli/reference/config#files) to rename output paths. SRT supports only an `SRT` output format; it cannot be converted to another file format with `transformationFormat`.
+
+## Translation behavior [#behavior]
+
+Only cue text is translated. The pipeline keeps these parts of the source document unchanged:
+
+- Cue numbers
+- Start and end timestamps, including position data
+- Blank-line separators and content outside valid cues
+- Subtitle markup such as `<i>`, `<b>`, `<u>`, `<font>`, and leading `{\an1}`–`{\an9}` position tags
+
+Translated lines use the cue's detected source line ending, while untouched separators remain unchanged. Existing translations for unchanged cues can be reused unless you force retranslation.
+
+## Encoding [#encoding]
+
+The CLI reads unmarked SRT files as UTF-8. When a file starts with a byte order mark, it supports UTF-8, UTF-16 little-endian or big-endian, and UTF-32 little-endian or big-endian. Downloaded translations use the source file's encoding and byte order mark.
+
+An unmarked UTF-16 or UTF-32 file is treated as UTF-8. Add the appropriate byte order mark or save it as UTF-8 before translating.
+
+## Validation [#validation]
+
+The CLI skips an empty SRT file and reports it in the command summary. The API requires at least one cue with a valid timing line. Blocks without a valid timing line remain unchanged and are not translated.
+
+`srt` file configuration is available in `gt` 2.22.2 and later.
