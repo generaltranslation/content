@@ -13,7 +13,7 @@ tags: ['generaltranslation', '9.5.0', 'gt', '2.22.0', '@generaltranslation/api',
 
 ## Start with guided setup
 
-Run [`gt init`](/docs/cli/reference/commands/init) to configure your project. The wizard starts sign-in if needed, so there is no separate login prerequisite:
+Run [`gt init`](/docs/cli/reference/commands/init) to configure your project and sign in if needed:
 
 ```bash
 npx gt init
@@ -21,15 +21,13 @@ npx gt init
 
 Use [`gt login`](/docs/cli/reference/commands/login) on its own when you only need to sign in without running setup. Login opens your browser for approval. If you need to approve on another device, use [`npx gt login --no-browser`](/docs/cli/reference/commands/login#flags) to get a verification URL and code. This still requires human approval; it is not an unattended CI login.
 
-[`gt whoami`](/docs/cli/reference/commands/whoami) checks your signed-in identity, and [`gt logout`](/docs/cli/reference/commands/logout) removes the saved session and attempts to revoke its refresh token. Your account's permissions still determine which projects and operations you can access.
-
-An explicit `--api-key` or loaded `GT_API_KEY` takes precedence over the saved login. A rejected key does not fall back to your account. Keep scoped API keys in your CI provider's secret store for unattended workflows.
+[`gt whoami`](/docs/cli/reference/commands/whoami) checks your signed-in identity, and [`gt logout`](/docs/cli/reference/commands/logout) removes the saved login. Use scoped API keys from your CI provider's secret store for unattended workflows.
 
 ## Choose a project and key permissions
 
 [`gt init`](/docs/cli/reference/commands/init) can sign you in, let you choose an accessible project, or create one in an Organization where you have permission. It can then save the project ID and a development runtime key in `.env.local`, using the environment variable names for your framework.
 
-That key has only `project:translations:generate`. It is for local runtime translations, not the CLI's upload, enqueue, or download workflow. Init leaves an existing `GT_API_KEY` untouched and does not create a production or CI tooling key. Local Vite setups can decline live development translations and skip credential provisioning.
+The generated key has only `project:translations:generate`: it is for local runtime translations, not CLI uploads or CI. Existing `GT_API_KEY` values stay unchanged. Local Vite setups can decline live development translations and skip credential provisioning.
 
 Use [`gt api-key create`](/docs/cli/reference/commands/api-key-create) when you want to create an additional project key with permissions you choose:
 
@@ -39,15 +37,13 @@ npx gt api-key create --project-id your-project-id \
   --permission project:translations:generate
 ```
 
-The command requires a name and explicit permissions. You need permission to create keys and delegate every requested grant. It prints the new secret once to stdout, sends diagnostics to stderr, and does not edit your environment files. Store the secret securely. For CI, choose permissions for the whole workflow rather than reusing this generate-only example.
-
-If setup cannot update your local files, a newly created project or key may still remain in your account. Never include API keys in deployed browser or mobile bundles, regardless of their permissions.
+You must be allowed to create keys and grant each selected permission. The command prints the secret once; store it securely. For CI, choose permissions for the whole workflow rather than reusing this generate-only example. Never include API keys in deployed browser or mobile bundles.
 
 ## Use typed API calls and check job results
 
 The typed SDK introduced in earlier releases remains available through [`generaltranslation/api`](/docs/platform/core/reference/api-client). You can continue using the supported `GT` class for runtime translation and project management.
 
-The SDK includes paginated project and Organization discovery. Applications can supply a refreshable `userTokenProvider` to the SDK or Core instead of an API key. That provider belongs to your application: the SDK does not read the CLI's saved session or perform login for you.
+The SDK adds paginated project and Organization discovery and supports a refreshable `userTokenProvider` instead of an API key. Your application supplies the token; the SDK does not read the CLI's saved login.
 
 The [API client's polling helpers](/docs/platform/core/reference/api-client#job-polling) let you wait for translation jobs and return `complete: false` on timeout. Completion does not mean every job succeeded. Check job results before downloading translations.
 
@@ -56,7 +52,7 @@ Diagnostic formatting is now available from the public [`generaltranslation/diag
 ## Upgrading
 
 - **Replace `gt auth` and `--key-type`.** Use login for account authentication, init for guided project setup, and explicit key creation for additional credentials. [`gt configure`](/docs/cli/reference/commands/configure) is not a side-effect-free substitute: depending on your setup, it can install dependencies and provision credentials.
-- **Keep runtime and tooling credentials separate.** `GT_DEV_API_KEY` remains a framework runtime setting. Signing in does not populate it or authenticate runtime SDKs. Earlier saved-login formats are not migrated automatically; sign in again if needed.
+- **Keep runtime and tooling credentials separate.** `GT_DEV_API_KEY` remains a framework runtime setting. Signing in alone does not configure runtime SDK credentials. Explicit API keys still take precedence over the CLI's saved login; see [credential selection](/docs/cli/guides/configuring#credentials).
 - **Check retry assumptions.** Management POST requests do not automatically retry network or server failures, but 429 responses can still retry when retries are enabled. Core runtime translation does not automatically retry these failures or 429 responses. Avoid blindly repeating project or key creation: each successful request creates another resource.
 - **Retain supported compatibility APIs.** Core's `devApiKey` fallback and [`getProjectData`](/docs/platform/core/reference/gt-class-methods/translation/get-project-data) remain available but deprecated. Use `apiKey` or `userTokenProvider`, and prefer [`getProjectInfo`](/docs/platform/core/reference/gt-class-methods/project/project-management#get-project-info) for new project-info calls.
 - **Handle validation and result changes.** Unsupported model-provider values fail before a request is sent. Font upload results no longer include the `deduped` field.
