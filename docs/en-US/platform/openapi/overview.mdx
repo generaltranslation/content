@@ -30,7 +30,7 @@ All endpoints, including runtime translation with `POST /v2/translate`, live und
 
 ### Authentication
 
-Every endpoint requires a bearer credential in the standard `Authorization` header. The endpoint reference shows whether an operation accepts an API key, an OAuth 2.1 user access token, or both.
+Authenticate with an API key in the standard `Authorization` header.
 
 ```bash
 curl https://api.gtx.dev/v2/project/info/PROJECT_ID \
@@ -42,21 +42,19 @@ Choose the key scope that matches your workflow:
 - **Project** with prefix `gtx-api-`: bound to one project and usable in any environment, subject to its permissions
 - **Organization** with prefix `gtx-org-`: works across projects in its bound Organization, subject to its permissions
 
-For project-scoped endpoints with a project ID in the path, that ID selects the project. An optional `gt-project-id` must match or the request fails with `403`. Without a path target, project keys use their bound project; Organization keys and OAuth users must send `gt-project-id`. Discovery needs no project target. Organization-scoped routes use the Organization in the path.
+For project-scoped endpoints with a project ID in the path, that ID selects the project. An optional `gt-project-id` must match or the request fails with `403`. Without a path target, project keys use their bound project; Organization keys must send `gt-project-id`. Project discovery needs no project target. Organization-scoped routes use the Organization in the path.
 
-Legacy API-key headers remain supported and take precedence over the bearer header. Send OAuth tokens only as bearer credentials. Keep API keys and user access tokens out of deployed browser and mobile bundles.
+Legacy API-key headers remain supported and take precedence over the bearer header. Keep API keys out of deployed browser and mobile bundles.
 
 (See [API keys](/docs/platform/dashboard/reference/api-keys) for how to create and scope API keys).
 
-OAuth applications use the Authorization Code flow with Proof Key for Code Exchange (PKCE). Discover the authorization server at `https://dash.generaltranslation.com/.well-known/oauth-authorization-server/api/auth`, request only the scopes your application needs, and send the resulting user access token in the same bearer header. The token is limited by both its granted scopes and the user's current access to the target Organization or project.
-
 ### Permissions
 
-Each endpoint requires a permission on the request identity. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. The [project API-key endpoint](/docs/platform/openapi/reference/project/create-api-key) lets you select permissions or omit the selection to grant all delegable project permissions. Explicit HTTP Write grants do not implicitly include Read. OAuth user access tokens must include the matching scope, and the signed-in user must still hold that permission.
+Each endpoint requires a permission on the request identity. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. The [project API-key endpoint](/docs/platform/openapi/reference/project/create-api-key) lets you select permissions or omit the selection to grant all delegable project permissions. Explicit HTTP Write grants do not implicitly include Read.
 
 Common permissions:
 
-- `org:projects:create` for listing Organizations where you can create projects and for creating projects.
+- `org:projects:create` for creating projects.
 - `project:api_keys:write` for creating project API keys with `POST /v2/projects/{projectId}/api-keys`.
 - `project:files:read` for listing projects, downloading files, reading file info, translation status, branch info, orphaned files, project info, and job info.
 - `project:files:write` for uploading files, translations, and assets; submitting diffs; publishing; creating branches and tags; and moving files.
@@ -91,9 +89,9 @@ Rate limits apply over a 60-second window and vary by endpoint:
 - **Heavy:** 30 requests/minute for queueing translations.
 - **Medium:** 120 requests/minute for uploads, diffs, context, moves, orphaned files, and publishing.
 - **Light:** 300 requests/minute for file downloads.
-- **Default:** 200 requests/minute for project and Organization discovery, project and project API-key creation, branches, tags, project info, job info, file info, translation status, and runtime translation.
+- **Default:** 200 requests/minute for project discovery, project and project API-key creation, branches, tags, project info, job info, file info, translation status, and runtime translation.
 
-Project and Organization discovery and project/key creation share a request limit. Refreshing an OAuth token does not reset your rate limit. Authentication attempts may also be rate-limited.
+Project discovery and project/key creation share a request limit. Authentication attempts may also be rate-limited.
 
 Exceeding a limit returns `429`. Organization token quotas return `402` from `POST /v2/translate`.
 
@@ -124,11 +122,5 @@ Common status codes:
 ## OpenAPI spec [#openapi-spec]
 
 A machine-readable OpenAPI 3.1 spec is available at [`/openapi.json`](/openapi.json). Import it into Postman, Insomnia, or an OpenAPI client to generate requests and types.
-
-The JavaScript tools also ship the OpenAPI snapshot used to generate their installed SDK version. That bundled snapshot can differ from the current hosted contract:
-
-- Run [`npx gt api --spec`](/docs/cli/reference/commands/api) with `gt` 2.20.0 or later.
-- Import `generaltranslation/api/openapi.json` from `generaltranslation` 9.2.0 or later.
-- Import `@generaltranslation/api/spec/openapi.json` from the standalone generated SDK.
 
 For typed endpoint helpers, use the [`generaltranslation/api` client](/docs/platform/core/reference/api-client).
