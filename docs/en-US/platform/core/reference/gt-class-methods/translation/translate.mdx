@@ -27,7 +27,7 @@ translate(
 ): Promise<TranslationResult>
 ```
 
-*Note: `translate` requires an `apiKey` (or `devApiKey`) and `projectId` on the GT instance. Under the hood it calls [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) with a single entry.*
+*Note: `translate` requires an API key (including the deprecated `devApiKey` alias), plus `projectId` on the GT instance. Under the hood it calls [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) with a single entry.*
 
 ## How it works [#how-it-works]
 
@@ -60,21 +60,26 @@ A target locale string such as `'es'`, or an options object:
 type TranslateOptions = {
   targetLocale: string; // locale to translate into
   sourceLocale?: string; // overrides the instance sourceLocale
-  modelProvider?: string; // optional model provider hint
+  modelProvider?: string; // validated before fetch
+  [key: string]: unknown; // extension metadata, not transport options
 };
 ```
+
+Import [`TranslateOptions`](/docs/platform/core/reference/types/translation-config#translate-options) from `generaltranslation/types`. A provided `modelProvider` must be `ANTHROPIC`, `OPENAI`, `XAI`, or `GOOGLE`; other values reject before fetch. Service [provider entitlements](/docs/platform/core/reference/types/enqueue-files-options#modelprovider) still apply.
 
 ### `timeout` [#timeout]
 
 **Type** `number` · **Optional**
 
-Request timeout in milliseconds. When omitted, the instance default is used.
+Request timeout in milliseconds. Omission or `0` selects the runtime default of 60000 ms. The class accepts only a number, not `false`, and has no constructor timeout option. It exposes neither caller `signal` nor custom `fetch`; extension metadata does not configure cancellation.
 
 ## Returns [#returns]
 
 **Type** `Promise<TranslationResult>`
 
 Resolves to a [`TranslationResult`](/docs/platform/core/reference/types/translation-result) — a discriminated union of a success result (with `translation` and `locale`) and an error result (with `error` and `code`). Always narrow on `success` before reading the translation.
+
+Runtime translation does not retry transport failures, including `429`. Configuration, authentication, HTTP, network, cancellation, and timeout failures can reject the entire call rather than resolve as an item failure. Results retain the service locale rather than restoring configured aliases. (See [Errors](/docs/platform/core/reference/api-client#types-errors)).
 
 ## Examples [#examples]
 

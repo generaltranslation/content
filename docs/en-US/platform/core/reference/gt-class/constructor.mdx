@@ -33,8 +33,8 @@ new GT(params?: GTConstructorParams): GT
 ## How it works [#how-it-works]
 
 - **Environment fallback.** When `apiKey`, `devApiKey`, or `projectId` are not passed, the constructor looks them up in the `GT_API_KEY`, `GT_DEV_API_KEY`, and `GT_PROJECT_ID` environment variables.
-- **Locale standardization then validation.** Each provided locale code (`sourceLocale`, `targetLocale`, and every entry in `locales`) is first standardized to its canonical BCP 47 form, then validated. The **stored values are the standardized/normalized forms**, not the raw strings you passed. The constructor throws for invalid codes.
-- **Custom mapping applies to `sourceLocale`/`targetLocale` but not to `locales`.** `sourceLocale` and `targetLocale` are validated **with** the [`customMapping`](/docs/platform/core/reference/types/custom-mapping), so a custom alias is accepted for them. Each entry of `locales` is validated **without** the mapping, so a `customMapping` alias is rejected if it appears inside `locales`.
+- **Configured identities.** Valid locale spellings such as `en-us` are preserved. `sourceLocale`, `targetLocale`, and every entry in `locales` validate against the effective [`customMapping`](/docs/platform/core/reference/types/custom-mapping), including custom aliases. Invalid codes throw.
+- **Returned locale codes.** Project and file responses use your configured spellings and aliases where possible. If multiple configured codes identify the same locale, the first match is used unless your request distinguishes them. Other dialects are not substituted. Runtime translation results use the API's locale codes.
 - **Custom mapping precedence.** A [`customMapping`](/docs/platform/core/reference/types/custom-mapping) lets you define locale aliases, override the standard BCP 47 validation, and override the standard locale properties (name, emoji, and so on). Custom mappings take precedence over the standard BCP 47 data.
 
 ## Parameters [#parameters]
@@ -56,37 +56,37 @@ The constructor accepts a single optional [`GTConstructorParams`](/docs/platform
 
 **Type** `string` · **Optional** · **Default** `GT_API_KEY` env
 
-Project API key for the translation service. Read from the `GT_API_KEY` environment variable when not provided. API operations require this key or `devApiKey`, with permission for the requested operation.
+Project API key for the translation service. Read from `GT_API_KEY` when not provided. API operations require an API key (including the deprecated `devApiKey` alias), plus a project ID and permission for the operation.
 
 ### `devApiKey` [#dev-api-key]
 
 **Type** `string` · **Optional** · **Default** `GT_DEV_API_KEY` env
 
-Alternate project API key. Used when `apiKey` is unset, regardless of environment. Read from the `GT_DEV_API_KEY` environment variable when not provided.
+Deprecated compatibility alias for `apiKey`, not a separate environment-specific key type. Used when `apiKey` is unset. Read from `GT_DEV_API_KEY` when not provided.
 
 ### `projectId` [#project-id]
 
 **Type** `string` · **Optional** · **Default** `GT_PROJECT_ID` env
 
-Unique project identifier. Read from the `GT_PROJECT_ID` environment variable when not provided. API operations require this key or `devApiKey`, with permission for the requested operation.
+Unique project identifier. Read from `GT_PROJECT_ID` when not provided. API operations require this ID in addition to credentials.
 
 ### `sourceLocale` [#source-locale]
 
 **Type** `string` · **Optional**
 
-Default source locale for translations, such as `en`. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+Default source locale for translations, such as `en`. Its configured spelling is preserved and validated with any `customMapping`, so custom aliases are accepted.
 
 ### `targetLocale` [#target-locale]
 
 **Type** `string` · **Optional**
 
-Default target locale for translations, such as `es`. Standardized to its canonical form and stored in that normalized form, then validated **with** any `customMapping` (so a custom alias is accepted here).
+Default target locale for translations, such as `es`. Its configured spelling is preserved and validated with any `customMapping`, so custom aliases are accepted.
 
 ### `locales` [#locales]
 
 **Type** `string[]` · **Optional**
 
-Array of supported locale codes. Each code is standardized to its canonical form and stored in that normalized form, then validated **without** the `customMapping` — so a `customMapping` alias that is valid for `sourceLocale`/`targetLocale` is rejected if it appears inside `locales`.
+Array of supported locale identities. Each code is preserved and validated with the effective `customMapping`; custom aliases are accepted here too.
 
 ### `baseUrl` [#base-url]
 
@@ -149,9 +149,10 @@ const gt = new GT({
 
 ## Notes [#notes]
 
-- All parameters are optional, but API operations require `apiKey` (or `devApiKey`) and `projectId`.
-- The constructor standardizes every locale code to its canonical form (the stored value is the normalized form), then validates it and throws for invalid codes.
-- `sourceLocale` and `targetLocale` are validated with the `customMapping`; each entry of `locales` is validated without it.
+- All parameters are optional, but API operations require an API key and `projectId`.
+- Configured locale spellings and aliases are preserved; returned codes follow the rules above.
+- All locale fields validate against the effective custom mapping.
 - Custom mappings take precedence over standard BCP 47 validation and properties.
+- Use [`setConfig`](/docs/platform/core/reference/gt-class/set-config) to reconfigure an instance, not direct property assignment.
 
-*Note: the `GT` class extends `GTRuntime`. In 9.0 the translation, formatting, and locale helpers live on `GTRuntime`, while the file-workflow methods (uploads, enqueue, downloads, and so on) live on `GT`. Both the constructor and [`setConfig`](/docs/platform/core/reference/gt-class/set-config) are defined on `GTRuntime`, so usage is unaffected via inheritance.*
+*Note: `GT` extends [`GTRuntime`](/docs/platform/core/reference/runtime), which supplies runtime translation, formatting, and locales. File/project management remains on `GT`.*

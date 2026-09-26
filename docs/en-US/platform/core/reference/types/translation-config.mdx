@@ -1,0 +1,99 @@
+---
+
+title: Translation configuration
+description: Distinguish translation metadata from request transport configuration. API reference for TranslateOptions, TranslationRequestConfig, and TranslateConfig.
+
+---
+
+Import these public types from `generaltranslation/types`. They describe distinct boundaries; request configuration is not interchangeable with [constructor parameters](/docs/platform/core/reference/types/gt-constructor-params).
+
+| Type | Description |
+| --- | --- |
+| [`TranslateOptions`](#translate-options) | Required target locale and optional translation metadata. |
+| [`TranslationRequestConfig`](#request-config) | Shared request credentials, project ID, and transport settings. |
+| [`TranslateConfig`](#translate-config) | Request configuration with optional project ID and custom mapping. |
+
+## `TranslateOptions` [#translate-options]
+
+**Type** object · **Required** as the object-form second argument to class translation methods
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `targetLocale` | Locale to translate into. | `string` | No | — |
+| `sourceLocale` | Source locale override. | `string` | Yes | Instance source locale, then `en` |
+| `modelProvider` | Provider selection, validated before fetch. | `string` | Yes | — |
+| `[key: string]` | Extension metadata, not transport settings. | `unknown` | Yes | — |
+
+The type has an unknown-valued extension index. Passing `signal`, `fetch`, or `timeoutMs` as metadata does not configure request cancellation or transport. The typed class call still requires an explicit target locale, even with an instance default.
+
+A provided `modelProvider` must be `ANTHROPIC`, `OPENAI`, `XAI`, or `GOOGLE`; other values reject locally before fetch. Omission or `undefined` is allowed. [Service entitlements](/docs/platform/core/reference/types/enqueue-files-options#modelprovider) apply separately.
+
+```ts
+import { GT } from 'generaltranslation';
+import type { TranslateOptions } from 'generaltranslation/types';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+const options: TranslateOptions = { targetLocale: 'es', sourceLocale: 'en' };
+const result = await gt.translate('Hello', options, 30000);
+if (result.success) console.log(result.translation);
+```
+
+## `TranslationRequestConfig` [#request-config]
+
+**Type** object · **Required field** `projectId`
+
+This shared request type uses transport settings from [`ApiClientConfig`](/docs/platform/core/reference/api-client#client-config). For example, configure an API-key request with a 30-second timeout:
+
+```ts
+import type { TranslationRequestConfig } from 'generaltranslation/types';
+
+const config: TranslationRequestConfig = {
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id',
+  timeoutMs: 30000,
+};
+```
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `projectId` | Project identifier. | `string` | No | — |
+| `apiKey` | Explicit API key. | `string` | Yes | — |
+| `apiVersion` | API contract version. | `ApiVersion` | Yes | `API_VERSION` |
+| `baseUrl` | Runtime API origin. | `string` | Yes | `https://api.gtx.dev` |
+| `fetch` | Fetch implementation wrapped by timeout and error handling. | `typeof fetch` | Yes | `globalThis.fetch` |
+| `timeoutMs` | Runtime-owned timer in milliseconds. | `number \| false` | Yes | `60000` |
+
+Credentials and project ID are validated before fetch. These explicit configurations do not read environment variables.
+
+For this type, `0` is literal zero and `false` disables only the runtime-owned timer, not custom-fetch cancellation.
+
+This is a public type, not a public standalone `translate(config)` function. Class translation methods instead accept a numeric [timeout argument](/docs/platform/core/reference/gt-class-methods/translation/translate#timeout).
+
+## `TranslateConfig` [#translate-config]
+
+**Type** object · **Optional fields** all, but execution still requires credentials and project ID
+
+```ts
+import type { CustomMapping, TranslationRequestConfig } from 'generaltranslation/types';
+
+type TranslateConfig = Omit<TranslationRequestConfig, 'projectId'> & {
+  projectId?: string;
+  customMapping?: CustomMapping;
+};
+```
+
+All request fields retain the behavior above. `projectId` becomes optional in the type, not at execution. `customMapping` is optional with no default and resolves locale aliases before requests. It does not restore aliases in runtime translation results.
+
+```ts
+import type { TranslateConfig } from 'generaltranslation/types';
+
+const config: TranslateConfig = {
+  apiKey: 'your-api-key',
+  projectId: 'your-project-id',
+  customMapping: { cn: { code: 'zh' } },
+};
+// A configuration value only; it is not a GT constructor or callable API.
+```
