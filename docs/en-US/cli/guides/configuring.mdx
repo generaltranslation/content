@@ -21,7 +21,7 @@ You can create `gt.config.json` three ways. Pick whichever fits your workflow.
 
 ### a) Run the full setup wizard
 
-Run [`gt init`](/docs/cli/reference/commands/init) to detect your framework, install dependencies, create the config file, and generate credentials when needed.
+Run [`gt init`](/docs/cli/reference/commands/init) to detect your framework, configure files, and optionally provision a project and development runtime key. The wizard starts sign-in if needed.
 
 ```bash
 npx gt init
@@ -29,9 +29,9 @@ npx gt init
 
 In a monorepo, run the command from the app you want to localize, not the workspace root. For Vite React apps, the wizard installs `gt-react`, configures [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) before the existing app entry, and sets up local or CDN translation loading.
 
-### b) Create only the config file
+### b) Configure without the React setup step
 
-Run [`gt configure`](/docs/cli/reference/commands/configure) to create `gt.config.json` without installing dependencies or changing your framework setup.
+Run [`gt configure`](/docs/cli/reference/commands/configure) to create or update `gt.config.json` without the experimental React framework rewrite. It shares the remaining setup flow with the full wizard: it can generate loaders, install the CLI, prompt for login, and provision development credentials.
 
 ```bash
 npx gt configure
@@ -39,7 +39,7 @@ npx gt configure
 
 ### c) Write it by hand
 
-Create the file yourself and add the `$schema` reference for editor validation and autocompletion.
+For config-only or CI setup without wizard side effects, create the file yourself. Add the `$schema` reference for editor validation and autocompletion.
 
 ```json title="gt.config.json"
 {
@@ -114,11 +114,35 @@ If you use `gt-next`, `gt-react`, or `gt-react-native`, decide how translations 
 
 ## Add your credentials [#credentials]
 
-The [`translate`](/docs/cli/reference/commands/translate) command needs a project API key and project ID. Keep them out of `gt.config.json` and set them as environment variables instead. For a [custom key](/docs/platform/dashboard/reference/api-keys#create-project-keys), grant **Files > Write** and **Translation queue > Enabled**; add **Context > Write** when generating context.
+### a) Sign in for local CLI work
 
-```bash title=".env"
+1. Run [`gt login`](/docs/cli/reference/commands/login) and approve access in your browser. Use [`gt whoami`](/docs/cli/reference/commands/whoami) to check the account and [`gt logout`](/docs/cli/reference/commands/logout) to sign out.
+2. Bind your app to a project with [`projectId`](/docs/cli/reference/config#project-id) in the existing `gt.config.json`, or set `GT_PROJECT_ID`. Login alone does not select or create a project. Use [`gt init`](/docs/cli/reference/commands/init) if you want guided selection or creation rather than manual binding.
+3. Run [`gt translate`](/docs/cli/reference/commands/translate). Your account must have permission for each requested operation.
+
+CLI sessions are separate from runtime SDK credentials. SDKs do not read your saved CLI login. Local [`gt generate`](/docs/cli/reference/commands/generate), [`gt validate`](/docs/cli/reference/commands/validate), and [`gt api --spec`](/docs/cli/reference/commands/api) do not require hosted authentication.
+
+### b) Use an explicit key for CI
+
+Commit your config and provide `GT_API_KEY` through your CI provider's secret settings. Set the project ID in the config or environment. Neither login (including `--no-browser`) nor the init wizard is an unattended CI flow.
+
+```bash
 GT_API_KEY=your-api-key
 GT_PROJECT_ID=your-project-id
 ```
 
-Run [`gt auth`](/docs/cli/reference/commands/auth) to generate these and write them to `.env.local` automatically.
+Create a [custom project key](/docs/platform/dashboard/reference/api-keys#create-project-keys) or use [`gt api-key create`](/docs/cli/reference/commands/api-key-create) with explicit permissions. Grant permissions for the whole workflow: file reads/downloads, file writes/uploads, and translation enqueueing, plus context access when used. A generate-only runtime key is not sufficient for the translation pipeline. Never store API keys in `gt.config.json`; normal CLI settings validation rejects them.
+
+### Credential precedence and environment files
+
+Hosted commands prefer `--api-key`, then a nonempty `GT_API_KEY`, then the saved login when no explicit tooling key is supplied. Invalid or insufficient explicit keys never fall back to login. `GT_DEV_API_KEY` and its public-prefixed variants are runtime settings, not CLI management credentials. To use login, remove unwanted tooling keys from both the process environment and loaded env files; login does not clear them.
+
+At startup, the executable loads `.env`, then `.env.local` with override, then `.env.production` with override. The last two files can replace an already exported key. For project binding and conflict checks, see [`projectId`](/docs/cli/reference/config#project-id).
+
+### Development runtime keys
+
+[`gt init`](/docs/cli/reference/commands/init) can provision a key with only `project:translations:generate` in ignored `.env.local`, using your framework's variable names. It does not replace `GT_API_KEY`. (See [Next.js credentials](/docs/react/nextjs/config#credentials) for runtime configuration).
+
+<Callout type="warn">
+  Never ship API keys in deployed browser or mobile bundles, even generate-only keys. (See [init file protections](/docs/cli/reference/commands/init#notes)).
+</Callout>

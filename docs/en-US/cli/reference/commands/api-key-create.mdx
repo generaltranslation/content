@@ -1,0 +1,91 @@
+---
+
+title: gt api-key create
+description: Create a project API key with explicit permissions and print its secret once. API reference for the gt api-key create command.
+
+---
+
+Create runtime or automation credentials without changing local environment or config files. Authenticate with a saved login or an authorized explicit key as described in [Configuring the CLI](/docs/cli/guides/configuring#credentials).
+
+## Overview [#overview]
+
+```bash
+npx gt api-key create --name <name> --permission <permissions...> [options]
+```
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`--name <name>`](#name) | Nonempty key name. | `string` | No | — |
+| [`--permission <permissions...>`](#permission) | Explicit canonical grants. | `string[]` | No | — |
+| [`-c, --config <path>`](#config) | Config file path. | `string` | Yes | Auto-resolved |
+| [`--api-key <key>`](#api-key) | Explicit authentication override. | `string` | Yes | `GT_API_KEY`, otherwise login |
+| [`--project-id <id>`](#project-id) | Target project. | `string` | Yes | Config or environment |
+
+## How it works [#how-it-works]
+
+The caller needs `project:api_keys:write` authorization and permission to delegate every requested grant. Unavailable grants fail all-or-nothing; the CLI does not silently narrow the selection. Project keys cannot hold `project:api_keys:write` and cannot create other keys.
+
+On success, only the new secret plus a newline is written to stdout. Diagnostics go to stderr. The secret bypasses the logger and log file, including under `--quiet` or `GT_LOG_FORMAT=json`; it is not JSON metadata. The command does not write env or config files.
+
+## Flags [#flags]
+
+The [global options](/docs/cli/reference/global-options) also apply.
+
+### Name
+
+**Type** `string` · **Required** · **Default** —
+
+The key's display name. Leading and trailing whitespace is trimmed; an empty result is rejected before any request.
+
+### Permission
+
+**Type** `string[]` · **Required** · **Default** —
+
+Pass one or more canonical permission names, separated by spaces or repeated occurrences of the flag:
+
+- `project:write`
+- `project:context:read`
+- `project:context:write`
+- `project:files:read`
+- `project:files:write`
+- `project:translations:generate`
+- `project:translations:enqueue`
+
+Wildcards, preset names, and key-type flags are not supported. Omitting permissions is an error, not a full-access shortcut. Include each required grant explicitly; do not assume a write grant also adds read access.
+
+### Config
+
+**Type** `string` · **Optional** · **Default** Auto-resolved
+
+Read project settings from this JSON config file; the `.json` suffix may be omitted. Without it, normal `gt.config.json` discovery applies.
+
+### API key
+
+**Type** `string` · **Optional** · **Default** `GT_API_KEY`, otherwise saved login
+
+Override authentication with an explicit authorized key. Invalid or insufficient keys do not fall back to login. Prefer environment-based secrets over literal secrets in shell history. (See [credential precedence](/docs/cli/guides/configuring#credentials)).
+
+### Project ID
+
+**Type** `string` · **Optional** · **Default** Config or environment
+
+Select the target project. A config ID that disagrees with the flag or resolved environment ID fails validation. Without a config ID, the flag wins over the environment. Supported framework-prefixed project variables also participate in resolution.
+
+## Example [#example]
+
+After signing in with [`gt login`](/docs/cli/reference/commands/login), create a generate-only development runtime key:
+
+```bash
+npx gt api-key create \
+  --project-id your-project-id \
+  --name "Runtime translations" \
+  --permission project:translations:generate
+```
+
+Store the returned secret securely once. This key supports runtime generation, not the full [`gt translate`](/docs/cli/reference/commands/translate) pipeline. CI keys need grants for all operations in their workflow, including reads/downloads, writes/enqueueing, and context access when used. Save CI credentials in the CI provider's secret store, not in committed files.
+
+<Callout type="warn">
+  Treat stdout as secret material. Do not merge stderr into it, send it to shared logs, or expose even a generate-only key in deployed browser or mobile bundles. Repeating the command can create another key; there is no remote rollback or idempotent retry guarantee.
+</Callout>
+
+Only key creation is available through this command group. There are no CLI list, revoke, rotate, or secret-recovery commands.

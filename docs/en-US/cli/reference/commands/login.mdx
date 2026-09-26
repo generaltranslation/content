@@ -1,0 +1,62 @@
+---
+
+title: gt login
+description: Sign in to your account for hosted CLI workflows. API reference for the gt login command.
+
+---
+
+Login authenticates the CLI as you; it does not create a project or runtime key. For guided project setup, run [`gt init`](/docs/cli/reference/commands/init) directly; it starts sign-in if needed. Use login on its own when you only need to authenticate an existing setup. To create a scoped key, use [`gt api-key create`](/docs/cli/reference/commands/api-key-create).
+
+## Overview [#overview]
+
+Requires [Node.js 20 or later](/docs/cli/quickstart#quickstart); prefer a currently supported LTS release.
+
+```bash
+npx gt login [options]
+```
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`--no-browser`](#flags) | Use device authorization instead of a local browser callback. | `boolean` | Yes | `false` |
+
+<Callout type="info">
+  **Changed in v2.22:** the former auth command and its key-type flag are removed, not aliases. Login replaces account sign-in; init and explicit key creation handle provisioning. Existing API keys remain usable.
+</Callout>
+
+## How it works [#how-it-works]
+
+- Opens your browser so you can approve CLI access to your account.
+- Your account permissions determine which projects and operations you can access.
+- Uses device authorization with `--no-browser`, or if it cannot listen for the browser callback on this machine. It displays a verification URL and code to approve on another device.
+- Does not automatically detect SSH or switch to device authorization merely because browser launching fails. Open the displayed authorization URL yourself, or rerun with `--no-browser`.
+- Saves an account session, not a project selection. It does not create API keys or write `.env.local`. Runtime SDKs do not load CLI sessions.
+
+For project binding, explicit-key precedence, and CI credentials, use [Configuring the CLI](/docs/cli/guides/configuring#credentials).
+
+## Flags [#flags]
+
+**`--no-browser`** · **Type** `boolean` · **Optional** · **Default** `false`
+
+Uses device authorization without opening a browser. Human approval is still required; this is not unattended CI authentication.
+
+The [global options](/docs/cli/reference/global-options) also apply. Login has no command-specific config, project-ID, API-key, or JSON-output flag.
+
+## Examples [#examples]
+
+```bash
+# Sign in using a browser on this machine
+npx gt login
+
+# Approve sign-in on another device
+npx gt login --no-browser
+```
+
+After approval, check the account with [`gt whoami`](/docs/cli/reference/commands/whoami). Use [`gt logout`](/docs/cli/reference/commands/logout) to remove the saved session.
+
+## Storage and troubleshooting [#storage]
+
+Sessions are stored at `$XDG_STATE_HOME/gt/credentials.json` when `XDG_STATE_HOME` is absolute, otherwise at `~/.local/state/gt/credentials.json`. Relative XDG values are ignored.
+
+Credentials use owner-only file permissions where supported; they are not encrypted or stored in an OS keychain. Older saved-login formats are not migrated automatically. Sign in again if your saved credentials are outdated or invalid. Corrupt credential files are preserved as `.corrupt-<timestamp>` backups.
+
+The CLI keeps you signed in between commands. Avoid updating the same saved login from multiple CLI processes at once.
