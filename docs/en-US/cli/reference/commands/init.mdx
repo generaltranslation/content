@@ -16,39 +16,91 @@ npx gt init
 ## How it works [#how-it-works]
 
 1. Detects your framework. For a Next.js App Router or Mintlify project, it offers to connect the [Locadex](/docs/platform/locadex/quickstart) AI agent instead.
-2. For a React-based project, optionally installs `gt-react` or `gt-next` and configures the framework (experimental). Vite apps get an [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) bootstrap that runs before the existing app entry; other supported React apps use [`GTProvider`](/docs/react/reference/components/gt-provider).
-3. Prompts for any missing default and target locales and creates or updates `gt.config.json`. Existing locale and file settings are preserved. For local Vite storage, it also creates a [`loadTranslations`](/docs/react/reference/functions/load-translations) file and empty target-locale files.
+2. For a React-based project, optionally installs `gt-react` or `gt-next` and configures the framework (experimental). Next.js App Router apps get [`GTProvider`](/docs/react/reference/components/gt-provider) and `withGTConfig`. Vite apps get an [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) bootstrap that runs before the existing app entry. Other React apps only get the library installed.
+3. Resolves the default and target locales and creates or updates `gt.config.json`. `--locales` and `--file-formats` replace their configured lists; unrelated settings are kept. An invalid `gt.config.json` stops setup before any change. For local Vite storage, it also creates a [`loadTranslations`](/docs/react/reference/functions/load-translations) file and empty target-locale files.
 4. Installs `gt` as a dev dependency when the configured workflow needs a persistent CLI installation. Vite framework setup does not add `gt`; continue to run it with `npx gt`.
-5. Uses an explicit tooling key or saved login, starting login if needed, then optionally selects or creates a project and provisions a development runtime key in `.env.local`. Bundled-local Vite asks whether to enable live development translations (default no); declining skips login, project discovery, and key creation.
+5. Optionally selects or creates a project and provisions a development runtime key in `.env.local`. Setup signs in only for this step, before changing files, and uses an explicit tooling key or saved login when available. Bundled-local Vite asks whether to enable live development translations (default no); declining skips sign-in, project discovery, and key creation.
 
 *Note: The React setup step is experimental and may not work for every project. Review the changes it makes.*
 
 ### Project selection and runtime credentials
 
-A configured project ID is reused. Otherwise, the wizard lists [accessible projects](/docs/platform/openapi/reference/project/list-projects) to select or offers to create one. When creating a project, choose an Organization where you have permission to create projects. If none are available, create an Organization in the Dashboard or ask an administrator for access. New project names default to the app directory name, and creation uses your selected source locale.
+A configured project ID is reused. Otherwise, the wizard lists [accessible projects](/docs/platform/openapi/reference/project/list-projects) to select or offers to create one. When creating a project, choose an Organization where you have permission to create projects. If none are available, create an Organization in the Dashboard or ask an administrator for access. Interactive project names default to the app directory name; headless creation requires `--project-name`. Creation uses your selected source locale.
 
 Selecting an existing project does not require Organization project-creation access. Provisioning a key still requires key-write authorization and permission to delegate runtime generation. An invalid or insufficient explicit tooling key never falls back to login.
 
 Provisioning creates one key named `Development key (gt init)` with only `project:translations:generate`. It writes the project ID and development key without printing the secret or changing an existing `GT_API_KEY`. This runtime key does not authenticate later CLI management commands; use your login or a separately scoped tooling key. (See [credentials](/docs/cli/guides/configuring#credentials)).
 
-Existing framework runtime credentials can skip provisioning. Server setups with a project ID and `GT_API_KEY` also skip it; browser setups do not treat unprefixed `GT_API_KEY` as a browser runtime key.
+Existing framework runtime credentials for the same project can skip provisioning. Server-only setups with a project ID and `GT_API_KEY` also skip it; frameworks that translate in the browser do not treat unprefixed `GT_API_KEY` as a runtime key.
 
-The generated variables are `GT_PROJECT_ID` and `GT_DEV_API_KEY`, with these prefixes for browser frameworks:
+The generated variables are `GT_PROJECT_ID` and `GT_DEV_API_KEY`, with these prefixes for frameworks that translate in the browser:
 
-- Next.js Pages Router: `NEXT_PUBLIC_`
+- Next.js (App Router and Pages Router): `NEXT_PUBLIC_`
 - Vite: `VITE_`
 - Gatsby: `GATSBY_`
 - React: `REACT_APP_`
 - Redwood: `REDWOOD_ENV_`
 
-Next.js App Router and other setups use unprefixed variables. Never include API keys in deployed browser or mobile bundles.
+Other setups use unprefixed variables. Development keys are for local development only; for production credentials, see [Next.js credentials](/docs/react/nextjs/config#credentials). Never include API keys in deployed browser or mobile bundles.
 
 ## Flags [#flags]
 
+Flags answer the wizard's questions, so a run asks only what is left. The same configuration and credential flags work with [`gt configure`](/docs/cli/reference/commands/configure).
+
+### Setup mode
+
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
-| `--src <paths...>` | Glob patterns for the app's source code. | `string[]` | Yes | `src`, `app`, `pages`, `components` globs |
+| `--no-interactive` | Never prompt. Stops before changing files and lists any options still needed. Automatic when stdin or stdout is not a terminal. | `boolean` | Yes | `false` |
+| `--json` | Write sign-in, handoff, and result events to stdout as JSON lines, and all other output to stderr. Implies `--no-interactive`. | `boolean` | Yes | `false` |
+| `--defaults` | Accept the recommended value for every local choice that no flag or `gt.config.json` answers. Never creates projects or keys. | `boolean` | Yes | — |
+| `--no-defaults` | Do not offer the recommended defaults. | `boolean` | Yes | — |
 | `-c, --config <path>` | Path to the config file. | `string` | Yes | `gt.config.json` |
+
+### Configuration
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--src <paths...>` | Glob patterns for the app's source code. | `string[]` | Yes | [Framework-specific](/docs/cli/reference/config#src) |
+| `--default-locale <locale>` | Default locale, such as `en`. | `string` | Yes | `en` with `--defaults` |
+| `--locales <locales...>` | Target locales, such as `fr es`. Replaces the configured list. | `string[]` | Yes | — |
+| `--storage <storage>` | Where framework translations are stored: `local` or `cdn`. `gt-vue` supports only `local`. | `string` | Yes | `local` with `--defaults` |
+| `--translations-dir <path>` | Directory for local translation files. | `string` | Yes | Framework-specific with `--defaults` |
+| `--file-formats <formats...>` | Additional file formats to translate, or `none`. Replaces the configured selection. | `string[]` | Yes | `none` with `--defaults` in framework projects |
+| `--file-patterns <patterns...>` | `<format>=<glob>` patterns that include `[locale]`, such as `json=./locales/[locale]/*.json`. Selects the format. | `string[]` | Yes | `./**/[locale]/*.<format>` with `--defaults` |
+| `--package-manager <id>` | Package manager for installs when it cannot be detected. | `string` | Yes | Detected |
+
+### Project and development credentials
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--dev-credentials` | Save a project ID and a new development key to `.env.local`. Use `--no-dev-credentials` to skip. | `boolean` | Yes | — |
+| `--live-translations` | Local Vite storage: set up live development translations, which creates a development key. Use `--no-live-translations` to skip. | `boolean` | Yes | `false` with `--defaults` |
+| `--project-id <id>` | Existing project for the development credentials. | `string` | Yes | — |
+| `--create-project` | Create a new project for the development credentials. | `boolean` | Yes | `false` |
+| `--org-id <id>` | Organization that owns the new project. Needed only when you can access more than one. | `string` | Yes | — |
+| `--project-name <name>` | Name of the new project. | `string` | Yes | App directory name, when prompted |
+
+### Framework setup
+
+These flags apply to `gt init` only. In `gt-vue` projects, `gt init` accepts the [`gt configure`](/docs/cli/reference/commands/configure) flags and skips React setup.
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--locadex` | Mintlify and Next.js App Router: hand setup to the Locadex AI agent through GitHub. Use `--no-locadex` to set up locally. | `boolean` | Yes | `false` with `--defaults` |
+| `--react-setup` | React projects: install the library and, for Next.js App Router or Vite, add its setup (see [How it works](#how-it-works)). Use `--no-react-setup` to leave application source unchanged. | `boolean` | Yes | `true` with `--defaults` |
+| `--framework <framework>` | React framework for `--react-setup`. Overrides detection. | `string` | Yes | Detected, with `--defaults` |
+| `--format` | Next.js App Router: format files changed by setup with the detected formatter. Use `--no-format` to skip. | `boolean` | Yes | `true` with `--defaults` |
+
+## Headless runs [#headless]
+
+A noninteractive run resolves each answer from its flag, then `gt.config.json`, then the recommended value when `--defaults` is set. If an answer is still missing, it exits before changing files and lists the options to pass. Development credentials are never created by default: pass `--dev-credentials` with a project ID or `--create-project --project-name <name>`, or pass `--no-dev-credentials`. Existing runtime credentials for the project skip this step.
+
+Setup signs in only when it provisions credentials and has no tooling key or saved login. Without a terminal, sign-in uses a device code and waits for a person to approve it; it does not open a browser. With `--json`, the command writes one JSON object per line, identified by its `type` field:
+
+- `authorization_required` — `verificationUri`, `userCode`, and, when available, `verificationUriComplete`.
+- `handoff` — the Locadex GitHub `url`, with `reason: "locadex"`.
+- `result` — `command`, `outcome` (`success`, `needs_human_action`, or `failed`), `completedSteps`, and, when present, `url`, `actions` for manual follow-up, `missingOptions`, and `error`.
 
 ## Example [#example]
 
@@ -58,6 +110,9 @@ npx gt init
 
 # Running gt with no command does the same thing
 npx gt
+
+# Headless local setup: no new project or development key
+npx gt init --no-interactive --defaults --locales fr es --no-dev-credentials --json
 ```
 
 ## Other notes [#notes]
@@ -67,5 +122,5 @@ npx gt
 - Automatic setup is not available for Electron applications.
 - The API key and project ID are not required to use `gt-react` or `gt-next` — they are only needed to call the General Translation API.
 - If the experimental React setup does not work for your project, set it up manually using the [React](/docs/react/react-quickstart) docs.
-- Git must be installed. Keep `.env.local` untracked and Git-ignored, and use your repository's normal Git configuration. Init refuses unsafe file locations or Git overrides. A symlink must point to an existing regular file that meets the same safety requirements. Existing unrelated environment variables are preserved.
+- Git must be installed when provisioning development credentials. Keep `.env.local` untracked and Git-ignored, and use your repository's normal Git configuration. Init refuses unsafe file locations or Git overrides. A symlink must point to an existing regular file that meets the same safety requirements. Existing unrelated environment variables are preserved.
 - Run one setup command at a time. If `.env.local` cannot be updated, including because of unsupported multiline assignments, newly created projects or keys may remain. Earlier configuration and dependency changes are not undone.
