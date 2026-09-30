@@ -1,0 +1,103 @@
+---
+
+title: .resx
+description: Translate .NET resource files (.resx and .resw) with the General Translation CLI. API reference for the RESX file format.
+
+---
+
+The CLI translates string resources in .NET `.resx` files, and in `.resw` files, which use the same schema. Translations keep the resource names, comments, .NET placeholders, and every resource that holds no text. Support requires `gt` 2.23.1 or later.
+
+## Overview [#overview]
+
+| Topic | Description |
+| --- | --- |
+| [Configuration](#config) | Match source files and name translations the way .NET expects. |
+| [Translation behavior](#behavior) | Which resources are translated and what stays unchanged. |
+| [Placeholders](#placeholders) | Keep .NET composite format and named placeholders intact. |
+| [Untranslated resources](#untranslated) | Resources the CLI leaves alone. |
+| [Encoding](#encoding) | Decode and restore byte-order-marked text encodings. |
+| [Validation](#validation) | Skip empty files and reject documents that are not valid XML. |
+
+## Configuration [#config]
+
+Add a `resx` entry under `files`. A .NET project keeps its default-language resources in a file such as `Properties/Resources.resx` and each translation in a sibling named with the culture, such as `Properties/Resources.es.resx`. The source file has no locale in its name, so point `include` at it and use `transform` to name the translated output. Use `exclude` with the `[locales]` placeholder so translated siblings are not read as source files:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": {
+    "resx": {
+      "include": ["Properties/*.resx"],
+      "exclude": ["Properties/*.[locales].resx"],
+      "transform": "*.[locale].resx"
+    }
+  }
+}
+```
+
+With this config, the CLI reads `Properties/Resources.resx` and writes `Properties/Resources.es.resx` and `Properties/Resources.fr.resx`.
+
+UWP and WinUI projects keep `.resw` files in a directory per language, such as `Strings/en-US/Resources.resw`. Use the `[locale]` placeholder for that layout and drop the `transform`:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en-US",
+  "locales": ["es-ES", "fr-FR"],
+  "files": {
+    "resx": {
+      "include": ["Strings/[locale]/Resources.resw"]
+    }
+  }
+}
+```
+
+RESX supports only a `RESX` output format; it cannot be converted to another file format with `transformationFormat`. See the [configuration reference](/docs/cli/reference/config#files) for the shared file keys.
+
+## Translation behavior [#behavior]
+
+The CLI translates each `<data>` entry that holds a string. A translated file is a copy of the source with the string values replaced, so it keeps:
+
+- Resource names and the order of entries
+- The `<resheader>` entries and the schema block
+- Resources that hold no text, such as images, icons, and sizes
+- Comments and indentation
+
+A `<comment>` on an entry is passed to the translation engine as context, so use one to disambiguate a short or overloaded string. Microsoft localization instructions in a comment, such as `{Locked}` and `{Locked="Power Display"}`, are passed along as instructions to follow.
+
+A value that contains XML, such as a comment or inline tags, is translated as XML and must stay well-formed. When a name appears more than once, the CLI translates the first entry, which is the one .NET reads, and leaves the others as they are.
+
+Existing translations for unchanged entries can be reused unless you force retranslation.
+
+## Placeholders [#placeholders]
+
+Translations keep every .NET placeholder exactly as written, including its format and alignment:
+
+| Placeholder | Example |
+| --- | --- |
+| Composite format | `{0}`, `{0:N2}`, `{1,-10}` |
+| Named placeholder | `{count}`, `{Name:0.00}` |
+| Literal brace | `{{` and `}}` |
+
+A placeholder can move within the sentence to fit the target language's word order, but it must appear as many times as in the source. A translation that changes or drops a placeholder, or breaks the XML in a value that contains XML, is left out of the translated file, so .NET falls back to the source language for that entry. The next run tries it again.
+
+A single `&` before a letter marks a keyboard access key, as in `&File`. Translations keep one `&` before a suitable letter of the translated word.
+
+## Untranslated resources [#untranslated]
+
+The CLI leaves these resources in the translated file without sending them for translation:
+
+- Entries with a `mimetype`, which hold binary data such as images
+- Entries with a `type` other than `System.String`, such as `System.Drawing.Size`
+- Windows Forms designer entries, whose names start with `>>`
+- Entries whose value is empty
+
+## Encoding [#encoding]
+
+The CLI reads unmarked `.resx` files as UTF-8. When a file starts with a byte order mark, it supports UTF-8, UTF-16 little-endian or big-endian, and UTF-32 little-endian or big-endian. Visual Studio saves `.resx` files as UTF-8 with a byte order mark. Downloaded translations use the source file's encoding and byte order mark.
+
+An unmarked UTF-16 or UTF-32 file is treated as UTF-8. Add the appropriate byte order mark or save it as UTF-8 before translating.
+
+## Validation [#validation]
+
+The CLI skips an empty `.resx` file and reports it in the command summary. The API rejects a file that is not well-formed XML or whose top element is not `<root>`.
