@@ -7,7 +7,7 @@ description: Create a typed client for the General Translation API and call gene
 
 Import the TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The module combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for batching and translation-job polling.
 
-`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.5.0 and the equivalent standalone `@generaltranslation/api` 0.4.0 package.
+`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.5.2 and the equivalent standalone `@generaltranslation/api` 0.5.0 package.
 
 The generated helpers reflect the installed package version, which can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview). Use the public reference when checking which endpoints and file formats are live.
 
@@ -19,8 +19,10 @@ The generated helpers reflect the installed package version, which can differ fr
 | [`ApiClientConfig`](#client-config) | Configures the client transport and shared request headers. |
 | [`API_VERSION`](#api-version) | Current API contract version sent by default. |
 | [Endpoint helpers](#endpoint-helpers) | Typed functions for the public operations listed below. |
+| [`paginate`](#pagination) | Iterate every item of a list operation. |
 | [`awaitJobs`](#job-polling) and [`pollJobs`](#job-polling) | Poll translation jobs until they finish or time out. |
 | [`processBatches`](#batch-processing) and [`DEFAULT_BATCH_SIZE`](#batch-processing) | Process an input array in configurable batches. |
+| [`ApiError`](#api-error) | Error thrown for a failed HTTP response. |
 | [Generated types](#types-errors) | Describe endpoint data, responses, errors, and client contracts. |
 | [Public OpenAPI specification](#openapi-spec) | Current hosted API contract. |
 
@@ -152,7 +154,7 @@ Common generated options include:
 | `signal` | Cancel the request with a Fetch API signal. | `AbortSignal` | Yes | — |
 | `meta` | Values exposed to custom client integrations. | `Record<string, unknown>` | Yes | — |
 
-The installed 0.4.0 SDK provides generated helpers for these 24 public operations:
+The installed 0.5.0 SDK provides generated helpers for these 24 public operations:
 
 | Function | Operation |
 | --- | --- |
@@ -182,6 +184,8 @@ The installed 0.4.0 SDK provides generated helpers for these 24 public operation
 | `getOrphanedFiles` | Find orphaned files. |
 
 <Callout type="info">
+  **Changed in v0.5.0:** list responses return `items` instead of `projects` or `orgs`, matching the current API. Failed `throwOnError` calls throw [`ApiError`](#api-error) instead of the decoded response body.
+
   **Changed in v0.3.0:** `encodeBase64`, `decodeBase64`, `encodeFileContent`, and `decodeFileContent` are no longer exported. Encode file content before passing it to a generated upload helper.
 
   **Changed in v0.2.1:** [`createProject`](/docs/platform/openapi/reference/project/create-project) now requires `path.orgId` and calls `POST /v2/orgs/{orgId}/projects`. This release also added [`createProjectApiKey`](/docs/platform/openapi/reference/project/create-api-key) and removed `shouldGenerateProjectContext` and `getProjectContextGenerationStatus`.
@@ -195,21 +199,17 @@ Use the [public OpenAPI reference](/docs/platform/openapi/overview) for live end
 
 Use [`listOrgs`](/docs/platform/openapi/reference/project/list-orgs) to find the Organization associated with your API key. Both Organization and project keys work; no project-creation permission is required for this lookup.
 
-Project discovery returns one page of projects readable by your API key, not all results. Follow `nextCursor` to collect every project.
+Project discovery returns one page of projects readable by your API key. Use [`paginate`](#pagination) to iterate every project:
 
 ```ts title="list-projects.ts"
-import { listProjects } from 'generaltranslation/api';
+import { listProjects, paginate } from 'generaltranslation/api';
 
-let cursor: string | undefined;
-do {
-  const { data } = await listProjects({
-    client,
-    query: { cursor, limit: 100 },
-    throwOnError: true,
-  });
-  for (const project of data.projects) console.log(project.id, project.name);
-  cursor = data.nextCursor ?? undefined;
-} while (cursor);
+for await (const project of paginate(listProjects, {
+  client,
+  query: { limit: 100 },
+})) {
+  console.log(project.id, project.name);
+}
 ```
 
 Project creation requires an Organization key with `org:projects:create` and takes `path: { orgId }` and `body: { name, defaultLocale, cdnEnabled? }`.
@@ -217,6 +217,27 @@ Project creation requires an Organization key with `org:projects:create` and tak
 For [`createProjectApiKey`](/docs/platform/openapi/reference/project/create-api-key), select explicit least-privilege `permissions`. Omitting them requests all delegable project permissions held by the caller; you must hold every selected permission. Store the returned secret securely and never log it.
 
 These generated discovery and creation helpers are not methods on [`GT`](/docs/platform/core/reference/gt-class/constructor).
+
+## `paginate` [#pagination]
+
+```ts
+function paginate<
+  Options extends {
+    client?: Client;
+    query?: { cursor?: string; limit?: number };
+  },
+  Item,
+>(
+  list: (options: Options & { throwOnError: true }) => Promise<{
+    data: { items: Item[]; nextCursor: string | null };
+  }>,
+  options: Options
+): AsyncGenerator<Item>;
+```
+
+`paginate` yields every item of a list operation such as [`listProjects`](/docs/platform/openapi/reference/project/list-projects) or [`listOrgs`](/docs/platform/openapi/reference/project/list-orgs), passing `options` to each page request. It requests the next page only when iteration reaches it, so breaking out of the loop stops further requests. Pass a saved `nextCursor` as `query.cursor` to resume. A failed page throws like a `throwOnError` call.
+
+Pages are read independently, so items that change during iteration can be missed or repeated.
 
 ## Job polling [#job-polling]
 
@@ -347,11 +368,11 @@ For each public operation listed above, the package exports:
 - `<Operation>Responses` for the status-code map of documented successful responses.
 - `<Operation>Response` for the union of documented successful responses.
 
-With the default `throwOnError: false`, a generated operation returns either `data` or `error` plus the Fetch API `request`. An HTTP response includes `response`; a failure before a response is received leaves it undefined. With `throwOnError: true`, API, network, cancellation, and timeout failures throw.
+With the default `throwOnError: false`, a generated operation returns either `data` or `error` plus the Fetch API `request`. An HTTP response includes `response`; a failure before a response is received leaves it undefined. With `throwOnError: true`, an HTTP error response from a `createApiClient` client throws an [`ApiError`](#api-error). Network and cancellation failures throw their original error; the built-in timeout throws `Error('Request timed out after <timeoutMs>ms')`.
 
-### Core `ApiError`
+### `ApiError` [#api-error]
 
-Class HTTP failures use `ApiError` from `generaltranslation/errors`, with `name: 'ApiError'`, numeric `code`, and `message`. This differs from generated helpers' returned error fields. Network, configuration, cancellation, and timeout failures can reject the entire class call; they are not necessarily per-item translation failures.
+With a `createApiClient` client, failed HTTP responses from `throwOnError` calls, [`paginate`](#pagination), [`awaitJobs`](#job-polling), and [`GT`](/docs/platform/core/reference/gt-class/constructor) class methods throw `ApiError`, with `name: 'ApiError'`, the HTTP status as numeric `code`, and `message`. Import it from `generaltranslation/api` or `generaltranslation/errors`. Calls without `throwOnError` still return the decoded response body in `error`. Network, configuration, cancellation, and timeout failures can reject the entire class call; they are not necessarily per-item translation failures.
 
 ```ts
 import { ApiError } from 'generaltranslation/errors';
