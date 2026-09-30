@@ -1,19 +1,19 @@
 ---
 
-title: generaltranslation@9.5.0 / gt@2.22.0
+title: gt@2.23.0 / @generaltranslation/api@0.5.0
 headline: Sign in and set up projects from the CLI
-summary: Sign in with your account, set up a project, and create keys with explicit permissions from the CLI.
-date: 2026-09-24
+summary: Sign in, set up a project, and create keys with explicit permissions from the CLI, or run setup headless from scripts and agents.
+date: 2026-09-29
 authors: [cyan]
-tags: ['generaltranslation', '9.5.0', 'gt', '2.22.0', '@generaltranslation/api', '0.4.0', 'cli']
+tags: ['gt', '2.23.0', '@generaltranslation/api', '0.5.0', 'generaltranslation', '9.5.2', 'cli']
 
 ---
 
-`gt@2.22.0` brings account sign-in, project selection, and scoped key creation into the terminal. The accompanying `generaltranslation@9.5.0` and `@generaltranslation/api@0.4.0` releases add project discovery.
+`gt@2.23.0` brings account sign-in, project selection, scoped key creation, and scriptable setup into the terminal. The accompanying `@generaltranslation/api@0.5.0` and `generaltranslation@9.5.2` releases add project discovery with automatic pagination.
 
 ## Start with guided setup
 
-Run [`gt init`](/docs/cli/reference/commands/init) to configure your project and sign in if needed:
+Run [`gt init`](/docs/cli/reference/commands/init) to configure your project. It signs in only when it creates a project or key:
 
 ```bash
 npx gt init
@@ -23,11 +23,21 @@ Use [`gt login`](/docs/cli/reference/commands/login) to sign in without running 
 
 [`gt whoami`](/docs/cli/reference/commands/whoami) checks your signed-in identity, and [`gt logout`](/docs/cli/reference/commands/logout) removes the saved login. Use scoped API keys from your CI provider's secret store for unattended workflows.
 
+## Run setup from scripts and agents
+
+Every setup question has a flag. Without a terminal, or with `--no-interactive`, [`gt init`](/docs/cli/reference/commands/init#headless) lists any missing options before changing files, and `--json` reports sign-in, handoff, and result events:
+
+```bash
+npx gt init --no-interactive --json --defaults --locales fr es --no-dev-credentials
+```
+
+`--defaults` accepts the recommended local choices but never creates projects or keys.
+
 ## Choose a project and key permissions
 
 [`gt init`](/docs/cli/reference/commands/init) can select an accessible project or create one in an Organization where you have permission, then save its ID and a development runtime key in `.env.local`.
 
-The key grants only `project:translations:generate`: it is for local runtime translations, not CLI uploads or CI. Existing `GT_API_KEY` values stay unchanged.
+The key grants only `project:translations:generate`: it is for local runtime translations, not CLI uploads or CI. Existing `GT_API_KEY` values stay unchanged. Next.js App Router projects get `NEXT_PUBLIC_GT_PROJECT_ID` and `NEXT_PUBLIC_GT_DEV_API_KEY`, so client components also translate in development; keep both out of production builds (see [Next.js credentials](/docs/react/nextjs/config#credentials)).
 
 Use [`gt api-key create`](/docs/cli/reference/commands/api-key-create) when you want to create an additional project key with permissions you choose:
 
@@ -41,7 +51,17 @@ You must be allowed to create keys and grant each selected permission. The comma
 
 ## Use typed API calls and check job results
 
-Use [`generaltranslation/api`](/docs/platform/core/reference/api-client) for paginated discovery of projects accessible to your API key.
+Use [`paginate`](/docs/platform/core/reference/api-client#pagination) from [`generaltranslation/api`](/docs/platform/core/reference/api-client) to iterate every project accessible to your API key without handling cursors:
+
+```ts
+import { listProjects, paginate } from 'generaltranslation/api';
+
+for await (const project of paginate(listProjects, { client })) {
+  console.log(project.id, project.name);
+}
+```
+
+With a `createApiClient` client, HTTP failures in `throwOnError` calls now throw an [`ApiError`](/docs/platform/core/reference/api-client#api-error) with the HTTP status in `code`.
 
 The [API client's polling helpers](/docs/platform/core/reference/api-client#job-polling) let you wait for translation jobs and return `complete: false` on timeout. Completion does not mean every job succeeded. Check job results before downloading translations.
 
@@ -49,6 +69,9 @@ Diagnostic formatting is now available from the public [`generaltranslation/diag
 
 ## Upgrading
 
+- **Upgrade to list projects and Organizations.** The API now returns them in `items` instead of `projects` or `orgs` and rejects cursors issued before this change. Earlier CLI versions cannot list them in [`gt init`](/docs/cli/reference/commands/init). Direct HTTP and SDK callers should read `items` and restart pagination.
+- **Catch `ApiError` from throwing calls.** HTTP failures in `throwOnError` calls and [`awaitJobs`](/docs/platform/core/reference/api-client#job-polling) throw `ApiError` instead of the decoded response body. Calls without `throwOnError` still return the body in `error`.
+- **Move `src/gt.config.json`.** The CLI no longer reads it. Move it to the project root, or pass `--config src/gt.config.json`.
 - **Replace `gt auth` and `--key-type`.** Use login for account authentication, init for guided project setup, and explicit key creation for additional credentials. [`gt configure`](/docs/cli/reference/commands/configure) is not a side-effect-free substitute: depending on your setup, it can install dependencies and provision credentials.
 - **Keep runtime and tooling credentials separate.** `GT_DEV_API_KEY` remains a framework runtime setting. Signing in alone does not configure runtime SDK credentials. Explicit API keys still take precedence over the CLI's saved login; see [credential selection](/docs/cli/guides/configuring#credentials).
 - **Check retry assumptions.** Management POST requests do not automatically retry network or server failures, but 429 responses can still retry when retries are enabled. Core runtime translation does not automatically retry these failures or 429 responses. Avoid blindly repeating project or key creation: each successful request creates another resource.
