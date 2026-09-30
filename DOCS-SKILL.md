@@ -324,6 +324,7 @@ The publishing app generates machine-readable maps from the docs source:
 - `/docs/<section>/llms.txt` — exhaustive section indexes for Overview, Platform, CLI, React, Vue, Node, Python, and Integrations. Platform capabilities also have scoped indexes.
 - `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
 - `/AGENTS.md` — the default-language drop-in agent guide from the **For coding agents** page.
+- `/agent-prompt.md`: the default-language start prompt from the **For coding agents** page, the text the website's Setup for Agents button copies.
 - `sitemap.md` — a default-language Markdown index of every docs page and blog post.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
@@ -520,11 +521,12 @@ The **Overview → For coding agents** page (slug `for-coding-agents`) is the si
 Cover, in this order (drop any part that does not yet exist rather than inventing it):
 
 1. **Intro** — one or two sentences on why General Translation is built to be agent- and LLM-friendly (open-source libraries, predictable configuration, machine-readable docs).
-2. **Drop-in agent guide** — the full agent guide (what to use, setup, core usage, commands, do/don't, links) embedded in a **single copyable code block** so a developer can paste it straight into their project's `AGENTS.md`, `CLAUDE.md`, or tool instructions. Use a fenced block with a `title="AGENTS.md"` and a wider outer fence (four backticks) so the guide's own inner code fences render as literal text.
-3. **Point agents at the docs** — link the machine-readable entry points (`llms.txt` and `sitemap.xml`) and show how to add the docs as context in an agent.
-4. **MCP server and agent skills** — if a General Translation MCP server or agent skill exists, show how to install and use it; otherwise omit this part.
-5. **Editor-specific tips** — short, parallel bullets for the common agents (Cursor, Claude Code, Copilot), only where the guidance genuinely differs. Use tabs when the shape is identical (see Code blocks).
-6. **Best practices** — a short decision list of what to hand an agent versus what to verify by hand (for example, let it wire up `<T>` components, but always review generated translation context and locale configuration).
+2. **Start prompt**: the brief a coding agent follows from the docs entry point through `gt login`, project selection, a first translation, and verification, in a fenced block with `title="agent-prompt.md"` and a four-backtick outer fence. The website's Setup for Agents button copies this block at build time and `/agent-prompt.md` serves it raw, so it lives only here.
+3. **Drop-in agent guide** — the full agent guide (what to use, setup, core usage, commands, do/don't, links) embedded in a **single copyable code block** so a developer can paste it straight into their project's `AGENTS.md`, `CLAUDE.md`, or tool instructions. Use a fenced block with a `title="AGENTS.md"` and a wider outer fence (four backticks) so the guide's own inner code fences render as literal text.
+4. **Point agents at the docs** — link the machine-readable entry points (`llms.txt` and `sitemap.xml`) and show how to add the docs as context in an agent.
+5. **MCP server and agent skills** — if a General Translation MCP server or agent skill exists, show how to install and use it; otherwise omit this part.
+6. **Editor-specific tips** — short, parallel bullets for the common agents (Cursor, Claude Code, Copilot), only where the guidance genuinely differs. Use tabs when the shape is identical (see Code blocks).
+7. **Best practices** — a short decision list of what to hand an agent versus what to verify by hand (for example, let it wire up `<T>` components, but always review generated translation context and locale configuration).
 
 Only document capabilities that actually exist, and resolve anything uncertain against the codebase (see Source of truth and best judgement).
 
