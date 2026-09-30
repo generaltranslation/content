@@ -49,7 +49,7 @@ const HTTP_METHODS = new Set([
 ]);
 const GROUP_DESCRIPTIONS = {
   files: 'Upload, download, publish, and manage Project files.',
-  context: 'Generate and check translation context for a Project.',
+  context: 'Generate translation context for a Project.',
   translation: 'Queue translations, translate at runtime, and check job status.',
   project: 'Create and manage Projects, API keys, branches, tags, and assets.',
 };
