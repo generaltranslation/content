@@ -5,7 +5,7 @@ description: Poll queued translation jobs until they complete, fail, or time out
 
 ---
 
-Polls the status of translation jobs and resolves once every job reaches a terminal state (`completed`, `failed`, or `unknown`) or a timeout is reached. It is a convenience wrapper around [`checkJobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status) that handles polling for you.
+Waits until every job is `completed`, `failed`, or `unknown`, or the timeout is reached. Supports translation and setup jobs.
 
 ## Overview [#overview]
 
@@ -43,8 +43,9 @@ awaitJobs(
 
 - **Automatic polling.** Replaces manual polling loops — you do not need to call [`checkJobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status) in a `while` loop yourself.
 - **Terminal states.** Resolves when every job is `completed`, `failed`, or `unknown`. Jobs the API cannot find are treated as `'unknown'`.
-- **Best-effort timeout.** The timeout is a best-effort limit — the method finishes the current poll before resolving.
-- **Empty input.** If the enqueue result contains no jobs or the job ID array is empty, the method resolves immediately with `{ complete: true, jobs: [] }`.
+- **Deadline.** Each status request has a timeout of at most 60 seconds, shortened to the remaining overall time. At timeout, the last known statuses return with `complete: false`; they can still be queued, processing, or unknown. Custom fetch implementations must honor cancellation to stop promptly.
+- **Errors.** Status errors before the deadline reject. Errors after the deadline return incomplete results instead. Stopping polling does not cancel remote jobs.
+- **Empty input.** After validating credentials and project ID, empty input resolves with `{ complete: true, jobs: [] }`.
 
 ## Parameters [#parameters]
 
@@ -63,7 +64,7 @@ The result returned by [`enqueueFiles`](/docs/platform/core/reference/gt-class-m
 
 **Type** `AwaitJobsOptions` · **Optional**
 
-Polling configuration:
+Polling configuration from `generaltranslation/types`. Unlike the [API polling options](/docs/platform/core/reference/api-client#job-polling), class options do not expose `onPoll` or a caller signal:
 
 | Field | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
@@ -95,7 +96,7 @@ type JobResult = {
 | `complete` | `true` if no jobs are still in progress; `false` if the timeout was reached. | `boolean` |
 | `jobs` | Final status of each job. | `JobResult[]` |
 | `jobs[].jobId` | The job identifier. | `string` |
-| `jobs[].status` | Terminal status: `'completed'`, `'failed'`, or `'unknown'`. | [`JobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status#jobstatus) |
+| `jobs[].status` | Latest status; may still be `'queued'` or `'processing'` at timeout. | [`JobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status#jobstatus) |
 | `jobs[].error` | Error details if the job failed. | `{ message: string }` |
 
 ## Examples [#examples]
@@ -149,5 +150,5 @@ for (const job of result.jobs) {
 ## Notes [#notes]
 
 - Jobs that are not found by the API are treated as `'unknown'` status.
-- An empty enqueue result or job ID array resolves immediately with `{ complete: true, jobs: [] }`.
-- The timeout is a best-effort limit — the method finishes the current poll before resolving.
+- Empty input returns `{ complete: true, jobs: [] }` after authentication validation.
+- Timeout returns the last accepted statuses, not necessarily terminal statuses; late poll results are discarded.

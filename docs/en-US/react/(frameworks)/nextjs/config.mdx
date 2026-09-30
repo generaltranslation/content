@@ -44,11 +44,33 @@ Set your project ID and API keys as environment variables, never as plugin optio
 | Variable | Description |
 | --- | --- |
 | `GT_PROJECT_ID` (or `NEXT_PUBLIC_GT_PROJECT_ID`) | Your General Translation project ID. |
-| `GT_API_KEY` | Project API key (prefixed `gtx-api-`), used by the CLI and production builds. |
+| `GT_API_KEY` | Project API key (prefixed `gtx-api-`) for server runtime or explicit CLI authentication; optional when the CLI uses login. |
 | `GT_DEV_API_KEY` (or `NEXT_PUBLIC_GT_DEV_API_KEY`) | Project API key (prefixed `gtx-api-`) with runtime translation permission, for development hot reload. |
 
+CLI sessions do not provide runtime SDK credentials. (See [CLI authentication](/docs/cli/guides/configuring#credentials)).
+
+### Development
+
+Use the `NEXT_PUBLIC_` variants so both server and client components can translate during development. [`gt init`](/docs/cli/reference/commands/init) writes these names in `gt` 2.23.0 and later. Development hot reload does not need `GT_API_KEY`.
+
+```bash title=".env.local"
+NEXT_PUBLIC_GT_PROJECT_ID="your-project-id"
+NEXT_PUBLIC_GT_DEV_API_KEY="gtx-api-your-runtime-key"
+```
+
+### Production
+
+Set these in the deployed server's environment only:
+
+```bash
+GT_PROJECT_ID="your-project-id"
+GT_API_KEY="gtx-api-your-production-key"
+```
+
+The key needs **Runtime translation** for server-side [`tx`](/docs/react/nextjs/reference/functions/tx) and [`<Tx>`](/docs/react/nextjs/reference/components/tx). If your build runs [`gt translate`](/docs/cli/reference/commands/translate) with the same key, also grant **Files > Write** and **Translation queue > Enabled**. `GT_API_KEY` does not enable development hot reload in production, and [`<T>`](/docs/react/reference/components/t) and [`useGT`](/docs/react/reference/hooks/use-gt) only look up already-generated translations. Send browser requests that need runtime translation to your authenticated server endpoint instead of exposing the key.
+
 <Callout type="warn">
-  **Warning:** Never include any API key in deployed client bundles. Full-access project keys work for local development, but we recommend a separate key with only **Runtime translation** enabled to minimize risk. The build throws if `GT_DEV_API_KEY` or `NEXT_PUBLIC_GT_DEV_API_KEY` is set with `NODE_ENV=production`.
+  **Warning:** Never include any API key in deployed client bundles or prefix `GT_API_KEY` with `NEXT_PUBLIC_`. We recommend development keys with only **Runtime translation** enabled. Remove both `GT_DEV_API_KEY` and `NEXT_PUBLIC_GT_DEV_API_KEY` from production; the build throws if either is set with `NODE_ENV=production`.
 </Callout>
 
 ## Options [#options]
@@ -229,6 +251,10 @@ Settings for the compiler plugin that analyzes your source at build time. Fields
 | `compileTimeHash` | Pre-compute translation hashes at build time. | `boolean` | `true` |
 | `disableBuildChecks` | Disable build-time validation checks. | `boolean` | `false` |
 | `enableAutoJsxInjection` | Automatically wrap translatable JSX at build time. | `boolean` | `false` |
+
+<Callout type="info">
+  **Changed in v11.4.2:** The published `gt-next` package includes the WebAssembly plugin required by `type: 'swc'`. Upgrade to v11.4.2 or later before using the SWC compiler.
+</Callout>
 
 Install `@generaltranslation/compiler`, then set `enableAutoJsxInjection` here or under `files.gt.parsingFlags` in `gt.config.json`. Prefer `gt.config.json` to keep CLI extraction and compiler transforms in sync; see [Using automatic JSX injection](/docs/cli/guides/using-auto-jsx). In either case, `type: 'babel'` is required so `gt-next` loads the compiler:
 

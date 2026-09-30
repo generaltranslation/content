@@ -128,10 +128,14 @@ The response returns a result with job information.
 
 ## 3. Check file status [#status]
 
-Use [queryFileData](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to check whether the translated file is complete and ready for download.
+Wait with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs), then use [queryFileData](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to confirm the requested version is ready, even if no new jobs were needed.
 
 ```typescript title="src/index.ts"
 const { fileId, versionId, branchId } = uploadedFiles[0];
+const jobs = await gt.awaitJobs(enqueueResult, { timeoutSeconds: 300 });
+if (!jobs.complete || jobs.jobs.some((job) => job.status !== 'completed')) {
+  throw new Error('Translation jobs did not complete successfully');
+}
 
 const status = await gt.queryFileData({
   translatedFiles: [
@@ -143,6 +147,10 @@ const status = await gt.queryFileData({
     },
   ],
 });
+const translatedFile = status.translatedFiles?.[0];
+if (!translatedFile || translatedFile.completedAt === null) {
+  throw new Error('The requested translation is not ready to download');
+}
 ```
 
 If the file is still being translated, `completedAt` is `null`. When complete, it contains a timestamp:

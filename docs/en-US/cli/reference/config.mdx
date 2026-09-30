@@ -5,7 +5,7 @@ description: Configure the General Translation CLI with the gt.config.json file.
 
 ---
 
-The `gt.config.json` file configures what the CLI translates and where results are saved. Place it at the root of your project. Create it with [`gt init`](/docs/cli/reference/commands/init) or [`gt configure`](/docs/cli/reference/commands/configure), or write it by hand.
+The `gt.config.json` file configures what the CLI translates and where results are saved. Place it at the root of your project; since `gt` 2.23.0, the CLI does not read `src/gt.config.json` unless you pass `--config src/gt.config.json`. Create it with [`gt init`](/docs/cli/reference/commands/init) or [`gt configure`](/docs/cli/reference/commands/configure), or write it by hand.
 
 *Note: Add the [JSON Schema](https://assets.gtx.dev/config-schema.json) with a `$schema` key for editor validation and autocompletion. The published schema lags some valid file keys, including `pot`, `html`, `txt`, `twilioContentJson`, `lottie`, `dotStrings`, `dotStringsdict`, `androidStrings`, `xcstrings`, `srt`, and `resx`, and also omits `fonts` and `options.saveLocal`. Editors may flag unsupported schema fields until the schema is refreshed.*
 
@@ -26,13 +26,14 @@ The `gt.config.json` file configures what the CLI translates and where results a
 | [`dictionary`](#dictionary) | Path to a dictionary file. | `string` | Yes | — |
 | [`branchOptions`](#branch-options) | Branch-based translation tracking settings. | `object` | Yes | — |
 | [`customMapping`](#custom-mapping) | Locale aliases and property overrides. | `object` | Yes | — |
+| [`options.experimentalLocalizeStaticUrls`](#localize-static-urls) | Localize static URLs in translated Markdown and MDX files. | `boolean \| object` | Yes | `false` |
 | [`options.saveLocal`](#save-local) | Detect and submit local translation edits before enqueueing. | `boolean` | Yes | `false` |
 
 ## `projectId` [#project-id]
 
 **Type** `string` · **Optional** · **Default** `GT_PROJECT_ID`
 
-The project used for API and translation workflows. A `--project-id` flag overrides the environment value, but it must match `projectId` when the config includes one.
+The project used for API and translation workflows. Login does not select it: bind the project here or through the environment. A `--project-id` flag overrides the environment value. When the config includes `projectId`, disagreement with either the flag or the resolved environment ID fails validation; [`gt init`](/docs/cli/reference/commands/init) and [`gt configure`](/docs/cli/reference/commands/configure) instead replace it with `--project-id`. Environment resolution also recognizes supported framework prefixes, not only `GT_PROJECT_ID`. (See [authentication and environment loading](/docs/cli/guides/configuring#credentials)).
 
 ```json title="gt.config.json"
 {
@@ -302,6 +303,33 @@ When you use an alias, set `defaultLocale` and entries in `locales` to the alias
   }
 }
 ```
+
+## `options.experimentalLocalizeStaticUrls` [#localize-static-urls]
+
+**Type** `boolean | { skipUntranslatedPages?: boolean }` · **Optional** · **Default** `false`
+
+Localizes static URLs in translated Markdown and MDX files. Set it under the top-level `options` object, or pass the `--experimental-localize-static-urls` flag to [`gt translate`](/docs/cli/reference/commands/translate#experimental) for one run.
+
+- `true` adds the target locale to every matching static URL.
+- `{ "skipUntranslatedPages": true }` keeps a link on the source locale when its source page exists but no translated page exists. Links to generated pages without a source Markdown or MDX file, such as OpenAPI reference pages, are still localized.
+
+Use `skipUntranslatedPages` for sites such as Mintlify, where a missing localized page returns a 404.
+
+```json title="gt.config.json"
+{
+  "options": {
+    "experimentalLocalizeStaticUrls": {
+      "skipUntranslatedPages": true
+    }
+  }
+}
+```
+
+### Version history [#localize-static-urls-version-history]
+
+| Version | Changes |
+| --- | --- |
+| `2.21.5` | Added the `skipUntranslatedPages` object form. |
 
 ## `options.saveLocal` [#save-local]
 

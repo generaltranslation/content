@@ -8,6 +8,36 @@ const config: NextConfig = {
   async redirects() {
     return [
       {
+        source: '/docs/cli/reference/commands/auth',
+        destination: '/docs/cli/reference/commands/init',
+        permanent: true,
+      },
+      {
+        source: '/:locale/docs/cli/reference/commands/auth',
+        destination: '/docs/cli/reference/commands/init',
+        permanent: true,
+      },
+      {
+        source: '/docs/cli/reference/commands/auth.md',
+        destination: '/docs/cli/reference/commands/init.md',
+        permanent: true,
+      },
+      {
+        source: '/docs/cli/reference/commands/auth.mdx',
+        destination: '/docs/cli/reference/commands/init.mdx',
+        permanent: true,
+      },
+      {
+        source: '/:locale/docs/cli/reference/commands/auth.md',
+        destination: '/docs/cli/reference/commands/init.md',
+        permanent: true,
+      },
+      {
+        source: '/:locale/docs/cli/reference/commands/auth.mdx',
+        destination: '/docs/cli/reference/commands/init.mdx',
+        permanent: true,
+      },
+      {
         source: '/docs/cli/reference/formats/apple-strings-files',
         destination: '/docs/cli/reference/formats/dot-strings-files',
         permanent: true,
