@@ -17,37 +17,42 @@ npx gt download
 
 1. Reads `gt.config.json` to determine the file configuration.
 2. Reads staged version data when `stageTranslations` is enabled; otherwise collects and hashes files to determine what to download.
-3. Polls the General Translation API for completed translations.
+3. Queries the General Translation API once for translation readiness and downloads completed files. Failed download requests may be retried; unfinished translation jobs are not polled.
 4. Saves translation files to the output paths in your config.
 
 Files that are still processing are skipped. Re-run `gt download` to fetch them later.
 
 ## Flags [#flags]
 
-`download` accepts the full [`gt translate`](/docs/cli/reference/commands/translate#flags) flag set, minus the source-scanning flags (`--src`, `--dictionary`, `--tsconfig`/`--jsconfig`, `--inline`, `--ignore-errors`), which only apply when scanning source code. Every flag below is accepted; the ones that affect a download-only run are the API, config, timeout, download, and branch flags.
+`download` accepts the shared [`gt translate`](/docs/cli/reference/commands/translate#flags) flags, but not the source-scanning flags (`--src`, `--dictionary`, `--tsconfig`/`--jsconfig`, `--inline`, `--ignore-errors`). Set source paths in [`src`](/docs/cli/reference/config#src) when downloads need to collect inline content. Some shared flags are accepted without performing their translation-time action, as listed below.
 
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | `--api-key <key>` | Explicit tooling key override. | `string` | Yes | `GT_API_KEY`, otherwise login |
 | `--project-id <id>` | project ID. | `string` | Yes | `GT_PROJECT_ID` |
-| `--version-id <id>` | Version ID to download. | `string` | Yes | Content hash |
+| `--version-id <id>` | Accepted but ignored. Versions come from staged entries or collected file hashes. | `string` | Yes | — |
 | `-c, --config <path>` | Path to the config file. | `string` | Yes | `gt.config.json` |
 | `--default-locale <locale>` | Source locale for the project. | `string` | Yes | `en` |
 | `--locales <locales...>` | Extra target locales, appended to config locales. | `string[]` | Yes | — |
-| `--timeout <seconds>` | Wait timeout in seconds. | `number` | Yes | `900` |
-| `--dry-run` | Parse and validate without calling the API. | `boolean` | Yes | `false` |
-| `--force` | Invalidate cached translations and re-translate. | `boolean` | Yes | `false` |
+| `--timeout <seconds>` | Accepted but does not make a download-only run wait for translation jobs or set its request timeout. | `number` | Yes | `900` |
+| `--dry-run` | Accepted but does not prevent API calls or file writes. | `boolean` | Yes | `false` |
+| `--force` | Same download behavior as `--force-download`; does not re-translate. | `boolean` | Yes | `false` |
 | `--force-download` | Overwrite local files, bypassing `gt-lock.json` checks. | `boolean` | Yes | `false` |
 | `--save-local, --no-save-local` | Accepted by the shared flag parser, but does not save edits during a download-only run. | `boolean` | Yes | `false` |
-| `--publish` | Publish translations to the CDN. | `boolean` | Yes | `false` |
+| `--publish` | Accepted but does not publish during a download-only run. | `boolean` | Yes | `false` |
 | `--enable-branching` | Enable branch-based tracking. | `boolean` | Yes | — |
 | `--branch <branch>` | Branch name instead of auto-detecting. | `string` | Yes | — |
 | `--disable-branch-detection` | Use only the specified branch, without relationship detection. | `boolean` | Yes | `false` |
 | `--remote-name <name>` | Git remote used for branch detection. | `string` | Yes | `origin` |
-| `--tag [value]` | Tag the run; auto-resolves from git when no value is given. | `string` | Yes | — |
-| `-m, --message <message>` | Message attached to the translation tag. | `string` | Yes | — |
+| `--omit-config-ids` | Allow inline downloads to use collected hashes without requiring `_versionId` in the config. | `boolean` | Yes | — |
+| `--tag [value]` | Accepted but does not create a tag during a download-only run. | `string` | Yes | — |
+| `-m, --message <message>` | Accepted but has no effect without tag creation. | `string` | Yes | — |
 
 `download` also accepts the experimental flags listed under [`gt translate`](/docs/cli/reference/commands/translate#experimental) (for example `--experimental-clear-locale-dirs`, which clears locale directories before writing new translations).
+
+<Callout type="warn">
+  In `gt` 2.23.1, `download --dry-run` still runs the download workflow and can overwrite local files. Do not use it as a preview. For offline validation of inline content, use [`gt validate`](/docs/cli/reference/commands/validate).
+</Callout>
 
 ## Example [#example]
 
@@ -65,6 +70,6 @@ npx gt download
 ## Other notes [#notes]
 
 - When `stageTranslations` is enabled, `download` reads the staged version data; otherwise it collects and hashes files to determine what to download.
-- `download` polls the API until translations are ready or the `--timeout` is reached, so it can run in a later CI job than [`gt enqueue`](/docs/cli/reference/commands/enqueue).
+- `download` skips unfinished translations instead of waiting for them. Schedule it after translation completes, or rerun it later. Use [`gt translate`](/docs/cli/reference/commands/translate) with `stageTranslations: false` when you need one command to enqueue, wait, and download supported formats.
 - A staged file remains staged in `gt-lock.json` until every configured locale has been downloaded.
 - `_versionId` is required only when the download includes an inline GTJSON template and `omitConfigIds` is `false`. File-only projects, including Lottie-only projects, do not need it.

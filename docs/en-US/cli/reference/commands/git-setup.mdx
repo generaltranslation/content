@@ -1,0 +1,93 @@
+---
+
+title: gt git setup
+description: Configure Git merge drivers for generated translation files. API reference for the gt git setup command.
+
+---
+
+Run this command from an app directory inside a Git repository after creating `gt.config.json`. It configures local merge drivers for `gt-lock.json` and the translation files matched by `files.gt.output`. It does not call the General Translation API or require credentials.
+
+## Overview [#overview]
+
+```bash
+npx gt git setup [options]
+```
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`-c, --config <path>`](#config) | Path to the app's configuration. | `string` | Yes | Discovered `gt.config.json` |
+| [`--dry-run`](#dry-run) | Preview attribute and Git configuration changes without writing them. | `boolean` | Yes | `false` |
+| [`--omit-config-ids`](#omit-config-ids) | Persist `omitConfigIds: true` and remove generated config IDs. | `boolean` | Yes | Existing config or interactive choice |
+| [`--driver-command <command>`](#driver-command) | Command Git uses to run the installed CLI. | `string` | Yes | Local executable, otherwise `gt` |
+
+The [global options](/docs/cli/reference/global-options) also apply.
+
+## How it works [#how-it-works]
+
+1. Finds the Git repository root and appends missing rules to its `.gitattributes`. The rules cover the app's `gt-lock.json` and, when configured, `files.gt.output` with `[locale]` replaced by `*`.
+2. Registers the `gt-lock` and `gtjson` merge drivers in the repository's local Git configuration. Existing unrelated attributes and Git settings are preserved.
+3. Optionally persists [`omitConfigIds`](/docs/cli/reference/config#omit-config-ids) and removes `_versionId` and `_branchId` from `gt.config.json`. Interactive runs offer this choice; noninteractive runs need the flag or an existing `omitConfigIds: true` setting.
+
+The lockfile driver merges version 2 lockfiles by file and locale, using translation timestamps to resolve competing records. Unsupported lockfile formats fall back to a Git conflict. The GTJSON driver combines independent key changes and leaves a conflict when both branches change the same key differently.
+
+Commit `.gitattributes` so the rules reach other checkouts. Each collaborator and CI checkout that performs merges must also run this command: local Git configuration is not committed. Run it again if you move the app or change its translation output path; review old `.gitattributes` patterns, which are not removed automatically.
+
+## Flags [#flags]
+
+### Config
+
+**Flag** `-c, --config <path>` · **Type** `string` · **Optional** · **Default** discovered `gt.config.json`
+
+Selects the configuration used to find generated translation files. In a monorepo, run the command from the app directory so the lockfile rule and local executable point to that app.
+
+```bash
+npx gt git setup --config gt.config.json
+```
+
+### Dry run
+
+**Flag** `--dry-run` · **Type** `boolean` · **Optional** · **Default** `false`
+
+Prints proposed `.gitattributes` additions and local Git configuration commands. It does not write `.gitattributes`, Git settings, or `gt.config.json`, and does not prompt about omitting config IDs.
+
+```bash
+npx gt git setup --dry-run
+```
+
+### Omit config IDs
+
+**Flag** `--omit-config-ids` · **Type** `boolean` · **Optional** · **Default** existing config or interactive choice
+
+Sets `omitConfigIds: true` and removes `_versionId` and `_branchId` from `gt.config.json`. This reduces generated config changes during translation. With `--dry-run`, it only previews the change.
+
+```bash
+npx gt git setup --omit-config-ids
+```
+
+### Driver command
+
+**Flag** `--driver-command <command>` · **Type** `string` · **Optional** · **Default** app-local executable, otherwise `gt`
+
+By default, the command uses the absolute path to `node_modules/.bin/gt` in the current directory when it exists. Otherwise it uses `gt`, which must be on Git's `PATH`. Override this when your package manager provides a different invocation. Git runs merge drivers from the repository root, so the command must resolve there.
+
+```bash
+npx gt git setup --driver-command "pnpm exec gt"
+```
+
+## Example [#example]
+
+Preview the rules, then register them and persist the config setting:
+
+```bash
+npx gt git setup --dry-run --omit-config-ids
+npx gt git setup --omit-config-ids
+```
+
+For an app at the repository root with `files.gt.output` set to `public/i18n/[locale].json`, the added rules are:
+
+```text title=".gitattributes"
+gt-lock.json merge=gt-lock
+public/i18n/*.json merge=gtjson
+```
+
+Rerunning the command does not duplicate identical attribute rules. Resolve any remaining conflicts normally; the drivers do not replace review of merged translations.
