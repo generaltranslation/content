@@ -398,7 +398,7 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 
 - **The filetree is the source of truth for order.** Each folder's `meta.json` `pages` array is the canonical order. Set and change page order there; the sidebar navigation follows it.
 - Order Guides along the natural workflow, and order Reference from setup outward.
-- **Single-part technical sections (CLI, Vue, Node, Python) share one Reference spine:** Configuration → Commands (or API) → File formats, each a subsection with one page per command, function, format, or config area. Order commands from setup outward (`init`/`setup`/`configure`/`auth` → `translate` → the CI building blocks → `generate`/`validate`).
+- **Single-part technical sections (CLI, Vue, Node, Python) share one Reference spine:** Configuration → Commands (or API) → File formats, each a subsection with one page per command, function, format, or config area. Order commands from setup outward (`init`/`setup`/`configure`/`login` → `translate` → the CI building blocks → `generate`/`validate`).
 - *Examples:*
   - **Dashboard Guides:** generating context → reviewing and editing translations → adding annotations.
   - **CLI Guides:** configuring the CLI (`configuring-cli.md`) → generating translations → managing translations → tracking by branch → …
