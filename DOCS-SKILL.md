@@ -195,6 +195,22 @@ Do not use the **plural of "product"** in reference to the General Translation p
 
 Capitalize the Organization scope noun even inside hyphenated compounds (Organization-level, Organization-wide); project compounds stay lowercase (project-wide, project-scoped, project-specific), as does everything inside code, URLs, permission strings (`project:files:read`), headers (`x-gt-project-id`), and identifiers (`projectId`, `GT_PROJECT_ID`).
 
+### Plans and billing
+
+- **The plans are Starter and Enterprise.** Capitalize both as product terms. The **Team** plan is retired: never write "Team plan" or "Starter, Team, or Enterprise," and replace any remaining mention with the plan that gates the feature today. An Organization that has not added a payment method is a *free Organization* (lowercase "free") that draws from a rolling allowance; do not invent a "Free plan" tier.
+- **Phrase a plan gate by the plans that unlock the feature.** Write "requires a Starter or Enterprise plan" for features that adding a payment method unlocks (member invitations, Locadex, webhooks, annotations, project integrations, branching) and "requires an Enterprise plan" for Enterprise-only features (Audit Logs, SSO, model provider selection). Call an Organization billed at Enterprise scope an *Enterprise-managed Organization*.
+- **Use the Dashboard's billing breadcrumbs and permission names exactly.** Plans live under **Organization > Plans**, usage under **Organization > Usage**, and the credit balance, auto-reload, and invoices under **Organization > Settings > Billing** (**Enterprise > Billing** for Enterprise-managed Organizations). Name the billing permissions as the Dashboard does — **View billing**, **Update billing**, and **Manage Projects & plan** — instead of a loose "billing access."
+- **Billing units.** Write "platform credits" and "credit balance" in lowercase ($1 = 1M credits). Expand **Locadex Compute Units (LCUs)** on first use. Capitalize **Layout Processing** charges and the **Usage Limit** setting as the Usage and Billing pages do.
+- **Link rates instead of copying them.** Point to the pricing and usage-rates pages for current amounts (see Preserve semantics while simplifying); the partner credits table on the **Managing billing** guide is the one place that records credit amounts.
+
+### API keys
+
+- **Describe a key by its scope and permissions, never by a production or development type.** The two scopes are **project keys** (`gtx-api-` prefix, created under **Project > API Keys**) and **Organization keys** (`gtx-org-` prefix, created under **Organization > Developer > API Keys**). In the Dashboard both take **All** or **Custom** permissions; name resource grants as the Dashboard labels them (**Runtime translation**, **Files > Write**, **Translation queue > Enabled**, **Context > Write**) and add the permission string in inline code (`project:translations:generate`) where a developer needs it.
+- **Write "project API key," not "production API key."** When a workflow needs particular grants — the CLI's file pipeline, CI — state the permissions it requires rather than implying a key type.
+- **"Development key" names a role, not a type.** Use it only for a project key restricted to **Runtime translation** and used for local on-demand translation — the key `gt init` provisions and the value of `devApiKey` / `GT_DEV_API_KEY`. On first use, say it is a project key with runtime translation permission; the setting names do not indicate a separate key type.
+- **`gtx-dev-` is a legacy prefix.** Mention it only when documenting existing keys (they still authenticate as project keys, and the prefix no longer implies limited permissions); never present it as a key type a reader can create.
+- **Credential commands.** Point new-project setup to `gt init`, account sign-in for existing or manually configured projects to `gt login`, and additional keys with explicit permissions to `gt api-key create`. The `gt auth` command and its `--key-type` flag are retired, and the old page redirects to `gt init`: do not document, link, or show them.
+
 ### Product and technology names
 
 Use the official capitalization and spelling for third-party names: **Next.js**, **TypeScript**, **JavaScript**, **ESLint**, **React Native**, **Node.js**. Always write **Next.js**, never shorten the product name to "Next." For GT itself: **General Translation**, **Quickstart** (one word, not "Quick Start").
@@ -398,10 +414,10 @@ Guides and Reference pages follow a **logical order** — usually the sequence i
 
 - **The filetree is the source of truth for order.** Each folder's `meta.json` `pages` array is the canonical order. Set and change page order there; the sidebar navigation follows it.
 - Order Guides along the natural workflow, and order Reference from setup outward.
-- **Single-part technical sections (CLI, Vue, Node, Python) share one Reference spine:** Configuration → Commands (or API) → File formats, each a subsection with one page per command, function, format, or config area. Order commands from setup outward (`init`/`setup`/`configure`/`auth` → `translate` → the CI building blocks → `generate`/`validate`).
+- **Single-part technical sections (CLI, Vue, Node, Python) share one Reference spine:** Configuration → Commands (or API) → File formats, each a subsection with one page per command, function, format, or config area. Order commands from setup outward (`init`/`setup`/`configure` → the account and credential commands `login`/`logout`/`whoami`/`api-key create` → the project commands `project create`/`project status`/`api` → `translate` → the CI building blocks `stage`/`enqueue`/`download`/`upload`/`save-local` → `generate`/`validate`). The retired `auth` command has no page; its old route redirects to `init`.
 - *Examples:*
   - **Dashboard Guides:** generating context → reviewing and editing translations → adding annotations.
-  - **CLI Guides:** configuring the CLI (`configuring-cli.md`) → generating translations → managing translations → tracking by branch → …
+  - **CLI Guides:** configuring the CLI (`configuring.md`) → generating translations → managing translations → branching → …
   - **CLI Reference:** Configuration → Commands → File Formats.
 
 
@@ -464,7 +480,7 @@ description: How to use labels, notes, and comments to coordinate translation re
 - **Reference pages** add a second sentence naming what the page documents. Choose the lead by page type:
   - **API/library reference** (a function, method, type, command, or endpoint) uses `API reference for [function/method/type]` — including OpenAPI endpoints. *Example: "…into a target locale. API reference for translateField."*
     - **React and Vue components:** name the component tag directly (`API reference for the <T> component.`).
-  - **Non-API reference** (a settings page, config area, file format, or other non-API surface) uses `Reference for [topic]` — do not start the sentence with "API reference". *Example: "…across every locale. Reference for supported file formats."*
+  - **Non-API reference** (a settings page, config area, or other non-API surface) uses `Reference for [topic]` — do not start the sentence with "API reference". *Example: "…for apps, local development, and automation. Reference for API keys."* CLI file-format pages are the exception and end with `API reference for the <format> file format.` (see File-format reference page under Reference page).
 
 A few optional fields appear on specific page types:
 
@@ -630,7 +646,7 @@ Source language code, such as `en`. Falls back to `defaultLocale` when not provi
 Two reference-page shapes recur in single-part technical sections:
 
 - **Command reference page.** The frontmatter title is the invoked command (`gt translate`); the `description` ends with `API reference for the <command> command.` Follow the page shape above: an Overview with the usage block inline, then How it works, then a **Flags** section documenting **all** flags (not just the common ones), then an Example, then Other notes.
-- **File-format reference page.** Cover format-specific behavior — syntax preservation, output/transform quirks, per-format extras such as keyed metadata — and link to the configuration reference for shared file keys. Do not repeat full config-key documentation on each format page. **Name the page for the format(s) it documents, with a** `-files` **suffix** (the suffix keeps the slug explicit and machine-readable). Join a related pair with a hyphen: `ts-js-files`, `po-pot-files`, `mdx-md-files`, `gt-jsx-files`. A page covering a single format uses that format's name plus the suffix: `json-files`, `yaml-files`, `html-files`, `plain-text-files`.
+- **File-format reference page.** Cover format-specific behavior — syntax preservation, output/transform quirks, per-format extras such as keyed metadata — and link to the configuration reference for shared file keys. Do not repeat full config-key documentation on each format page. **Name the page for the format(s) it documents, with a** `-files` **suffix** (the suffix keeps the slug explicit and machine-readable). Base a single-format slug on the `gt.config.json` key the reader types, in kebab case, plus the suffix: `json-files`, `yaml-files`, `html-files`, `resx-files`, `xcstrings-files`, `dot-strings-files` (key `dotStrings`), `android-strings-files` (key `androidStrings`). Join a related pair with a hyphen: `ts-js-files`, `po-pot-files`, `mdx-md-files`, `gt-jsx-files`. The suffix belongs to the slug only: the frontmatter `title` is the format's short name as developers write it — `JSON`, `YAML`, `SRT`, `MDX and Markdown`, `PO / POT`, `.resx`, `.strings`, `.xcstrings` — never "SRT files" or "SRT file format," and a format known by its extension keeps the leading dot. The `description` is one sentence on what the CLI translates, followed by `API reference for the <format> file format.` (format pages document the `files` configuration contract, so they take the API-reference lead).
 
 The OpenAPI section (~40 endpoint pages) uses its own reference shape:
 
@@ -846,6 +862,8 @@ CI validates every `meta.json`: entries must resolve, every navigable child must
 - `.md` link suffix usage is consistent within the file.
 - Notes and tips use the established format for their page type and are consistent across sibling pages.
 - Product/term casing matches the canonical list (Dashboard, Locadex, Core, Google Drive, Context Group, Glossary, Custom Prompts, Organization, Enterprise, GitHub); "project" is lowercase in prose, capitalized only in UI labels and at sentence starts.
+- Plan gates name only **Starter** and **Enterprise** (no **Team** plan anywhere), free Organizations are not called a "Free plan," and billing breadcrumbs and permission names (**View billing**, **Update billing**, **Manage Projects & plan**) match the Dashboard.
+- API keys are described by scope (project or Organization) and permissions, never as production or development key types; "project API key" replaces "production API key"; `gtx-dev-` appears only when documenting existing keys; and the retired `gt auth` command is not documented, linked, or shown.
 - Reference descriptions end with a second sentence: `API reference for X.` for API/library pages, or `Reference for X.` for non-API reference pages (ending with a period).
 - No broken internal links (verify the target file exists).
 - Links to generaltranslation.com pages outside the docs are locale-less (no `/en-US/` segment) and use one canonical path per destination, matching the form used elsewhere for that page.
