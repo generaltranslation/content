@@ -63,6 +63,16 @@ Read the matching quickstart before making framework changes:
 
 For Mintlify, Sanity, Storyblok, or Google Drive, fetch https://generaltranslation.com/docs/integrations/llms.txt and follow that integration's quickstart. Do not apply a React setup wizard to a content integration. If I want GT to continuously maintain localization through GitHub, read https://generaltranslation.com/docs/platform/locadex/quickstart.mdx and walk me through connecting the repository and creating the appropriate automation. Do not enable auto-merge or change paid plans without my direction.
 
+## Run the CLI without questions
+
+The CLI is interactive. When `init` or `configure` is missing an answer, it does not fail: it asks the question in the terminal and waits, with no timeout. In an agent session that wait never ends. So in this session:
+
+- Always pass `--no-interactive`. With it, a missing answer is a hard error that lists the flags still needed and changes no file.
+- Pass a flag for every question before you run the command. `--defaults` accepts the recommended local choices in one flag; the answers with no default are `--default-locale`, `--locales`, `--locadex` or `--no-locadex`, `--react-setup` or `--no-react-setup`, `--file-formats` (`none` when there are no resource files to translate), and `--dev-credentials` or `--no-dev-credentials`.
+- Add `--json` so the result comes back as events you can read instead of a rendered screen.
+- If a command prints a question and stops, you are inside an interactive prompt. End the process and rerun it with `--no-interactive` and the missing flag. Never type an answer into it, and never run a command whose questions you have not answered with flags.
+- `gt login` is the one step that needs a person: it opens a browser and waits for the sign-in to finish. If no browser can open from this session, run it with `--no-browser`, give me the URL it prints, and wait for me to confirm. `translate`, `upload`, `api`, `whoami`, `project create` and `api-key create` ask nothing when their flags are complete; a missing required flag is an error.
+
 ## Sign in with `gt login`
 
 Use account login for local CLI authentication. Do not begin by asking me to find and paste an API key.
@@ -97,15 +107,18 @@ Show me the verification URL and code returned by that command; wait for success
 
 Reuse an existing configured project if it is the intended one. Check for conflicting project IDs in configuration and environment variables without printing secret values. Do not overwrite existing credentials or create another key unnecessarily.
 
-For a supported fresh app, run the interactive setup wizard from the app directory after login:
+For a supported fresh app, run the setup wizard from the app directory after login, with every question answered by a flag. For a Next.js App Router app set up locally, with translations stored in the repository and an existing project reused:
 
 ```bash
-npx gt@latest init
+npx gt@latest init --no-interactive --json --defaults \
+  --default-locale <source-locale> --locales <target-locales> \
+  --no-locadex --react-setup --file-formats none \
+  --no-dev-credentials --project-id <project-id>
 ```
 
-The login-enabled wizard can configure the app, select or create a project, and save a development runtime key and project ID to `.env.local`. Review its changes against the framework quickstart: automatic framework setup is experimental. If it offers Locadex, choose that only if we agreed to use hosted automation. Before a production build, move the development key (`NEXT_PUBLIC_GT_DEV_API_KEY` or `GT_DEV_API_KEY`) from `.env.local` to `.env.development.local`: `next dev` loads that file and `next build` does not, and a production build refuses to run with a development key present. A production build that ships local translation files needs no key. When reusing an existing key, pass `--no-dev-credentials --project-id <id>`: the wizard then writes `projectId` to `gt.config.json` and no env file, so add `NEXT_PUBLIC_GT_PROJECT_ID` yourself if development translation is wanted.
+Verified against gt 2.23.1 on a fresh create-next-app: this run asks nothing, installs gt-next, wraps the layout in GTProvider, adds withGTConfig to next.config.ts, creates loadTranslations.js and gt.config.json, and ends with `{"type":"result","command":"init","outcome":"success"}`. `--defaults` covers local storage and the translations directory; pass `--storage` and `--translations-dir` only for other values. `--dev-credentials --project-id <id>` saves a new development key and the project ID to `.env.local` instead; `--create-project --org-id <id> --project-name <name>` creates the project first. `--no-react-setup` is for an app that already has the GT library; on an app without one it fails with "No GT runtime is installed, so select at least one file format to translate", which is right, since there would be nothing to translate. Review the wizard's changes against the framework quickstart: automatic framework setup is experimental. Pass `--locadex` only if we agreed to use hosted automation. Before a production build, move the development key (`NEXT_PUBLIC_GT_DEV_API_KEY` or `GT_DEV_API_KEY`) from `.env.local` to `.env.development.local`: `next dev` loads that file and `next build` does not, and a production build refuses to run with a development key present. A production build that ships local translation files needs no key. When reusing an existing key, pass `--no-dev-credentials --project-id <id>`: the wizard then writes `projectId` to `gt.config.json` and no env file, so add `NEXT_PUBLIC_GT_PROJECT_ID` yourself if development translation is wanted.
 
-Without an interactive terminal, run `npx gt@latest init --help` and pass a flag for every question; a bare run lists the first missing flags (it does not mention storage) and changes nothing, so also pass `--storage local --translations-dir <dir>`. If the app already has framework setup, configure it directly from the docs. Use the authenticated CLI to discover resources:
+If the app already has framework setup, configure it directly from the docs. Use the authenticated CLI to discover resources:
 
 ```bash
 npx gt@latest api /v2/projects
@@ -182,10 +195,10 @@ All of these are free and open-source. The libraries work with or without a Gene
 
 ## Setup
 
-For a new setup, run from the app directory. Without a terminal, pass a flag for each answer; the command lists any missing options before changing files:
+For a new setup, run from the app directory with `--no-interactive` and a flag for every question. Without `--no-interactive`, a missing answer opens a question in the terminal and the command waits for it; with it, a missing answer is an error that lists the flags still needed and changes no file:
 
 ```bash
-npx gt init --no-interactive --json --locales fr es --no-dev-credentials
+npx gt init --no-interactive --json --defaults --default-locale en --locales fr es --no-locadex --react-setup --file-formats none --no-dev-credentials
 ```
 
 The wizard detects the framework, creates or updates `gt.config.json`, and can select/create a project and provision a generate-only development runtime key. Creating a project or key without a tooling key or saved login signs in first, which a person must approve. Framework rewrites are experimental and need review. Review [init flags and side effects](/docs/cli/reference/commands/init) before running it.
