@@ -50,6 +50,8 @@ const HTTP_METHODS = new Set([
 const GROUP_DESCRIPTIONS = {
   files: 'Upload, download, publish, and manage Project files.',
   context: 'Generate translation context for a Project.',
+  'context-management':
+    'Manage context groups, glossary terms, custom prompts, and context imports and exports.',
   translation: 'Queue translations, translate at runtime, and check job status.',
   project: 'Create and manage Projects, API keys, branches, tags, and assets.',
 };
