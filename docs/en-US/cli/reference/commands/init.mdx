@@ -16,10 +16,10 @@ npx gt init
 ## How it works [#how-it-works]
 
 1. Detects your framework. For a Next.js App Router or Mintlify project, it offers to connect the [Locadex](/docs/platform/locadex/quickstart) AI agent instead.
-2. For a React-based project, optionally installs `gt-react` or `gt-next` and configures the framework (experimental). Next.js App Router apps get [`GTProvider`](/docs/react/reference/components/gt-provider) and `withGTConfig`. Vite apps get an [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) bootstrap that runs before the existing app entry. Other React apps only get the library installed.
-3. Resolves the default and target locales and creates or updates `gt.config.json`. `--locales` replaces the configured locale list and `--file-formats` replaces the formats setup offers; other formats and unrelated settings are kept. An invalid `gt.config.json` stops setup before any change. For local Vite storage, it also creates a [`loadTranslations`](/docs/react/reference/functions/load-translations) file and empty target-locale files.
+2. For a React-based project, optionally installs the matching runtime and configures the framework (experimental). Next.js App Router apps get [`GTProvider`](/docs/react/reference/components/gt-provider) and `withGTConfig`. Vite apps get an [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) bootstrap that runs before the existing app entry. TanStack Start apps get `gt-tanstack-start`, `src/loadTranslations.ts`, [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) in `src/start.ts`, [`initializeGT`](/docs/react/tanstack-start/setup#initialize) in `src/router.tsx`, and [`GTProvider`](/docs/react/reference/components/gt-provider) in the root route. Other React apps only get the library installed.
+3. Resolves the default and target locales and creates or updates `gt.config.json`. `--locales` replaces the configured locale list and `--file-formats` replaces the formats setup offers; other formats and unrelated settings are kept. An invalid `gt.config.json` stops setup before any change. For local Vite or TanStack Start storage, it also creates a [`loadTranslations`](/docs/react/reference/functions/load-translations) file and empty target-locale files.
 4. Installs `gt` as a dev dependency when the configured workflow needs a persistent CLI installation. Vite framework setup does not add `gt`; continue to run it with `npx gt`.
-5. Optionally selects or creates a project and provisions a development runtime key in `.env.local`. Setup signs in only for this step, before changing files, and uses an explicit tooling key or saved login when available. Bundled-local Vite asks whether to enable live development translations (default no); declining skips sign-in, project discovery, and key creation.
+5. Optionally selects or creates a project and provisions a development runtime key in `.env.local`. Setup signs in only for this step, before changing files, and uses an explicit tooling key or saved login when available. Local Vite and TanStack Start setups ask whether to enable live development translations (default no); declining skips sign-in, project discovery, and key creation.
 
 *Note: The React setup step is experimental and may not work for every project. Review the changes it makes.*
 
@@ -36,7 +36,7 @@ Existing framework runtime credentials for the same project can skip provisionin
 The generated variables are `GT_PROJECT_ID` and `GT_DEV_API_KEY`, with these prefixes for frameworks that translate in the browser:
 
 - Next.js (App Router and Pages Router): `NEXT_PUBLIC_`
-- Vite: `VITE_`
+- Vite and TanStack Start: `VITE_`
 - Gatsby: `GATSBY_`
 - React: `REACT_APP_`
 - Redwood: `REDWOOD_ENV_`
@@ -68,14 +68,14 @@ Flags answer the wizard's questions, so a run asks only what is left. The same c
 | `--translations-dir <path>` | Directory for local translation files. | `string` | Yes | Framework-specific with `--defaults` |
 | `--file-formats <formats...>` | `json`, `md`, `mdx`, `ts`, `js`, `yaml`, or `none`. Replaces the configured selection among these; other configured formats are kept with a warning. | `string[]` | Yes | `none` with `--defaults` in framework projects |
 | `--file-patterns <patterns...>` | `<format>=<glob>` patterns that include `[locale]`, such as `json=./locales/[locale]/*.json`. Selects the format. | `string[]` | Yes | `./**/[locale]/*.<format>` with `--defaults` |
-| `--package-manager <id>` | Package manager for installs when it cannot be detected. | `string` | Yes | Detected |
+| `--package-manager <id>` | Package manager for installs: `npm`, `yarn_v1`, `yarn_v2`, `pnpm`, `bun`, or `deno`. Detection uses the nearest `packageManager` or `devEngines` field, lockfile, or recognized workspace indicator up to the Git root. | `string` | Yes | Detected |
 
 ### Project and development credentials
 
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | `--dev-credentials` | Save a project ID and a new development key to `.env.local`. Use `--no-dev-credentials` to skip. | `boolean` | Yes | — |
-| `--live-translations` | Local Vite storage: set up live development translations, which creates a development key. Use `--no-live-translations` to skip. | `boolean` | Yes | `false` with `--defaults` |
+| `--live-translations` | Local Vite or TanStack Start storage: set up live development translations, which creates a development key. Use `--no-live-translations` to skip. | `boolean` | Yes | `false` with `--defaults` |
 | `--project-id <id>` | Existing project for the development credentials. | `string` | Yes | — |
 | `--create-project` | Create a new project for the development credentials. | `boolean` | Yes | `false` |
 | `--org-id <id>` | Organization that owns the new project. Needed only when you can access more than one. | `string` | Yes | — |
@@ -88,19 +88,21 @@ These flags apply to `gt init` only. In `gt-vue` projects, `gt init` accepts the
 | Parameter | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | `--locadex` | Mintlify and Next.js App Router: hand setup to the Locadex AI agent through GitHub. Use `--no-locadex` to set up locally. | `boolean` | Yes | `false` with `--defaults` |
-| `--react-setup` | React projects: install the library and, for Next.js App Router or Vite, add its setup (see [How it works](#how-it-works)). Use `--no-react-setup` to leave application source unchanged. | `boolean` | Yes | `true` with `--defaults` |
+| `--react-setup` | React projects: install the library and, for Next.js App Router, Vite, or TanStack Start, add its setup (see [How it works](#how-it-works)). Use `--no-react-setup` to leave application source unchanged. | `boolean` | Yes | `true` with `--defaults` |
 | `--framework <framework>` | React framework for `--react-setup`. Overrides detection. | `string` | Yes | Detected, with `--defaults` |
 | `--format` | Next.js App Router: format files changed by setup with the detected formatter. Use `--no-format` to skip. | `boolean` | Yes | `true` with `--defaults` |
 
 ## Headless runs [#headless]
 
-A noninteractive run resolves each answer from its flag, then `gt.config.json`, then the recommended value when `--defaults` is set. If an answer is still missing, it exits before changing files and lists the options to pass. Development credentials are never created by default: pass `--dev-credentials` with a project ID or `--create-project --project-name <name>`, or pass `--no-dev-credentials`. Existing runtime credentials for the project skip this step.
+A noninteractive run resolves each answer from its flag, then `gt.config.json`, then the recommended value when `--defaults` is set. If an answer is still missing, it exits before changing files and lists the options to pass. Development credentials are never created by default. For local Vite and TanStack Start storage, pass `--live-translations` with a project ID or `--create-project --project-name <name>`, or pass `--no-live-translations`. For other setups, use `--dev-credentials` or `--no-dev-credentials`. Do not combine the `--[no-]live-translations` and `--[no-]dev-credentials` flag families; the CLI rejects every pair before changing files. Existing runtime credentials for the project skip this step.
 
 Setup signs in only when it provisions credentials and has no tooling key or saved login. Without a terminal, sign-in uses a device code and waits for a person to approve it; it does not open a browser. With `--json`, the command writes one JSON object per line, identified by its `type` field:
 
 - `authorization_required` — `verificationUri`, `userCode`, and, when available, `verificationUriComplete`.
 - `handoff` — the Locadex GitHub `url`, with `reason: "locadex"`.
 - `result` — `command`, `outcome` (`success`, `needs_human_action`, or `failed`), `completedSteps`, and, when present, `url`, `actions` for manual follow-up, `missingOptions`, and `error`.
+
+`completedSteps` leaves unchanged `gt.config.json` and generated translation-loader files out of the list. When either file changes, the step identifies it as created or updated.
 
 ## Example [#example]
 

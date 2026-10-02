@@ -1,27 +1,86 @@
 ---
 
 title: gt generate
-description: The gt generate command was removed from the CLI; use gt translate instead. Reference for the removed gt generate command.
+description: Generate source templates for manual translation. API reference for the gt generate command.
 
 ---
 
-`gt generate` is not a command in the current `gt` CLI. It wrote source-language template files for projects that handled translation outside the General Translation API. As of `gt` 2.23.1 the command is not registered: `npx gt generate` prints the top-level help and exits with status 0, so a script or agent that probes for it sees a success exit code and no files are written.
+Generates local template files for your default and target locales. Use it when you handle translations yourself rather than through the General Translation API.
 
-## Replacement [#replacement]
+*Note: Available when the CLI detects `gt-next`, `gt-react`, `gt-react-native`, `gt-tanstack-start`, `gt-node`, `gt-vue`, `gt-flask`, or `gt-fastapi`. It is not registered for projects without one of these libraries. If you use the General Translation API, use [`gt translate`](/docs/cli/reference/commands/translate) instead.*
 
-Use [`gt translate`](/docs/cli/reference/commands/translate) to create translation files. It scans the same sources the removed command did, translates them through the API, and writes one file per locale to the `files.gt.output` path in `gt.config.json`. It requires a project ID and a [saved login or tooling key](/docs/cli/guides/configuring#credentials).
+## Overview [#overview]
+
+Configure the project first, then generate the templates:
 
 ```bash
-npx gt translate
+npx gt configure
+npx gt generate
 ```
 
-To check which content the CLI would translate without calling the API, pass `--dry-run`:
+## How it works [#how-it-works]
+
+1. Reads `gt.config.json` to determine the default and target locales, source paths, dictionary, and `files.gt.output` path.
+2. Uses the detected library's parser to scan inline content and the configured dictionary, the same way [`gt translate`](/docs/cli/reference/commands/translate) collects content.
+3. Replaces the default-locale template with the current source entries.
+4. Merges those entries into each target-locale file. Existing target values are preserved, new entries use the source text, and stale entries are removed.
+
+The command does not call the General Translation API. If `files.gt.output` is not configured, it scans the project but exits without writing a template.
+
+## Flags [#flags]
+
+### Template generation flags
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `-c, --config <path>` | Path to `gt.config.json`. | `string` | Yes | Detected `gt.config.json` |
+| `--default-language, --default-locale <locale>` | Default locale used for the source template. | `string` | Yes | Configured default locale |
+| `--new, --locales <locales...>` | Target locales whose template files are merged. | `string[]` | Yes | Configured locales |
+| `--src <paths...>` | Glob patterns for source files. | `string[]` | Yes | `src`, `app`, `pages`, and `components` globs |
+| `--dictionary <path>` | Path to the dictionary file. | `string` | Yes | — |
+| `--tsconfig, --jsconfig <path>` | Path to a TypeScript or JavaScript config file used to resolve source imports. | `string` | Yes | Detected config, or `./tsconfig.json` |
+| `--inline` | Include inline content supported by the detected library. | `boolean` | Yes | `true` |
+| `--ignore-errors` | Ignore errors found while scanning inline content. | `boolean` | Yes | `false` |
+
+### Accepted compatibility flags
+
+The command shares its parser with [`gt translate`](/docs/cli/reference/commands/translate), so its help output accepts the flags below. They do not affect local template generation. In particular, `--dry-run` does not suppress file writes.
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `--api-key <key>` | Accepted but unused. | `string` | Yes | — |
+| `--project-id <id>` | Accepted but unused. | `string` | Yes | — |
+| `--version-id <id>` | Accepted but unused. | `string` | Yes | — |
+| `--dry-run` | Accepted but does not prevent template writes. | `boolean` | Yes | `false` |
+| `--timeout <seconds>` | Accepted but unused. | `number` | Yes | `900` |
+| `--save-local`, `--no-save-local` | Accepted but unused. | `boolean` | Yes | Configured value or `false` |
+| `--publish` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--experimental-localize-static-urls` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--experimental-hide-default-locale` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--experimental-flatten-json-files` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--experimental-localize-static-imports` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--experimental-localize-relative-assets` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--force` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--force-download` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--omit-config-ids` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--experimental-clear-locale-dirs` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--branch <branch>` | Accepted but unused. | `string` | Yes | — |
+| `--disable-branch-detection` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--enable-branching` | Accepted but unused. | `boolean` | Yes | `false` |
+| `--remote-name <name>` | Accepted but unused. | `string` | Yes | `origin` |
+| `--tag [value]` | Accepted but unused. | `string \| boolean` | Yes | — |
+| `-m, --message <message>` | Accepted but unused. | `string` | Yes | — |
+
+## Example [#example]
 
 ```bash
-npx gt translate --dry-run
+# Generate templates for the configured locales
+npx gt generate
+
+# Generate from a custom source locale, ignoring scan errors
+npx gt generate --default-locale en-US --ignore-errors
 ```
 
 ## Other notes [#notes]
 
-- **Running an app before its files exist:** create an empty JSON object (`{}`) at each configured output path, for example `public/_gt/es.json`. The library renders source content for any entry without a translation.
-- **Bundling the files:** to ship the generated files with your app instead of loading them from the CDN, follow [Storing translations locally](/docs/react/guides/storing-translations).
+After generating the template files, translate the target values and serve them with [local translations](/docs/react/guides/storing-translations). Re-run `generate` whenever the source content changes; review the target files because entries removed from the source are removed there too.
