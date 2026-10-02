@@ -1,0 +1,67 @@
+---
+
+title: gt git setup
+description: Configure Git merge drivers for generated translation files. API reference for the gt git setup command.
+
+---
+
+Use `gt git setup` to merge `gt-lock.json` and generated GTJSON files by their structured content instead of as plain text.
+
+## Overview [#overview]
+
+```bash
+npx gt git setup [options]
+```
+
+Run the command from a Git worktree that contains a `gt.config.json` file.
+
+## How it works [#how-it-works]
+
+1. Finds the root of the current Git worktree.
+2. Adds merge-driver entries for `gt-lock.json` and the configured `files.gt.output` pattern to the root `.gitattributes` file.
+3. Registers both merge drivers in the repository's local Git configuration.
+4. Optionally sets [`omitConfigIds: true`](/docs/cli/reference/config#omit-config-ids) and removes generated config IDs.
+
+The command preserves existing `.gitattributes` content and appends only missing entries, so you can run it again after changing your GTJSON output path.
+
+## Flags [#flags]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `-c, --config <path>` | Path to `gt.config.json`. | `string` | Yes | Auto-resolved |
+| `--dry-run` | Print the planned file and Git configuration changes without writing them. | `boolean` | Yes | `false` |
+| `--omit-config-ids` | Set `omitConfigIds: true` and remove `_versionId` and `_branchId`. | `boolean` | Yes | `false` |
+| `--driver-command <command>` | Command Git uses to call the installed CLI. | `string` | Yes | Local `gt` binary, then `gt` on `PATH` |
+
+## Example [#example]
+
+Preview the generated attributes and local Git configuration:
+
+```bash
+npx gt git setup --dry-run
+```
+
+Apply the configuration and keep generated IDs out of `gt.config.json`:
+
+```bash
+npx gt git setup --omit-config-ids
+```
+
+In a pnpm project where the CLI is not installed locally, specify how Git should call it:
+
+```bash
+npx gt git setup --driver-command "pnpm exec gt"
+```
+
+## Other notes [#notes]
+
+- **Interactive configuration:** when `omitConfigIds` is not already enabled, an interactive run asks whether to enable it and defaults to yes. Non-interactive and dry runs do not prompt; pass `--omit-config-ids` to opt in.
+- **GTJSON conflicts:** changes to separate top-level keys merge automatically. If both branches change the same key differently, Git reports a normal merge conflict.
+- **Lockfile conflicts:** the lockfile driver requires `gt-lock.json` version 2. Run [`gt translate`](/docs/cli/reference/commands/translate) or [`gt stage`](/docs/cli/reference/commands/stage) to regenerate an older lockfile before merging.
+- **Scope:** the command writes merge-driver settings with `git config --local`, so each clone must run setup separately.
+
+### Version history
+
+| Version | Changes |
+| --- | --- |
+| `2.14.53` | Added `gt git setup`, structured merge drivers, and config ID omission. |
