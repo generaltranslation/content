@@ -87,6 +87,7 @@ const GENERATED_DOC_ROUTES = new Set([
 ]);
 const GENERATED_ROOT_ROUTES = new Set([
   '/AGENTS.md',
+  '/agent-prompt.md',
   '/llms.txt',
   '/llms-index.txt',
   '/llms-full.txt',

@@ -373,6 +373,10 @@ description: A test
     'Allows the drop-in agent guide'
   );
   assert(
+    isGeneratedMachineRoute('/agent-prompt.md'),
+    'Allows the start prompt'
+  );
+  assert(
     isGeneratedMachineRoute('/openapi.yaml'),
     'Allows the canonical OpenAPI specification'
   );
