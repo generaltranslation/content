@@ -8,8 +8,8 @@ import { OPENAPI_SPEC_PATH } from './openApiPath';
 // it with `<APIPage document="gt-api" />` regardless of the on-disk path, which
 // differs between this app and the landing app that renders the same content.
 export const openapi = createOpenAPI({
-  input: () => ({
+  input: {
     'gt-api': OPENAPI_SPEC_PATH,
-  }),
+  },
   proxyUrl: '/api/proxy',
 });

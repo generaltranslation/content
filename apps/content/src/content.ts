@@ -1,4 +1,4 @@
-import { blog, devlog, docs } from '@/.source';
+import { blog, devlog, docs } from '@/.source/server';
 
 export type ContentCollection = 'docs' | 'blog' | 'devlog';
 export type ContentEntry =

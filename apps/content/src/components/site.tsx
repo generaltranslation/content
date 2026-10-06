@@ -52,7 +52,7 @@ export function PageShell({
   return (
     <>
       <SiteHeader />
-      <main className='max-w-fd-container mx-auto grid w-full gap-10 px-6 py-8 md:grid-cols-[260px_minmax(0,1fr)]'>
+      <main className='max-w-[1400px] mx-auto grid w-full gap-10 px-6 py-8 md:grid-cols-[260px_minmax(0,1fr)]'>
         {aside ? (
           <aside className='max-h-[calc(100vh-6rem)] overflow-auto border-r pr-5 text-sm md:sticky md:top-20'>
             {aside}
