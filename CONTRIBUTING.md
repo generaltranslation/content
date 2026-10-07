@@ -28,12 +28,13 @@ Run the validators from `scripts/`:
 
 | Command | What it checks |
 | ------- | -------------- |
-| `npm test` | Unit tests for every validator (links, unsafe HTML, callouts, reference links, and docs structure) |
+| `npm test` | Unit tests for every validator (links, unsafe HTML, callouts, reference links, docs structure, and blog order) |
 | `npx tsx validate-links.ts` | Every internal link across all content |
 | `npm run validate:unsafe-html` | The disallowed HTML and MDX patterns listed below |
 | `npm run validate:callouts` | Callout types |
 | `npm run validate:reference-links` | Inline-code API symbols resolve to reference pages |
 | `npm run validate:structure` | `meta.json` filetree and section structure |
+| `npm run validate:blog-order` | `blog/order.json` lists every blog post exactly once |
 | `npm run typecheck` | The validation scripts themselves |
 
 These mirror the CI jobs in `.github/workflows/run-tests.yml`. `pnpm install` reports `Ignored build scripts: esbuild, sharp`; that is expected and does not affect dev, build, or the validators.
@@ -44,6 +45,7 @@ These mirror the CI jobs in `.github/workflows/run-tests.yml`. `pnpm install` re
 | ----------------- | ----------------------------------- |
 | `docs/en-US/`     | Documentation pages                 |
 | `blog/en-US/`     | Blog posts                          |
+| `blog/order.json` | The order of posts on the blog page |
 | `devlog/en-US/`   | Devlog / release note entries       |
 | `authors/`        | Author profiles                     |
 | `docs-templates/` | Shared templates (maintainers only) |
@@ -79,6 +81,8 @@ authors: [author-slug]
 tags: ['tag1', 'tag2']
 ---
 ```
+
+The blog page lists posts in the order of `blog/order.json`, an array of post slugs; the first three take the large feature cards. Add every new post's slug to that array where it should appear. CI fails when the array leaves a post out, names a post that does not exist, or lists one twice.
 
 ### Devlog entries
 
