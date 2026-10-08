@@ -2,25 +2,23 @@
 /**
  * OpenAPI Documentation Generator
  *
- * Generates one MDX page per API operation from the OpenAPI JSON snapshot at
- * docs/en-US/platform/openapi/openapi.json. Its canonical source is the public
- * artifact at gt-cloud/apps/api/openapi.public.json; this snapshot supports the
- * standalone content preview and page generation.
- *
- * To refresh the snapshot, copy the canonical artifact over it and rerun this
- * script:
- *   cp ../gt-cloud/apps/api/openapi.public.json docs/en-US/platform/openapi/openapi.json
- *   pnpm --filter ./apps/content generate-openapi-docs
+ * Generates one MDX page per API operation for every API version listed in
+ * docs/en-US/platform/openapi/openapi.versions.json, which gt-cloud's OpenAPI
+ * sync writes together with the OpenAPI snapshots. Snapshot layout: see
+ * src/lib/openApiDocuments.mjs.
  *
  * Each generated page renders with the `<APIPage />` component (registered in
- * the docs MDX components) against the `gt-api` schema, which provides the
+ * the docs MDX components) against the version's schema id (`gt-api` for the
+ * latest version, `gt-api@<version>` for older ones), which provides the
  * interactive request playground. Fumadocs' frontmatter (including
  * `_openapi.preload`) is kept, but the page body stays a plain `<APIPage />`
  * instead of its ESM layout: the landing app renders this content straight
  * from main and maps only `APIPage`, and MDX here carries no exports.
  *
- * The generated pages and their navigation metadata live in
- * docs/en-US/platform/openapi/reference. Operation slugs and navigation come
+ * The latest version's pages and navigation metadata live in
+ * docs/en-US/platform/openapi/reference; each older version's live in
+ * reference/versions/<version>, which reference/meta.json does not list.
+ * Operation slugs and navigation, including each group's description, come
  * from the contract's x-docs-slug and x-docs-nav extensions.
  *
  * Usage:
@@ -35,11 +33,12 @@ import { generateFiles } from 'fumadocs-openapi';
 import { createOpenAPI } from 'fumadocs-openapi/server';
 import { parse, stringify } from 'yaml';
 
+import { readOpenApiDocuments } from '../src/lib/openApiDocuments.mjs';
+
 const REPO_ROOT = path.join(fileURLToPath(import.meta.url), '../../../..');
 const OPENAPI_DIR = path.join(REPO_ROOT, 'docs/en-US/platform/openapi');
-const OPENAPI_PATH = path.join(OPENAPI_DIR, 'openapi.json');
 const OUTPUT_DIR = path.join(OPENAPI_DIR, 'reference');
-const document = JSON.parse(fs.readFileSync(OPENAPI_PATH, 'utf-8'));
+const VERSIONS_DIR = path.join(OUTPUT_DIR, 'versions');
 
 const HTTP_METHODS = new Set([
   'get',
@@ -51,14 +50,6 @@ const HTTP_METHODS = new Set([
   'patch',
   'trace',
 ]);
-const GROUP_DESCRIPTIONS = {
-  files: 'Upload, download, publish, and manage Project files.',
-  context: 'Generate translation context for a Project.',
-  'context-management':
-    'Manage context groups, glossary terms, custom prompts, and context imports and exports.',
-  translation: 'Queue translations, translate at runtime, and check job status.',
-  project: 'Create and manage Projects, API keys, branches, tags, and assets.',
-};
 const DOCS_SLUG_PATTERN =
   /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -111,11 +102,13 @@ function readOperationPages(document) {
       !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.group) ||
       typeof item.title !== 'string' ||
       item.title.length === 0 ||
+      typeof item.description !== 'string' ||
+      item.description.length === 0 ||
       !Array.isArray(item.pages) ||
       item.pages.length === 0
     ) {
       throw new Error(
-        'Each x-docs-nav entry must have a group slug, title, and non-empty pages array.'
+        'Each x-docs-nav entry must have a group slug, title, description, and non-empty pages array.'
       );
     }
     if (groupSlugs.has(item.group)) {
@@ -150,7 +143,12 @@ function readOperationPages(document) {
       pagesBySlug.set(slug, metadata);
       pages.push(page);
     }
-    groups.push({ slug: item.group, title: item.title, pages });
+    groups.push({
+      slug: item.group,
+      title: item.title,
+      description: item.description,
+      pages,
+    });
   }
 
   const missingSlugs = [...operationsBySlug.keys()].filter(
@@ -165,22 +163,39 @@ function readOperationPages(document) {
   return { groups, pagesByOperation, pagesBySlug };
 }
 
-const { groups, pagesByOperation, pagesBySlug } =
-  readOperationPages(document);
+// One reference per API version: the latest version renders into OUTPUT_DIR
+// under `gt-api`, each older one into VERSIONS_DIR/<version> under
+// `gt-api@<version>`. Versions that share a doc share its parsed pages.
+function readReferences() {
+  const sources = new Map();
+  return readOpenApiDocuments(OPENAPI_DIR).map(
+    ({ id, version, latest, path: file }) => {
+      let source = sources.get(file);
+      if (!source) {
+        const document = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        try {
+          source = { document, ...readOperationPages(document) };
+        } catch (error) {
+          throw new Error(`${path.basename(file)}: ${error.message}`, {
+            cause: error,
+          });
+        }
+        sources.set(file, source);
+      }
+      return {
+        ...source,
+        id,
+        version,
+        latest,
+        outputDir: latest ? OUTPUT_DIR : path.join(VERSIONS_DIR, version),
+      };
+    }
+  );
+}
 
-// Mirror src/lib/openapi.ts (minus runtime-only playground config). We
-// re-create the server here instead of importing that module because it lives
-// behind a Next.js path alias and pulls in app-only code paths that aren't
-// resolvable from a plain node script.
-const openapi = createOpenAPI({
-  input: {
-    'gt-api': document,
-  },
-});
-
-function pageSlug(entry) {
+function pageSlug(reference, entry) {
   const key = operationKey(entry.item.method, entry.item.path);
-  const page = pagesByOperation.get(key);
+  const page = reference.pagesByOperation.get(key);
   if (!page) {
     throw new Error(`No documentation metadata found for operation "${key}".`);
   }
@@ -204,14 +219,14 @@ const GENERATED_MARKER = 'This file was generated by Fumadocs';
 const GENERATED_COMMENT = `{/* ${GENERATED_MARKER}. Do not edit this file directly. Any changes should be made by running the generation command again. */}`;
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n/;
 
-function writePage(file) {
+function writePage(reference, file) {
   const slug = file.path.replace(/\.mdx$/, '');
-  const page = pagesBySlug.get(slug);
+  const page = reference.pagesBySlug.get(slug);
   if (!page) {
     throw new Error(`No operation found for generated page "${file.path}".`);
   }
 
-  const operation = document.paths?.[page.route]?.[page.method];
+  const operation = reference.document.paths?.[page.route]?.[page.method];
   if (!operation || typeof operation.summary !== 'string') {
     throw new Error(`No OpenAPI operation found for "${page.key}".`);
   }
@@ -228,7 +243,7 @@ function writePage(file) {
   );
   const frontmatter = {
     title: summary,
-    description: `${overview} API reference for ${summary}.`,
+    description: overview,
     method: page.method.toUpperCase(),
     full: true,
     _openapi,
@@ -240,42 +255,45 @@ ${stringify(frontmatter)}---
 
 ${GENERATED_COMMENT}
 
-<APIPage document={"gt-api"} operations={${JSON.stringify(operations)}} />`;
+<APIPage document={${JSON.stringify(reference.id)}} operations={${JSON.stringify(operations)}} />`;
 }
 
-function writeNavigation() {
-  for (const { slug, title, pages } of groups) {
-    const description = GROUP_DESCRIPTIONS[slug];
-    if (!description) {
-      throw new Error(`No reference description configured for "${slug}".`);
-    }
-    fs.mkdirSync(path.join(OUTPUT_DIR, slug), { recursive: true });
-    fs.writeFileSync(
-      path.join(OUTPUT_DIR, slug, 'meta.json'),
-      `${JSON.stringify(
-        {
-          title,
-          description,
-          pages: pages.map((page) => `./${page}`),
-        },
-        null,
-        2
-      )}\n`
-    );
+function writeMeta(dir, meta) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'meta.json'),
+    `${JSON.stringify(meta, null, 2)}\n`
+  );
+}
+
+function writeNavigation(reference) {
+  for (const { slug, title, description, pages } of reference.groups) {
+    writeMeta(path.join(reference.outputDir, slug), {
+      title,
+      description,
+      pages: pages.map((page) => `./${page}`),
+    });
   }
 
-  fs.writeFileSync(
-    path.join(OUTPUT_DIR, 'meta.json'),
-    `${JSON.stringify(
-      {
-        title: 'Reference',
-        description: 'Browse Reference pages for the General Translation API.',
-        pages: groups.map(({ slug }) => `./${slug}`),
-      },
-      null,
-      2
-    )}\n`
-  );
+  writeMeta(reference.outputDir, {
+    title: reference.latest ? 'Reference' : reference.version,
+    description: reference.latest
+      ? 'Browse Reference pages for the General Translation API.'
+      : `Browse Reference pages for General Translation API version ${reference.version}.`,
+    pages: reference.groups.map(({ slug }) => `./${slug}`),
+  });
+}
+
+// Lists the older versions newest first. reference/meta.json does not list
+// this folder, so older versions stay out of the latest version's navigation.
+function writeVersionsNavigation(olderReferences) {
+  if (olderReferences.length === 0) return;
+  writeMeta(VERSIONS_DIR, {
+    title: 'Versions',
+    description:
+      'Browse Reference pages for earlier General Translation API versions.',
+    pages: olderReferences.map(({ version }) => `./${version}`).reverse(),
+  });
 }
 
 // Recursively delete only Fumadocs-generated `.mdx` pages. Group dirs left
@@ -303,22 +321,32 @@ function cleanGenerated(dir = OUTPUT_DIR) {
   }
 }
 
-async function main() {
-  console.log('=== OpenAPI Docs Generator ===\n');
-  cleanGenerated();
-
+// Mirror src/lib/openapi.ts (minus runtime-only playground config), with one
+// document per server so each reference renders only its version's pages. We
+// re-create the server here instead of importing that module because it lives
+// behind a Next.js path alias and pulls in app-only code paths that aren't
+// resolvable from a plain node script.
+async function generateReference(reference) {
   await generateFiles({
-    input: openapi,
-    output: OUTPUT_DIR,
+    input: createOpenAPI({ input: { [reference.id]: reference.document } }),
+    output: reference.outputDir,
     per: 'operation',
-    groupBy: (entry) => path.dirname(pageSlug(entry)),
-    name: (entry) => path.basename(pageSlug(entry)),
+    groupBy: (entry) => path.dirname(pageSlug(reference, entry)),
+    name: (entry) => path.basename(pageSlug(reference, entry)),
     beforeWrite(files) {
-      for (const file of files) writePage(file);
+      for (const file of files) writePage(reference, file);
     },
   });
+  writeNavigation(reference);
+}
 
-  writeNavigation();
+async function main() {
+  console.log('=== OpenAPI Docs Generator ===\n');
+  const references = readReferences();
+  cleanGenerated();
+
+  for (const reference of references) await generateReference(reference);
+  writeVersionsNavigation(references.filter(({ latest }) => !latest));
   console.log(`\nGenerated operation pages and navigation into ${OUTPUT_DIR}`);
 }
 
