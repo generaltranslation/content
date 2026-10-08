@@ -1,15 +1,17 @@
 import { createOpenAPI } from 'fumadocs-openapi/server';
 
-import { OPENAPI_SPEC_PATH } from './openApiPath';
+import { readOpenApiDocuments } from './openApiDocuments.mjs';
+import { OPENAPI_DIR } from './openApiPath';
 
-// This snapshot of gt-cloud/apps/api/openapi.public.json lives alongside the
-// docs content so it ships with the standalone app. We register it under a
-// stable schema id (`gt-api`) so MDX pages can reference
-// it with `<APIPage document="gt-api" />` regardless of the on-disk path, which
+// These snapshots of gt-cloud/apps/api/openapi.public*.json live alongside the
+// docs content so they ship with the standalone app. Each API version is
+// registered under a stable schema id (`gt-api` for the latest version,
+// `gt-api@<version>` for older ones) so MDX pages can reference it with
+// `<APIPage document="gt-api" />` regardless of the on-disk path, which
 // differs between this app and the landing app that renders the same content.
 export const openapi = createOpenAPI({
-  input: {
-    'gt-api': OPENAPI_SPEC_PATH,
-  },
+  input: Object.fromEntries(
+    readOpenApiDocuments(OPENAPI_DIR).map(({ id, path }) => [id, path])
+  ),
   proxyUrl: '/api/proxy',
 });
