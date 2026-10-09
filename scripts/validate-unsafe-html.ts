@@ -16,7 +16,7 @@ import { mdxjs } from "micromark-extension-mdxjs";
 import { visit } from "unist-util-visit";
 
 const CONTENT_ROOT = resolve(import.meta.dirname, "..");
-const CONTENT_DIRS = ["docs", "docs-templates", "blog", "devlog"];
+const CONTENT_DIRS = ["docs", "docs-templates", "blog", "devlog", "kb"];
 const UNSAFE_TAGS = new Set(["script", "iframe", "object", "embed", "style"]);
 const UNSAFE_HTML_PATTERN =
   /<\s*(script|iframe|object|embed|style)(?=[\s/>])/gi;

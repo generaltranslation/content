@@ -16,7 +16,7 @@ import {
 import type { ContentCollection, ContentEntry } from '@/content';
 import type { ReactNode } from 'react';
 
-const collectionOrder: ContentCollection[] = ['docs', 'blog', 'devlog'];
+const collectionOrder: ContentCollection[] = ['docs', 'blog', 'devlog', 'kb'];
 
 export function SiteHeader() {
   return (

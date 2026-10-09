@@ -18,7 +18,7 @@ import { mdxFromMarkdown } from 'mdast-util-mdx';
 import { mdxjs } from 'micromark-extension-mdxjs';
 
 const CONTENT_ROOT = resolve(import.meta.dirname, '..');
-const CONTENT_DIRECTORIES = ['docs', 'blog', 'devlog'];
+const CONTENT_DIRECTORIES = ['docs', 'blog', 'devlog', 'kb'];
 const REFERENCE_ROOT = join(CONTENT_ROOT, 'docs', 'en-US');
 
 type AstPosition = {
