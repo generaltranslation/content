@@ -299,6 +299,39 @@ assertEqual(
   'rejects a page omitted from folder metadata'
 );
 
+function withReferenceFolder(folder: string): Map<string, string> {
+  const base = `platform/openapi/reference/${folder}`;
+  const files = new Map(
+    [...repositoryFiles].filter(([path]) => !path.startsWith(`${base}/`))
+  );
+  files.set(
+    `${base}/meta.json`,
+    JSON.stringify({ title: 'Versions', pages: ['./2026-03-06.v1'] })
+  );
+  files.set(
+    `${base}/2026-03-06.v1/meta.json`,
+    JSON.stringify({ title: '2026-03-06.v1', pages: ['./list-orgs'] })
+  );
+  files.set(`${base}/2026-03-06.v1/list-orgs.mdx`, '');
+  return files;
+}
+
+assertEqual(
+  validateDocsStructure(withReferenceFolder('versions')).length,
+  0,
+  'accepts older OpenAPI reference versions left out of reference/meta.json'
+);
+
+assertEqual(
+  hasFinding(
+    validateDocsStructure(withReferenceFolder('archive')),
+    'platform/openapi/reference/meta.json',
+    'Navigable child "./archive" is missing from pages'
+  ),
+  true,
+  'rejects any other folder left out of reference/meta.json'
+);
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) {
   throw new Error(`${failed} documentation structure validator test(s) failed`);

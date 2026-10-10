@@ -81,6 +81,12 @@ const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
   types: 'Types',
 };
 
+// Folders deliberately absent from their parent's `pages`: older OpenAPI
+// reference versions are reached only through the docs version picker.
+const UNLISTED_FOLDERS: ReadonlySet<string> = new Set([
+  'platform/openapi/reference/versions',
+]);
+
 const ALLOWED_META_KEYS = new Set([
   'defaultOpen',
   'description',
@@ -301,7 +307,10 @@ export function validateDocsStructure(
 
     for (const child of findImmediateNavigableChildren(files, metaPath)) {
       const entry = `./${child}`;
-      if (!seenPages.has(entry)) {
+      if (
+        !seenPages.has(entry) &&
+        !UNLISTED_FOLDERS.has(resolveEntryBase(metaPath, entry))
+      ) {
         addFinding(metaPath, `Navigable child "${entry}" is missing from pages.`);
       }
     }
