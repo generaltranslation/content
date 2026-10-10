@@ -15,13 +15,11 @@ related:
 
 Use this quickstart for apps built with `@react-router/dev`. If you use React Router as a library inside a Vite single-page app, follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) instead.
 
-Run [`npx gt@latest init`](/docs/cli/reference/commands/init) from the app root to automate the setup. The wizard installs `gt-react`, creates the config and translation loader, and configures `app/root.tsx`. It leaves unrecognized roots unchanged and lists any manual actions; this guide covers the same setup by hand.
+Run [`npx gt@latest init`](/docs/cli/reference/commands/init) from the app root to automate the setup. The wizard installs `gt-react`, creates the config and translation loader, and configures an `app/root.tsx` from the create-react-router or Hydrogen starter. It leaves other roots unchanged and lists any manual actions; this guide covers the same setup by hand.
 
 *Note: This setup requires `gt-react` 11.1.3 or later and an app that renders on each request. SPA mode (`ssr: false`), pre-rendering, and RSC Framework Mode are not supported.*
 
 ## Quickstart [#quickstart]
-
-Install the packages, create a config file and a translation loader, set up the root route, mark content for translation, and generate translations.
 
 ### 1. Install the packages
 
@@ -92,7 +90,6 @@ Call [`initializeGT`](/docs/react/reference/config#initialize) once at module sc
 
 ```tsx title="app/root.tsx"
 import {
-  isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
@@ -131,8 +128,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 export function Layout({ children }: { children: React.ReactNode }) {
   const locale = useRouteLoaderData<typeof loader>('root')?.locale ?? gtConfig.defaultLocale; // [!code ++]
   return (
-    {/* [!code --] */}
-    <html lang="en">
     {/* [!code ++] */}
     <html lang={locale}>
       <head>
@@ -161,6 +156,8 @@ export default function App() {
 
 `parseLocale` reads the locale cookie, then the `Accept-Language` header, and falls back to `defaultLocale`. If your root already has a `loader`, add `locale` and `translations` to the object it returns.
 
+*Note: Error pages without root loader data, such as a direct 404 or a root loader error, render without [`GTProvider`](/docs/react/reference/components/gt-provider). Translation components and hooks, such as [`<T>`](/docs/react/reference/components/t) and [`useLocale`](/docs/react/reference/hooks/use-locale), throw there and turn the error page into a server error, so keep the root `ErrorBoundary` untranslated.*
+
 ### 5. Mark content for translation
 
 Wrap JSX in the [`<T>`](/docs/react/reference/components/t) component to translate it in place, and use [`useGT`](/docs/react/reference/hooks/use-gt) for plain strings such as `aria-label` values. Add a [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) so visitors can switch languages.
@@ -188,14 +185,16 @@ When a visitor picks a language, [`<LocaleSelector>`](/docs/react/reference/comp
 
 ### 6. Generate translations
 
-Sign in with [`gt login`](/docs/cli/reference/commands/login), set your project's [`projectId`](/docs/cli/reference/config#project-id) in `gt.config.json` or `GT_PROJECT_ID` in the environment, and translate:
+Sign in with [`gt login`](/docs/cli/reference/commands/login), set your existing project's [`projectId`](/docs/cli/reference/config#project-id) in `gt.config.json` or `GT_PROJECT_ID` in the environment, and translate:
 
 ```bash
 npx gt login
 GT_PROJECT_ID=your-project-id npx gt translate
 ```
 
-Start the development server and switch languages to see the translations. Add the command to your build script so production builds always include current translations:
+Signing in does not select a project; run [`gt init`](/docs/cli/reference/commands/init) if you need to choose or create one.
+
+Start the development server and switch languages to see the translations. Prepend the command to your existing build script so production builds always include current translations:
 
 ```json title="package.json"
 {
@@ -207,13 +206,23 @@ Start the development server and switch languages to see the translations. Add t
 
 To load translations from the CDN instead of bundling them, run [`npx gt configure --storage cdn`](/docs/cli/reference/commands/configure). It shows the change to make in `app/root.tsx`.
 
+If you cache document responses, for example on a CDN or a reverse proxy, vary the cache by locale so visitors don't receive another language's page. Send `Vary: Cookie, Accept-Language` on document responses, or exclude them from shared caches.
+
 <Callout type="info">
   **Note:** For CI, provide a separately scoped `GT_API_KEY` and the same project ID through your secret settings. (See [CLI credentials](/docs/cli/guides/configuring#credentials)).
 </Callout>
 
 ## Shopify Hydrogen [#hydrogen]
 
-Hydrogen storefronts are React Router framework apps, so the steps above apply unchanged, and [`gt init`](/docs/cli/reference/commands/init) configures the Hydrogen starter's root automatically.
+Hydrogen storefronts are React Router framework apps and follow the same steps. Keep Hydrogen's own build command and prepend translation generation to it:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && shopify hydrogen build --codegen"
+  }
+}
+```
 
 `gt-react` translates the text in your storefront's code, such as navigation, buttons, and page copy. Product titles, descriptions, and other store content come from Shopify; translate those in Shopify.
 
@@ -224,7 +233,11 @@ Hydrogen storefronts are React Router framework apps, so the steps above apply u
     The wizard only edits roots shaped like the create-react-router or Hydrogen starter that don't already call [`initializeGT`](/docs/react/reference/config#initialize). Follow [step 4](#quickstart) to make the changes by hand.
   </Accordion>
   <Accordion title="gt init stopped before making changes">
-    Setup stops for SPA mode, pre-rendering, RSC Framework Mode, an `appDirectory` other than `app`, an unreadable `react-router.config`, or a `gt-react` range below 11.1.3. Run `npx gt@latest init --no-react-setup` to set up everything else, then follow [step 4](#quickstart).
+    The reason decides the fix:
+
+    - **SPA mode, pre-rendering, or RSC Framework Mode:** this setup reads each visitor's locale in a root loader on every request, so these modes are not supported, by the wizard or by hand.
+    - **A `gt-react` range that allows versions older than 11.1.3:** upgrade `gt-react` and rerun `npx gt@latest init`.
+    - **An `appDirectory` other than `app`, or a `react-router.config` the wizard cannot read:** if the app renders on each request, run `npx gt@latest init --no-react-setup` to set up everything except your source, then follow steps 3 and 4 with your app directory in place of `app/`.
   </Accordion>
   <Accordion title="The language isn't changing when I use the selector">
     Confirm that cookies are enabled, the locale is in `gt.config.json`, and the selector renders inside `RootGTProvider`. If `<html lang>` changes but the text doesn't, run [`npx gt translate`](/docs/cli/reference/commands/translate) to fill `app/_gt/[locale].json`.
