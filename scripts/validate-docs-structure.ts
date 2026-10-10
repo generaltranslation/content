@@ -53,6 +53,7 @@ const EXPECTED_OVERVIEW_GROUP_PAGES: Readonly<
     '[Next.js App Router](/docs/react/nextjs-quickstart)',
     '[Next.js Pages Router](/docs/react/nextjs-pages-router-quickstart)',
     '[TanStack Start](/docs/react/tanstack-start-quickstart)',
+    '[React Router](/docs/react/react-router-quickstart)',
     '[React Native](/docs/react/react-native-quickstart)',
     '[Vue](/docs/vue/quickstart)',
     '[Node.js](/docs/node/quickstart)',
