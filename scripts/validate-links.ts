@@ -29,7 +29,7 @@ import GithubSlugger from 'github-slugger';
 const CONTENT_ROOT = join(import.meta.dirname, '..');
 
 /** Directories containing MDX content to validate */
-const CONTENT_DIRS = ['docs', 'blog', 'devlog'];
+const CONTENT_DIRS = ['docs', 'blog', 'devlog', 'kb'];
 
 /** Template directory with placeholder files */
 const TEMPLATE_DIR = 'docs-templates';

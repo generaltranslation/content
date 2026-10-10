@@ -1,21 +1,24 @@
-import { blog, devlog, docs } from '@/.source/server';
+import { blog, devlog, docs, kb } from '@/.source/server';
 
-export type ContentCollection = 'docs' | 'blog' | 'devlog';
+export type ContentCollection = 'docs' | 'blog' | 'devlog' | 'kb';
 export type ContentEntry =
   | (typeof docs.docs)[number]
   | (typeof blog)[number]
-  | (typeof devlog)[number];
+  | (typeof devlog)[number]
+  | (typeof kb)[number];
 
 export const collections = {
   docs: docs.docs,
   blog,
   devlog,
+  kb,
 } satisfies Record<ContentCollection, ContentEntry[]>;
 
 export const collectionLabels = {
   docs: 'Docs',
   blog: 'Blog',
   devlog: 'Devlog',
+  kb: 'Knowledge Base',
 } satisfies Record<ContentCollection, string>;
 
 export function isCollection(value: string): value is ContentCollection {
