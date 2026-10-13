@@ -1,0 +1,78 @@
+---
+title: Can an AI coding agent set up i18n for me?
+summary: Yes. The Setup for Agents button on generaltranslation.com copies a start prompt for a coding agent such as Cursor, Claude Code, or Copilot. The prompt has the agent read the docs, sign in with gt login, set up your project, translate a first page, and verify the result.
+date: 2026-10-13
+related: [add-i18n-to-nextjs, translations-in-ci, translate-strings-outside-jsx, what-is-locadex]
+---
+
+Internationalization (i18n) is the work that lets an app show its text in more than one language. The start prompt is one Markdown document that tells an agent how to do that work with General Translation, from the first command to a verified translation.
+
+## Give the prompt to your agent
+
+1. On [generaltranslation.com](https://generaltranslation.com), click **Setup for Agents** to copy the prompt.
+2. Open your project in your coding agent and paste the prompt.
+3. Answer the agent's questions about the source language, the target languages, and the first page to translate.
+
+The same text is in the docs under [Start prompt](/docs/overview/for-coding-agents#start-prompt), and it is served raw at [`/agent-prompt.md`](/agent-prompt.md), so an agent can also fetch it by URL.
+
+## What the agent does
+
+The prompt has the agent work in this order:
+
+1. Fetch the documentation entry point, [`llms.txt`](/llms.txt), and then the quickstart for your stack.
+2. Inspect the repository for the framework, router, existing i18n library, and build scripts, and ask only for the decisions it cannot read from the code.
+3. Sign in with [`gt login`](/docs/cli/reference/commands/login), which you approve in your browser.
+4. For a fresh app, set up the project with [`gt init`](/docs/cli/reference/commands/init), answering every question with a flag.
+5. In a React or Next.js app, wrap the page's text in [`<T>`](/docs/react/reference/components/t), translate standalone strings such as placeholders with [`useGT`](/docs/react/reference/hooks/use-gt), and add a language switcher. In Next.js, the switcher is [`<LocaleSelector>`](/docs/react/reference/components/locale-selector). Vue, Node, and Python projects use the matching APIs for their stack.
+6. Check the scope with a dry run, then run [`npx gt translate`](/docs/cli/reference/commands/translate).
+7. Run the type check and the production build, and check the translated pages in a browser when it has browser tools.
+8. Hand off a summary of what changed, which project and locales are configured, how to run it, what it actually verified, and what is left for you to do.
+
+The prompt tells the agent not to claim a browser check it could not perform.
+
+## The sign-in needs you
+
+The agent first checks for an existing session, then signs in:
+
+```bash
+npx gt@latest whoami
+npx gt@latest login
+```
+
+The login command opens a browser and waits until a person finishes the sign-in, so this is the one step you do yourself. In a remote or headless terminal, the agent runs `npx gt@latest login --no-browser` and shows you the verification URL and code instead. The prompt tells the agent not to ask for your password and not to begin by asking you for an API key.
+
+## Setup runs without questions
+
+When [`gt init`](/docs/cli/reference/commands/init) runs in an interactive terminal and is missing an answer, it asks the question and waits with no timeout, so an agent session would stop there. The prompt has the agent pass `--no-interactive` and a flag for every question. With `--no-interactive`, a missing answer is an error that lists the flags still needed and changes no file.
+
+For a Next.js App Router app that stores its translations in the repository and reuses an existing project, the prompt gives this command:
+
+```bash
+npx gt@latest init --no-interactive --json --defaults \
+  --default-locale <source-locale> --locales <target-locales> \
+  --no-locadex --react-setup --file-formats none \
+  --no-dev-credentials --project-id <project-id>
+```
+
+The run installs `gt-next`, adds [`GTProvider`](/docs/react/reference/components/gt-provider) to the root layout and `withGTConfig` to `next.config.ts`, and creates `loadTranslations.js` and `gt.config.json`. It does not wrap any page text, so the agent does that next. Automatic framework setup is experimental, and the prompt has the agent review the changes against the framework's quickstart.
+
+The agent then translates the page:
+
+```bash
+npx gt@latest translate --dry-run
+npx gt@latest translate
+```
+
+The dry run shows the translation scope without calling the API. The second command writes translation files such as `public/_gt/<locale>.json`, along with `gt-lock.json`.
+
+## Keep the agent current
+
+The prompt covers one session. For later sessions, copy the [drop-in agent guide](/docs/overview/for-coding-agents#agent-guide) into an `AGENTS.md` or `CLAUDE.md` file, a Cursor rule, or your tool's instructions file at the project root. The same guide is served raw at [`/AGENTS.md`](/AGENTS.md). For live project information and Context Management, connect the agent to the hosted [MCP server](/docs/overview/for-coding-agents#mcp) at `https://api.gtx.dev/mcp`.
+
+Every docs page is also available as raw Markdown: append `.md` or `.mdx` to the page URL.
+
+## Keep translations current after setup
+
+Translations need a new run of the translate command when source text changes. To run it on every deploy, add it to the build in CI. (See [How do I keep translations up to date on every deploy?](/kb/translations-in-ci)). For localization that opens pull requests on its own, use [Locadex](/docs/platform/locadex/quickstart) instead of driving your own agent. Locadex is the General Translation AI agent which works in your GitHub repository.
+
+Read [Using coding agents](/docs/overview/for-coding-agents) for the full prompt, the agent guide, and the MCP server setup.

@@ -1,0 +1,115 @@
+---
+title: How do I translate strings outside JSX?
+summary: Use the useGT hook for strings such as placeholders and aria labels, getGT in async Next.js App Router components, and msg with useMessages for strings defined outside a component. In a client-side gt-react app, the t function also translates strings at module scope.
+date: 2026-10-13
+related: [translate-conditional-jsx, format-numbers-dates-currencies, translate-react-app, i18n-without-translation-files]
+---
+
+The [`<T>`](/docs/react/reference/components/t) component translates JSX children. Some text is not a JSX child: a placeholder, an `aria-label`, alt text, a string you build in code, or a constant at module scope. Each of these goes through a translation function instead. The examples import from `gt-react`. The same functions are exported by `gt-next`, `gt-tanstack-start`, and `gt-react-native` unless a section says otherwise.
+
+## Translate a string in a component
+
+Call the [`useGT`](/docs/react/reference/hooks/use-gt) hook to get a translation function, then pass it the source string.
+
+```tsx
+import { useGT } from 'gt-react';
+
+function Search() {
+  const gt = useGT();
+  return <input placeholder={gt('Search products')} aria-label={gt('Search')} />;
+}
+```
+
+The hook returns the function itself, so write `const gt = useGT()` and not `const { gt } = useGT()`. Pass a string literal: the CLI extracts strings from the source code, and it cannot extract a template literal or a concatenation.
+
+In a server-rendered `gt-react` app, call the hook under a [`<GTProvider>`](/docs/react/reference/components/gt-provider). A single-page app set up with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) needs no provider. In `gt-next`, the hook also works in synchronous server components.
+
+## Translate a string in an async component
+
+Async components cannot use hooks. In an async Next.js App Router component, import [`getGT`](/docs/react/nextjs/reference/functions/get-gt) from `gt-next/server` and await it:
+
+```tsx
+import { getGT } from 'gt-next/server';
+
+async function Search() {
+  const gt = await getGT();
+  return <input placeholder={gt('Search products')} aria-label={gt('Search')} />;
+}
+```
+
+The function is server-only and does not work with the Pages Router.
+
+## Insert a variable
+
+Write a named placeholder in ICU message syntax, and pass its value in the options object:
+
+```tsx
+const gt = useGT();
+gt('Welcome back, {name}!', { name: user.name });
+```
+
+The value is inserted into the translated string and is never translated itself.
+
+## Add context to an ambiguous string
+
+Pass [`$context`](/docs/react/reference/types/inline-translation-options#context) when a word has more than one meaning, so the translation uses the right one:
+
+```tsx
+gt('Bank', { $context: 'a bank of a river' });
+```
+
+Pass [`$id`](/docs/react/reference/types/inline-translation-options#id) to give a string a stable identifier.
+
+## Translate a constant defined outside a component
+
+A hook cannot run at module scope. Register each string there with [`msg`](/docs/react/reference/functions/msg), and resolve it where it renders with the function that [`useMessages`](/docs/react/reference/hooks/use-messages) returns:
+
+```tsx
+import { msg, useMessages } from 'gt-react';
+
+const STATUS = { active: msg('Active'), paused: msg('Paused') };
+
+function Badge({ status }: { status: 'active' | 'paused' }) {
+  const m = useMessages();
+  return <span>{m(STATUS[status])}</span>;
+}
+```
+
+Render the value the resolver returns. The value that [`msg`](/docs/react/reference/functions/msg) returns is not translated.
+
+In an async Next.js App Router component, resolve the same constant with [`getMessages`](/docs/react/nextjs/reference/functions/get-messages) from `gt-next/server`:
+
+```tsx
+import { msg } from 'gt-next';
+import { getMessages } from 'gt-next/server';
+
+const STATUS = { active: msg('Active'), paused: msg('Paused') };
+
+async function Badge({ status }: { status: 'active' | 'paused' }) {
+  const m = await getMessages();
+  return <span>{m(STATUS[status])}</span>;
+}
+```
+
+## Translate at module scope in a client-side React app
+
+A single-page app built with `gt-react` can call the [`t`](/docs/react/reference/functions/t-function) function directly at module scope. It returns the translated string because [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) loads the translations before the rest of the app runs.
+
+```ts title="src/navigation.ts"
+import { t } from 'gt-react';
+
+export const navigation = [
+  { label: t('Home'), href: '/' },
+  { label: t('About'), href: '/about' },
+];
+```
+
+Translations are resolved when the module is evaluated, so a locale switch needs a full page reload. The function is exported by `gt-react` and `gt-tanstack-start` only. A server-rendered app must not call it at module scope: it throws in development, and in production it logs an error and falls back to the default locale's value.
+
+## When the strings are translated
+
+In production, strings passed to these functions are translated at build time. Run [`npx gt translate`](/docs/cli/reference/commands/translate) before the production build so new strings ship translated. A string with no translation falls back to its source text. In development, a project API key with runtime translation permission translates strings on demand, with a short delay that production does not have.
+
+Vue apps use [`useGT`](/docs/vue/reference/composables/use-gt) and [`useMessages`](/docs/vue/reference/composables/use-messages) from `gt-vue`. (See [Translating strings in Vue](/docs/vue/guides/translating-strings)).
+
+Read the [Translating strings](/docs/react/guides/translating-strings) guide for every framework's version of these examples, and the [`useGT`](/docs/react/reference/hooks/use-gt), [`getGT`](/docs/react/nextjs/reference/functions/get-gt), [`msg`](/docs/react/reference/functions/msg), [`useMessages`](/docs/react/reference/hooks/use-messages), and [`t`](/docs/react/reference/functions/t-function) references for their options.

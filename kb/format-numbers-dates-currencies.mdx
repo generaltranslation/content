@@ -1,0 +1,123 @@
+---
+title: How do I format numbers, dates, and currencies for each locale?
+summary: Wrap each value in the component for its type, with <Num> for numbers, <Currency> for money, <DateTime> for dates and times, and <RelativeTime> for phrases such as 3 days ago. Each component formats its value for the active locale with JavaScript's Intl API, and the value is never sent to the General Translation API.
+date: 2026-10-13
+related: [how-to-handle-plurals-in-react, translate-strings-outside-jsx, translate-conditional-jsx, translate-react-app]
+---
+
+Each locale has its own format for the same value. The table shows what the four components render for one set of values in English, German, Spanish, and Japanese:
+
+| Value | `en` | `de` | `es` | `ja` |
+| --- | --- | --- | --- | --- |
+| The number `12500` | 12,500 | 12.500 | 12.500 | 12,500 |
+| An amount of `12450.75` euros | €12,450.75 | 12.450,75 € | 12.450,75 € | €12,450.75 |
+| 14 March 2026 at 14:30 UTC | Mar 14, 2026, 2:30 PM | 14.03.2026, 14:30 | 14 mar 2026, 14:30 | 2026/03/14 14:30 |
+| Three days in the past | 3 days ago | vor 3 Tagen | hace 3 días | 3 日前 |
+
+Node.js 24.13 with ICU 77.1 produced these values. The date row uses the `dateStyle: 'medium'`, `timeStyle: 'short'`, and `timeZone: 'UTC'` options.
+
+The components ship in `gt-react`, `gt-next`, `gt-tanstack-start`, and `gt-react-native`, and they behave the same in each. Import them from your framework's package. A project without one of these libraries can start from the [Next.js Quickstart](/docs/react/nextjs-quickstart) or the [React SPA Quickstart](/docs/react/react-spa-quickstart).
+
+## Format a number
+
+Use [`<Num>`](/docs/react/reference/components/num) for digit grouping, decimals, percentages, and units. It formats with `Intl.NumberFormat`.
+
+```tsx
+import { T, Num } from 'gt-react';
+
+<T>
+  <p>
+    <Num>{count}</Num> downloads are complete.
+  </p>
+</T>;
+```
+
+Inside a [`<T>`](/docs/react/reference/components/t), wrap every dynamic number in a [`<Num>`](/docs/react/reference/components/num). The number then counts as a variable: the sentence around it is translated, and the number is only formatted.
+
+Pass `Intl.NumberFormat` options through the `options` prop for percentages, units, and rounding:
+
+```tsx
+<Num options={{ style: 'percent', maximumFractionDigits: 0 }}>
+  {completionRate}
+</Num>
+```
+
+## Format money
+
+Use [`<Currency>`](/docs/react/reference/components/currency) with an ISO 4217 currency code such as `USD` or `EUR`. The `currency` prop defaults to `USD`.
+
+```tsx
+import { T, Currency } from 'gt-react';
+
+<T>
+  <p>
+    Your total is <Currency currency="EUR">{total}</Currency>.
+  </p>
+</T>;
+```
+
+The component localizes the currency symbol, the digit grouping, and the decimal mark. It does not convert between currencies, so an amount in euros stays the same amount in euros in every locale.
+
+## Format a date or a time
+
+Use [`<DateTime>`](/docs/react/reference/components/datetime) for calendar dates and clock times. It formats with `Intl.DateTimeFormat`, and its `options` prop sets the date style, the time style, and the time zone.
+
+```tsx
+import { T, DateTime } from 'gt-react';
+
+<T>
+  <p>
+    Published{' '}
+    <DateTime
+      options={{
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'UTC',
+      }}
+    >
+      {publishedAt}
+    </DateTime>
+    .
+  </p>
+</T>;
+```
+
+Set `timeZone` in a server-rendered app. Without it, the output depends on the time zone of the runtime, so the server and the browser can render different dates and React reports a hydration error. (See [Avoiding hydration errors](/docs/react/reference/components/datetime#hydration)).
+
+## Format relative time
+
+Use [`<RelativeTime>`](/docs/react/reference/components/relative-time) for phrases such as "3 days ago" or "in 5 minutes". It formats with `Intl.RelativeTimeFormat`. Given a `Date`, it picks the unit by itself:
+
+```tsx
+import { T, RelativeTime } from 'gt-react';
+
+<T>
+  <p>
+    Published <RelativeTime>{publishedAt}</RelativeTime>.
+  </p>
+</T>;
+```
+
+For a known offset, pass `value` and `unit` instead:
+
+```tsx
+<RelativeTime value={-3} unit="day" />
+```
+
+The component measures from the current time unless you pass `baseDate`. In a server-rendered app, pass the same `baseDate` on the server and in the browser so both render the same phrase. (See [Avoiding hydration errors](/docs/react/reference/components/relative-time#hydration)).
+
+## Keep a value as it is
+
+Use [`<Var>`](/docs/react/reference/components/var) for a value that must render exactly as provided, such as a username, an email address, or an ID. Inside a [`<T>`](/docs/react/reference/components/t), it keeps the value out of the translation and leaves the sentence around it translatable.
+
+```tsx
+import { T, Var } from 'gt-react';
+
+<T>
+  <p>Signed in as <Var>{user.email}</Var></p>
+</T>;
+```
+
+Vue apps format numbers, money, and dates with the number, currency, and date components of `gt-vue`, which take the value through a `value` prop. (See [Formatting variables in Vue](/docs/vue/guides/formatting-variables)).
+
+Read the [Formatting numbers and dates](/docs/react/guides/formatting-variables) guide for the full workflow, and the references for [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency), [`<DateTime>`](/docs/react/reference/components/datetime), and [`<RelativeTime>`](/docs/react/reference/components/relative-time) for every option.

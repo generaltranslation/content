@@ -1,0 +1,45 @@
+---
+title: How do I translate a Mintlify docs site?
+summary: Connect the GitHub repository that holds your Mintlify docs to General Translation, choose your languages, and Locadex opens a pull request that restructures docs.json for multiple languages and adds the translated pages.
+date: 2026-10-13
+related: [what-is-locadex, translate-sanity-content, translate-storyblok-content, review-translations]
+---
+
+[Locadex](/docs/platform/locadex/quickstart) is the General Translation AI agent. The Mintlify integration runs on Locadex through the General Translation GitHub App. There is nothing to install in the docs repository, and Locadex writes the translation configuration for you.
+
+## Requirements
+
+- Your [project](/docs/platform/dashboard/get-started) is on a Starter or Enterprise plan. Locadex automations require one of these plans.
+- Your role includes `project:locadex:write` permission, which creating and running an automation requires.
+- The repository holds a valid Mintlify project. Its `docs.json` sets `$schema` to Mintlify's schema (`mintlify.com/docs.json`), and it has no legacy `mint.json`.
+- You can install a GitHub App on that repository.
+
+## Set up translation
+
+1. In the Dashboard, open **Project > Integrations > Catalog** and connect GitHub. Authorize the General Translation GitHub App for the repository that holds your Mintlify docs.
+2. Open **Project > Automations** and choose **Generate translations and push**. Select the repository, the directory that contains `docs.json`, and **Mintlify** as the framework. The directory is `.` when `docs.json` sits at the repository root, or the docs folder's path in a monorepo.
+3. Review the target branch and the trigger, then click **Create automation**.
+4. Open the automation and click **Run setup**. Set the source locale and the target languages, then confirm.
+5. Setup can take a few minutes. When it finishes, Locadex opens a pull request on the repository. Review the changes and merge the pull request to publish the translated docs.
+
+Mintlify accepts a fixed set of language codes, and General Translation maps each locale you choose onto one of them. For example, `en-US` maps to `en`, `zh-CN` maps to `zh-Hans`, and `pt-BR` stays `pt-BR`. A locale with no Mintlify code cannot be selected as a source or a target.
+
+## What the setup pull request changes
+
+The pull request adds a `gt.config.json` tuned for Mintlify. It restructures the `docs.json` navigation into Mintlify's multi-language layout, with one navigation entry per locale, and Mintlify renders a language switcher from that navigation. If your navigation lives in a separate file referenced with `$ref`, Locadex writes the changes to that file and keeps the `$ref` in `docs.json`.
+
+The pull request also adds the translated pages. Locadex translates the text of every `.mdx` and `.md` page, frontmatter fields such as titles and descriptions, reusable snippets, and the navigation labels in `docs.json`. It also translates the `summary` and `description` fields of any OpenAPI 3.x specifications it finds. Code blocks, inline code, and custom MDX components keep their structure. Each translated heading reuses the source heading's anchor ID, so in-page links reach the same section in every language.
+
+Each translated language is served under its own locale segment, such as `/es/...`. The generated `gt.config.json` also records whether the source pages keep their original paths or move under their own locale segment. The [configuration reference](/docs/integrations/mintlify/reference/config#modes) describes both layouts, so check which one the setup pull request uses before you merge it.
+
+Merging publishes the translations through your normal Mintlify deployment. The integration changes only files in the repository, so no other deploy step is needed.
+
+## Keep translations up to date
+
+After the setup pull request is merged, Locadex runs on the automation's trigger. New translation automations run when a pull request changes. To translate changes after they reach the target branch, set **Run when** to **A commit is pushed**. Locadex reuses an open pull request for the same automation branch and opens a new one after the previous pull request is merged or closed.
+
+To add or remove a language, open **Project > Automations** and select **Keep locales in sync**. Create it from its template if it is not there. Click **Run now** and change the target languages. Its pull request updates the locale configuration and the `docs.json` navigation, and it translates the content for each newly added language.
+
+Translated pages are ordinary files in the repository. You can edit them and commit the change, or edit them in the Dashboard. **Preserve local edits** is on for new automations, and it uploads your edits before each run so that downloaded translations do not replace them.
+
+The [Mintlify Quickstart](/docs/integrations/mintlify/quickstart) has the setup steps, and [Configuring Mintlify](/docs/integrations/mintlify/guides/configuring-mintlify) covers the target directory, languages, and triggers. [Supported content](/docs/integrations/mintlify/reference/supported-content) lists what is translated and which files are excluded, and [Managing translations](/docs/integrations/mintlify/guides/managing-translations) covers language changes and edits.

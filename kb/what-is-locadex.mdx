@@ -1,0 +1,68 @@
+---
+title: What does the Locadex agent do?
+summary: Locadex is General Translation's AI agent. It works in your GitHub repository and opens pull requests that set up internationalization, wrap user-facing text in translation calls, translate new content into every target language, and update project files when languages change.
+date: 2026-10-13
+related: [ai-agent-i18n-setup, add-i18n-to-nextjs, translate-mintlify-docs, translations-in-ci, i18n-without-translation-files]
+---
+
+Locadex supports **Next.js**, **Mintlify**, **Fern**, and **Docusaurus** projects. It also supports React applications built with Vite, Gatsby, Redwood, React Router, TanStack Start, Bazel, esbuild, Rollup, Rolldown, or webpack. You configure Locadex in the Dashboard, and every change it makes reaches your repository as a pull request.
+
+## Setup
+
+Before the first automation runs, Locadex prepares the repository and opens a setup pull request. In server-rendered React frameworks, setup configures `gt.config.json`, translation loading, runtime initialization, and [`GTProvider`](/docs/react/reference/components/gt-provider) placement. In client-rendered React applications, setup calls [`initializeGTSPA()`](/docs/react/reference/config#initialize-spa) before the application entry and configures browser translation loading. Setup then runs the repository's existing build or type-check command.
+
+Setup leaves your application strings as they are. The **Generate code** automation wraps them after the setup pull request is merged.
+
+## The three automations
+
+Each automation starts from a template under **Project > Automations**:
+
+- **Generate code** detects untranslated user interface content, wraps it in internationalization calls such as the [`<T>`](/docs/react/reference/components/t) component, and opens a pull request for review.
+- **Generate translations and push** translates source content into every target language and updates the translation files.
+- **Keep locales in sync** updates the project configuration after languages are added or removed. A manual run asks for the source locale and the target languages.
+
+In a Next.js app that uses `gt-next`, content wrapped in [`<T>`](/docs/react/reference/components/t) looks like this:
+
+```tsx title="app/page.tsx"
+import { T } from 'gt-next';
+
+export default function Home() {
+  return (
+    <main>
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content will be translated automatically.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+A **Generate code** run lints the files it edits and feeds the results back to the agent. In files that already import General Translation, the `user-facing-object` rule warns when hardcoded text reaches the interface through an object or a constant. Locadex fixes the warning where the string is defined. It uses [`<T>`](/docs/react/reference/components/t) for JSX content, and [`useGT`](/docs/react/reference/hooks/use-gt) or [`msg`](/docs/react/reference/functions/msg) for strings held in props and objects.
+
+## Start Locadex
+
+Locadex needs a General Translation project on a Starter or Enterprise plan and a GitHub repository built with a supported framework. Creating and running an automation requires `project:locadex:write` permission.
+
+1. Open your project in the [Dashboard](https://dash.generaltranslation.com), go to **Project > Integrations > Catalog**, and connect GitHub. Choose the repository Locadex should use for the project.
+2. Open **Project > Automations**. Under **Start with a template**, choose **Generate code**, **Generate translations and push**, or **Keep locales in sync**.
+3. Select the linked repository, the target directory, and the detected framework. Use `.` when the app is at the repository root.
+4. Choose the target branch, the trigger, the created branch prefix, auto-merge, changed-file filtering, and whether to preserve local edits. Click **Create automation**.
+5. Open the automation and click **Run setup**. Choose the source locale and the target languages.
+6. Open the setup pull request from the automation page, review the changes, and merge it before you run the automation.
+
+## When automations run
+
+Each automation runs on its **Run when** trigger:
+
+- **A pull request changes** runs when a relevant pull request is opened, reopened, or marked ready for review. A new commit cancels a run in progress without starting another, and a `/locadex` comment on the pull request starts processing again.
+- **A commit is pushed** runs when commits are pushed to the target branch.
+- **Started manually** runs only when you click **Run now** on the automation.
+
+New **Generate code** and **Generate translations and push** automations default to **A pull request changes**. **Keep locales in sync** defaults to **Started manually**.
+
+For automatic runs, Locadex reuses the open pull request for the same source branch and automation, and it opens a new one after that pull request is merged or closed. When a pull request triggers a run, Locadex comments on that pull request with a link to the pull request it opens. The branches it creates start with `locadex/` unless you change the prefix.
+
+**Auto-merge** merges Locadex pull requests when checks pass. It is off for new automations, and it never applies to setup pull requests. If branch protection blocks the merge, add **Locadex Agent** as a bypass in the repository's GitHub rulesets. An automation can also run your own commands. A pre-process command such as `npm run build` runs before Locadex processes files, and a post-process command such as `npm run typecheck` runs after. When a check fails, auto-merge does not run.
+
+The [Locadex Quickstart](/docs/platform/locadex/quickstart) has the setup steps. [Configuring Locadex automations](/docs/platform/locadex/guides/configuring-automations) covers triggers, branches, and commands, and [Auto-merging Locadex PRs](/docs/platform/locadex/guides/auto-merging-prs) covers branch protection. The [Automations reference](/docs/platform/locadex/reference/automations) lists what setup configures for each kind of app.

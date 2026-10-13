@@ -1,0 +1,98 @@
+---
+title: How do I keep translations up to date on every deploy?
+summary: Run npx gt translate in your CI pipeline before the production build, with a project API key and project ID stored as CI secrets. Each build then translates new and changed source text and ships current translation files with the app.
+date: 2026-10-13
+related: [ai-agent-i18n-setup, review-translations, what-is-locadex, i18n-without-translation-files]
+---
+
+Production builds use translations generated at build time, for both [`<T>`](/docs/react/reference/components/t) content and [`useGT`](/docs/react/reference/hooks/use-gt) strings. Content with no translation renders in the source language. So new copy deploys untranslated until [`npx gt translate`](/docs/cli/reference/commands/translate) runs again. A translate step in the build runs the command on every deploy.
+
+The steps below assume a project that already has a committed `gt.config.json`. A project without one can create it with the [CLI Quickstart](/docs/cli/quickstart).
+
+## Create a project API key for CI
+
+The CLI needs an explicit key in CI, because [`gt login`](/docs/cli/reference/commands/login) waits for a person to approve the sign-in in a browser. Grant the key the permissions for the whole workflow: file reads, file writes, and translation enqueueing, plus context access when the workflow uses context. A key with only runtime translation permission cannot run the translation pipeline.
+
+In the Dashboard, create the key under **Project > API Keys** with **Custom** permissions. Set **Files** to **Write** and **Translation queue** to **Enabled**, and set **Context** to **Write** if the pipeline generates context. (See [Create project keys](/docs/platform/dashboard/reference/api-keys#create-project-keys)).
+
+From the CLI, sign in with [`gt login`](/docs/cli/reference/commands/login), then run [`gt api-key create`](/docs/cli/reference/commands/api-key-create) and name each grant:
+
+```bash
+npx gt api-key create \
+  --project-id your-project-id \
+  --name "CI build" \
+  --permission project:files:read \
+  --permission project:files:write \
+  --permission project:translations:enqueue \
+  --permission project:context:write
+```
+
+The command lists both file grants. Do not assume a write grant also adds read access. The `project:context:write` grant covers context access. Leave it out only for a workflow that never uses context. The command prints the new secret once to standard output and writes no file, so store the secret right away.
+
+## Store the key and project ID as CI secrets
+
+Add the key as `GT_API_KEY` and the project ID as `GT_PROJECT_ID` in your CI provider's secret settings:
+
+```bash
+GT_API_KEY=your-api-key
+GT_PROJECT_ID=your-project-id
+```
+
+The CLI reads both variables from the environment. Keep the key out of committed files, including `gt.config.json`, whose settings validation rejects an API key.
+
+## Translate before the build command
+
+Run the translate step before your build command in `package.json`:
+
+```json title="package.json"
+{
+  "scripts": {
+    "translate": "npx gt translate",
+    "build": "npm run translate && <your build command>"
+  }
+}
+```
+
+In a Next.js app, the build script can also be written as `"build": "npx gt translate && next build"`. The `&&` runs the build only after the translate step succeeds.
+
+## Run the build on every push
+
+With this script, a CI provider translates before each build whenever it runs `npm run build` with the two secrets in its environment. In GitHub Actions, this workflow builds every push to `main` and passes the secrets to the build step:
+
+```yaml title=".github/workflows/build.yml"
+on:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build
+        env:
+          GT_API_KEY: ${{ secrets.GT_API_KEY }}
+          GT_PROJECT_ID: ${{ secrets.GT_PROJECT_ID }}
+```
+
+The CLI needs Node.js 20 or later. The workflow syntax is GitHub's. (See [Using secrets in GitHub Actions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)).
+
+## What each run does
+
+- It reads `gt.config.json` for the target locales, the files to translate, and the output paths.
+- It scans the source code for inline content, such as [`<T>`](/docs/react/reference/components/t) components and [`useGT`](/docs/react/reference/hooks/use-gt) calls.
+- It translates only content whose source has changed, and it can reuse a matching translation from an earlier version of the same file.
+- It saves the translations to the output paths, where the build picks them up. With `--publish`, it also publishes them to the General Translation CDN.
+
+The `--dry-run` flag parses and validates the project without calling the API, so a CI check can catch errors before a real run. The `--tag` flag with no value labels the run with the current commit hash and commit message, which makes versions easier to track in the Dashboard.
+
+## Other ways to keep translations current
+
+A project with no CI key can keep its build script unchanged. Run [`npx gt translate`](/docs/cli/reference/commands/translate) locally after signing in with [`gt login`](/docs/cli/reference/commands/login) whenever source text changes, then commit the translation files, `gt-lock.json`, and `gt.config.json`.
+
+[Locadex](/docs/platform/locadex/quickstart) is the General Translation AI agent which works in your GitHub repository. It keeps translations current through pull requests. Its **Generate translations and push** automation translates source content into every target language and updates the translation files when a pull request changes, when a commit is pushed, or when you run it by hand. Locadex requires a Starter or Enterprise plan.
+
+Read [Generating translations](/docs/cli/guides/generating-translations) for the full CLI workflow, [CLI credentials](/docs/cli/guides/configuring#credentials) for key permissions, and the [`gt translate`](/docs/cli/reference/commands/translate) reference for every flag.
