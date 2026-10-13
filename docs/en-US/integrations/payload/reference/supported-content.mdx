@@ -1,0 +1,99 @@
+---
+
+title: Supported content
+description: Find the Payload CMS fields translated, preserved, or skipped by the plugin. Reference for gt-payload supported content.
+
+---
+
+The plugin walks Payload's flattened field schema and translates only localized text. It preserves field structure so results can be written back through the Payload Local API.
+
+## Overview [#overview]
+
+| Topic | Description |
+| --- | --- |
+| [Translated fields](#translated-fields) | Localized text, textarea, and rich text values. |
+| [Nested content](#nested-content) | Groups, tabs, arrays, blocks, and rich text blocks. |
+| [Preserved fields](#preserved-fields) | Values that are copied or left unchanged. |
+| [Field opt-out](#field-opt-out) | Per-field configuration for excluding text. |
+| [Character limits](#character-limits) | Payload and SEO length behavior. |
+| [Save behavior](#save-behavior) | Draft, direct-save, and publishing behavior. |
+
+## Translated fields [#translated-fields]
+
+The plugin translates nonempty values from localized:
+
+- `text` fields, including `hasMany` lists
+- `textarea` fields
+- Lexical `richText` fields
+
+The Payload default locale is the source. Each other supported configured locale can be a translation target.
+
+Text removed from the source is removed from the translated locale on the next run. A locale with no requested target or no translatable source text does not start a translation job.
+
+## Nested content [#nested-content]
+
+Translatable fields may appear inside:
+
+- Groups and named tabs
+- Arrays
+- Blocks, including block references
+- Lexical block and inline-block fields
+
+Localized containers keep their own per-locale rows. Shared arrays and blocks match rows by Payload ID so translated text returns to the corresponding source row.
+
+## Preserved fields [#preserved-fields]
+
+The plugin does not translate:
+
+- Fields without `localized: true`, unless they are inside a localized container
+- Payload slug fields
+- Read-only, hidden, or virtual fields
+- Text values recognized as paths, URLs, or email addresses
+- Non-text field types such as relationships, uploads, dates, numbers, checkboxes, and JSON
+- Payload row metadata such as IDs and block type names
+
+Required fields that are not translated receive the source value when the target locale has no value, allowing Payload to save the locale. Existing target-locale values for preserved fields remain unchanged where Payload's localized structure supports them.
+
+Rich text nodes keep marks, links, uploads, blocks, and formatting. If translated markup cannot be matched safely to the source structure, the plugin skips that string and reports `broken_markup`.
+
+## Field opt-out [#field-opt-out]
+
+Set `custom.gt.translate` to `false` on a field to leave it out:
+
+```ts title="src/collections/products.ts"
+{
+  name: 'sku',
+  type: 'text',
+  localized: true,
+  custom: {
+    gt: {
+      translate: false,
+    },
+  },
+}
+```
+
+The option also excludes translatable descendants when it is set on their containing field.
+
+## Character limits [#character-limits]
+
+When a translation exceeds a field's `maxLength`, the plugin requests a shorter translation. If it still exceeds the hard limit, the plugin cuts it at a word boundary and adds the locale's ellipsis character.
+
+Fields rendered by the Payload SEO plugin use these recommended limits:
+
+| Field | Recommended length | Hard truncation |
+| --- | --- | --- |
+| Meta title | 60 characters | Only when the field also has `maxLength` |
+| Meta description | 150 characters | Only when the field also has `maxLength` |
+
+SEO recommendations trigger a shorter translation request but do not truncate on their own.
+
+## Save behavior [#save-behavior]
+
+The plugin reads the latest draft for the source and target locales with locale fallback disabled. It writes through the Local API:
+
+- With drafts enabled, it saves a draft.
+- Without drafts, it saves directly.
+- It never publishes.
+
+Admin-initiated reads and writes follow the signed-in user's Payload access rules. Programmatic calls may pass a Payload user to enforce the same rules; without one, the Payload Local API uses its normal server-side access behavior.
