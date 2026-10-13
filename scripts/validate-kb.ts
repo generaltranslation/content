@@ -8,6 +8,7 @@
  * - Every `redirectFrom` entry is a blog post slug claimed by one article
  *   only, and is not the slug of a live blog or devlog post (a redirect would
  *   hide it).
+ * - `related` lists at most RELATED_MAX other kb/ article slugs, each once.
  *
  * Usage: npx tsx validate-kb.ts
  */
@@ -27,13 +28,55 @@ const SLUG = /^[A-Za-z0-9_-]+$/;
 /** /kb/sitemap.md is the Knowledge Base index, so no article may use it. */
 export const RESERVED_SLUGS = ["sitemap"];
 
+/** Most related questions the site shows for one article. */
+export const RELATED_MAX = 5;
+
 export type KbEntry = {
   /** File or folder name directly inside kb/. */
   name: string;
   isDirectory: boolean;
   /** Parsed frontmatter `redirectFrom`, whatever shape it has. */
   redirectFrom?: unknown;
+  /** Parsed frontmatter `related`, whatever shape it has. */
+  related?: unknown;
 };
+
+function findRelatedProblems(
+  path: string,
+  slug: string,
+  related: unknown,
+  kbSlugs: ReadonlySet<string>
+): string[] {
+  if (related === undefined) return [];
+  if (
+    !Array.isArray(related) ||
+    !related.every((entry) => typeof entry === "string")
+  ) {
+    return [`${path}: related must be a list of Knowledge Base article slugs.`];
+  }
+
+  const problems: string[] = [];
+  if (related.length > RELATED_MAX) {
+    problems.push(
+      `${path}: related lists ${related.length} articles; the site shows at most ${RELATED_MAX}.`
+    );
+  }
+  const seen = new Set<string>();
+  for (const entry of related) {
+    if (entry === slug) {
+      problems.push(`${path}: related "${entry}" is the article itself.`);
+    } else if (!kbSlugs.has(entry)) {
+      problems.push(
+        `${path}: related "${entry}" is not a Knowledge Base article.`
+      );
+    }
+    if (seen.has(entry)) {
+      problems.push(`${path}: related lists "${entry}" more than once.`);
+    }
+    seen.add(entry);
+  }
+  return problems;
+}
 
 /**
  * @param entries - Everything directly inside kb/
@@ -47,6 +90,11 @@ export function findKbProblems(
   const problems: string[] = [];
   const live = new Set(liveSlugs);
   const claimedBy = new Map<string, string>();
+  const kbSlugs = new Set(
+    entries
+      .filter((entry) => !entry.isDirectory && entry.name.endsWith(".mdx"))
+      .map((entry) => entry.name.slice(0, -".mdx".length))
+  );
 
   for (const entry of entries) {
     const path = `${KB_DIR}/${entry.name}`;
@@ -68,6 +116,7 @@ export function findKbProblems(
     if (RESERVED_SLUGS.includes(slug)) {
       problems.push(`${path}: "${slug}" is a reserved slug.`);
     }
+    problems.push(...findRelatedProblems(path, slug, entry.related, kbSlugs));
 
     if (entry.redirectFrom === undefined) continue;
     if (
@@ -123,13 +172,17 @@ function main(): void {
   }
 
   const entries: KbEntry[] = readdirSync(kbPath, { withFileTypes: true }).map(
-    (dirent) => ({
-      name: dirent.name,
-      isDirectory: dirent.isDirectory(),
-      redirectFrom: dirent.name.endsWith(".mdx")
-        ? readFrontmatter(join(kbPath, dirent.name)).redirectFrom
-        : undefined,
-    })
+    (dirent) => {
+      const frontmatter = dirent.name.endsWith(".mdx")
+        ? readFrontmatter(join(kbPath, dirent.name))
+        : {};
+      return {
+        name: dirent.name,
+        isDirectory: dirent.isDirectory(),
+        redirectFrom: frontmatter.redirectFrom,
+        related: frontmatter.related,
+      };
+    }
   );
   const liveSlugs = LIVE_POST_DIRS.flatMap((dir) =>
     readSlugs(join(CONTENT_ROOT, dir))
