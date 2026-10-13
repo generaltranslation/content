@@ -21,10 +21,15 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
   }
 }
 
-const article = (name: string, redirectFrom?: unknown): KbEntry => ({
+const article = (
+  name: string,
+  redirectFrom?: unknown,
+  related?: unknown
+): KbEntry => ({
   name,
   isDirectory: false,
   redirectFrom,
+  related,
 });
 
 console.log("\nKnowledge base validator\n");
@@ -81,6 +86,58 @@ assertEqual(
   )[0],
   'kb/b.mdx: redirectFrom "plurals" is already claimed by kb/a.mdx.',
   "rejects two articles claiming the same redirect"
+);
+
+assertEqual(
+  findKbProblems(
+    [
+      article("a.mdx", undefined, ["b", "c"]),
+      article("b.mdx"),
+      article("c.mdx"),
+    ],
+    []
+  ).length,
+  0,
+  "accepts related articles that exist"
+);
+
+assertEqual(
+  findKbProblems([article("a.mdx", undefined, "b"), article("b.mdx")], [])[0],
+  "kb/a.mdx: related must be a list of Knowledge Base article slugs.",
+  "rejects a related that is not a list"
+);
+
+assertEqual(
+  findKbProblems([article("a.mdx", undefined, ["missing"])], [])[0],
+  'kb/a.mdx: related "missing" is not a Knowledge Base article.',
+  "rejects a related article that does not exist"
+);
+
+assertEqual(
+  findKbProblems([article("a.mdx", undefined, ["a"])], [])[0],
+  'kb/a.mdx: related "a" is the article itself.',
+  "rejects an article listed as related to itself"
+);
+
+assertEqual(
+  findKbProblems(
+    [article("a.mdx", undefined, ["b", "b"]), article("b.mdx")],
+    []
+  )[0],
+  'kb/a.mdx: related lists "b" more than once.',
+  "rejects a related article listed twice"
+);
+
+assertEqual(
+  findKbProblems(
+    [
+      article("a.mdx", undefined, ["b", "c", "d", "e", "f", "g"]),
+      ...["b", "c", "d", "e", "f", "g"].map((slug) => article(`${slug}.mdx`)),
+    ],
+    []
+  )[0],
+  "kb/a.mdx: related lists 6 articles; the site shows at most 5.",
+  "rejects more related articles than the site shows"
 );
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
