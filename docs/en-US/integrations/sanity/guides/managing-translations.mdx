@@ -127,7 +127,14 @@ gtPlugin({
 
 ## Customize serialization [#serialization]
 
-The plugin converts documents to HTML for translation and back. Most projects do not need to change this. Use custom serializers only when your schema has custom marks or block types that the defaults do not handle.
+The plugin converts documents to HTML for translation and back. Most projects do not need to change this. By default:
+
+- **Text fields** (`string`, `text`, and string-based types such as `markdown`) are sent as plain text. Newlines, blank lines, and surrounding whitespace are kept exactly, and anything that looks like HTML (for example `<br>` or `<sup>` in a markdown table) stays literal text.
+- **Annotations** such as links keep every field and their original `_key`. Only the annotated text is translated.
+- **Inline objects** in Portable Text, such as inline references, are kept in place unchanged. The text around them is translated.
+- **Decorators** such as bold, italic, superscript, subscript, underline, and custom decorators keep their marks, including on whitespace and line breaks inside the marked text.
+
+Use custom serializers only when you want to control the HTML a mark or block type produces. Wrap the output with `attachGTData` so the plugin can rebuild the original data when it merges the translation back.
 
 ```ts title="sanity.config.ts"
 import { attachGTData, gtPlugin } from 'gt-sanity';
@@ -137,8 +144,6 @@ gtPlugin({
   locales: ['es', 'zh', 'ja'],
   additionalSerializers: {
     marks: {
-      link: ({ value, children }) =>
-        attachGTData(`<a>${children}</a>`, value, 'markDef'),
       inlineMath: ({ value, children }) =>
         attachGTData(`<span>${children}</span>`, value, 'markDef'),
     },
@@ -146,4 +151,4 @@ gtPlugin({
 });
 ```
 
-`attachGTData(html, data, 'markDef')` embeds the mark's data into the serialized HTML so the plugin can rebuild the mark when it merges the translation back. (See the [serialization reference](/docs/integrations/sanity/reference/plugin-configuration#serialization)).
+(See the [serialization reference](/docs/integrations/sanity/reference/plugin-configuration#serialization)).
