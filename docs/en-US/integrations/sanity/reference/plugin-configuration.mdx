@@ -465,6 +465,10 @@ Setting an exclusion option on a custom type definition's `options` excludes eve
 
 The plugin serializes documents to HTML for translation and deserializes the result back into Sanity fields. Most projects do not need these options.
 
+<Callout type="info">
+  **Changed in `gt-sanity` 4.0.27:** The serializer now preserves significant whitespace, tag-like string content, inline objects, full annotation data, and custom decorators. Existing translations are not sent again automatically; regenerate affected documents to apply these fixes. If an `additionalBlockDeserializers` rule matched the previous empty `<div>` for an inline object or an `unknown__pt__mark__*` annotation element, update it for the current exported HTML or remove it so the built-in deserializer can restore the content.
+</Callout>
+
 ### `additionalStopTypes` [#additional-stop-types]
 
 **Type** `string[]` · **Optional** · **Default** `[]`
@@ -485,7 +489,7 @@ gtPlugin({
 
 Custom serializers merged with the defaults, following the `@portabletext/to-html` component shape (`types`, `marks`, `block`, `list`, `listItem`, and more). Most often used to serialize custom `marks`.
 
-For custom marks, wrap the output with `attachGTData` so the mark's data survives translation.
+Built-in links and other annotations preserve their full `markDef`, including `_key`, without a custom serializer. When you define a custom annotation serializer, including an override for `link`, wrap its output with `attachGTData` so the annotation data survives translation.
 
 ```ts title="sanity.config.ts"
 import { attachGTData, gtPlugin } from 'gt-sanity';
@@ -495,8 +499,6 @@ gtPlugin({
   locales: ['es'],
   additionalSerializers: {
     marks: {
-      link: ({ value, children }) =>
-        attachGTData(`<a>${children}</a>`, value, 'markDef'),
       inlineMath: ({ value, children }) =>
         attachGTData(`<span>${children}</span>`, value, 'markDef'),
     },
@@ -599,8 +601,8 @@ export default defineConfig({
       // Serialization — only if the defaults do not handle your schema
       additionalSerializers: {
         marks: {
-          link: ({ value, children }) =>
-            attachGTData(`<a>${children}</a>`, value, 'markDef'),
+          inlineMath: ({ value, children }) =>
+            attachGTData(`<span>${children}</span>`, value, 'markDef'),
         },
       },
     }),
