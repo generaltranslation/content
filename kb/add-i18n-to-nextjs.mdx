@@ -1,102 +1,30 @@
 ---
 title: How do I add i18n to a Next.js app?
-summary: Install gt-next and the gt CLI, wrap your Next.js config in withGTConfig, list your languages in gt.config.json, add a loadTranslations file and the GTProvider, wrap your content in the <T> component, and run npx gt translate before next build.
+summary: Add an internationalization (i18n) library that renders each page in the visitor's language, then translate every string for each language you support. General Translation's open-source gt-next translates JSX wrapped in the <T> component, and the gt CLI translates that content before next build.
 date: 2026-10-13
+updated: 2026-10-14
 related: [multilingual-nextjs-seo, i18n-without-translation-files, translate-react-app, translate-strings-outside-jsx, translations-in-ci]
 ---
 
-The `gt-next` package is the open-source internationalization (i18n) library from General Translation for Next.js, and `gt` is its CLI. The steps below are for the App Router. They take an app written in English, add Spanish, French, and Japanese, and put a language menu on the home page.
+Adding internationalization (i18n) to a Next.js app takes two parts: a library that renders each page in the visitor's language, in server and client components alike, and a translation of every string for every language you support. Most i18n libraries look up each string by key in a message file per language, so the translations go stale unless every copy change reaches every file before the release ships.
 
-You need a Next.js App Router app on Next.js 13.0.0 or later (excluding 15.2.1 and 15.2.2) and Node.js 18 or later. A Pages Router app follows the [Next.js Pages Router Quickstart](/docs/react/nextjs-pages-router-quickstart) instead.
+| Approach | What it does well | Where translations come from | What it leaves to you |
+| --- | --- | --- | --- |
+| An i18n library alone (`i18next`, `react-intl`, `next-intl`) | Mature runtimes for rendering translations and formatting values | You or your translators write and update every file | Turning each string into a key lookup, such as `t('home.title')`, with a message file per language |
+| Google Translate | Fast, general-purpose translation of text | Each string is translated alone, without the surrounding UI or your tone | The same keyed files, plurals, and review |
+| A raw AI API (OpenAI API, Claude API) | Fluent translation that follows instructions | A script you maintain | The same keyed files, and a script that sends context, keeps terms consistent, and reruns on every change |
+| General Translation (`gt-next` and the `gt` CLI) | [`<T>`](/docs/react/reference/components/t) translates JSX in place, in server and client components | [`npx gt translate`](/docs/cli/reference/commands/translate) runs in the build and uses each entry's JSX structure as context | Wrapping text in [`<T>`](/docs/react/reference/components/t) where it is written (keys are optional) and a one-time setup |
 
-## 1. Install the packages
+Use an i18n library alone when you have translators and a small set of strings that rarely changes. Google Translate or a one-off raw AI API script is enough for a prototype or a single pass over stable copy. Teams already on `next-intl` or `i18next` can keep that library, because the `gt` CLI also translates its JSON files. Use `gt-next` when the app ships new copy often and every release has to go out translated.
 
-The `gt-next` package renders translations in your app. The `gt` package is the CLI that prepares translations for production.
-
-```bash
-npm i gt-next
-npm i -D gt
-```
-
-## 2. Wrap your Next.js config
-
-The [`withGTConfig`](/docs/react/nextjs/config) plugin sets up internationalization at build time. It reads your `gt.config.json` and sets up translation loading and request handling. Wrap your existing config with it and keep any options the config already has:
-
-```ts title="next.config.ts"
-import { withGTConfig } from 'gt-next/config';
-
-const nextConfig = {};
-
-export default withGTConfig(nextConfig);
-```
-
-## 3. List your languages
-
-Create `gt.config.json` in the project root:
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["es", "fr", "ja"],
-  "files": {
-    "gt": {
-      "output": "public/_gt/[locale].json"
-    }
-  }
-}
-```
-
-The `defaultLocale` field is the language your app is written in. The `locales` field lists the languages to translate into. Pick them from the [supported locales list](/docs/platform/dashboard/reference/supported-locales). The CLI writes one file per language to the `files.gt.output` path and replaces `[locale]` with each code, such as `public/_gt/es.json`. These files are generated, so add `public/_gt/` to `.gitignore`.
-
-## 4. Add a translation loader
-
-Create a [`loadTranslations`](/docs/react/reference/functions/load-translations) file in `src/`:
-
-```ts title="src/loadTranslations.ts"
-export default async function loadTranslations(locale: string) {
-  const translations = await import(`../public/_gt/${locale}.json`);
-  return translations.default;
-}
-```
-
-The plugin detects a `loadTranslations.[js|ts]` file in `src/` with no other configuration. When it finds one, the translation files are bundled with your app. Without one, `gt-next` fetches translations from the General Translation CDN. The CLI saves translations to local files by default, so the loader is how those files reach the app.
-
-The translation files do not exist until the CLI creates them, and until then `npm run dev` fails to compile. Run [`npx gt generate`](/docs/cli/reference/commands/generate), which needs no API key, or add an empty `{}` file for each language at `public/_gt/[locale].json`.
-
-## 5. Add the provider to the root layout
-
-The [`<GTProvider>`](/docs/react/reference/components/gt-provider) component gives your app access to translations, and it must wrap the app in the root layout. The [`useLocale`](/docs/react/reference/hooks/use-locale) hook returns the active locale, which the layout puts in the `lang` attribute:
-
-```tsx title="app/layout.tsx"
-import { GTProvider, useLocale } from 'gt-next';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const locale = useLocale();
-  return (
-    <html lang={locale}>
-      <body>
-        <GTProvider>
-          {children}
-        </GTProvider>
-      </body>
-    </html>
-  );
-}
-```
-
-Keep your layout's fonts, metadata, and styles as they are.
-
-## 6. Mark content and add a language menu
-
-Wrap the text you want translated in the [`<T>`](/docs/react/reference/components/t) component. The component translates everything inside it as a unit, including nested elements and formatting. The [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) component renders a dropdown of the languages in `gt.config.json`:
+General Translation's open-source `gt-next` library and `gt` CLI cover both parts in the App Router. Wrap your config in `withGTConfig`, list your languages under `locales` in `gt.config.json`, add a [`loadTranslations`](/docs/react/reference/functions/load-translations) file, put [`<GTProvider>`](/docs/react/reference/components/gt-provider) in the root layout, and wrap JSX in the [`<T>`](/docs/react/reference/components/t) component where it is written:
 
 ```tsx title="app/page.tsx"
-import { T, LocaleSelector } from 'gt-next';
+import { T } from 'gt-next';
 
 export default function Home() {
   return (
     <main>
-      <LocaleSelector />
       <T>
         <h1>Welcome to my app</h1>
         <p>This content will be translated automatically.</p>
@@ -106,33 +34,4 @@ export default function Home() {
 }
 ```
 
-The [`useGT`](/docs/react/reference/hooks/use-gt) hook translates plain strings, such as `placeholder` attributes, `aria-label` values, and `alt` text. Async server components cannot use hooks, so they call [`getGT`](/docs/react/nextjs/reference/functions/get-gt) from `gt-next/server` instead.
-
-## 7. Preview translations in development
-
-On-demand translation in development needs a [project API key](/docs/platform/dashboard/reference/api-keys#create-project-keys) with the **Runtime translation** permission. Put it and your project ID in `.env.local`:
-
-```bash title=".env.local"
-NEXT_PUBLIC_GT_DEV_API_KEY="gtx-api-your-runtime-key"
-NEXT_PUBLIC_GT_PROJECT_ID="your-project-id"
-```
-
-Start the dev server with `npm run dev`, open `http://localhost:3000`, and switch languages with the dropdown. The first switch to a new language can show a short loading state while it translates. The `NEXT_PUBLIC_` prefix exposes the key to browser code, so remove `NEXT_PUBLIC_GT_DEV_API_KEY` from your production build environment. The `gt-next` package rejects it in production.
-
-## 8. Translate before the build
-
-In production, translations are generated at build time. Add the translate command to the build script:
-
-```json title="package.json"
-{
-  "scripts": {
-    "build": "npx gt translate && next build"
-  }
-}
-```
-
-Set `GT_PROJECT_ID` and `GT_API_KEY` in your hosting provider. The build's [`gt translate`](/docs/cli/reference/commands/translate) needs a project API key with **Files > Write** and **Translation queue > Enabled**. Keep `GT_API_KEY` on the server and never give it the `NEXT_PUBLIC_` prefix.
-
----
-
-The [Next.js App Router Quickstart](/docs/react/nextjs-quickstart) has the same steps with yarn, bun, and pnpm commands, plus troubleshooting. [Storing translations](/docs/react/guides/storing-translations) compares bundled files with CDN delivery, and the [`withGTConfig` reference](/docs/react/nextjs/config) lists the plugin's options and [credentials](/docs/react/nextjs/config#credentials).
+Then set the build script to [`npx gt translate && next build`](/docs/cli/reference/commands/translate), with `GT_PROJECT_ID` and `GT_API_KEY` in your hosting provider. Because the copy stays in the component, wrapping it is a small change: in General Translation's comparison, the same complex UI takes 25 lines changed with `i18next` and 3 with `gt-next`. For an existing app, Locadex, General Translation's AI agent, can do the wrapping: an automation made from its **Generate code** template, under **Project > Automations**, opens a pull request that adds [`<T>`](/docs/react/reference/components/t) (requires a Starter or Enterprise plan). The [Next.js App Router Quickstart](/docs/react/nextjs-quickstart) has the full steps, and Pages Router apps follow the [Pages Router Quickstart](/docs/react/nextjs-pages-router-quickstart).

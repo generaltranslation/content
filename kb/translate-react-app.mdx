@@ -1,97 +1,30 @@
 ---
 title: How do I translate a React app?
-summary: Install gt-react and the gt CLI, list your languages in gt.config.json, add a loadTranslations file, call initializeGTSPA in a small entry file before your app renders, wrap your text in the <T> component, and run npx gt translate to write a translation file for each language.
+summary: Translating a React app means internationalizing its components so they render in the user's language, then translating every string into each language you support. General Translation's gt-react translates JSX in place in the <T> component, and npx gt translate writes one file per language.
 date: 2026-10-13
+updated: 2026-10-14
 related: [add-i18n-to-nextjs, translate-react-native-app, i18n-without-translation-files, translate-strings-outside-jsx, how-to-handle-plurals-in-react]
 ---
 
-The `gt-react` package is the open-source internationalization library from General Translation for React, and `gt` is its CLI. The steps below are for a single-page app (SPA) that renders in the browser, such as a Vite, webpack, or Create React App project. The code is for Vite. In an SPA, `gt-react` runs entirely in the browser: you initialize it once at startup, and you don't need a provider component.
+Translating a React app takes two jobs: internationalization (i18n), which makes components render in the user's language, and translation of every string into each language you support. The work is hard because the text lives inside JSX, mixed with markup, variables, and plurals whose rules differ by language (English has 2 forms, Arabic has 6). The usual setup moves each string behind a key, such as `t('home.welcome')`, with one JSON file per language to keep in sync. Translated without the UI around it, a "Save" button can come back in German as *sparen* (save money) instead of *speichern* (save a file).
 
-Other kinds of React app have their own setup. A server-rendered app follows the [React Quickstart](/docs/react/react-quickstart), a React Router framework app follows the [React Router Quickstart](/docs/react/react-router-quickstart), and a Next.js app follows the [Next.js App Router Quickstart](/docs/react/nextjs-quickstart).
+| Approach | What it does well | What it leaves to you |
+| --- | --- | --- |
+| An i18n library alone (`i18next` with `react-i18next`, or `react-intl`) | Mature runtime for rendering translations and formatting values | Replacing strings with keys, keeping a JSON file per language in sync, and producing every translation |
+| Google Translate | Fast, general-purpose translation of text | Each string is translated alone, without the component or your tone; the i18n setup, plurals, and review are up to you |
+| A raw AI API (OpenAI API, Claude API) | Fluent translation that follows instructions | Collecting context for every string, keeping terms consistent across releases, plurals, review, and loading results into the app |
+| General Translation (`gt-react` and the `gt` CLI) | [`<T>`](/docs/react/reference/components/t) translates JSX in place with no keys, and [`npx gt translate`](/docs/cli/reference/commands/translate) writes one file per language, with the surrounding JSX structure as context | Wrapping text in [`<T>`](/docs/react/reference/components/t), a one-time setup (languages in `gt.config.json`, a loader, an entry file, sign-in, and a project ID), and rerunning [`npx gt translate`](/docs/cli/reference/commands/translate) (locally or in CI) when content changes |
 
-You need Node.js 18 or later, and your build tool may need a newer version. For example, Vite 8 requires Node.js `^20.19.0 || >=22.12.0`.
+Use an i18n library alone, with hand-written JSON files, when the app has a few strings that rarely change. Use Google Translate or a raw AI API for one-off text, such as a page you translate once. Use General Translation when the app keeps changing and every release has to ship in every language.
 
-## 1. Install the packages
-
-The `gt-react` package renders translations in your app. The `gt` package is the CLI that prepares them.
-
-```bash
-npm i gt-react
-npm i -D gt
-```
-
-## 2. List your languages
-
-Create `gt.config.json` in the project root:
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["es", "fr", "ja"],
-  "files": {
-    "gt": {
-      "output": "src/_gt/[locale].json"
-    }
-  }
-}
-```
-
-The `defaultLocale` field is the language your app is written in, and `locales` lists the languages to translate into. The `output` path is where the CLI writes one file per language. It sits inside `src/` because bundlers such as Vite import translation files as modules.
-
-By default, the CLI scans JavaScript and TypeScript files under `src`, `app`, `pages`, and `components`. Set [`src`](/docs/cli/reference/config#src) in `gt.config.json` when your code lives elsewhere.
-
-## 3. Add a translation loader
-
-The [`loadTranslations`](/docs/react/reference/functions/load-translations) function loads a language's file in the browser at runtime. Its import path matches the `output` path from step 2:
-
-```ts title="src/loadTranslations.ts"
-export default async function loadTranslations(locale: string) {
-  try {
-    const translations = await import(`./_gt/${locale}.json`);
-    return translations.default;
-  } catch (error) {
-    console.warn(`No translations found for ${locale}`);
-    return {};
-  }
-}
-```
-
-## 4. Initialize before the app renders
-
-Call [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) once at startup, before your app renders. It takes your config and translation loader, determines the user's locale, and loads that locale's translations. Put the call in a small entry module that initializes GT first and then loads the rest of the app:
-
-```ts title="src/index.ts"
-import { initializeGTSPA } from 'gt-react';
-import gtConfig from '../gt.config.json';
-import loadTranslations from './loadTranslations';
-
-await initializeGTSPA({
-  ...gtConfig,
-  loadTranslations,
-});
-
-await import('./main'); // render the app only after GT is ready
-```
-
-Your existing `src/main.tsx` stays as it is and renders the app. In Vite, point the module script tag in `index.html` at the new entry by changing its `src` from `/src/main.tsx` to `/src/index.ts`:
-
-```html title="index.html"
-<script type="module" src="/src/index.ts"></script>
-```
-
-The configuration is fixed for the lifetime of the app. The active locale comes from a saved choice, the browser's settings, or the default locale. The [React SPA Quickstart](/docs/react/react-spa-quickstart) has variants of this entry file for CommonJS and Create React App, which do not support top-level `await`.
-
-## 5. Mark content and add a language menu
-
-Wrap the text you want translated in the [`<T>`](/docs/react/reference/components/t) component. The component translates everything inside it as a unit, including nested elements and formatting. The [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) component renders a dropdown of the languages in `gt.config.json`:
+General Translation's open-source `gt-react` library and `gt` CLI translate a React single-page app (SPA), such as a Vite or webpack project. Install both, list your languages in `gt.config.json`, add a [`loadTranslations`](/docs/react/reference/functions/load-translations) function, and call [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) in a small entry file so translations load before the app renders. The `npx gt@latest` setup wizard can configure the Vite entry and translation loading for you (an experimental step). Wrap your text in the [`<T>`](/docs/react/reference/components/t) component, sign in with [`npx gt login`](/docs/cli/reference/commands/login), set your project ID, and run [`npx gt translate`](/docs/cli/reference/commands/translate).
 
 ```tsx title="src/components/Welcome.tsx"
-import { T, LocaleSelector } from 'gt-react';
+import { T } from 'gt-react';
 
 export default function Welcome() {
   return (
     <main>
-      <LocaleSelector />
       <T>
         <h1>Welcome to my app</h1>
         <p>This content will be translated automatically.</p>
@@ -101,53 +34,4 @@ export default function Welcome() {
 }
 ```
 
-Render the component from your application:
-
-```tsx title="src/App.tsx"
-import Welcome from './components/Welcome';
-
-export default function App() {
-  return <Welcome />;
-}
-```
-
-When a user picks a language, `gt-react` saves the choice in the `generaltranslation.locale` cookie and reloads the page. Then [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) runs again and loads the new locale's translations before the app renders.
-
-Strings outside React components go through the [`t()`](/docs/react/reference/functions/t-function) function. It works at module level because [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) loads translations before the rest of your app:
-
-```ts title="src/navigation.ts"
-import { t } from 'gt-react';
-
-export const navigation = [
-  { label: t('Home'), href: '/' },
-  { label: t('About'), href: '/about' },
-];
-```
-
-## 6. Sign in and translate
-
-Sign in with [`gt login`](/docs/cli/reference/commands/login):
-
-```bash
-npx gt login
-```
-
-Login does not select a project or write environment files. Set your existing project's ID in `.env.local`, or add [`projectId`](/docs/cli/reference/config#project-id) to `gt.config.json`:
-
-```bash title=".env.local"
-GT_PROJECT_ID="your-project-id"
-```
-
-Keep `.env.local` out of version control. Then translate:
-
-```bash
-npx gt translate
-```
-
-The CLI scans your app, translates its content, and writes one file per language to the `output` path. Run it again whenever your source content changes. In CI, use a separately scoped `GT_API_KEY` from your secret store, and never put a tooling key in browser code.
-
-Start the dev server with `npm run dev` and pick a language from the dropdown. The page reloads and shows the heading in that language. To see new strings translated while you edit, add the compiler and a project API key with runtime translation permission, as [Developing with SPA translations](/docs/react/guides/developing-spa-translations) describes.
-
----
-
-The [React SPA Quickstart](/docs/react/react-spa-quickstart) has the same steps with yarn, bun, and pnpm commands. The [Vite](/docs/react/guides/spa/configuring-vite-spa), [webpack](/docs/react/guides/spa/configuring-webpack-spa), [esbuild](/docs/react/guides/spa/configuring-esbuild-spa), [Rollup](/docs/react/guides/spa/configuring-rollup-spa), [Rolldown](/docs/react/guides/spa/configuring-rolldown-spa), and [Bazel](/docs/react/guides/spa/configuring-bazel-spa) guides set up the entry point and loader for each build tool, and [Internationalizing a React SPA](/docs/react/guides/spa/internationalizing-react-spa) covers JSX, strings, and locale selection after setup.
+The `context` prop on [`<T>`](/docs/react/reference/components/t) resolves an ambiguous word, such as "Save," and a Glossary and Custom Prompts in the Dashboard keep terms and tone consistent. [Server-rendered React](/docs/react/react-quickstart), [React Router framework](/docs/react/react-router-quickstart), and [Next.js](/docs/react/nextjs-quickstart) (with `gt-next`) apps have their own Quickstarts; for an SPA, the [React SPA Quickstart](/docs/react/react-spa-quickstart) has the full steps.
