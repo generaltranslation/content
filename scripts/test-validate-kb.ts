@@ -124,6 +124,33 @@ assertEqual(
   "rejects two articles with the same title"
 );
 
+assertEqual(
+  first([article("a.mdx", { title: "" })]),
+  "kb/a.mdx: title must be non-empty text.",
+  "rejects an empty title"
+);
+
+assertEqual(
+  first([article("a.mdx", { title: 42 })]),
+  "kb/a.mdx: title must be non-empty text.",
+  "rejects a title that is not text"
+);
+
+assertEqual(
+  first([article("a.mdx", { noindex: "yes" })]),
+  "kb/a.mdx: noindex must be true or false.",
+  "rejects a noindex the site would ignore"
+);
+
+assertEqual(
+  findKbProblems(
+    [article("a.mdx", { noindex: true }), article("b.mdx", { noindex: false })],
+    context
+  ).length,
+  0,
+  "accepts noindex true or false"
+);
+
 // Summaries
 
 assertEqual(
@@ -244,6 +271,24 @@ assertEqual(
   first([article("a.mdx", {}, `${BODY}\nIn conclusion, plurals are hard.\n`)]),
   'kb/a.mdx: line 5 contains "In conclusion".',
   "rejects filler phrasing"
+);
+
+assertEqual(
+  first([
+    article(
+      "a.mdx",
+      {},
+      `${BODY}\nFirst line\nsecond line\nIn conclusion, plurals are hard.\n`
+    ),
+  ]),
+  'kb/a.mdx: line 7 contains "In conclusion".',
+  "reports the line a phrase is on, not where its paragraph starts"
+);
+
+assertEqual(
+  first([article("a.mdx", {}, `${BODY}\nFirst line\nTODO: add an example.\n`)]),
+  'kb/a.mdx: line 6 contains the placeholder "TODO".',
+  "reports the line a placeholder is on"
 );
 
 assertEqual(

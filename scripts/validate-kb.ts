@@ -5,7 +5,8 @@
  * - kb/ holds only <slug>.mdx files, with no subfolders.
  * - Slugs use only letters, digits, `-`, and `_` (the site rejects anything
  *   else), and never a reserved slug.
- * - Frontmatter has title, summary, and date, and no unknown fields.
+ * - Frontmatter has title, summary, and date, and no unknown fields; a
+ *   title is non-empty text and `noindex`, when set, is true or false.
  * - Titles are unique and at most TITLE_MAX characters.
  * - A summary is at most SUMMARY_MAX_WORDS words, ends with a period, and has
  *   no backticks or Markdown links (it is reused as plain text).
@@ -146,6 +147,12 @@ function frontmatterProblems(
       problems.push(`${path}: frontmatter is missing ${field}.`);
     }
   }
+  if (
+    frontmatter.noindex !== undefined &&
+    typeof frontmatter.noindex !== "boolean"
+  ) {
+    problems.push(`${path}: noindex must be true or false.`);
+  }
   return problems;
 }
 
@@ -225,15 +232,29 @@ function headingProblems(
   return problems;
 }
 
-function textProblems(path: string, text: string, line: number): string[] {
-  const problems = FILLER.filter(({ pattern }) => pattern.test(text)).map(
-    ({ problem }) => `${path}: line ${line} ${problem}`
-  );
-  const placeholder =
-    text.match(PLACEHOLDER_WORDS)?.[0] ?? text.match(LOREM)?.[0];
-  if (placeholder) {
+/**
+ * Filler and placeholder problems in one text node. `startLine` is the
+ * node's first file line; a node spans several lines when its paragraph
+ * wraps, so each problem cites the line its match is on.
+ */
+function textProblems(
+  path: string,
+  text: string,
+  startLine: number
+): string[] {
+  const lineAt = (index: number) =>
+    startLine + (text.slice(0, index).match(/\n/g)?.length ?? 0);
+  const problems: string[] = [];
+  for (const { pattern, problem } of FILLER) {
+    const index = text.search(pattern);
+    if (index !== -1) {
+      problems.push(`${path}: line ${lineAt(index)} ${problem}`);
+    }
+  }
+  const placeholder = text.match(PLACEHOLDER_WORDS) ?? text.match(LOREM);
+  if (placeholder?.index !== undefined) {
     problems.push(
-      `${path}: line ${line} contains the placeholder "${placeholder}".`
+      `${path}: line ${lineAt(placeholder.index)} contains the placeholder "${placeholder[0]}".`
     );
   }
   return problems;
@@ -415,7 +436,13 @@ export function findKbProblems(
     problems.push(...frontmatterProblems(path, frontmatter));
 
     const { title } = frontmatter;
-    if (typeof title === "string") {
+    if (
+      title !== undefined &&
+      title !== null &&
+      (typeof title !== "string" || title.trim() === "")
+    ) {
+      problems.push(`${path}: title must be non-empty text.`);
+    } else if (typeof title === "string") {
       if (title.length > TITLE_MAX) {
         problems.push(
           `${path}: title is ${title.length} characters; keep it to ${TITLE_MAX} or fewer.`
