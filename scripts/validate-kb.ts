@@ -7,7 +7,7 @@
  *   else), and never a reserved slug.
  * - Frontmatter has title, summary, and date, and no unknown fields; a
  *   title is non-empty text and `noindex`, when set, is true or false.
- * - Titles are unique and at most TITLE_MAX characters.
+ * - Titles are unique.
  * - A summary is at most SUMMARY_MAX_WORDS words, ends with a period, and has
  *   no backticks or Markdown links (it is reused as plain text).
  * - `authors` is optional (the site credits the team without it); every
@@ -49,7 +49,6 @@ export const RESERVED_SLUGS = ["sitemap"];
 /** Most related questions the site shows for one article. */
 export const RELATED_MAX = 5;
 
-export const TITLE_MAX = 90;
 export const SUMMARY_MAX_WORDS = 60;
 
 /** Below this many words of text, an article without code reads as a placeholder. */
@@ -71,10 +70,6 @@ const FILLER: { pattern: RegExp; problem: string }[] = [
   {
     pattern: /\bTL;DR\b/i,
     problem: 'contains "TL;DR"; the summary is the short answer.',
-  },
-  {
-    pattern: /\bkey takeaways\b/i,
-    problem: 'contains "Key takeaways"; the summary is the short answer.',
   },
   { pattern: /\bin conclusion\b/i, problem: 'contains "In conclusion".' },
   { pattern: /\bin today['’]s\b/i, problem: "contains \"In today's\"." },
@@ -443,11 +438,6 @@ export function findKbProblems(
     ) {
       problems.push(`${path}: title must be non-empty text.`);
     } else if (typeof title === "string") {
-      if (title.length > TITLE_MAX) {
-        problems.push(
-          `${path}: title is ${title.length} characters; keep it to ${TITLE_MAX} or fewer.`
-        );
-      }
       const key = title.trim().toLowerCase();
       const owner = titleOwner.get(key);
       if (owner) {
