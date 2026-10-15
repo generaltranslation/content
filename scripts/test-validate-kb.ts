@@ -110,9 +110,10 @@ assertEqual(
 // Titles
 
 assertEqual(
-  first([article("a.mdx", { title: "x".repeat(91) })]),
-  "kb/a.mdx: title is 91 characters; keep it to 90 or fewer.",
-  "rejects a title over 90 characters"
+  findKbProblems([article("a.mdx", { title: `${"x".repeat(120)}?` })], context)
+    .length,
+  0,
+  "accepts a long title"
 );
 
 assertEqual(
@@ -265,6 +266,15 @@ assertEqual(
   first([article("a.mdx", {}, `## TL;DR\n\n${BODY}`)]),
   'kb/a.mdx: line 1 contains "TL;DR"; the summary is the short answer.',
   "rejects a TL;DR section"
+);
+
+assertEqual(
+  findKbProblems(
+    [article("a.mdx", {}, `${BODY}\n## Key takeaways\n\nPlurals vary by language.\n`)],
+    context
+  ).length,
+  0,
+  "accepts a Key takeaways section"
 );
 
 assertEqual(
