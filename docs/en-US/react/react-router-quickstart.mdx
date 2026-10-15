@@ -224,56 +224,29 @@ Hydrogen storefronts are React Router framework apps and follow the same steps. 
 }
 ```
 
-`gt-react` translates the text in your storefront's code, such as navigation, buttons, and page copy. Product titles, descriptions, and other store content come from Shopify's Storefront API, in the language Hydrogen requests; translate that content in Shopify. The Hydrogen starter always requests English, so map the visitor's locale to a Shopify language:
-
-```ts title="app/lib/storefrontLocale.ts"
-import { parseLocale } from 'gt-react';
-import type {
-  CountryCode,
-  LanguageCode,
-} from '@shopify/hydrogen/storefront-api-types';
-
-// Locales whose Shopify language code is not the uppercased language.
-const SHOPIFY_LANGUAGES: Record<string, LanguageCode> = {
-  'pt-BR': 'PT_BR',
-  'pt-PT': 'PT_PT',
-  'zh-CN': 'ZH_CN',
-  'zh-Hans': 'ZH_CN',
-  'zh-TW': 'ZH_TW',
-  'zh-Hant': 'ZH_TW',
-  'zh-HK': 'ZH_TW',
-  tl: 'FIL',
-};
-
-export function getStorefrontI18n(
-  request: Request,
-  country: CountryCode = 'US'
-): { language: LanguageCode; country: CountryCode } {
-  const locale = parseLocale(request);
-  const language =
-    SHOPIFY_LANGUAGES[locale] ??
-    (locale.split('-')[0].toUpperCase() as LanguageCode);
-  return { language, country };
-}
-```
-
-Then pass it to `createHydrogenContext` in `app/lib/context.ts`:
+`gt-react` translates the text in your storefront's code, such as navigation, buttons, and page copy. Product titles, descriptions, and other store content come from Shopify's Storefront API, in the language Hydrogen requests; translate that content in Shopify. The Hydrogen starter always requests English, so request the visitor's language in `app/lib/context.ts` instead:
 
 ```ts title="app/lib/context.ts"
-import { getStorefrontI18n } from '~/lib/storefrontLocale'; // [!code ++]
+import { parseLocale } from 'gt-react'; // [!code ++]
+import type { LanguageCode } from '@shopify/hydrogen/storefront-api-types'; // [!code ++]
 
 // ...
   const hydrogenContext = createHydrogenContext(
     {
       // ...
       i18n: { language: 'EN', country: 'US' }, // [!code --]
-      i18n: getStorefrontI18n(request), // [!code ++]
+      i18n: { // [!code ++]
+        language: parseLocale(request).split('-')[0].toUpperCase() as LanguageCode, // [!code ++]
+        country: 'US', // [!code ++]
+      }, // [!code ++]
     },
     additionalContext
   );
 ```
 
-The country stays the same, so prices and currency do not change with the language; pass your store's default country if it is not `US`. Shopify returns store content in a language only when the store has published that language and translated the content; otherwise it returns the default language. Shopify has no language for Montenegrin (`cnr`) or Standard Moroccan Tamazight (`zgh`). If your storefront already sets `i18n` another way, such as from the URL with Shopify Markets, keep that setup.
+This requests the language part of the visitor's locale, so `fr-CA` requests French. Map other locales to Shopify's codes yourself: Portuguese and Chinese use regional codes (`PT_BR`, `PT_PT`, `ZH_CN`, `ZH_TW`), Filipino is `FIL`, and Montenegrin (`cnr`) and Standard Moroccan Tamazight (`zgh`) have no Shopify language.
+
+The country stays the same, so prices and currency do not change with the language; use your store's default country if it is not `US`. Shopify returns store content in a language only when the store has published that language and translated the content; otherwise it returns the default language. If your storefront already sets `i18n` another way, such as from the URL with Shopify Markets, keep that setup.
 
 ## Troubleshooting [#troubleshooting]
 
