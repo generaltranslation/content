@@ -1,0 +1,96 @@
+---
+title: "next-intl vs gt-next: which should you use for Next.js?"
+summary: Choose next-intl when you want its Next.js internationalization APIs and a translation workflow built around messages you supply. Choose General Translation's gt-next when you want to author content inline and use General Translation's tooling to generate translations from it.
+date: 2026-10-16
+category: workflow-tools
+related:
+  - i18n-without-manual-json-files
+  - nextjs-app-router-i18n
+---
+
+Both libraries support the App Router. The decision is less about whether they can display another language and more about how your team creates, updates, and delivers translated content. [next-intl App Router setup](https://next-intl.dev/docs/getting-started/app-router), [gt-next App Router setup](/docs/react/nextjs-quickstart).
+
+## Compare the whole workflow
+
+| Question | next-intl | General Translation's gt-next |
+| --- | --- | --- |
+| Where does source copy live? | In message catalogs in the standard setup; inline extraction is also available experimentally | In marked JSX and inline string calls; dictionary APIs are also available |
+| How are translations produced? | You supply translated messages, optionally using a localization service | The GT CLI can generate translations through General Translation; local templates also support manual translation |
+| Does it support Server Components? | Yes, with APIs for synchronous and asynchronous components | Yes, with server translation APIs and JSX translation |
+| What handles interactive UI? | Client-side APIs and `NextIntlClientProvider` | Client-side APIs under [`GTProvider`](/docs/react/reference/components/gt-provider) |
+| Can translations be bundled with the app? | Yes; the App Router guide loads local messages | Yes; configure generated output and a local loader |
+
+The implementation details are in the official guides for [next-intl server/client usage](https://next-intl.dev/docs/environments/server-client-components), [next-intl extraction](https://next-intl.dev/docs/usage/extraction), [GT's quickstart](/docs/react/nextjs-quickstart), and [GT's local storage](/docs/react/guides/storing-translations).
+
+## The same heading, two authoring styles
+
+In next-intl's standard catalog workflow, a source message might look like this:
+
+```json
+{
+  "Projects": {
+    "heading": "Find your next project"
+  }
+}
+```
+
+The component selects the message by namespace and key:
+
+```tsx
+import { useTranslations } from 'next-intl';
+
+export default function ProjectHeading() {
+  const t = useTranslations('Projects');
+  return <h1>{t('heading')}</h1>;
+}
+```
+
+With `gt-next`, the same source sentence can stay inside the component:
+
+```tsx
+import { T } from 'gt-next';
+
+export default function ProjectHeading() {
+  return (
+    <T>
+      <h1>Find your next project</h1>
+    </T>
+  );
+}
+```
+
+These snippets assume each library's provider and configuration are already in place. They illustrate authoring, not complete setup. [next-intl setup](https://next-intl.dev/docs/getting-started/app-router), [GT's T component](/docs/react/reference/components/t).
+
+The catalog approach lets a reviewer inspect copy separately from component code. The inline approach lets a reviewer see copy in its JSX context. For ambiguous copy, supply explicit context: GT's [`T` component accepts a `context` prop](/docs/react/reference/components/t#context), and next-intl's [experimental extraction supports message descriptions](https://next-intl.dev/docs/usage/extraction#descriptions).
+
+Also, “next-intl requires manually managed keys” is too broad. Its experimental `useExtracted` API offers inline messages with automatic extraction. Evaluate that option if authoring is your main reason for considering a migration. [How extraction works](https://next-intl.dev/blog/use-extracted), [current API status](https://next-intl.dev/docs/usage/extraction).
+
+## Translation generation is a separate decision
+
+An internationalization library renders messages. A translation workflow produces and maintains them. Evaluate both parts, even if one vendor supplies them together.
+
+For next-intl, the official [localization management guide](https://next-intl.dev/docs/workflows/localization-management) describes using Crowdin, including automated repository synchronization. A catalog workflow can therefore involve translators, automation, or both; it is not inherently a manual export/import process.
+
+You can also keep next-intl and use General Translation for translation production. The GT CLI [supports translating next-intl JSON catalogs](/docs/cli/reference/commands/translate), detecting the library from `package.json` and handling its message syntax. Configure the catalog paths and target locales for that workflow. Adopting GT's translation service does not require switching to `gt-next`.
+
+With General Translation, [`gt translate`](/docs/cli/reference/commands/translate) collects source content, submits translation work, and downloads the output. This connects inline authoring to a translation service, but adds service credentials and translation generation to your delivery process.
+
+The `gt-next` package and General Translation's hosted service are distinct. You can use [`gt generate`](/docs/cli/reference/commands/generate) to produce local source templates and supply translations yourself. That route requires maintaining translated output; it does not provide automatic translation for free.
+
+## Server rendering, delivery, and cost
+
+Both libraries document server and client usage. next-intl provides [`getTranslations`](https://next-intl.dev/docs/environments/server-client-components#async-components) for asynchronous server code; `gt-next` provides [`getGT`](/docs/react/nextjs/reference/functions/get-gt) for inline strings in that setting. Keep interactive components at client boundaries rather than converting a whole page just to translate text. [next-intl server/client guide](https://next-intl.dev/docs/environments/server-client-components).
+
+For delivery, distinguish building translations from serving them. General Translation's [local loader](/docs/react/guides/storing-translations) bundles translations with the app. Updating those translations then requires a new build. Its CDN delivery option has a different runtime dependency and update model.
+
+Evaluate cost across your actual workflow: translation generation, review, hosting or delivery, and engineering maintenance. Consult [General Translation's current pricing](https://generaltranslation.com/pricing) and the pricing of any translation service you pair with next-intl. Library choice alone does not determine the total cost.
+
+## When would we choose each?
+
+**Keep or choose next-intl** when its message model fits your application and your translation production and review process already works. If your main complaint is repetitive key management, investigate extraction before committing to a library migration.
+
+**Choose General Translation's gt-next** when inline JSX is how you want to author copy and you want the same toolchain to handle translation generation. Confirm that its translation review and deployment workflow matches your team's needs.
+
+For an existing app, trial one representative route before migrating. Include plurals, rich text, metadata, a Server Component, and an interactive component. Preserve existing locale URLs and verify the results in a production build. Replacing [`t()` calls](https://next-intl.dev/docs/usage/translations) alone is not a complete migration.
+
+If you want to evaluate more approaches, read [i18n without manually managing JSON translation files](/kb/i18n-without-manual-json-files). If you have chosen General Translation, continue with [the App Router implementation](/kb/nextjs-app-router-i18n).

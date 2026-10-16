@@ -1,0 +1,110 @@
+---
+title: What's the best i18n setup without manually managing JSON translation files?
+summary: Choose General Translation for inline React content and automated translation, Lingui for JavaScript extraction and catalogs, or Django’s gettext workflow for Python and templates. Existing next-intl users should evaluate its experimental extraction before migrating. The best fit depends on your framework and which maintenance work you want to remove.
+date: 2026-10-16
+category: workflow-tools
+related:
+  - next-intl-vs-gt-next
+  - nextjs-app-router-i18n
+---
+
+The important distinction is what you want to stop maintaining. You can avoid writing translation keys and source dictionaries while still generating files that hold translated content.
+
+## What does “without translation files” mean?
+
+Consider a heading in a component:
+
+```tsx
+<h1>Find your next project</h1>
+```
+
+In a key-based workflow, you move that sentence into a source catalog and replace it with a lookup such as `t('projects.heading')`. An inline workflow keeps the sentence near the UI and lets tooling identify the message.
+
+That changes how developers author content. It does not eliminate the need to store its Spanish or Japanese translation somewhere. The useful questions are:
+
+- Do I have to invent and maintain message keys?
+- Where do translators or translation services receive the source content?
+- Who generates and reviews the translations?
+- How does the application load them in production?
+
+A file being JSON is rarely the whole problem. The repeated work around those files is what you should evaluate.
+
+## Choose a workflow that fits your application
+
+| Approach | Application fit | Translation workflow | Choose it when |
+| --- | --- | --- | --- |
+| General Translation | React with `gt-react`; Next.js with `gt-next` | Mark inline content, then use the GT CLI to generate translations | You want inline authoring and an integrated translation service |
+| Lingui | JavaScript, including React | Extract inline messages into catalogs, translate them, and compile them | You want source copy in code with catalog-based translation handoffs |
+| next-intl with experimental extraction | Next.js | Extract inline messages and update catalogs; your translation workflow fills them | You want to retain next-intl while reducing manual key management |
+| Django's gettext-based workflow | Django applications | Extract marked Python/template messages into PO files, translate, and compile | You want the framework's own translation workflow without JSON catalogs |
+
+These options solve different parts of the problem. General Translation can automate translation production as well as collect source content. Extraction tools update catalogs for marked messages they can discover in your source code; you still need to translate and review those messages. A PO-based workflow avoids JSON specifically while retaining catalogs.
+
+See the official guides for [General Translation's React SDK](/docs/react/react-quickstart), [Lingui](https://lingui.dev/introduction), [next-intl extraction](https://next-intl.dev/docs/usage/extraction), and [Django translation](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/).
+
+### General Translation: inline content with automated translation
+
+In React, General Translation's `gt-react` lets you mark static JSX using [`<T>`](/docs/react/reference/components/t):
+
+```tsx
+import { T } from 'gt-react';
+
+export default function ProjectHeading() {
+  return (
+    <T>
+      <h1>Find your next project</h1>
+      <p>Explore projects from teams around the world.</p>
+    </T>
+  );
+}
+```
+
+Your component contains the source copy. This snippet assumes the SDK is configured; use the setup guide for your rendering model: [a React SPA](/docs/react/react-spa-quickstart), [custom React SSR](/docs/react/react-quickstart), or [Next.js with `gt-next`](/docs/react/nextjs-quickstart).
+
+The [`gt translate`](/docs/cli/reference/commands/translate) command collects marked content and uses General Translation's service to generate translations. It requires project credentials and permission to submit translation work.
+
+You can [bundle the generated translations locally](/docs/react/guides/storing-translations), so the deployed application loads them from its own build. In that setup, JSON files still exist, but developers do not maintain a parallel dictionary for each source-code change. Translation updates require rebuilding and redeploying the application.
+
+Choose this approach when automating translation production is part of the requirement. You still need to mark translatable content, configure the build, and review translations appropriate to your product. Inline authoring does not make dynamic values or plural rules disappear; General Translation provides [variable and formatting components](/docs/react/guides/formatting-variables) for those cases.
+
+### next-intl: an option for an existing Next.js application
+
+next-intl documents an experimental `useExtracted` API that extracts inline messages and maintains catalogs. It supports JSON, PO, and custom extraction formats. Extraction relies on static analysis: message arguments must be string literals, rather than text known only at runtime. Treat those constraints and the experimental status as part of the adoption decision. [See the extraction guide](https://next-intl.dev/docs/usage/extraction).
+
+If your team already uses next-intl, first identify the actual friction. Replacing manual key management may be enough; replacing the library could also require changes to routing, tests, and message conventions.
+
+For teams that want a managed translation process, next-intl documents a [Crowdin integration](https://next-intl.dev/docs/workflows/localization-management). Catalogs do not imply that developers must manually translate or synchronize every language.
+
+### Lingui: inline JavaScript messages with translation catalogs
+
+Lingui supports JavaScript internationalization and provides a React integration, so its use is not limited to Next.js. Its macros let you author messages in source code and extract catalogs for translation. The [introduction](https://lingui.dev/introduction) explains its scope, and the [React tutorial](https://lingui.dev/tutorials/react) walks through authoring, extraction, and compilation.
+
+This is worth considering when a catalog handoff is useful to your team. The tradeoff is that you still need to operate the extraction, translation, and compilation workflow. Choosing PO instead of JSON changes the interchange format; it does not remove that work.
+
+### Django: use the framework's gettext workflow
+
+For Django, start by evaluating its built-in translation support. You mark source strings in Python and templates, extract PO catalogs with `makemessages`, and compile translated catalogs with `compilemessages`. This workflow uses the GNU gettext toolset. [Django translation documentation](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/).
+
+Choose it when you want a workflow that fits an existing Django application and you are comfortable retaining catalogs. This Python/template workflow avoids JSON, but someone or some service must still produce and maintain the translations. Browser-side translation can require a separate delivery setup. It is an example of why the framework matters when selecting an implementation, even though the underlying maintenance problem is shared.
+
+## Decide using one real feature
+
+Before changing libraries, try a small feature with a heading, an input label, an interpolated value, and a plural message. Change the English copy after translating it. Then check what the developer, translator, and build pipeline each have to do.
+
+That exercise answers a more useful question than which library has the shortest installation command: **which workflow makes your team's next change easiest to ship correctly?**
+
+Start with the tools that fit your application's language, rendering model, and translation review process. For a Next.js application, the next steps are [next-intl vs gt-next](/kb/next-intl-vs-gt-next) and [the General Translation App Router walkthrough](/kb/nextjs-app-router-i18n).
+
+## Common questions
+
+### Will every page view need an AI translation request?
+
+No. In the General Translation local-output workflow described here, translations are generated before deployment and loaded from the application's build. That is separate from on-demand translation during development. [Storage options](/docs/react/guides/storing-translations).
+
+### Should I migrate a working app just to remove JSON?
+
+Start with the maintenance problem. If translation review and delivery already work, changing the message-authoring step may be sufficient. A migration should earn its cost through a better overall workflow.
+
+### Can I avoid JSON catalogs and manually writing translation keys?
+
+Yes, depending on the workflow. For example, next-intl's experimental extraction can generate keys and use PO catalogs. The keys still exist; the tooling creates them for you. If your objective is to stop maintaining translation catalogs altogether, changing their file extension is only part of the answer. [Supported extraction formats](https://next-intl.dev/docs/usage/extraction#formats).
