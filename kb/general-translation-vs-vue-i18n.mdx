@@ -1,0 +1,106 @@
+---
+title: "General Translation vs. vue-i18n: which should you use?"
+summary: vue-i18n is a mature i18n plugin for Vue 3, but it doesn't translate anything. You write a keyed message file for each language, and version 11 needs a custom plural rule for languages such as Polish. General Translation's gt-vue renders translations the same way and also does the translating, from copy written inline in your templates.
+date: 2026-10-16
+category: internationalization
+related: [general-translation-vs-i18n-libraries, general-translation-vs-i18next, general-translation-vs-lingui, general-translation-vs-react-intl, i18n-without-translation-files]
+---
+
+vue-i18n renders messages in the user's language for Vue apps. You define messages for each locale, look them up by key in your templates, and it formats plurals, dates, and numbers. It doesn't translate anything: every language's messages come from you, your translators, or a translation management system (TMS). General Translation's `gt-vue` renders translations the same way, and General Translation also generates them from copy you write inline in your templates.
+
+## What vue-i18n does well
+
+- **Maturity.** vue-i18n has been on npm since 2014. Version 11 is the maintained line, with about 4.5 million npm downloads in the week of September 29, 2026, and version 12 is in alpha.
+- **Nuxt.** The `@nuxtjs/i18n` module builds on vue-i18n 11 and adds locale-prefixed routes, localized paths, browser-language detection, lazy-loaded translations, and SEO tags such as hreflang alternates.
+- **Formatting and rich text.** `datetimeFormats` and `numberFormats` take `Intl` options, and the `<i18n-t>` component places elements inside a translated message without `v-html`.
+- **Messages beside components.** With `@intlify/unplugin-vue-i18n`, an `<i18n>` block keeps a component's messages inside its single-file component.
+- **Tooling.** The official ESLint plugin flags raw text in templates and missing or unused keys.
+
+## What vue-i18n leaves to you
+
+Here's a small inbox with vue-i18n's Composition API. Each string gets a key, and the English lives in a message file:
+
+```json title="locales/en.json"
+{
+  "inbox": {
+    "heading": "Inbox",
+    "unread": "You have {n} unread message | You have {n} unread messages"
+  }
+}
+```
+
+```vue title="Inbox.vue"
+<script setup>
+import { useI18n } from 'vue-i18n'
+
+defineProps({ count: { type: Number, required: true } })
+const { t } = useI18n()
+</script>
+
+<template>
+  <section>
+    <h1>{{ t('inbox.heading') }}</h1>
+    <p>{{ t('inbox.unread', count) }}</p>
+  </section>
+</template>
+```
+
+Every other language needs its own file, written by hand or sent out for translation, and a string added to the template is missing from every other file until someone adds it. Two details catch teams out:
+
+- **Plural rules.** vue-i18n 11's default rule picks a form by position: one form for zero, one for one, and one for everything else. Polish uses different forms for 1, 2, 5, and 22, so a Polish message with all four forms renders "Masz 1 nieprzeczytane wiadomości" for one message, where Polish needs "Masz 1 nieprzeczytaną wiadomość," until you write a custom `pluralRules` function for the locale. vue-i18n 12, still in alpha, switches to `Intl.PluralRules`.
+- **Numbers inside messages.** The `{n}` in a plural message isn't formatted for the locale, so 12345 renders as "12345" in Spanish instead of "12.345" unless you pass a formatted value.
+
+## General Translation does the same, and generates the translations
+
+`gt-vue` does the same job as vue-i18n. It renders each locale's messages, picks plural forms with each locale's CLDR rules, and formats numbers, currencies, and dates with [`<Num>`](/docs/vue/reference/components/num), [`<Currency>`](/docs/vue/reference/components/currency), and [`<DateTime>`](/docs/vue/reference/components/datetime). Then General Translation does what vue-i18n doesn't: it generates the translations. Here's the same inbox, with the copy inline:
+
+```vue title="Inbox.vue"
+<script setup>
+import { Num, Plural, T } from 'gt-vue'
+
+defineProps({ count: { type: Number, required: true } })
+</script>
+
+<template>
+  <section>
+    <T><h1>Inbox</h1></T>
+    <p>
+      <T>
+        <Plural :n="count">
+          <template #one>You have <Num :value="count" /> unread message</template>
+          <template #other>You have <Num :value="count" /> unread messages</template>
+        </Plural>
+      </T>
+    </p>
+  </section>
+</template>
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) scans your templates, sends each [`<T>`](/docs/vue/reference/components/t) block with its structure to the General Translation API, and writes a catalog for every target locale. [`<Plural>`](/docs/vue/reference/components/plural) selects a form with `Intl.PluralRules`, so a Polish translation's forms for 2, 5, and 22 are chosen with no rule setup, and [`<Num>`](/docs/vue/reference/components/num) formats the count for each locale: 12,345 in English, 12.345 in Spanish, and 12 345 in Polish. To translate by hand instead, [`gt generate`](/docs/cli/reference/commands/generate) writes template catalogs without calling the API.
+
+`gt-vue` is much newer than vue-i18n. It's a 0.x package, its [Quickstart](/docs/vue/quickstart) marks it unstable, so its API can change between releases, and it requires Vue 3.3 or later.
+
+## vue-i18n vs. General Translation at a glance
+
+| Feature | vue-i18n | General Translation (`gt-vue`) |
+| --- | --- | --- |
+| How you write copy | Keys in a message file or `<i18n>` block per locale | Inline in templates, inside [`<T>`](/docs/vue/reference/components/t) |
+| Translates your content | No | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| Plural forms | Forms separated by a vertical bar; version 11 needs a custom rule for languages such as Polish | [`<Plural>`](/docs/vue/reference/components/plural) slots chosen with CLDR rules for every locale |
+| Numbers in messages | Formatted when you pass a formatted value | [`<Num>`](/docs/vue/reference/components/num) formats for each locale |
+| Nuxt | `@nuxtjs/i18n` adds routing, language detection, and SEO tags | No Nuxt module |
+| Maturity | On npm since 2014; version 11 is stable | 0.x, marked unstable |
+
+Keep vue-i18n when you build on Nuxt and rely on `@nuxtjs/i18n` for routing and SEO, when your catalogs and translation process already work, or when you need a library at a stable major version. Choose General Translation when you'd rather keep copy inline in your templates and have every language translated with each build, and a 0.x library fits your project.
+
+## Moving from vue-i18n
+
+Move one component at a time: replace each key lookup with its English copy inside [`<T>`](/docs/vue/reference/components/t), and turn pipe-separated plural messages into [`<Plural>`](/docs/vue/reference/components/plural) slots, as in the example above. Set up `gt-vue` with the [Vue Quickstart](/docs/vue/quickstart), then run [`npx gt translate`](/docs/cli/reference/commands/translate) before your build.
+
+The `gt` CLI can also translate JSON files from any library, but its [JSON format docs](/docs/cli/reference/formats/json-files) note that custom message syntax is supported only for next-intl and i18next, so vue-i18n's pipe-separated plurals may not translate accurately. For a Vue app, `gt-vue` is the supported path. (See [Why use General Translation instead of other open-source i18n libraries?](/kb/general-translation-vs-i18n-libraries) for how the other libraries compare.)
+
+## Key takeaways
+
+- vue-i18n is a mature i18n plugin with strong Nuxt support, but it doesn't translate anything, and version 11 needs a custom plural rule for languages such as Polish.
+- General Translation's `gt-vue` renders translations the same way and also does the translating, from copy written inline in [`<T>`](/docs/vue/reference/components/t), with CLDR plural selection and number formatting for each locale.
+- Keep vue-i18n for Nuxt routing and SEO or a stable major version. Choose `gt-vue` to stop maintaining keyed message files.

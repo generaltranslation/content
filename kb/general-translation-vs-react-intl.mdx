@@ -1,0 +1,106 @@
+---
+title: "General Translation vs. react-intl: which should you use?"
+summary: react-intl, part of FormatJS, formats ICU messages that you write inline as default messages and extract into a catalog, but it doesn't translate anything. Each language's catalog comes from you, your translators, or a TMS. General Translation's libraries render the same ICU messages, and General Translation also does the translating, with the context of your code.
+date: 2026-10-16
+category: internationalization
+related: [general-translation-vs-i18n-libraries, general-translation-vs-i18next, general-translation-vs-lingui, general-translation-vs-vue-i18n, how-to-handle-plurals-in-react]
+---
+
+react-intl is the React library from FormatJS. You write each message inline as a `defaultMessage` in ICU MessageFormat, add a `description` for translators, collect every message into a JSON catalog with `formatjs extract`, and render translated catalogs through `IntlProvider`. It doesn't translate anything: the extracted catalog goes to you, your translators, or a translation management system (TMS), and translated files come back to be compiled. General Translation's libraries render ICU messages too, and General Translation also generates the translations.
+
+## What react-intl does well
+
+- **ICU MessageFormat throughout.** Plurals with `#` and exact matches such as `=0`, `select`, and `selectordinal`, built on the browser's `Intl` APIs.
+- **Inline source text.** FormatJS recommends writing `defaultMessage` and `description` inline and letting `babel-plugin-formatjs` or `@swc/plugin-formatjs` generate message IDs, so nobody invents keys.
+- **Tooling for a TMS workflow.** `formatjs extract` writes the catalog, built-in formatters produce files for Crowdin, Lokalise, Smartling, and Transifex, `formatjs compile` pre-parses messages, and `formatjs verify` checks catalogs for missing or extra keys.
+- **TypeScript.** Version 12 can type each message's ICU arguments.
+- **Adoption.** About 3.8 million npm downloads in the week of September 29, 2026, under the BSD-3-Clause license.
+
+## What react-intl leaves to you
+
+Here's a small inbox with react-intl. The English stays in the component as `defaultMessage`:
+
+```jsx title="Inbox.jsx"
+import { FormattedMessage } from 'react-intl';
+
+export function Inbox({ count }) {
+  return (
+    <section>
+      <h1>
+        <FormattedMessage defaultMessage="Inbox" description="Heading of the inbox page" />
+      </h1>
+      <p>
+        <FormattedMessage
+          defaultMessage="You have {count, plural, one {# unread message} other {# unread messages}}."
+          description="Number of unread messages in the inbox"
+          values={{ count }}
+        />
+      </p>
+    </section>
+  );
+}
+```
+
+`formatjs extract` turns those messages into a catalog keyed by generated IDs:
+
+```json title="lang/en.json"
+{
+  "U5vJOY": {
+    "defaultMessage": "You have {count, plural, one {# unread message} other {# unread messages}}.",
+    "description": "Number of unread messages in the inbox"
+  },
+  "gBGgGs": {
+    "defaultMessage": "Inbox",
+    "description": "Heading of the inbox page"
+  }
+}
+```
+
+Every other language needs its own copy of that catalog, with each message translated and its ICU syntax intact, then `formatjs compile` before the app can load it. Whoever translates sees the message and its description, not the component. Two more details shape the setup: generated IDs need the Babel or SWC plugin in your build, or rendering fails because a message has no ID, and in the Next.js App Router, react-intl's components run in client components while server code formats messages through `createIntl` from `react-intl/server`.
+
+## General Translation does the same, and generates the translations
+
+General Translation's libraries do the same job as react-intl: they render ICU messages, apply each locale's plural rules, and format numbers, currencies, and dates. Your ICU strings move almost unchanged, because [`useGT`](/docs/react/reference/hooks/use-gt) takes the same syntax:
+
+```tsx title="Inbox.tsx"
+import { useGT } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  const gt = useGT();
+  return (
+    <section>
+      <h1>{gt('Inbox')}</h1>
+      <p>
+        {gt('You have {count, plural, one {# unread message} other {# unread messages}}.', { count })}
+      </p>
+    </section>
+  );
+}
+```
+
+Then General Translation does what react-intl doesn't: [`npx gt translate`](/docs/cli/reference/commands/translate) finds these strings in your code, translates them with their context, and writes a catalog for every target locale, with no extract command, ID plugin, or compile step to run. The `#` is formatted for each locale, so a count of 12345 reads "12,345" in English and "12.345" in Spanish. A react-intl `description` becomes the `$context` option, and for JSX with markup, [`<T>`](/docs/react/reference/components/t) translates the whole block, elements included. In `gt-next`, [`<T>`](/docs/react/reference/components/t) works directly in Server Components.
+
+## react-intl vs. General Translation at a glance
+
+| Feature | react-intl | General Translation |
+| --- | --- | --- |
+| How you write copy | Inline `defaultMessage` in ICU, extracted to a JSON catalog | Inline JSX in [`<T>`](/docs/react/reference/components/t), or ICU strings in [`useGT`](/docs/react/reference/hooks/use-gt) |
+| Translates your content | No | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| Steps per change | Extract, translate, compile, with an ID plugin in your build | [`npx gt translate`](/docs/cli/reference/commands/translate) before your build |
+| What the translator sees | The message and its description | The surrounding code, a context note, your Glossary, and Custom Prompts |
+| Next.js App Router | Components in client components; `createIntl` on the server | [`<T>`](/docs/react/reference/components/t) in Server and Client Components |
+| License | BSD-3-Clause | MIT |
+
+Keep react-intl when your ICU catalogs and TMS formatters already work, when you rely on its typed message arguments or `formatjs verify`, or when you use FormatJS outside React. Choose General Translation when you'd rather skip the extract and compile round trip and have every language generated from your code with each build.
+
+## Moving from react-intl
+
+Move one component or route at a time. Replace each `<FormattedMessage>` with a [`useGT`](/docs/react/reference/hooks/use-gt) call that keeps its ICU string, or wrap the JSX in [`<T>`](/docs/react/reference/components/t), and pass each description as `$context`. Once the last component has moved, remove the FormatJS plugin and the extract and compile scripts. [Migrating i18n libraries](/docs/react/guides/migrating-i18n-libraries) covers running both libraries during the move and keeping existing translations, which aren't imported automatically.
+
+The `gt` CLI's [JSON format docs](/docs/cli/reference/formats/json-files) note that it preserves message syntax for next-intl and i18next only, so moving messages into `gt-react` is the supported path for react-intl. (See [Why use General Translation instead of other open-source i18n libraries?](/kb/general-translation-vs-i18n-libraries) for how react-intl compares with the rest.)
+
+## Key takeaways
+
+- react-intl is a mature ICU MessageFormat library with strong FormatJS tooling, but it doesn't translate anything. Every language's catalog is yours to produce, compile, and keep current.
+- General Translation's libraries render the same ICU messages, and General Translation also does the translating, with the context of your code and no extract or compile step.
+- Your ICU strings move almost unchanged into [`useGT`](/docs/react/reference/hooks/use-gt), one component at a time.
