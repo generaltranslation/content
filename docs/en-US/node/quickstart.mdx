@@ -70,7 +70,7 @@ export GT_PROJECT_ID="your-project-id"
 export GT_DEV_API_KEY="gtx-api-your-runtime-key"
 ```
 
-Use a [project API key](/docs/platform/dashboard/reference/api-keys#create-project-keys) with **Runtime translation** enabled. `GT_DEV_API_KEY` is the SDK setting for development hot reload; it accepts a project key starting with `gtx-api-`.
+Use a [project API key](/docs/platform/dashboard/reference/api-keys#create-project-keys) with **Runtime translation** enabled. `GT_DEV_API_KEY` is the SDK setting for development hot reload; it accepts a project key starting with `gtx-api-`. Hot reload runs only when `NODE_ENV` is `development`.
 
 Call [`initializeGT`](/docs/node/reference/functions/initialize-gt) once at startup, before handling requests. Pass your locales directly. When credential fields are omitted, `gt-node` reads `GT_PROJECT_ID`, `GT_API_KEY`, and `GT_DEV_API_KEY` from the environment; it does not read `gt.config.json` automatically.
 
@@ -130,12 +130,45 @@ curl http://localhost:3000/api/greeting
 
 ### 6. Generate translations
 
-Run the CLI before you deploy to production so translations are available at runtime.
+Run [`npx gt init`](/docs/cli/reference/commands/init) with the locales from step 2, storing translations locally:
+
+```bash
+npx gt init --locales es fr --storage local
+```
+
+It creates a `gt.config.json`, an empty translation file for each target locale in `public/_gt`, and a `loadTranslations.js` at the project root that reads them. (If the project has a `src` folder, `loadTranslations.js` goes in `src` instead.)
+
+Pass the loader to [`initializeGT`](/docs/node/reference/functions/initialize-gt):
+
+```js title="server.js"
+import { initializeGT } from 'gt-node';
+import loadTranslations from './loadTranslations.js'; // [!code ++]
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  loadTranslations, // [!code ++]
+});
+```
+
+Then translate your strings. Run the CLI again whenever they change, and before you deploy, so the files stay current.
 
 ```bash
 npx gt translate
 ```
 
-*Note: [`gt translate`](/docs/cli/reference/commands/translate) reads a `gt.config.json` and requires a project ID and API key. Run [`npx gt init`](/docs/cli/reference/commands/init) first to create them.*
+*Note: [`gt translate`](/docs/cli/reference/commands/translate) needs a project ID and a sign-in or API key. If it says you are not signed in, run [`npx gt login`](/docs/cli/reference/commands/login). In a `gt-node` project it scans the project's JavaScript and TypeScript files, except `node_modules`, build output, `public` and test files. To load translations from the General Translation CDN instead of local files, see [Choose how translations are delivered](/docs/node/guides/configuring#delivery).*
+
+### 7. Check a translated response
+
+Restart the server and request the greeting in Spanish:
+
+```bash
+curl -H "Accept-Language: es" http://localhost:3000/api/greeting
+```
+
+```json title="Output"
+{"message":"¡Hola, Alice!"}
+```
 
 (See [Translating strings](/docs/node/guides/translating-strings) for when to use [`getGT`](/docs/node/reference/functions/get-gt), [`msg`](/docs/node/reference/functions/msg), and [`tx`](/docs/node/reference/functions/tx), and [Configuring gt-node](/docs/node/guides/configuring) for credentials and delivery).
