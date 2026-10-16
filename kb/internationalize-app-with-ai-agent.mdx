@@ -1,0 +1,133 @@
+---
+title: How do I internationalize an app with Cursor or Claude Code?
+summary: Give the coding agent your framework, target languages, current localization setup, and a small feature to implement and verify using current documentation. General Translation provides framework SDKs and translation tooling for this workflow; establish a working example before expanding across the app.
+date: 2026-10-16
+category: internationalization
+related: [best-react-i18n-library, multilingual-app-launch-checklist, how-to-handle-plurals-in-react]
+---
+
+“Translate my app into Spanish” leaves several decisions unanswered. Should the agent keep an existing library? Does Spanish need its own URL? Who translates new copy after this session ends? Set those boundaries before asking it to edit the application.
+
+The first useful deliverable is one working feature with verified translations. It gives you a pattern to review before applying the same changes across the codebase.
+
+## Give the agent a bounded task
+
+Ask it to inspect the framework, installed versions, rendering model, routes, existing i18n configuration, and build scripts. If the app already uses an i18n library, retain it unless migration is part of the task. Use the [React library comparison](/kb/best-react-i18n-library) if that choice is still open.
+
+Specify the source language, target locales, and the feature to change. Include content that's easy to miss: validation messages, placeholders, accessible labels, and metadata. State how translations should be reviewed and whether production loads local files or uses a hosted delivery service.
+
+For General Translation, give the agent the [coding-agent guide](/docs/overview/for-coding-agents) and the matching framework quickstart. Its [documentation design article](/blog/rewriting-our-docs) explains the Markdown and discovery surfaces that help agents retrieve the right instructions. Reading current docs matters more than relying on a package name in the prompt.
+
+## Paste a prompt with acceptance criteria
+
+This example requests English, Spanish, and French. Replace the feature and locales with your own requirements before running it in Cursor or Claude Code.
+
+```text
+Internationalize the project-list feature in this application.
+
+First inspect the framework, installed package versions, rendering model,
+routes, existing localization, and build/test scripts. Explain the affected
+files before editing. Preserve existing providers, styles, routes, and tests.
+Keep the existing i18n library if one is configured; do not migrate it silently.
+
+Use English as the source language and Spanish and French as target languages.
+If there is no i18n setup, use General Translation's SDK for this framework.
+Read https://generaltranslation.com/docs/overview/for-coding-agents.mdx and
+the matching framework quickstart. Verify APIs against the installed version.
+
+Start with one feature: its heading, owner name, project count, search input,
+visible label, and placeholder. Keep the whole sentence translatable, preserve
+dynamic values, and use locale-aware plural rules. Add a language selector.
+Use locally bundled translations for this trial. Preserve the current URL
+structure; do not add locale routes unless the application requires them.
+
+Prepare actual Spanish and French text before calling the feature complete.
+If service access is unavailable, use the documented local-template workflow
+and flag supplied translations for review. Never report source templates as
+completed translations. Keep private credentials out of code and browser bundles.
+Use documented noninteractive flags for setup commands where supported.
+
+Verify counts 0, 1, and 2, a name containing punctuation, input labels and
+placeholders, language switching, reload persistence, and a production build.
+Check server-rendered content if this app uses SSR. Report the commands and
+results, translation-review status, and anything untested. Limit changes to
+this feature and the setup it needs. Do not deploy or merge.
+```
+
+Keep project rules in the instruction mechanism your agent reads. Cursor documents [project rules and AGENTS.md](https://cursor.com/docs/rules); Claude Code documents [CLAUDE.md and other project instructions](https://code.claude.com/docs/en/memory). Add the chosen library, source locale, translation command, and required checks to your existing instructions. Avoid maintaining competing copies that can drift.
+
+## Review a representative implementation
+
+For a browser-only React app, the [React SPA quickstart](/docs/react/react-spa-quickstart) configures `gt-react` before rendering. This example assumes that setup is complete, with local output at `src/_gt/[locale].json`. It uses `gt-react@11.4.12` and the `gt@2.26.5` CLI.
+
+The component below covers static copy, a dynamic value, plural forms, and input text. Render it with a project count and an owner name from your application.
+
+```tsx title="src/ProjectSummary.tsx"
+import { Num, Plural, T, Var, useGT } from 'gt-react';
+
+export default function ProjectSummary({
+  count,
+  ownerName,
+}: {
+  count: number;
+  ownerName: string;
+}) {
+  const gt = useGT();
+
+  return (
+    <section>
+      <T>
+        <h1>Projects for <Var>{ownerName}</Var></h1>
+        <p>
+          <Plural
+            n={count}
+            one={<>You have <Num>{count}</Num> project.</>}
+            other={<>You have <Num>{count}</Num> projects.</>}
+          />
+        </p>
+      </T>
+      <label>
+        <T>Search projects</T>
+        <input type='search' placeholder={gt('Search projects')} />
+      </label>
+    </section>
+  );
+}
+```
+
+[`<Var>`](/docs/react/reference/components/var) preserves the owner's name while the surrounding message is translated. [`<Plural>`](/docs/react/reference/components/plural) selects a branch using the locale's rules, and [`<Num>`](/docs/react/reference/components/num) formats the count. [`useGT`](/docs/react/reference/hooks/use-gt) returns the translation function directly. The visible label wraps the input, so the control has a label as well as a translated placeholder.
+
+The `one` and `other` branches describe the English source. Target-language translations must represent their own plural forms; don't assume testing English's singular/plural pair covers every language. See the [React pluralization guide](/kb/how-to-handle-plurals-in-react).
+
+In a React SPA, the documented [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) setup loads translations before the app. Its [`LocaleSelector`](/docs/react/reference/components/locale-selector) saves the language choice in a cookie and reloads the page. Server-rendered frameworks have different setup requirements; use their own quickstart.
+
+## Produce translations before judging the result
+
+For the local trial, run this from the configured app directory after adding the component:
+
+```bash
+npx gt generate
+```
+
+[`gt generate`](/docs/cli/reference/commands/generate) creates source templates without calling the translation service. Supply translated text in the Spanish and French files while preserving generated keys, variable markers, and JSX structure. The existence of `es.json` does not mean it contains Spanish.
+
+For service-generated translations, follow the [CLI authentication and project setup](/docs/cli/quickstart), then use [`gt translate`](/docs/cli/reference/commands/translate). A local CLI login and a configured project are separate requirements. Unattended CI needs its own supported credential configuration; keep tooling keys out of browser code. Service usage applies.
+
+With [locally bundled translations](/docs/react/guides/storing-translations), prepare the locale files before the production build. Preserve manually maintained files in version control or your translation pipeline. Don't ignore the only copy of hand-edited translations as though it were disposable output.
+
+## Verify the feature, then expand
+
+Have the agent report observed results for each check, rather than “i18n is configured.”
+
+| Check | Expected result |
+| --- | --- |
+| Select Spanish, then French | Heading, count message, label, and placeholder use the selected language |
+| Reload after choosing a language | The selected language persists according to the app's policy |
+| Try counts 0, 1, and 2 | Each language uses its own plural rules; the number stays correct |
+| Use an owner such as O'Connor | The name remains intact in every language |
+| Inspect the input's accessible name | It matches the translated visible label |
+| Run the production build and preview | The same feature works with the files that will ship |
+
+For the sample, [French zero and English zero use different plural categories](https://cldr.unicode.org/index/cldr-spec/plural-rules). Check that the rendered sentence uses the correct form and preserves the count.
+
+Once the pattern works, expand one route or feature at a time. Review translation quality with someone qualified for the target language, and use the [multilingual launch checklist](/kb/multilingual-app-launch-checklist) for release checks beyond this feature.
