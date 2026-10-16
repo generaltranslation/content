@@ -3,7 +3,7 @@ title: What should I check before launching a multilingual app?
 summary: Test translation coverage, language selection, variables and plurals, regional formatting, layout, accessibility, and production delivery in every supported locale, using complete user workflows and explicit expected results. Public multilingual pages also need crawlable language URLs and consistent search metadata.
 date: 2026-10-16
 category: internationalization
-related: [internationalize-app-with-ai-agent, best-react-i18n-library, how-to-handle-plurals-in-react, multilingual-nextjs-seo]
+related: [best-react-i18n-library, i18n-without-translation-files, how-to-handle-plurals-in-react, multilingual-nextjs-seo]
 ---
 
 A translated homepage can look finished while the checkout, validation errors, or password-reset flow still uses the source language. Start with the paths a user needs to complete, and test those paths in the production build.
@@ -18,7 +18,9 @@ Choose a critical journey such as creating an account or completing a purchase. 
 
 **Pass condition:** Each surface uses reviewed target-language content, apart from intentional exceptions such as a product name. No raw keys, missing-message markers, or unexplained source-language fallbacks appear.
 
-General Translation's [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations) apply shared Glossary terms and Custom Prompts across projects, so your app, documentation, and notifications can use the same product terminology. Check that each project has the intended groups assigned and review critical wording in the generated translations.
+General Translation's [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations) apply shared Glossary terms and Custom Prompts across projects, so your app, documentation, and notifications can use the same product terminology. Projects and reviewer seats are [unlimited](https://generaltranslation.com/pricing). Assign the intended groups before generating translations; changes to context guide new translations rather than silently rewriting existing ones.
+
+Reviewers work in the [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations), where they can correct wording directly. Enterprise adds an approval step. For teams that edit generated local files, [`gt save-local`](/docs/cli/reference/commands/save-local) uploads those edits for reuse in later translation runs; this synchronization is opt-in.
 
 If your pipeline uses [`gt translate`](/docs/cli/reference/commands/translate), confirm that its output is the version included in the release. The manual alternative, [`gt generate`](/docs/cli/reference/commands/generate), produces source templates that still need translated text.
 
@@ -28,7 +30,7 @@ Test a fresh browser, an explicit language choice, a reload, a deep link, and an
 
 **Pass condition:** The app follows that policy consistently, and a user can recover from an unwanted language choice. For server-rendered apps, inspect the initial response as well as the hydrated page.
 
-Use [locale configuration](/docs/react/guides/managing-locales) to define supported languages. Don't infer URL behavior from the presence of a language dropdown: a cookie-based switcher and locale-prefixed routes solve different requirements.
+Use [locale configuration](/docs/react/guides/managing-locales) to define supported languages. Locale identifiers follow BCP 47: `es-MX` and `es-AR` can be separate targets for Mexican and Argentine Spanish. Test each regional target you ship. A cookie-based switcher and locale-prefixed routes serve different needs; check the app's actual URL behavior.
 
 ### 3. Exercise variables and plural categories
 
@@ -36,7 +38,7 @@ Test counts including 0, 1, 2, and larger values, then add cases for your target
 
 **Pass condition:** Values remain intact, the sentence reads correctly, and every required plural form has usable content. Unicode's [plural rules](https://cldr.unicode.org/index/cldr-spec/plural-rules) describe why one English singular/plural test pair is insufficient.
 
-For General Translation, use the [variable and formatting components](/docs/react/guides/formatting-variables) to represent those values explicitly. The [React pluralization article](/kb/how-to-handle-plurals-in-react) covers the implementation pattern.
+General Translation's [`<Plural>`](/docs/react/reference/components/plural) follows the locale's plural rules: English has two cardinal categories, while Arabic has six. Use [`<Branch>`](/docs/react/reference/components/branch) when wording depends on an explicit value such as a person's grammatical gender, and [`<Var>`](/docs/react/reference/components/var) for dynamic text such as a name. Values inside that variable wrapper are not sent to the translation API. The [React pluralization article](/kb/how-to-handle-plurals-in-react) covers the implementation pattern.
 
 ## Check formatting, layout, and accessibility
 
@@ -64,6 +66,8 @@ new Intl.DateTimeFormat('en-GB', {
 ```
 
 **Pass condition:** Separators, currency identity, calendar date, and displayed time match the product's intended meaning. Include a daylight-saving transition when your supported time zones observe one. The [number](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) and [date](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) APIs expose these choices separately.
+
+In General Translation, [`<Currency>`](/docs/react/reference/components/currency), [`<DateTime>`](/docs/react/reference/components/datetime), and [`<Num>`](/docs/react/reference/components/num) format values using the active locale. Set the currency and time zone for the business meaning you intend; changing the UI language should not change the amount owed or the instant an event occurs.
 
 ### 5. Test text expansion across screen sizes
 
@@ -93,9 +97,9 @@ Build from a clean checkout using the release process, then run that build with 
 
 **Pass condition:** The app serves the intended translations without relying on files left over from development. Missing assets or failed generation cause a visible failure or an explicitly accepted fallback, rather than a silent partial release.
 
-With General Translation, put the [incremental translation step before the build](/docs/cli/guides/generating-translations) so source changes reach the shipped locale files. [Locadex automations](/docs/platform/locadex/guides/configuring-automations) can generate translation updates and synchronize locale changes through pull requests. Test the configured trigger with a source-copy change as part of this release check.
+With General Translation, run [`gt validate`](/docs/cli/reference/commands/validate) to catch supported inline-translation errors before an API call, then put the [incremental translation step before the build](/docs/cli/guides/generating-translations). It reuses earlier translations and translates changed content, so new copy can ship translated in the release that adds it. [Branch tracking](/docs/cli/guides/branching) keeps parallel development branches separate. [Locadex automations](/docs/platform/locadex/guides/configuring-automations) can handle translation updates through pull requests. Test the configured trigger with a source-copy change as part of this release check.
 
-With the [local storage workflow](/docs/react/guides/storing-translations), translation updates ship in a new build. With hosted delivery, verify the publishing and loading behavior for that configuration. Keep private translation tooling credentials in the build environment, outside browser bundles.
+With the [local storage workflow](/docs/react/guides/storing-translations), the app serves bundled translations without runtime calls to General Translation; updates ship in a new build. With CDN delivery, published edits can reach the app without a redeploy, subject to its translation version and cache settings. Test that update path. Keep private translation tooling credentials in the build environment, outside browser bundles.
 
 ### 9. Verify discovery for public language versions
 
@@ -103,10 +107,10 @@ For pages intended for search, check that each language version has a crawlable 
 
 **Pass condition:** Each public language URL loads the expected content, is indexable when intended, and points to real alternate versions. Google's [localized-page guidance](https://developers.google.com/search/docs/specialty/international/localized-versions) describes the supported annotation methods. For a Next.js implementation, use the [multilingual SEO guide](/kb/multilingual-nextjs-seo).
 
-An authenticated dashboard may not need indexed language URLs. Make that an explicit product decision instead of applying public-site SEO requirements to every translated screen.
+Path prefixes, language subdomains, and country domains can provide separate language URLs. An `Accept-Language` header or cookie can select a visitor's language, but does not by itself create a crawlable URL for each version. Google's [multilingual-site guidance](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) recommends separate URLs. An authenticated dashboard may not need indexed language URLs; choose the routing policy for the product's audience.
 
 ## Keep a release record
 
 Record the build, locale, journey, browser or device, expected result, actual result, and reviewer. Assign an owner to failures. Treat a missing checkout translation or unreadable primary action differently from a minor wording preference, and make any accepted fallback explicit.
 
-The [coding-agent workflow](/kb/internationalize-app-with-ai-agent) can help automate repeatable checks and collect evidence. Human review still needs to assess the language and meaning users will see.
+General Translation's free [Report Card](https://generaltranslation.com/report-card) can provide a starting assessment of a public site's localization. Pair it with the journey checks above, especially authenticated flows and failure states. The [coding-agent setup guide](/docs/overview/for-coding-agents) can help automate repeatable checks and collect evidence; use the Translation Editor for the language review that completes the release.
