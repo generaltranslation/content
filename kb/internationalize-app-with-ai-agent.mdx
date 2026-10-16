@@ -1,6 +1,6 @@
 ---
 title: How do I internationalize an app with Cursor or Claude Code?
-summary: Give the coding agent your framework, target languages, current localization setup, and a small feature to implement and verify using current documentation. General Translation provides framework SDKs and translation tooling for this workflow; establish a working example before expanding across the app.
+summary: Give the coding agent your framework, target languages, current localization setup, and one feature to implement and verify. General Translation combines framework SDKs and translation tooling with a hosted MCP server, so the agent can inspect live project settings and work with shared translation context while localizing your app.
 date: 2026-10-16
 category: internationalization
 related: [best-react-i18n-library, multilingual-app-launch-checklist, how-to-handle-plurals-in-react]
@@ -18,6 +18,34 @@ Specify the source language, target locales, and the feature to change. Include 
 
 For General Translation, give the agent the [coding-agent guide](/docs/overview/for-coding-agents) and the matching framework quickstart. Its [documentation design article](/blog/rewriting-our-docs) explains the Markdown and discovery surfaces that help agents retrieve the right instructions. Reading current docs matters more than relying on a package name in the prompt.
 
+## Connect General Translation's MCP server
+
+General Translation's hosted [Model Context Protocol (MCP) server](/docs/overview/for-coding-agents#mcp) lets your coding agent inspect live project settings and manage translation context. The agent can look up your project's locales, read shared terminology, and update Glossary terms or Custom Prompts when the task calls for it. That connects the code changes to the translation rules your team maintains in General Translation.
+
+In **Cursor**, add this server entry to your project's `.cursor/mcp.json`, preserving any existing entries. See [Cursor's MCP setup](https://cursor.com/docs/mcp) for configuration and authentication options.
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "generaltranslation": {
+      "url": "https://api.gtx.dev/mcp"
+    }
+  }
+}
+```
+
+In **Claude Code**, register the same server using its [HTTP transport](https://code.claude.com/docs/en/mcp):
+
+```bash
+claude mcp add --transport http generaltranslation https://api.gtx.dev/mcp
+```
+
+Complete the client's OAuth sign-in flow, or configure an API key through its secret-header settings as described in the [MCP authentication guide](/docs/overview/for-coding-agents#mcp). Context Management requires Organization Context access through OAuth or an Organization key with the relevant Context permissions; project keys cannot access those tools.
+
+Start with a concrete request: “Use the generaltranslation MCP server to list my projects and show the locale settings for the project we're localizing.” Then have the agent inspect the project's assigned Context Groups, which hold shared Glossary terms and Custom Prompts. It can use those terms and instructions while preparing the feature, and update them when you've requested a terminology or style change.
+
+Use the framework docs for code integration and the CLI for the extraction and translation steps below. The MCP connection gives the agent access to the live project and its context; the app still needs its SDK setup, translated content, and verification.
+
 ## Paste a prompt with acceptance criteria
 
 This example requests English, Spanish, and French. Replace the feature and locales with your own requirements before running it in Cursor or Claude Code.
@@ -34,6 +62,12 @@ Use English as the source language and Spanish and French as target languages.
 If there is no i18n setup, use General Translation's SDK for this framework.
 Read https://generaltranslation.com/docs/overview/for-coding-agents.mdx and
 the matching framework quickstart. Verify APIs against the installed version.
+
+When using General Translation, use its connected MCP server to identify the
+project, inspect locale settings, and read assigned Glossary terms and Custom
+Prompts when permitted. Apply those translation rules to the feature. Report
+connection or permission gaps; do not guess project settings or change shared
+translation context unless that change is part of the task.
 
 Start with one feature: its heading, owner name, project count, search input,
 visible label, and placeholder. Keep the whole sentence translatable, preserve
