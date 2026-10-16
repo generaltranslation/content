@@ -1,0 +1,107 @@
+---
+title: "General Translation vs. Weblate: which should you use?"
+summary: Weblate is a GPL-licensed, Git-based localization platform you can self-host for free or use as Hosted Weblate, which hosts public libre projects at no charge. It commits translations back to your repository, but engineers still extract strings, wait for translators, and merge results. General Translation translates content in your code with its context and ships every language with each release.
+date: 2026-10-16
+category: workflow-tools
+related: [general-translation-vs-tms, general-translation-vs-gettext, general-translation-vs-tolgee, general-translation-vs-django-i18n, best-localization-software]
+---
+
+Weblate is an open-source, web-based translation platform built around Git. You connect a repository, Weblate reads the translation files in it, translators and volunteers translate in its editor, and Weblate commits the results and pushes them back or opens a pull request. It's a common home for open-source projects with community translators. What Weblate leaves to engineers is everything around the repository sync: extracting strings into translation files, waiting for each language, and merging and deploying the results. General Translation starts from the code instead, and translates as part of the build.
+
+## What Weblate does well
+
+- **Copyleft open source.** Weblate is licensed under GPL-3.0-or-later, and you can download and run the whole platform at no cost, with paid support plans if you want help installing and maintaining it.
+- **Free hosting for libre projects.** Hosted Weblate runs on EU infrastructure, and public libre projects can get its Libre plan at no charge, with the same limits as its 160k-string plan.
+- **Git-based continuous localization.** Weblate pulls changes when your forge sends a webhook (or on a daily fetch), commits translations with lazy commits that group changes by author, and pushes them to your branch or opens pull requests on GitHub, GitLab, Gitea, Bitbucket, Azure DevOps, and Pagure. Hosted Weblate also connects through a GitHub App.
+- **Very broad file support.** Weblate's docs list about 50 formats, including gettext PO, XLIFF 1.2 and 2.0, Android and Apple strings, ARB, i18next JSON, Fluent, Java properties, .NET RESX, Ruby YAML, PHP and Laravel strings, Qt Linguist, CSV, Excel, and Markdown.
+- **Add-ons for file chores.** Built-in add-ons update PO files from a POT template, generate MO files, squash commits, and run automatic translation.
+- **Machine translation and LLMs.** Integrations include DeepL, Google, Azure, Amazon, and LibreTranslate, plus OpenAI, Azure OpenAI, Anthropic, Mistral, and Ollama, whose prompts include matching glossary terms and your style settings, alongside Weblate's own translation memory.
+- **Quality checks.** Dozens of checks cover placeholders, missing plural forms, maximum length, ICU MessageFormat syntax, and unchanged translations, and automatic fixups correct whitespace and ellipses.
+- **Community translation.** Volunteers can suggest translations and comment, reviewers approve them, and a project can commit only approved strings. Screenshots, glossaries, and source references give translators context.
+
+## What Weblate still leaves to your engineers
+
+Here's a Python app using gettext, with a Spanish catalog translated before the last line was added:
+
+```python title="app.py"
+import gettext
+t = gettext.translation("messages", localedir="locale", languages=["es"])
+_ = t.gettext
+print(_("Inbox"))
+print(_("No messages yet."))  # new copy, added after the last translation round
+```
+
+After extracting the POT template, translating only "Inbox" in `locale/es/LC_MESSAGES/messages.po`, and compiling it with Babel 2.17.0, a Spanish reader sees the new line in English:
+
+```text title="Output"
+Bandeja de entrada
+No messages yet.
+```
+
+That line stays in English until a round trip finishes:
+
+1. Wrap the string in `_()` and regenerate the POT template with `xgettext` or `pybabel extract`, then commit it.
+2. Weblate picks up the change from a webhook or its next fetch, and its `msgmerge` add-on adds the new entry to each PO file.
+3. Wait for volunteers, translators, or machine translation to fill in each language, and for a reviewer if you require approval.
+4. Weblate commits the changes (by default, pending changes are committed after 24 hours unless something triggers a commit sooner) and pushes them or opens a pull request. You merge it, compile MO files, and deploy.
+
+Edits to the same files outside Weblate can cause merge conflicts, which Weblate's docs suggest avoiding by locking the component while you change files. And a translator sees each string with its source references and screenshots, not the code that renders it.
+
+Self-hosting is free. Hosted Weblate is priced by hosted strings, which are source strings times the number of languages plus one, and every plan includes unlimited languages, projects, and translators. (See [Weblate hosting](https://weblate.org/en/hosting/), checked October 2026.)
+
+## Weblate vs. General Translation at a glance
+
+| Feature | Weblate | General Translation |
+| --- | --- | --- |
+| Where strings live | Translation files in your repository, mirrored in Weblate components | In your code inside [`<T>`](/docs/react/reference/components/t), or in the resource files you already have |
+| How code connects | Weblate pulls from Git, then pushes commits or opens pull requests | [`npx gt translate`](/docs/cli/reference/commands/translate) in your build, or [Locadex](/docs/platform/locadex/quickstart) pull requests |
+| Who translates | Volunteers, your translators, machine translation, or LLMs | AI with context from your code, Glossary, and Custom Prompts, reviewed by your team in the Dashboard |
+| Context for each string | Source references, screenshots, glossary, and translation memory | The component and elements around the string, its variables, context notes, Glossary, and Custom Prompts |
+| File formats | About 50, including XLIFF, ARB, Fluent, and Java properties | JSON, YAML, PO, Markdown and MDX, iOS and Android strings, and more; no XLIFF, ARB, Fluent, or properties |
+| Hosting | Self-hosted for free, or Hosted Weblate | Hosted platform; open-source libraries and CLI |
+| Pricing | Self-hosted free; hosted plans by hosted strings; free Libre plan for public libre projects | Usage-based; $0 platform fee and unlimited users, projects, and languages on Starter |
+| License | GPL-3.0-or-later | MIT-licensed libraries and CLI |
+
+## Why teams choose General Translation over Weblate
+
+General Translation starts from the code, so the round trip above goes away: copy stays in your components inside [`<T>`](/docs/react/reference/components/t), and translation runs with each release.
+
+- **Faster.** [`npx gt translate`](/docs/cli/reference/commands/translate) runs in your build, or Locadex opens a pull request when code changes, so new copy ships translated with the release that adds it instead of waiting for a commit window. Adding a language is one line in `gt.config.json`, and the next build translates the whole project into it.
+- **Cheaper to run.** There's no server to install, upgrade, or back up, and engineers don't extract templates or resolve translation merge conflicts. General Translation's pricing is usage-based, with a $0 platform fee and unlimited users, projects, and languages on Starter. (See [pricing](https://generaltranslation.com/pricing).)
+- **Higher quality.** General Translation sends the context of the code with every translation: the elements around a string, the variables in the sentence, and the branches that choose between versions of it, plus your Glossary and Custom Prompts across every project.
+- **Lower risk.** General Translation's libraries and CLI are open source under the MIT license and work without an account, and translations can live as files in your repository, so you can change how translations are produced without rewriting your app.
+
+The tradeoff: General Translation's platform is a hosted service, and it's built for AI translation reviewed by your team, not for a community of volunteer translators.
+
+## When Weblate is the better fit
+
+Choose Weblate when an open-source project wants volunteers to translate it, when you need to self-host the whole platform under a copyleft license, or when you work in formats General Translation doesn't support, such as XLIFF, ARB, Fluent, Java properties, PHP arrays, or Qt Linguist files. Choose General Translation when most of your product's text lives in React, Next.js, or Vue code, or in JSON, YAML, PO, or Markdown files, and you want every release to ship in every language.
+
+## Using both on gettext files
+
+General Translation's CLI translates the same gettext files Weblate reads. Point a `pot` entry at your template and map each output to the folder layout Weblate uses:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "pl"],
+  "files": {
+    "pot": {
+      "include": ["locale/messages.pot"],
+      "transformationFormat": "PO",
+      "transform": {
+        "match": "locale/messages\\.pot",
+        "replace": "locale/{locale}/LC_MESSAGES/messages.po"
+      }
+    }
+  }
+}
+```
+
+With `gt` 2.26.5, this config maps `locale/messages.pot` to `locale/es/LC_MESSAGES/messages.po` and the same path for each locale. For plural entries, General Translation writes the target language's `Plural-Forms` header and fills each `msgstr[n]` form. Give each language one owner, for example General Translation for languages your community doesn't cover and Weblate's volunteers for the rest, so the two don't edit the same file. For gettext folder names with underscores, such as `pt_BR`, add a [`customMapping`](/docs/cli/reference/config#custom-mapping) entry that maps them to the standard `pt-BR`. (See [PO / POT](/docs/cli/reference/formats/po-pot-files).)
+
+## Key takeaways
+
+- Weblate is a strong copyleft platform for open-source and community translation, with Git-based continuous localization, free self-hosting, and about 50 file formats.
+- Engineers still extract strings into translation files, wait for each language, and merge Weblate's commits before readers see new copy translated.
+- General Translation translates content where it's written, with the context of the code, and ships every language with each release, on MIT-licensed libraries with no lock-in.
