@@ -1,6 +1,6 @@
 ---
 title: What's the best i18n library for a React app?
-summary: Choose gt-react for inline JSX connected to context-aware translation, built-in review, and ongoing automation; react-i18next for the i18next ecosystem; Lingui for extraction and compiled catalogs; or React Intl for FormatJS. GT's MIT libraries also work independently, and you can keep a supported existing library while using GT's translation platform.
+summary: Choose gt-react to keep source copy in JSX, with optional automatic wrapping for React SPAs; react-i18next for keyed resources and its plugin ecosystem; Lingui for extraction and compiled catalogs; or React Intl for FormatJS. Compare how each handles a real component, including rich text, variables, and changes to the source copy.
 date: 2026-10-16
 category: workflow-tools
 related: [multilingual-app-launch-checklist, i18n-without-translation-files, how-to-handle-plurals-in-react]
@@ -16,34 +16,24 @@ Compare these four options using the same feature and your application's build s
 
 | Library | Source authoring | Translation workflow | Choose it when |
 | --- | --- | --- | --- |
-| General Translation's gt-react | Inline JSX and string calls; dictionary APIs are also available | Context-aware translation generation, incremental CLI updates, and Locadex automations | You want authoring, translation, and ongoing updates in one workflow |
+| General Translation's gt-react | Inline JSX and string calls; optional compiler wrapping; dictionary APIs also available | The CLI extracts marked content and can generate translations with its code context | You want readable component copy or automatic marking of existing SPA text |
 | react-i18next | Message resources and translation calls, with components for rich text | Use i18next tooling and your chosen translation service or review process | You already use i18next or need its loading and detection integrations |
 | Lingui | Inline messages or explicit IDs, extracted into catalogs | Extract, translate, and compile catalogs for the app | You want extraction and compilation to organize the workflow |
 | React Intl | Message descriptors, IDs, and optional default messages | FormatJS extracts messages; you supply translated catalogs for rendering | Your team wants FormatJS and ICU MessageFormat conventions |
 
-### 1. General Translation: connect inline content to translation generation
+### 1. General Translation: write copy in JSX, with optional automatic wrapping
 
 General Translation's `gt-react` lets source copy stay in the component. Mark coherent JSX with [`<T>`](/docs/react/reference/components/t), and use [`useGT`](/docs/react/reference/hooks/use-gt) when an API needs a string, such as an input label. The [`gt translate`](/docs/cli/reference/commands/translate) command collects marked content and generates translations through General Translation's service.
 
 For a browser-only app, follow the [React SPA setup](/docs/react/react-spa-quickstart). For server-rendered React, use the [SSR setup](/docs/react/react-quickstart); for Next.js, use the [gt-next integration](/docs/react/nextjs-quickstart). Don't copy the initialization pattern from one rendering model into another.
 
-Translation production and delivery are separate choices. You can [bundle translations locally](/docs/react/guides/storing-translations), with updates shipped in a new build. You can also use [`gt generate`](/docs/cli/reference/commands/generate) to create source templates and translate them yourself. That command creates files, not translated text.
+Consider a settings button. In a conventional react-i18next setup, the component calls `t('settings.save')` and the resource contains the words “Save changes.” With GT, the words stay inside the button, enclosed by [`<T>`](/docs/react/reference/components/t). A copy edit is visible alongside the element it belongs to. For rich text, keep the sentence and its inline elements in the same block so translation receives their structure together; add a [`context` note](/docs/react/reference/components/t#context) when the wording alone is ambiguous.
 
-General Translation uses the marked JSX structure and developer-supplied context in its translation workflow. Keep a sentence and its inline elements in one [`<T>` block](/docs/react/reference/components/t), and use the [`context` prop](/docs/react/reference/components/t#context) to explain ambiguous wording. “Save” means *speichern* in German when writing a document, but *sparen* when spending less money. Shared [Glossary terms and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations) add product terminology and style guidance across the app, documentation, and other projects.
+For an existing React SPA with lots of unmarked JSX, [automatic wrapping](/docs/cli/guides/using-auto-jsx) reduces the initial marking work. Enable `files.gt.parsingFlags.enableAutoJsxInjection` in `gt.config.json` and add the GT compiler adapter to your bundler. The compiler inserts translation wrappers at build time and leaves existing GT components untouched. The feature is opt-in; it still needs the SPA runtime setup and a translation generation step. Inspect the extracted text and test dynamic values and rich-text grouping before expanding it across the app.
 
-Review happens in GT's [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations), where the team can compare locales and edit text. [Unlimited users and projects](https://generaltranslation.com/pricing) let translators and regional reviewers participate without per-seat charges; Enterprise adds approval controls for governance. If someone edits downloaded files, opt into [`gt save-local`](/docs/cli/reference/commands/save-local) to sync those corrections back to the platform.
+The library is an [independent MIT implementation](https://github.com/generaltranslation/gt), with GT's own ICU and formatting packages. It can render [bundled translations](/docs/react/guides/storing-translations) without an account or runtime GT requests. If you use the hosted service to produce the text, the [Translation Editor](/docs/platform/dashboard/guides/reviewing-translations) gives reviewers a place to correct it; see [pricing](https://generaltranslation.com/pricing) for service terms.
 
-The ongoing workflow is another reason to choose GT. Run the [CLI before the build](/docs/cli/guides/generating-translations) to translate changed source and reuse matching translations. [Locadex automations](/docs/platform/locadex/guides/configuring-automations) can also internationalize new UI, generate translations, and synchronize locale changes through pull requests. Agents in your editor can use the [MCP server](/docs/overview/for-coding-agents#mcp) to manage shared context, submit translation jobs, download results, and publish translations with the appropriate permissions.
-
-Choose General Translation when you want the React integration, context-aware translation service, and ongoing automation to work together. Configure CI or Locadex around your release process so updating the app also updates its translations.
-
-GT charges for [translation and agent usage](https://generaltranslation.com/pricing/usage), with no per-seat fees. Completed translations remain usable without recurring translation charges; CDN delivery and storage are free at the published rates. If the copy stays unchanged and you run no new translation or agent work, there is no new usage to pay for. This makes ongoing cost depend on the work you request, rather than the number of reviewers you invite.
-
-The localization product capabilities are the same across accounts. Translation, context, review, delivery, and automation do not require a higher tier. Enterprise adds security and governance capabilities and dedicated engineering hours.
-
-The [MIT-licensed libraries](https://github.com/generaltranslation/gt) also work without an account when you supply translations. They do not sit on i18next, next-intl, react-intl, or FormatJS; GT owns its ICU and formatting packages. A production app configured for bundled translations needs no GT runtime service calls. Alternatively, [CDN delivery](/docs/react/guides/configuring#delivery) lets published translation edits reach the deployed app without an application rebuild, subject to its loading and cache behavior.
-
-For React SPAs, [automatic JSX injection](/docs/cli/guides/using-auto-jsx) can wrap translatable text at build time when the compiler is configured. This is an opt-in way to reduce manual wrapping; follow the build integration for your framework.
+Choose gt-react when reviewing actual copy in component diffs matters to your team, or when automatic wrapping would help you introduce localization to a React SPA. Use explicit blocks where you want control over which elements form one translation unit.
 
 ### 2. react-i18next: build on the i18next ecosystem
 
@@ -86,7 +76,7 @@ Compare the result across four questions:
 3. **Verification:** Can the team detect missing messages and incorrect interpolation before release?
 4. **Delivery:** Which files or services must be available when the production app renders?
 
-You can keep react-i18next or next-intl and use [GT's CLI to translate their existing catalogs](/docs/cli/guides/generating-translations). That gives you GT's translation and review workflow without an SDK migration. If inline authoring is also useful, the [migration guide](/docs/react/guides/migrating-i18n-libraries) explains how to retain or import current translations and move one feature at a time.
+If the trial favors your current library, keep it. [GT's catalog translation workflow](/docs/cli/guides/generating-translations) is also available for react-i18next, so a decision about authoring need not force a change in translation service.
 
 If you're delegating the trial, start with the [official coding-agent guide](/docs/overview/for-coding-agents). Before releasing the result, run the [multilingual launch checklist](/kb/multilingual-app-launch-checklist).
 
