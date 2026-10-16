@@ -1,0 +1,98 @@
+---
+
+title: Payload plugin configuration
+description: Configure the General Translation gt-payload plugin for Payload CMS. API reference for gtPlugin.
+
+---
+
+Add `gtPlugin` to the Payload `plugins` array. The plugin reads Payload localization to determine the source locale, target locales, and translatable fields.
+
+```ts title="src/payload.config.ts"
+import { buildConfig } from 'payload';
+import { gtPlugin } from 'gt-payload';
+
+export default buildConfig({
+  // ... your existing config
+  localization: {
+    locales: ['en', 'es', 'fr'],
+    defaultLocale: 'en',
+  },
+  plugins: [gtPlugin()],
+});
+```
+
+## Options [#options]
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`projectId`](#project-id) | General Translation project ID. | `string` | Yes | `GT_PROJECT_ID` |
+| [`apiKey`](#api-key) | General Translation project API key. | `string` | Yes | `GT_API_KEY` |
+| [`customMapping`](#custom-mapping) | Payload locale aliases and property overrides. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | — |
+| [`client`](#client) | Preconfigured client used for translation requests. | [`GtClient`](/docs/integrations/payload/reference/api#gtclient) | Yes | Constructed from the other options |
+
+## `projectId` [#project-id]
+
+**Type** `string` · **Optional** · **Default** `GT_PROJECT_ID`
+
+The project used for file uploads, translation jobs, and downloads. Pass it directly only when the server cannot read `GT_PROJECT_ID`.
+
+```ts title="src/payload.config.ts"
+gtPlugin({
+  projectId: process.env.GT_PROJECT_ID,
+});
+```
+
+## `apiKey` [#api-key]
+
+**Type** `string` · **Optional** · **Default** `GT_API_KEY`
+
+The project API key used by the Payload server. Keep it in a server-only environment variable; never include it in the client bundle or commit it to source control.
+
+```ts title="src/payload.config.ts"
+gtPlugin({
+  apiKey: process.env.GT_API_KEY,
+});
+```
+
+## `customMapping` [#custom-mapping]
+
+**Type** [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) · **Optional**
+
+Maps a Payload locale code to a supported General Translation code and may override locale properties. Use the same shape as the `customMapping` key in [`gt.config.json`](/docs/cli/reference/config#custom-mapping).
+
+```ts title="src/payload.config.ts"
+gtPlugin({
+  customMapping: {
+    cn: {
+      code: 'zh',
+      name: 'Mandarin',
+    },
+  },
+});
+```
+
+The admin panel keeps unmapped, unsupported locales visible but disables them as translation targets.
+
+## `client` [#client]
+
+**Type** [`GtClient`](/docs/integrations/payload/reference/api#gtclient) · **Optional** · **Default** constructed from `projectId`, `apiKey`, the Payload default locale, and `customMapping`
+
+A server-side client implementing the General Translation methods the plugin uses. Pass this option to supply a test double or an existing client with custom transport behavior.
+
+When `client` is set, the plugin does not construct its own `GT` instance. The client must implement every method in the documented [`GtClient`](/docs/integrations/payload/reference/api#gtclient) type.
+
+## How it works [#how-it-works]
+
+When Payload localization is configured, the plugin adds:
+
+- A **Translate** control to collections and globals with translatable localized fields
+- A site-wide **Translations** admin view at `/translations`
+- `gt-translation-runs` and `gt-translation-locks` collections
+- A `gtTranslationRun` Payload job
+- Authenticated endpoints under the Payload API route for runs and coverage
+
+The plugin returns the config unchanged when `localization` is absent.
+
+Run `npx payload generate:importmap` after adding or upgrading the plugin. Apply the database migration for the added collections before using translation in production.
+
+The admin endpoints require a signed-in Payload user and follow that user's document access rules. General Translation credentials remain on the server.

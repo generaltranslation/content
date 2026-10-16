@@ -23,7 +23,14 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
   vue: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
-  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
+  integrations: [
+    'Google Drive',
+    'Mintlify',
+    'Payload CMS',
+    'Sanity',
+    'Storyblok',
+    'rrweb',
+  ],
 };
 
 const EXPECTED_OVERVIEW_PAGES = [
@@ -39,6 +46,7 @@ const EXPECTED_OVERVIEW_PAGES = [
   '---Integrations---',
   '[Google Drive](/docs/integrations/google-drive/quickstart)',
   '[Mintlify](/docs/integrations/mintlify/quickstart)',
+  '[Payload CMS](/docs/integrations/payload/quickstart)',
   '[Sanity](/docs/integrations/sanity/quickstart)',
   '[Storyblok](/docs/integrations/storyblok/quickstart)',
   '[rrweb](/docs/integrations/rrweb/quickstart)',
@@ -53,6 +61,7 @@ const EXPECTED_OVERVIEW_GROUP_PAGES: Readonly<
     '[Next.js App Router](/docs/react/nextjs-quickstart)',
     '[Next.js Pages Router](/docs/react/nextjs-pages-router-quickstart)',
     '[TanStack Start](/docs/react/tanstack-start-quickstart)',
+    '[React Router](/docs/react/react-router-quickstart)',
     '[React Native](/docs/react/react-native-quickstart)',
     '[Vue](/docs/vue/quickstart)',
     '[Node.js](/docs/node/quickstart)',
@@ -64,7 +73,14 @@ const EXPECTED_OVERVIEW_GROUP_PAGES: Readonly<
 
 const EXPECTED_LANDING_CARDS: Readonly<Record<string, readonly string[]>> = {
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
-  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
+  integrations: [
+    'Google Drive',
+    'Mintlify',
+    'Payload CMS',
+    'Sanity',
+    'Storyblok',
+    'rrweb',
+  ],
 };
 
 const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {

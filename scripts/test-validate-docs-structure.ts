@@ -246,7 +246,7 @@ assertEqual(
   hasFinding(
     validateDocsStructure(reorderedIntegrationSections),
     'integrations/meta.json',
-    'Sidebar sections must be Google Drive, Mintlify, Sanity, Storyblok, rrweb'
+    'Sidebar sections must be Google Drive, Mintlify, Payload CMS, Sanity, Storyblok, rrweb'
   ),
   true,
   'rejects reordered integration sections'
@@ -264,7 +264,7 @@ assertEqual(
   hasFinding(
     validateDocsStructure(reorderedIntegrationCards),
     'integrations/index.mdx',
-    'Landing cards must be Google Drive, Mintlify, Sanity, Storyblok, rrweb'
+    'Landing cards must be Google Drive, Mintlify, Payload CMS, Sanity, Storyblok, rrweb'
   ),
   true,
   'rejects landing cards that drift from sidebar order'

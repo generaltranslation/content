@@ -1,5 +1,5 @@
 import { CollectionCards, PageShell } from '@/components/site';
-import { blog, devlog, docs } from '@/.source';
+import { blog, devlog, docs } from '@/.source/server';
 
 export default function Home() {
   return (

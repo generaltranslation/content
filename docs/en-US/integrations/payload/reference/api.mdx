@@ -1,0 +1,281 @@
+---
+
+title: Programmatic API
+description: Call gt-payload from server code and inspect its exported result types and admin components. API reference for gt-payload exports.
+
+---
+
+The root package exports server-side translation functions and their types. The `gt-payload/client` and `gt-payload/rsc` subpaths expose the components that [`gtPlugin`](/docs/integrations/payload/reference/plugin-configuration) registers in the Payload admin panel.
+
+## Exports [#exports]
+
+| Export | Entry point | Description |
+| --- | --- | --- |
+| [`translateDocument`](#translate-document) | `gt-payload` | Translate one collection document or global. |
+| [`translateSite`](#translate-site) | `gt-payload` | Translate all supported documents and globals. |
+| [`saveTranslations`](#save-translations) | `gt-payload` | Save current locale values for one target. |
+| [`saveSiteTranslations`](#save-site-translations) | `gt-payload` | Save current locale values for the whole site. |
+| [`gtPlugin`](#plugin) | `gt-payload` | Add the admin workflow to a Payload config. |
+| [`GtDocumentControls`](#admin-components) | `gt-payload/client` | Document-level translation control. |
+| [`GtNavLink`](#admin-components) | `gt-payload/client` | Link to the site-wide Translations view. |
+| [`GtRunsProvider`](#admin-components) | `gt-payload/client` | Resumes outstanding translation runs. |
+| [`GtTranslationsClient`](#admin-components) | `gt-payload/client` | Client content for the Translations view. |
+| [`GtTranslationsView`](#admin-components) | `gt-payload/rsc` | Server view registered at `/translations`. |
+| [`GtPluginOptions`](#gtpluginoptions) | `gt-payload` | Options accepted by `gtPlugin`. |
+| [`TranslateDocumentInput`](#translatedocumentinput-and-translatesiteinput) | `gt-payload` | Input for one-document operations. |
+| [`TranslateSiteInput`](#translatedocumentinput-and-translatesiteinput) | `gt-payload` | Input for site-wide operations. |
+| [`TranslateTarget`](#translatetarget) | `gt-payload` | Collection document or global identity. |
+| [`TranslateResult`](#translateresult-and-localeresult) | `gt-payload` | Translation result for one target. |
+| [`LocaleResult`](#translateresult-and-localeresult) | `gt-payload` | Result for one target locale. |
+| [`SkippedReason`](#skippedstring-and-skippedreason) | `gt-payload` | Reason a string was not written. |
+| [`SkippedString`](#skippedstring-and-skippedreason) | `gt-payload` | Skipped key and reason. |
+| [`SiteResult`](#siteresult-and-documentresult) | `gt-payload` | Site-wide translation result. |
+| [`DocumentResult`](#siteresult-and-documentresult) | `gt-payload` | Target paired with its result. |
+| [`SaveTranslationsResult`](#savetranslationsresult) | `gt-payload` | Save-local-edits result. |
+| [`GtClient`](#gtclient) | `gt-payload` | General Translation methods required by the plugin. |
+
+## `translateDocument` [#translate-document]
+
+**Input** [`TranslateDocumentInput`](#translatedocumentinput-and-translatesiteinput) · **Returns** `Promise<TranslateResult>`
+
+Uploads one collection document or global, waits up to one hour for its jobs, and writes completed translations into Payload.
+
+```ts
+import { GT } from 'generaltranslation';
+import { translateDocument } from 'gt-payload';
+
+const result = await translateDocument({
+  payload,
+  gt: new GT({
+    projectId: process.env.GT_PROJECT_ID,
+    apiKey: process.env.GT_API_KEY,
+    sourceLocale: payload.config.localization
+      ? payload.config.localization.defaultLocale
+      : undefined,
+  }),
+  target: { collection: 'pages', id: pageId },
+  locales: ['es', 'fr'],
+});
+```
+
+The result reports failures instead of throwing for expected document, permission, job, and translation errors. Calls to Payload or the client may still reject when an unexpected operation fails.
+
+## `translateSite` [#translate-site]
+
+**Input** [`TranslateSiteInput`](#translatedocumentinput-and-translatesiteinput) · **Returns** `Promise<SiteResult>`
+
+Lists every collection document and global with translatable localized fields, then translates them in one batch. Documents with no translated locales and no error are omitted from `documents`.
+
+```ts
+import { translateSite } from 'gt-payload';
+
+const result = await translateSite({
+  payload,
+  gt,
+  locales: ['es', 'fr'],
+  user,
+});
+```
+
+## `saveTranslations` [#save-translations]
+
+**Input** [`TranslateDocumentInput`](#translatedocumentinput-and-translatesiteinput) · **Returns** `Promise<SaveTranslationsResult>`
+
+Sends the current Payload locale values for one target to General Translation without enqueueing new translation work. If General Translation does not know the source document yet, this function uploads it first.
+
+```ts
+import { saveTranslations } from 'gt-payload';
+
+const result = await saveTranslations({
+  payload,
+  gt,
+  target: { global: 'site-settings' },
+  locales: ['es', 'fr'],
+  user,
+});
+```
+
+## `saveSiteTranslations` [#save-site-translations]
+
+**Input** [`TranslateSiteInput`](#translatedocumentinput-and-translatesiteinput) · **Returns** `Promise<{ documents: DocumentResult<SaveTranslationsResult>[] }>`
+
+Calls the save-local-edits workflow for every target covered by [`translateSite`](#translate-site).
+
+```ts
+import { saveSiteTranslations } from 'gt-payload';
+
+const result = await saveSiteTranslations({
+  payload,
+  gt,
+  locales: ['es', 'fr'],
+  user,
+});
+```
+
+## `gtPlugin` [#plugin]
+
+**Type** `(options?: GtPluginOptions) => Plugin`
+
+Returns a Payload plugin. See [Payload plugin configuration](/docs/integrations/payload/reference/plugin-configuration) for every option and side effect.
+
+## Input types [#input-types]
+
+### `GtPluginOptions`
+
+```ts
+type GtPluginOptions = {
+  projectId?: string;
+  apiKey?: string;
+  customMapping?: CustomMapping;
+  client?: GtClient;
+};
+```
+
+### `TranslateDocumentInput` and `TranslateSiteInput`
+
+```ts
+type TranslateDocumentInput = {
+  payload: Payload;
+  gt: GtClient;
+  target: TranslateTarget;
+  locales: string[];
+  saveLocalEdits?: boolean;
+  user?: TypedUser | null;
+};
+
+type TranslateSiteInput = Omit<TranslateDocumentInput, 'target'>;
+```
+
+| Property | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `payload` | Initialized Payload instance. | `Payload` | No | — |
+| `gt` | Client used for uploads, jobs, downloads, and shorter retries. | [`GtClient`](#gtclient) | No | — |
+| `target` | Collection document or global. Document operations only. | [`TranslateTarget`](#translatetarget) | No | — |
+| `locales` | Payload locale codes to process. The source locale and duplicates are removed. | `string[]` | No | — |
+| `saveLocalEdits` | Save known locale edits before translating and preserve edits that cannot be sent. | `boolean` | Yes | `false` |
+| `user` | Payload user whose access rules apply to reads and writes. | `TypedUser \| null` | Yes | Payload Local API server behavior |
+
+### `TranslateTarget`
+
+```ts
+type TranslateTarget =
+  | { collection: string; id: string | number }
+  | { global: string };
+```
+
+Collection IDs are unique only within a collection, so both values form the General Translation file identity. A global uses its slug.
+
+## Result types [#result-types]
+
+### `TranslateResult` and `LocaleResult`
+
+```ts
+type TranslateResult = {
+  error?: string;
+  usageLimitReached?: true;
+  locales: Record<string, LocaleResult>;
+};
+
+type LocaleResult =
+  | {
+      status: 'applied';
+      applied: string[];
+      skipped: SkippedString[];
+    }
+  | {
+      status: 'failed';
+      error: string;
+    };
+```
+
+`error` describes a target-level failure. `usageLimitReached` is present only when General Translation refuses the work with status `402`.
+
+`applied` contains the stable field keys written to Payload. `skipped` explains translated strings that were not written.
+
+### `SkippedString` and `SkippedReason`
+
+```ts
+type SkippedString = {
+  key: string;
+  reason: SkippedReason;
+};
+
+type SkippedReason =
+  | 'removed'
+  | 'broken_markup'
+  | 'missing'
+  | 'unsaved_edit';
+```
+
+| Reason | Meaning |
+| --- | --- |
+| `removed` | The source row, block, or field no longer exists. |
+| `broken_markup` | Returned rich text or links could not be rebuilt safely. |
+| `missing` | No translated value was returned for the source key. |
+| `unsaved_edit` | A Payload edit could not be sent, so `saveLocalEdits` kept it. |
+
+### `SiteResult` and `DocumentResult`
+
+```ts
+type DocumentResult<T> = {
+  target: TranslateTarget;
+  result: T;
+};
+
+type SiteResult = {
+  error?: string;
+  documents: DocumentResult<TranslateResult>[];
+};
+```
+
+`DocumentResult` keeps partial successes and failures associated with their collection document or global.
+
+### `SaveTranslationsResult`
+
+```ts
+type SaveTranslationsResult = {
+  error?: string;
+  locales: Record<
+    string,
+    | { status: 'saved'; unsaved?: number }
+    | { status: 'no_translations'; unsaved?: number }
+    | { status: 'failed'; error: string }
+  >;
+};
+```
+
+`unsaved` counts strings the plugin could not send because their links differ from the source.
+
+### `GtClient`
+
+`GtClient` is the subset of the `generaltranslation` `GT` class used by the plugin:
+
+```ts
+type GtClient = Pick<
+  GT,
+  | 'uploadSourceFiles'
+  | 'enqueueFiles'
+  | 'awaitJobs'
+  | 'downloadFileBatch'
+  | 'uploadTranslations'
+  | 'checkJobStatus'
+  | 'translateMany'
+  | 'customMapping'
+>;
+```
+
+Use a `GT` instance in production. The narrower type also supports test doubles.
+
+## Admin components [#admin-components]
+
+The plugin registers these exports by import-map path:
+
+| Component | Entry point | Role |
+| --- | --- | --- |
+| `GtDocumentControls` | `gt-payload/client` | Adds the **Translate** button and drawer to a document or global. |
+| `GtNavLink` | `gt-payload/client` | Adds the **Translations** navigation link. |
+| `GtRunsProvider` | `gt-payload/client` | Finds and advances outstanding runs while the admin panel is open. |
+| `GtTranslationsClient` | `gt-payload/client` | Renders site-wide controls and the coverage table. |
+| `GtTranslationsView` | `gt-payload/rsc` | Wraps the client view in Payload's admin template. |
+
+Add [`gtPlugin`](/docs/integrations/payload/reference/plugin-configuration) instead of registering these components individually. They are exported so Payload's generated import map can resolve the plugin configuration.

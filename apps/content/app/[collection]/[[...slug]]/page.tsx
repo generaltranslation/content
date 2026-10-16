@@ -11,7 +11,7 @@ import { notFound } from 'next/navigation';
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return staticParams(['blog', 'devlog']);
+  return staticParams(['blog', 'devlog', 'kb']);
 }
 
 export default async function Page({

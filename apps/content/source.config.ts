@@ -45,6 +45,20 @@ export const devlog = defineCollections({
   schema: contentFrontmatterSchema,
 });
 
+// Knowledge base articles: flat kb/<slug>.mdx files, served only in en-US.
+export const kb = defineCollections({
+  type: 'doc',
+  dir: '../../kb',
+  schema: frontmatterSchema.extend({
+    summary: z.string().min(1),
+    date: z.union([z.date(), z.string().min(1)]),
+    authors: z.array(z.string()).optional(),
+    noindex: z.boolean().optional(),
+    // Blog post slugs whose /blog/<slug> URLs redirect to this article.
+    redirectFrom: z.array(z.string()).optional(),
+  }),
+});
+
 export default defineConfig({
   mdxOptions: {
     preset: 'minimal',

@@ -6,8 +6,12 @@ import {
 } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 
+import OpenAPIPage from '@/components/docs/OpenAPIPage';
+import { openapi } from '@/lib/openapi';
 import { getMDXComponents } from '@/mdx-components';
 import { source } from '@/source';
+
+import type { GeneratedPageProps } from 'fumadocs-openapi';
 
 export const dynamicParams = false;
 
@@ -51,6 +55,7 @@ export default async function Page({
   if (!page) notFound();
 
   const MDXContent = page.data.body;
+  const { preloaded } = await openapi.preloadOpenAPIPage(page);
 
   return (
     <DocsPage
@@ -63,7 +68,15 @@ export default async function Page({
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
-        <MDXContent components={getMDXComponents()} />
+        <MDXContent
+          components={getMDXComponents({
+            // Generated reference pages keep the `<APIPage>` name that the
+            // landing app also renders.
+            APIPage: (props: GeneratedPageProps) => (
+              <OpenAPIPage {...props} preloaded={preloaded} />
+            ),
+          })}
+        />
       </DocsBody>
     </DocsPage>
   );

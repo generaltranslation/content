@@ -16,7 +16,7 @@ import { mdxjs } from "micromark-extension-mdxjs";
 import { visit } from "unist-util-visit";
 
 const CONTENT_ROOT = resolve(import.meta.dirname, "..");
-const CONTENT_DIRS = ["docs", "docs-templates", "blog", "devlog"];
+const CONTENT_DIRS = ["docs", "docs-templates", "blog", "devlog", "kb"];
 
 // Keep this list aligned with CalloutType in the pinned fumadocs-ui package.
 // Reference: https://www.fumadocs.dev/docs/markdown#callouts

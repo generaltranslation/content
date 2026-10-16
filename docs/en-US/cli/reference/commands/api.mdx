@@ -1,11 +1,11 @@
 ---
 
 title: gt api
-description: Make authenticated raw requests to the General Translation API or print its bundled OpenAPI specification. API reference for the gt api command.
+description: Make authenticated raw requests or inspect the bundled General Translation API contract. API reference for the gt api command.
 
 ---
 
-Use `gt api` when you need direct access to an endpoint without adding an HTTP client to your project. The command writes the unmodified response body to standard output, which makes it suitable for scripts and shell pipelines.
+Use `gt api` when you need direct access to an endpoint without adding an HTTP client to your project. It can also list the bundled API operations or print the contract for one operation without loading the full OpenAPI specification.
 
 ## Overview [#overview]
 
@@ -13,7 +13,7 @@ Use `gt api` when you need direct access to an endpoint without adding an HTTP c
 npx gt api [endpoint] [options]
 ```
 
-Pass an endpoint path such as `/v2/project/info/PROJECT_ID`, or omit the endpoint when using `--spec`.
+Pass an endpoint path such as `/v2/project/info/PROJECT_ID` to make a request. Use `--list` without an endpoint to discover operations, or pass an operation ID, specification path, or concrete request path with `--spec` to inspect a smaller contract.
 
 ## How it works [#how-it-works]
 
@@ -25,6 +25,8 @@ Pass an endpoint path such as `/v2/project/info/PROJECT_ID`, or omit the endpoin
 
 If `gt.config.json` provides a project ID that differs from `--project-id` or the environment, the command stops before sending the request. When only the flag and environment provide different IDs, the flag takes precedence.
 
+`--list` prints one tab-separated line per bundled operation: method, path, operation ID, and summary. With an endpoint, `--spec` looks up an operation ID first, then an exact specification path, then a concrete request path matched against path parameters. It resolves schema references in the filtered output and retains referenced components and security schemes. Recursive schema references remain as `$ref` values.
+
 ## Flags [#flags]
 
 | Parameter | Description | Type | Optional | Default |
@@ -33,18 +35,26 @@ If `gt.config.json` provides a project ID that differs from `--project-id` or th
 | `--input <file>` | Reads the request body from a file, or from standard input when set to `-`. | `string` | Yes | — |
 | `-H, --header <header>` | Adds a `Key: Value` request header. Repeat for multiple headers. | `string` | Yes | — |
 | `-i, --include` | Writes the response status and headers before the body. | `boolean` | Yes | `false` |
-| `--spec` | Prints the bundled OpenAPI 3.1 specification. | `boolean` | Yes | `false` |
+| `--spec` | Prints the bundled OpenAPI 3.1 specification, filtered to the endpoint when one is provided. | `boolean` | Yes | `false` |
+| `--list` | Prints every bundled API operation as tab-separated method, path, operation ID, and summary fields. | `boolean` | Yes | `false` |
 | `-c, --config <path>` | Path to `gt.config.json`. The `.json` suffix may be omitted. | `string` | Yes | Auto-resolved |
 | `--api-key <key>` | Explicit tooling key override. | `string` | Yes | `GT_API_KEY`, otherwise login |
 | `--project-id <id>` | project ID override. | `string` | Yes | Config or `GT_PROJECT_ID` |
 
-`--spec` works offline without an endpoint, login, API key, or project ID.
+`--list` and `--spec` work offline without a login, API key, project ID, or valid translation settings. They cannot be combined. If a focused specification lookup does not match an operation, the command exits with status 1 and suggests `--list`.
 
 ## Examples [#examples]
 
 ```bash
 # Save the API snapshot bundled with the installed CLI dependencies
 npx gt api --spec > openapi.json
+
+# List the bundled operations
+npx gt api --list
+
+# Print one operation by operation ID or concrete request path
+npx gt api --spec getProjectInfo
+npx gt api --spec /v2/project/info/PROJECT_ID
 
 # Read project information using saved login or an explicit key
 npx gt api /v2/project/info/PROJECT_ID
@@ -66,7 +76,14 @@ printf '{"defaultLocale":"fr"}' |
 
 ## Other notes [#notes]
 
-- `gt api` is available in `gt` 2.20.0 and later.
 - `--spec` prints the installed snapshot; it does not fetch the current hosted specification.
+- A path lookup prints every method on the matched specification path. The `--method` flag does not filter specification output.
 - The command skips the CLI's file and locale settings validation, so invalid translation settings do not block a raw API request.
 - Use the [OpenAPI reference](/docs/platform/openapi/overview) to find endpoint paths, permissions, request fields, and response schemas.
+
+### Version history
+
+| Version | Changes |
+| --- | --- |
+| `2.25.0` | Added `--list` and focused `--spec <endpoint>` output. |
+| `2.20.0` | Added `gt api` with raw requests and full specification output. |
