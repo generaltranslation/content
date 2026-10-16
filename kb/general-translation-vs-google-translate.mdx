@@ -1,0 +1,78 @@
+---
+title: Why use General Translation instead of Google Translate?
+summary: Google Translate is quick and inexpensive for translating text, which is enough for one-off content. Shipping a product in another language also needs each string translated in context, consistent terminology, correct variables and plurals, review, and a release process. General Translation translates your app's content with context from the code and ships the translations with every build.
+date: 2026-10-16
+category: translation
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, translate-conditional-jsx, how-to-handle-plurals-in-react, multilingual-nextjs-seo]
+---
+
+Google Translate is a fast way to read a page in another language or translate a paragraph once, and its Cloud Translation API costs $20 per million characters after the first 500,000 each month ([pricing](https://cloud.google.com/translate/pricing), October 2026). The harder parts of localizing a product are translating every string with the meaning it has in your UI, keeping terms consistent across releases, and getting translations to where your app loads them. Each way of using Google Translate for an app leaves some of that to you.
+
+## Three ways to use Google Translate for an app
+
+### Let visitors' browsers translate the page
+
+Chrome offers to translate pages in languages the user doesn't read. The translation happens in the visitor's browser after the page loads: Google's translate script replaces the page's text with translated text wrapped in `<font>` elements. You don't see or review the result, and there's no translated URL for search engines to crawl, while Google's guidance for multilingual sites is to publish each language at its own URL ([Managing multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)).
+
+The rewrite can also break React apps. React keeps references to the text nodes it rendered, so after translation replaces them, the next update can fail with `NotFoundError: Failed to execute 'removeChild' on 'Node'`. React's maintainers closed the issue for it ([react#11538](https://github.com/react/react/issues/11538)) in 2018, explaining that React can't work around it without masking other bugs or slowing down common cases. Elements marked with `translate="no"` are left alone.
+
+### Add the Website Translator widget
+
+Google's embeddable Website Translator is limited to academic, government, nonprofit, and non-commercial sites, so a company can't add it to its product ([Google Translate Help](https://support.google.com/translate/answer/2534559)).
+
+### Call the Cloud Translation API
+
+The Cloud Translation API is the option built for developers. It keeps HTML tags intact, and its Advanced edition skips text marked `translate="no"` and adds glossaries, adaptive translation from example sentence pairs, and a Translation LLM built on Gemini. A request carries the text, the languages, and optionally a model and a glossary:
+
+```json title="translateText request body"
+{
+  "contents": ["Save"],
+  "mimeType": "text/plain",
+  "sourceLanguageCode": "en",
+  "targetLanguageCode": "de"
+}
+```
+
+There's no field for where a string appears. In German, "Save" is *speichern* (store a file) or *sparen* (spend less), and a one-word request gives the model nothing to choose by. The rest of the pipeline is yours to build: pulling strings out of your i18n files, protecting placeholders such as `{{count}}`, producing each language's plural forms, writing results back, rerunning on every change, and giving reviewers a place to fix output that the next run won't overwrite. If you show the output to users, Google also requires attribution: a "powered by Google Translate" badge next to results, a disclaimer for unmodified output, and machine-translation markup on pages that search engines index ([attribution requirements](https://docs.cloud.google.com/translate/attribution)).
+
+## How the options compare
+
+| Approach | Context for each string | Variables and plurals | Search engines | Review and updates |
+| --- | --- | --- | --- | --- |
+| Browser translation | The visible page text | Translated as plain text | Nothing new to index | No review; reruns in each visitor's browser |
+| Cloud Translation API | The text, plus an optional glossary or example pairs | You protect placeholders and build each language's plural forms | Indexed once you publish each language at its own URL | You rerun your script and build review yourself |
+| General Translation | The surrounding JSX, a context note, your Glossary, and Custom Prompts | [`<Var>`](/docs/react/reference/components/var) values stay out of translation, and [`<Plural>`](/docs/react/reference/components/plural) gets each language's forms | Indexed with `gt-next` locale routing, such as `/es/about` | Each build or Locadex pull request translates what changed, and reviewers edit in the Dashboard |
+
+Use Google Translate to read foreign-language content or translate internal text once. Use the Cloud Translation API when you want raw translation at a per-character price and will build context, placeholders, plurals, review, and attribution yourself. Use General Translation when the translations ship in your product, such as app UI, docs, or a marketing site that has to read right in every language and stay current with each release.
+
+## How General Translation translates an app
+
+With General Translation, the request for each string carries what the string means in your UI. Here's a billing toggle whose badge reads "Save 20%":
+
+```tsx title="BillingToggle.tsx"
+import { T, Var } from 'gt-react';
+
+export function BillingToggle({ discount }: { discount: string }) {
+  return (
+    <T context="Pricing page billing toggle. Save means pay less, not store data.">
+      <button>Yearly</button>
+      <span className="badge">Save <Var>{discount}</Var></span>
+    </T>
+  );
+}
+```
+
+[`<T>`](/docs/react/reference/components/t) sends the block as one unit, with its elements (a button and a badge) and the [`context`](/docs/react/reference/components/t#context) note, so the translation can resolve "Save" and place the discount where each language puts it. [`<Var>`](/docs/react/reference/components/var) holds a placeholder for the discount, and its value is never sent to the General Translation API. The rest of the workflow is already built:
+
+- **Consistent terms and tone.** A Context Group's Glossary pins terms such as product names in every language, and Custom Prompts set rules such as formal "Sie" in German, across every project you assign it to. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations).)
+- **Translation as a build step.** [`npx gt translate`](/docs/cli/reference/commands/translate) runs before your build, translates what changed, and writes translations to your repository or General Translation's CDN. [Locadex](/docs/platform/locadex/quickstart), General Translation's AI agent, can open the pull request instead.
+- **Review in the Dashboard.** Reviewers edit translations on the Dashboard's **Translations** page and compare locales side by side. (See [Reviewing and editing translations](/docs/platform/dashboard/guides/reviewing-translations).)
+- **Content that exists only at run time.** For user-generated or CMS text, [`tx`](/docs/node/reference/functions/tx) in `gt-node` translates on request.
+
+General Translation supports 120+ locales, and its libraries are open source. Start with the [Next.js Quickstart](/docs/react/nextjs-quickstart) or the [React Quickstart](/docs/react/react-quickstart).
+
+## Key takeaways
+
+- Google Translate translates text well. Browser translation gives you no review or indexable pages and can break React apps, and the Website Translator widget is limited to non-commercial sites.
+- A Cloud Translation API request has no field for where a string appears, and placeholders, plurals, review, delivery, and attribution are yours to build.
+- General Translation translates content in your code with its UI context, keeps variable values out of translation, applies your Glossary, and ships translations with each build.
