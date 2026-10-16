@@ -21,10 +21,18 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
   }
 }
 
+const categories = (list: unknown) => JSON.stringify(list);
+
+const CATEGORIES = categories([
+  { slug: "internationalization", title: "Internationalization", description: "Setting up i18n." },
+  { slug: "translation", title: "Translation", description: "Translating content." },
+]);
+
 const context: KbContext = {
   liveSlugs: [],
   authors: ["jackie", "default"],
   today: "2026-10-13",
+  categoriesJson: CATEGORIES,
 };
 
 const BODY = `## The problem\n\n${"Plural rules differ by language. ".repeat(12)}\n`;
@@ -42,6 +50,7 @@ const article = (
     summary: "It works by following the rules.",
     date: "2026-01-01",
     authors: ["jackie"],
+    category: "internationalization",
     ...frontmatter,
   },
   body,
@@ -107,12 +116,72 @@ assertEqual(
   "rejects an unknown frontmatter field"
 );
 
+// Categories
+
+assertEqual(
+  findKbProblems(
+    [article("a.mdx"), { name: "categories.json", isDirectory: false }],
+    context
+  ).length,
+  0,
+  "treats categories.json as the category list, not an article"
+);
+
+assertEqual(
+  first([article("a.mdx", { category: undefined })]),
+  "kb/a.mdx: frontmatter is missing category.",
+  "rejects an article without a category"
+);
+
+assertEqual(
+  first([article("a.mdx", { category: "seo" })]),
+  'kb/a.mdx: category "seo" is not in kb/categories.json.',
+  "rejects a category that is not in the list"
+);
+
+assertEqual(
+  first([article("a.mdx")], { categoriesJson: undefined }),
+  "kb/categories.json is missing.",
+  "rejects a missing category list"
+);
+
+assertEqual(
+  first([article("a.mdx")], { categoriesJson: "{not json" }),
+  "kb/categories.json is not valid JSON.",
+  "rejects a category list that is not JSON"
+);
+
+assertEqual(
+  first([article("a.mdx")], { categoriesJson: categories([]) }),
+  "kb/categories.json must be a non-empty list of categories.",
+  "rejects an empty category list"
+);
+
+assertEqual(
+  findKbProblems([article("a.mdx", { category: "translation" })], {
+    ...context,
+    categoriesJson: categories([
+      { slug: "translation", title: "Translation", description: "x" },
+      { slug: "Bad slug", title: "", description: "x" },
+      { slug: "translation", title: "Again", description: "" },
+    ]),
+  }).join("\n"),
+  [
+    'kb/categories.json: category 2 needs a slug of letters, digits, "-", and "_".',
+    "kb/categories.json: category 2 needs a title.",
+    'kb/categories.json: category 3 repeats the slug "translation".',
+    "kb/categories.json: category 3 needs a description.",
+  ].join("\n"),
+  "reports each problem in the category list"
+);
+
 // Titles
 
 assertEqual(
-  first([article("a.mdx", { title: "x".repeat(91) })]),
-  "kb/a.mdx: title is 91 characters; keep it to 90 or fewer.",
-  "rejects a title over 90 characters"
+  findKbProblems([article("a.mdx", { title: `${"x".repeat(120)}?` })], context)
+    .length,
+  0,
+  "accepts a long title"
 );
 
 assertEqual(
@@ -289,6 +358,15 @@ assertEqual(
   first([article("a.mdx", {}, `## TL;DR\n\n${BODY}`)]),
   'kb/a.mdx: line 1 contains "TL;DR"; the summary is the short answer.',
   "rejects a TL;DR section"
+);
+
+assertEqual(
+  findKbProblems(
+    [article("a.mdx", {}, `${BODY}\n## Key takeaways\n\nPlurals vary by language.\n`)],
+    context
+  ).length,
+  0,
+  "accepts a Key takeaways section"
 );
 
 assertEqual(

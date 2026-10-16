@@ -2,12 +2,15 @@
  * Validate the knowledge base folder, kb/, whose articles generaltranslation.com
  * serves at /en-US/kb/<slug> (and as Markdown at /kb/<slug>.md).
  *
- * - kb/ holds only <slug>.mdx files, with no subfolders.
+ * - kb/ holds only <slug>.mdx files and CATEGORIES_FILE, with no subfolders.
+ * - CATEGORIES_FILE is a non-empty JSON list of categories, each with a
+ *   unique slug, a title, and a description; its order is the index order.
  * - Slugs use only letters, digits, `-`, and `_` (the site rejects anything
  *   else), and never a reserved slug.
- * - Frontmatter has title, summary, and date, and no unknown fields; a
+ * - Frontmatter has title, summary, date, and category, and no unknown
+ *   fields; `category` is a slug from CATEGORIES_FILE; a
  *   title is non-empty text and `noindex`, when set, is true or false.
- * - Titles are unique and at most TITLE_MAX characters.
+ * - Titles are unique.
  * - A summary is at most SUMMARY_MAX_WORDS words, ends with a period, and has
  *   no backticks or Markdown links (it is reused as plain text).
  * - `authors` is optional (the site credits the team without it); every
@@ -45,19 +48,21 @@ const LIVE_POST_DIRS = ["blog/en-US", "devlog/en-US"];
 const SLUG = /^[A-Za-z0-9_-]+$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** The ordered category list inside kb/, read by the site for grouping. */
+export const CATEGORIES_FILE = "categories.json";
+
 /** /kb/sitemap.md is the Knowledge Base index, so no article may use it. */
 export const RESERVED_SLUGS = ["sitemap"];
 
 /** Most related questions the site shows for one article. */
 export const RELATED_MAX = 5;
 
-export const TITLE_MAX = 90;
 export const SUMMARY_MAX_WORDS = 60;
 
 /** Below this many words of text, an article without code reads as a placeholder. */
 export const MIN_BODY_WORDS = 50;
 
-const REQUIRED_FIELDS = ["title", "summary", "date"];
+const REQUIRED_FIELDS = ["title", "summary", "date", "category"];
 
 /** Every frontmatter field the site reads for a KB article. */
 const KNOWN_FIELDS = new Set([
@@ -74,10 +79,6 @@ const FILLER: { pattern: RegExp; problem: string }[] = [
   {
     pattern: /\bTL;DR\b/i,
     problem: 'contains "TL;DR"; the summary is the short answer.',
-  },
-  {
-    pattern: /\bkey takeaways\b/i,
-    problem: 'contains "Key takeaways"; the summary is the short answer.',
   },
   { pattern: /\bin conclusion\b/i, problem: 'contains "In conclusion".' },
   { pattern: /\bin today['’]s\b/i, problem: "contains \"In today's\"." },
@@ -110,6 +111,8 @@ export type KbContext = {
   authors: readonly string[];
   /** Today as YYYY-MM-DD. */
   today: string;
+  /** Contents of kb/CATEGORIES_FILE; undefined when the file is missing. */
+  categoriesJson?: string;
 };
 
 type MdastNode = {
@@ -407,6 +410,71 @@ function relatedProblems(
   return problems;
 }
 
+/**
+ * Problems in kb/CATEGORIES_FILE, and the category slugs it defines (empty
+ * when the file is missing or unreadable).
+ */
+function categoryListProblems(json: string | undefined): {
+  problems: string[];
+  slugs: Set<string>;
+} {
+  const path = `${KB_DIR}/${CATEGORIES_FILE}`;
+  const slugs = new Set<string>();
+  if (json === undefined) return { problems: [`${path} is missing.`], slugs };
+
+  let list: unknown;
+  try {
+    list = JSON.parse(json);
+  } catch {
+    return { problems: [`${path} is not valid JSON.`], slugs };
+  }
+  if (!Array.isArray(list) || list.length === 0) {
+    return {
+      problems: [`${path} must be a non-empty list of categories.`],
+      slugs,
+    };
+  }
+
+  const problems: string[] = [];
+  list.forEach((category: unknown, index) => {
+    const at = `${path}: category ${index + 1}`;
+    const { slug, title, description } =
+      category && typeof category === "object"
+        ? (category as Record<string, unknown>)
+        : {};
+    if (typeof slug !== "string" || !SLUG.test(slug)) {
+      problems.push(
+        `${at} needs a slug of letters, digits, "-", and "_".`
+      );
+    } else if (slugs.has(slug)) {
+      problems.push(`${at} repeats the slug "${slug}".`);
+    } else {
+      slugs.add(slug);
+    }
+    if (typeof title !== "string" || title.trim() === "") {
+      problems.push(`${at} needs a title.`);
+    }
+    if (typeof description !== "string" || description.trim() === "") {
+      problems.push(`${at} needs a description.`);
+    }
+  });
+  return { problems, slugs };
+}
+
+function categoryProblems(
+  path: string,
+  category: unknown,
+  categories: ReadonlySet<string>
+): string[] {
+  if (category === undefined || category === null) return [];
+  if (typeof category !== "string" || !categories.has(category)) {
+    return [
+      `${path}: category ${JSON.stringify(category)} is not in ${KB_DIR}/${CATEGORIES_FILE}.`,
+    ];
+  }
+  return [];
+}
+
 function slugProblems(path: string, slug: string): string[] {
   const problems: string[] = [];
   if (!SLUG.test(slug)) {
@@ -422,14 +490,15 @@ function slugProblems(path: string, slug: string): string[] {
 
 /**
  * @param entries - Everything directly inside kb/
- * @param context - Live post slugs, author slugs, and today's date
+ * @param context - Live post slugs, author slugs, today's date, and the category list
  * @returns One message per problem; an empty array means kb/ is valid
  */
 export function findKbProblems(
   entries: readonly KbEntry[],
   context: KbContext
 ): string[] {
-  const problems: string[] = [];
+  const categoryList = categoryListProblems(context.categoriesJson);
+  const problems: string[] = [...categoryList.problems];
   const live = new Set(context.liveSlugs);
   const authors = new Set(context.authors);
   const claimedBy = new Map<string, string>();
@@ -442,6 +511,7 @@ export function findKbProblems(
 
   for (const entry of entries) {
     const path = `${KB_DIR}/${entry.name}`;
+    if (entry.name === CATEGORIES_FILE && !entry.isDirectory) continue;
     if (entry.isDirectory) {
       problems.push(`${path} is a folder; kb/ holds only <slug>.mdx files.`);
       continue;
@@ -469,11 +539,6 @@ export function findKbProblems(
     ) {
       problems.push(`${path}: title must be non-empty text.`);
     } else if (typeof title === "string") {
-      if (title.length > TITLE_MAX) {
-        problems.push(
-          `${path}: title is ${title.length} characters; keep it to ${TITLE_MAX} or fewer.`
-        );
-      }
       const key = title.trim().toLowerCase();
       const owner = titleOwner.get(key);
       if (owner) {
@@ -485,6 +550,7 @@ export function findKbProblems(
 
     problems.push(
       ...summaryProblems(path, frontmatter.summary),
+      ...categoryProblems(path, frontmatter.category, categoryList.slugs),
       ...authorProblems(path, frontmatter.authors, authors),
       ...dateProblems(path, frontmatter.date, context.today),
       ...updatedProblems(
@@ -558,6 +624,9 @@ function main(): void {
     ),
     authors: readSlugs(join(CONTENT_ROOT, AUTHORS_DIR)),
     today: new Date().toISOString().slice(0, 10),
+    categoriesJson: existsSync(join(kbPath, CATEGORIES_FILE))
+      ? readFileSync(join(kbPath, CATEGORIES_FILE), "utf8")
+      : undefined,
   });
 
   for (const problem of problems) {
@@ -570,7 +639,8 @@ function main(): void {
     process.exit(1);
   }
 
-  console.log(`Validated ${KB_DIR}/: ${entries.length} articles.`);
+  const articles = entries.filter((entry) => entry.name.endsWith(".mdx"));
+  console.log(`Validated ${KB_DIR}/: ${articles.length} articles.`);
 }
 
 if (
