@@ -1,83 +1,146 @@
 ---
 title: Can I do i18n without translation files?
-summary: Yes. With gt-react or gt-next, content stays inline in your components inside a <T> component, and translations are generated at build time as output, so there are no keys or per-locale JSON files to write and keep in sync.
+summary: "Yes. General Translation's gt-react and gt-next libraries do React and Next.js i18n with no translation keys and no JSON file per language to maintain. Copy stays inline in JSX inside the <T> component, and the gt translate command generates each language's translations in your build, with context from your code. Locadex can keep them current through pull requests."
 date: 2026-05-07
+updated: 2026-10-16
 category: internationalization
 authors: [jackie, ernest]
 redirectFrom: [i18n-without-translation-files, nextjs-i18n-code-is-the-source-of-truth]
-related: [translate-conditional-jsx, how-to-handle-plurals-in-react, best-localization-software]
+related: [add-i18n-to-nextjs, ai-agent-i18n-setup, how-to-handle-plurals-in-react, translations-in-ci]
 ---
 
-Everyone who's internationalized a JavaScript app knows the workflow. You install an i18n library, create an `en.json` file, pull every user-facing string out of your components, assign each one a key, and reference the key where the string used to be. Then you duplicate that JSON file for every language you support. `es.json`, `fr.json`, `ja.json`.
+Yes. General Translation's open-source `gt-react` and `gt-next` libraries let you internationalize (i18n) a React or Next.js app without translation keys and without writing a JSON file for each language. You write copy inline in your JSX inside the [`<T>`](/docs/react/reference/components/t) component, and [`npx gt translate`](/docs/cli/reference/commands/translate) generates the translations for every language when you build.
 
-At first, it's fine. Thirty strings, three languages, 90 entries.
+Key-based libraries such as i18next, react-intl, and next-intl look up each string by key in a message file per language, so every new string needs a key in every file. A key added to `en.json` but missed in `ja.json` leaves one line of your Japanese checkout page untranslated.
 
-Then your app grows. Six months later you have 400 strings and 12 languages. 4,800 entries across a dozen files. A developer adds a new feature, writes five new strings, forgets to update three of the translation files. Nobody notices until a user in Tokyo sees English fallbacks in a Japanese interface. Someone suggests buying a translation management system.
+Translation files still exist with General Translation, but as build output. The CLI writes one generated file per language and can publish the translations to General Translation's CDN. No one edits those files by hand or copies keys between them.
 
-<Video src='https://assets.gtx.dev/i18n-no-translation.mp4' />
+## Can I translate React components inline instead of using a key file?
 
-## The file management tax
+Yes. With General Translation, each sentence stays in the component inside [`<T>`](/docs/react/reference/components/t), and the CLI translates the whole block. A checkout summary with react-i18next reads every string by key from a JSON file:
 
-Translation files create a maintenance burden that scales with the number of languages you support. Change a string and you need to update a dozen files. Those files drift out of sync. Keeping them aligned requires tooling, automation, or discipline.
+```json title="locales/en/checkout.json"
+{
+  "summary": {
+    "title": "Order summary",
+    "item_count_one": "You have {{count}} item in your cart.",
+    "item_count_other": "You have {{count}} items in your cart.",
+    "tax_notice": "Tax is calculated at checkout."
+  }
+}
+```
 
-The ecosystem of workarounds tells the story: VS Code extensions that auto-generate translation keys, type generators that validate your JSON against TypeScript interfaces, linters for unused keys, CI checks that verify all locales are in sync. You don't build this kind of tooling for a workflow that works well.
+```tsx title="CheckoutSummary.tsx"
+import { useTranslation } from 'react-i18next';
 
-Your UI says one thing, your translation files say another, and a key-based mapping holds the two together:
-
-```tsx
-function CheckoutSummary({ itemCount, discount }) {
+export function CheckoutSummary({ itemCount }: { itemCount: number }) {
   const { t } = useTranslation('checkout');
-
   return (
-    <div>
+    <section>
       <h2>{t('summary.title')}</h2>
       <p>{t('summary.item_count', { count: itemCount })}</p>
-      {discount && <p>{t('summary.discount_applied', { percent: discount })}</p>}
-      <p>{t('summary.total_label')}</p>
       <small>{t('summary.tax_notice')}</small>
-    </div>
+    </section>
   );
 }
 ```
 
-To understand what this component renders, you'd have to open `checkout.json`, find the `summary` namespace, and cross-reference five keys. Across hundreds of components, code review becomes an exercise in file-hopping.
+The same component with `gt-next` keeps the English in the JSX. Other React frameworks import from their own package, such as `gt-react`.
 
-ICU message syntax makes this worse. The format libraries like `i18next`, `react-intl`, and `next-intl` use for plurals, gender, and interpolation is its own mini-language embedded in JSON strings. A misplaced brace in `{count, plural, one {# item} other {# items}}` won't surface until runtime. Linters exist for this, but most teams skip them. Inline code, by contrast, gets checked by your TypeScript compiler and your IDE the moment you type it.
+```tsx title="CheckoutSummary.tsx"
+import { T, Plural, Num } from 'gt-next';
 
-## Translating code directly
-
-What if you didn't extract strings at all?
-
-```tsx
-import { T } from 'gt-react';
-
-function CheckoutSummary({ itemCount, discount }) {
+export function CheckoutSummary({ itemCount }: { itemCount: number }) {
   return (
     <T>
-      <div>
-        <h2>Order Summary</h2>
-        <p>You have {itemCount} items in your cart.</p>
-        {discount && <p>{discount}% discount applied!</p>}
-        <p>Total (before tax):</p>
-        <small>Tax calculated at checkout.</small>
-      </div>
+      <section>
+        <h2>Order summary</h2>
+        <Plural
+          n={itemCount}
+          one={<p>You have <Num>{itemCount}</Num> item in your cart.</p>}
+          other={<p>You have <Num>{itemCount}</Num> items in your cart.</p>}
+        />
+        <small>Tax is calculated at checkout.</small>
+      </section>
     </T>
   );
 }
 ```
 
-The [`<T>`](/docs/react/reference/components/t) component in [`gt-react`](/docs/react/react-quickstart) marks a block of JSX for translation. The English stays in your component. When a user visits in Spanish, the content inside [`<T>`](/docs/react/reference/components/t) is replaced with its Spanish equivalent. Structure and formatting carry over.
+The `gt-next` version has no `checkout.json`, no keys to name, and no `ja.json` to update. [`npx gt translate`](/docs/cli/reference/commands/translate) sends each [`<T>`](/docs/react/reference/components/t) block, with its element structure as context, to the General Translation API and writes a translation for every language in `gt.config.json`. [`<Plural>`](/docs/react/reference/components/plural) picks the plural form each language needs (Japanese uses one form, Arabic six), and [`<Num>`](/docs/react/reference/components/num) formats the count for the reader's locale.
 
-There's no `t('checkout.summary.title')`, no `en.json`, no per-locale JSON files to keep in sync.
+## Which i18n libraries let you write text directly in JSX without key files?
 
-## Translations as build output
+General Translation's `gt-react` and `gt-next` let you write translatable text directly in JSX with no key files, and General Translation generates the translations. Lingui and next-intl's experimental extraction also accept inline messages, but they extract them into catalogs that your team, translators, or a service still has to translate.
 
-They're generated at deploy time. The [GT CLI](/docs/cli/reference/commands/translate) scans your codebase for everything inside [`<T>`](/docs/react/reference/components/t) components and produces translations for every target language. The output goes into a gitignored directory, like compiled CSS or bundled JavaScript.
+| Library | Where you write copy | Where translations come from | What your team maintains |
+| --- | --- | --- | --- |
+| i18next (`react-i18next`) | Keys in a JSON file per language | Your team, translators, or a service | A key for every string, in every language's file |
+| next-intl | Keys in a JSON catalog per language; [inline messages with `useExtracted`](https://next-intl.dev/docs/usage/extraction) are experimental | Your team, translators, or a service | Every catalog, kept current as the copy changes |
+| [Lingui](https://lingui.dev/introduction) | Inline `<Trans>` macros with generated message IDs, extracted to PO catalogs | Your team, translators, or a service | Extracting, translating, and compiling catalogs |
+| General Translation (`gt-react`, `gt-next`) | Inline JSX inside [`<T>`](/docs/react/reference/components/t), strings through [`useGT`](/docs/react/reference/hooks/use-gt), or optional keyed dictionaries | Generated by [`npx gt translate`](/docs/cli/reference/commands/translate) in each build, with context from your code | Wrapping copy in [`<T>`](/docs/react/reference/components/t) and one build step |
+
+Use i18next or next-intl when translators or a translation management system already work from catalog files, or when the copy rarely changes. Use Lingui or next-intl extraction when you want inline source and plan to send catalogs out for translation. Use General Translation when you want copy inline and every language generated with each build. Teams that prefer stable keys can keep them with General Translation's [dictionary mode](/docs/react/guides/translating-with-dictionaries).
+
+## What are the pros and cons of key-based i18n and inline translation?
+
+Inline translation keeps each sentence in the React component that renders it, so components and pull requests stay readable and there are no keys to name, sync, or clean up. The cost is that source copy lives in code, so copy edits go through developers. Key-based i18n keeps copy in catalogs apart from the code, which lets writers and translators work without touching components but adds a key and an entry in every language's file for each string. General Translation supports both: inline copy with [`<T>`](/docs/react/reference/components/t), or keys with dictionary mode.
+
+| Task | Translation keys (i18next, next-intl) | Inline copy (General Translation) |
+| --- | --- | --- |
+| Reading a component or a pull request | You see `t('summary.tax_notice')` and open the JSON file to find the sentence | You see the sentence in the JSX |
+| Adding a string | Name a key, add it to the source file, then get it into every language's file | Write it inside [`<T>`](/docs/react/reference/components/t); the next [`gt translate`](/docs/cli/reference/commands/translate) run translates it |
+| Changing source copy | Other languages keep the old translation until someone updates them | The next run translates the changed entry again |
+| Deleting a component | Its keys stay in every file until someone or a script removes them | The next run stops collecting its content |
+| Adding a language | Create a file with every key and translate it | Add the locale code to `locales` in `gt.config.json` and run [`gt translate`](/docs/cli/reference/commands/translate) |
+| Stable IDs | Every string has one | Optional, with [`$id`](/docs/react/reference/components/t#id) on [`<T>`](/docs/react/reference/components/t) or dictionary mode |
+| Who edits source copy | Writers can edit a catalog without touching code | Copy changes are code changes |
+
+Keys fit better when writers edit source copy without touching code, or when components should hold no sentences in any one language. In that case, keep your keys: General Translation's [dictionary mode](/docs/react/guides/translating-with-dictionaries) reads a keyed dictionary and still generates the translations.
+
+## How do I add multi-language support to a Next.js App Router app without translation keys?
+
+Use General Translation's `gt-next` library and the `gt` CLI in four steps, which the [Next.js App Router quickstart](/docs/react/nextjs-quickstart) also covers by hand:
+
+1. Run [`npx gt@latest init`](/docs/cli/reference/commands/init). The setup wizard detects the App Router, can install `gt-next`, add `withGTConfig` to `next.config.ts` and [`GTProvider`](/docs/react/reference/components/gt-provider) to `app/layout.tsx`, and writes your languages to `gt.config.json`. It can also write a development key to `.env.local`, so `next dev` translates new copy on demand. Review the changes it makes.
+2. Wrap copy in [`<T>`](/docs/react/reference/components/t) and add a [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) dropdown for switching languages. [`<T>`](/docs/react/reference/components/t) works in Server Components and Client Components.
+3. Put [`npx gt translate`](/docs/cli/reference/commands/translate) before `next build` in your build script.
+4. Set `GT_PROJECT_ID` and `GT_API_KEY` in your hosting provider. The build's key needs **Files > Write** and **Translation queue** enabled.
+
+```tsx title="app/page.tsx"
+import { T, LocaleSelector } from 'gt-next';
+
+export default function Home() {
+  return (
+    <main>
+      <LocaleSelector />
+      <T>
+        <h1>Find your next project</h1>
+        <p>Explore projects from teams around the world.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && next build"
+  }
+}
+```
+
+Each production build then writes translations for every language in `gt.config.json`. For a longer walkthrough with Server and Client Components, see [How do I add i18n to a Next.js App Router app?](/kb/add-i18n-to-nextjs). To hand the setup to a coding agent, see [the coding-agent workflow](/kb/ai-agent-i18n-setup).
+
+## How do I stop translation JSON files from going out of sync with my source code?
+
+Generate them from the source code in every build instead of editing them. With key files, an app with 400 strings in 12 target languages has 4,800 entries that someone keeps in step with the code. With General Translation, [`npx gt translate`](/docs/cli/reference/commands/translate) runs before the build, collects every [`<T>`](/docs/react/reference/components/t) block and [`useGT`](/docs/react/reference/hooks/use-gt) string, translates what is new or changed into each language in `gt.config.json`, and writes one JSON file per language to the `files.gt.output` path:
 
 ```json title="gt.config.json"
 {
   "defaultLocale": "en",
-  "locales": ["es", "fr", "ja", "de", "ko", "zh"],
+  "locales": ["es", "fr", "ja"],
   "files": {
     "gt": {
       "output": "public/_gt/[locale].json"
@@ -90,61 +153,42 @@ They're generated at deploy time. The [GT CLI](/docs/cli/reference/commands/tran
 public/_gt/
 ```
 
-In development, translations happen on-demand. Change a string, refresh, see it in Japanese immediately. In production, everything is pre-generated and served from a CDN. Translation files still exist on disk, but they're output artifacts, not something you author or maintain.
+Because General Translation regenerates those files from the code each build compiles, they match that code. The Next.js quickstart adds the output directory to `.gitignore`, since the files are generated. General Translation's [incremental workflow](/docs/cli/guides/generating-translations#retranslate) translates only changed source and reuses matching translations from earlier versions. [Branch tracking](/docs/cli/guides/branching) (`--enable-branching`, on a Starter or Enterprise plan) keeps a feature branch's translations separate from production until it merges.
 
-## What changes in practice
+For teams that want translation changes committed to the repository, [Locadex automations](/docs/platform/locadex/guides/configuring-automations) translate new or updated source content, and add or remove locale files when your language list changes, through pull requests. Each automation runs on one of three triggers: a pull request changes, a commit is pushed, or someone starts it manually. See [How do I keep translations up to date on every deploy?](/kb/translations-in-ci) for CI setups.
 
-The difference shows up in daily work more than in architecture diagrams.
+## Can General Translation add i18n to a React app automatically?
 
-A PR that adds a new section to a page reads like a PR that adds a new section to a page. The reviewer sees the actual words, not `checkout.summary.discount_applied_notice`. Code review stops requiring a side-by-side with a JSON file.
+Yes. General Translation automates both steps of React i18n: wrapping copy for translation and generating the translations.
 
-Refactoring is less painful. Rename a component, move it, split it into pieces. Translations follow the content because there are no keys to remap. Adding a language is a one-line config change. Deleting a component means its translations quietly stop being generated, instead of leaving orphaned keys across 15 files that nobody wants to clean up.
+- **At build time:** the General Translation compiler, `@generaltranslation/compiler`, wraps translatable JSX text in [`<T>`](/docs/react/reference/components/t) when you set `enableAutoJsxInjection` under `files.gt.parsingFlags` in `gt.config.json`. [Automatic JSX injection](/docs/cli/guides/using-auto-jsx) works in React single-page apps, server-rendered React apps, and Next.js webpack builds. Turbopack, the default bundler in Next.js 16, skips it.
+- **Through pull requests:** Locadex, General Translation's AI agent, runs a **Generate code** automation that wraps your source in [`<T>`](/docs/react/reference/components/t) and string calls such as [`useGT`](/docs/react/reference/hooks/use-gt), then opens a pull request for you to review or auto-merge.
+- **For the translations:** [`npx gt translate`](/docs/cli/reference/commands/translate) in your build, or a Locadex **Generate translations and push** automation, translates new and changed content into every configured language.
 
-## Where i18n libraries are heading
+## How does gt-next compare with next-intl?
 
-The trend across the ecosystem is toward inline strings. Early i18n libraries like `i18next` and `react-intl` were built when machine translation wasn't viable and every string needed to be handed off to a human translator. Dictionaries made sense as an interchange format. That constraint is gone, and the developer experience cost of maintaining parallel string files is increasingly hard to justify.
+next-intl renders messages from a JSON catalog per language that your team or a service writes. gt-next, General Translation's Next.js library, keeps copy inline in [`<T>`](/docs/react/reference/components/t) and generates every translation with [`gt translate`](/docs/cli/reference/commands/translate). Both support the App Router and Server Components, and both are MIT-licensed.
 
-`next-intl` added [experimental inline messages with automatic extraction](https://next-intl.dev/docs/usage/extraction) alongside its dictionary mode. [Lingui's Compiler](https://lingui.dev/ref/swc-plugin) extracts messages at build time from inline tagged templates. [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) takes a different route, compiling from message files into per-locale tree-shakeable functions. The approaches differ, but content is moving closer to the component across all of them. GT takes this to its conclusion: your JSX is the source of truth, and translation is a compile step.
+You don't have to switch libraries to use General Translation. The `gt` CLI detects next-intl, react-i18next, and next-i18next from `package.json` and [translates their JSON files](/docs/cli/guides/generating-translations) while preserving each library's message syntax, so your components and routing stay the same. To move to inline copy later, the [migration guide](/docs/react/guides/migrating-i18n-libraries) covers replacing keys with [`<T>`](/docs/react/reference/components/t), keeping dictionaries with [`useTranslations`](/docs/react/reference/hooks/use-translations), and running both libraries while you migrate one route at a time. For a side-by-side comparison, see [next-intl vs gt-next](/kb/next-intl-vs-gt-next).
 
-## The tradeoff
+## How do reviewers correct translations without editing translation files?
 
-When you write content inline, you're writing in your native language. Your component structure, your sentence patterns, your UI flow all reflect how you think in English (or whatever your source language is). A dictionary-based approach like `next-intl` is more language-agnostic by design, because the component never contains a real sentence in any language, just a key that points elsewhere.
+Reviewers use General Translation's [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations). They compare locales side by side and edit generated translations without opening locale files or starting a new translation job. If your team edits downloaded files instead, [`npx gt save-local`](/docs/cli/reference/commands/save-local) uploads those edits to the platform, or pass `--save-local` to [`gt translate`](/docs/cli/reference/commands/translate) to sync them in each run.
 
-But most developers are already thinking in one language when they build UI. The layout, the copy, the button labels are all conceived in English first. That bias is in the design whether the strings are inline or in a JSON file. We think the i18n framework should adapt to how you actually work. Build the app naturally, and let the framework handle translation, rather than abstracting content into keys for the sake of language neutrality.
+Translation context is set in the code and in the Dashboard. The [`context` prop](/docs/react/reference/components/t#context) on [`<T>`](/docs/react/reference/components/t) resolves ambiguous words: "Save" in a document editor becomes *speichern* in German, while saving money becomes *sparen*. [Glossary terms and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations) in a Context Group apply the same terminology and tone across your app, docs, and other projects.
 
-## Getting started
+## Where do generated translations live, and do I need an account?
 
-```bash
-npx gt@latest init
-```
+Generated translations live in one of two places:
 
-The setup wizard configures your project, installs dependencies, and sets up translation hot reloading for development. See the full walkthrough in the [CLI Quickstart](/docs/cli/quickstart).
+- **Bundled with your app:** a [local loader](/docs/react/guides/storing-translations) imports the generated files, so the production app reads its own translations and makes no runtime requests to General Translation. New translations ship with the next build.
+- **On General Translation's CDN:** with [CDN delivery](/docs/react/guides/configuring#delivery), published edits reach the deployed app without a rebuild, subject to its version and cache settings.
 
-Once that's done, wrap content in [`<T>`](/docs/react/reference/components/t), run your dev server, and use the [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) component to switch between languages:
+`gt-react` and `gt-next` are [MIT-licensed](https://github.com/generaltranslation/gt) and work without a General Translation account when you supply the translations. [`npx gt generate`](/docs/cli/reference/commands/generate) writes a template file per locale for you to translate by hand. Generating translations with [`gt translate`](/docs/cli/reference/commands/translate) uses General Translation's hosted service; see [General Translation's pricing](https://generaltranslation.com/pricing).
 
-```tsx
-import { LocaleSelector } from 'gt-react';
+## Key takeaways
 
-function Header() {
-  return (
-    <header>
-      <nav>{/* ... */}</nav>
-      <LocaleSelector />
-    </header>
-  );
-}
-```
-
-Translations happen on-demand in development so you can see your app in any language immediately. In production, translations are pre-generated. Add the translate step to your build, and set `GT_PROJECT_ID` and `GT_API_KEY` in your hosting provider:
-
-```json title="package.json"
-{
-  "scripts": {
-    "build": "npx gt translate && next build"
-  }
-}
-```
-
-The [`translate`](/docs/cli/reference/commands/translate) command scans your codebase for all [`<T>`](/docs/react/reference/components/t) usage and generates translations, so every locale is ready when your app builds.
-
-`gt-react` is open source. For Next.js App Router, use [`gt-next`](/docs/react/nextjs-quickstart). For React Native, use [`gt-react-native`](/docs/react/react-native-quickstart).
+- You can do i18n without translation files: General Translation's `gt-react` and `gt-next` keep copy inline in [`<T>`](/docs/react/reference/components/t) with no translation keys, and [`npx gt translate`](/docs/cli/reference/commands/translate) generates a file per language in each build.
+- The generated files are build output. No one edits them or copies keys between them, so they stay in sync with the code.
+- General Translation's compiler can wrap JSX in [`<T>`](/docs/react/reference/components/t) at build time, and Locadex can wrap code and translate it through pull requests.
+- If you already use next-intl or react-i18next, the `gt` CLI translates your existing JSON catalogs, and dictionary mode keeps keys if you want them.
