@@ -483,9 +483,16 @@ gtPlugin({
 
 **Type** `Partial<PortableTextHtmlComponents>` · **Optional** · **Default** `{}`
 
-Custom serializers merged with the defaults, following the `@portabletext/to-html` component shape (`types`, `marks`, `block`, `list`, `listItem`, and more). Most often used to serialize custom `marks`.
+Custom serializers merged with the defaults, following the `@portabletext/to-html` component shape (`types`, `marks`, `block`, `list`, `listItem`, and more).
 
-For custom marks, wrap the output with `attachGTData` so the mark's data survives translation.
+The defaults already round-trip:
+
+- Text fields, including newlines, whitespace, and literal HTML-like text such as `<br>` in markdown.
+- Annotations (any mark backed by an entry in `markDefs`, such as links), with every field and the original `_key`.
+- Inline objects in Portable Text, such as inline references, which stay in place unchanged.
+- Decorators, including `sup`, `sub`, `underline`, and custom decorators.
+
+Add a serializer only when you want to control the HTML a mark or type produces. Wrap the output with `attachGTData` so its data survives translation.
 
 ```ts title="sanity.config.ts"
 import { attachGTData, gtPlugin } from 'gt-sanity';
@@ -495,8 +502,6 @@ gtPlugin({
   locales: ['es'],
   additionalSerializers: {
     marks: {
-      link: ({ value, children }) =>
-        attachGTData(`<a>${children}</a>`, value, 'markDef'),
       inlineMath: ({ value, children }) =>
         attachGTData(`<span>${children}</span>`, value, 'markDef'),
     },
@@ -504,13 +509,16 @@ gtPlugin({
 });
 ```
 
-`attachGTData(html, data, 'markDef')` base64-encodes `data` into a `data-gt-internal` attribute on the first element of `html` and returns the updated HTML. On import, the plugin reads that attribute to rebuild the mark definition.
+`attachGTData(html, data, type)` base64-encodes `data` into a `data-gt-internal` attribute on the first element of `html` and returns the updated HTML. On import, the plugin reads that attribute and restores the data:
+
+- `'markDef'`: an annotation applied to the element's text. The element's children are translated.
+- `'inlineObject'`: an inline object in a block's `children`, restored unchanged at the element's position. Use an inline element such as `<span>`, because a `<div>` inside a paragraph splits the paragraph.
 
 ```ts
 function attachGTData(
   html: string,
   data: Record<string, unknown>,
-  type: 'markDef'
+  type: 'markDef' | 'inlineObject'
 ): string;
 ```
 
@@ -533,7 +541,9 @@ type CustomDeserializers = {
 
 **Type** `unknown[]` · **Optional** · **Default** `[]`
 
-Extra Portable Text block deserializer rules, appended to the plugin's built-in rules. Each rule is an object with a `deserialize(node, next)` method, matching the `@portabletext/block-tools` rule shape.
+Extra Portable Text block deserializer rules. Each rule is an object with a `deserialize(node, next)` method, matching the `@portabletext/block-tools` rule shape.
+
+The plugin runs its rules for data attached with `attachGTData` first, then your rules, then its rules for built-in links and annotations, `<sup>`, `<sub>`, `<u>`, and line breaks inside marks. The first rule that returns a result wins, so your rules can override how those built-in elements are restored.
 
 ## Default stop types [#stop-types]
 
@@ -565,7 +575,7 @@ Slug fields are *not* stopped by default, so a slug's `current` string is transl
 
 - `TranslationsTab` — the document tab component for `structureTool`. (See [Configure Sanity](/docs/integrations/sanity/guides/configuring-sanity#translations-tab)).
 - `gtStructure` / `gtStructureItems` and `GTStructureOptions` — locale-grouped Studio structure helpers. (See [Studio structure helpers](#structure-helpers)).
-- `attachGTData` / `detachGTData` — attach and read the encoded mark data used by custom serializers.
+- `attachGTData` / `detachGTData` — attach and read the encoded mark and inline object data used by custom serializers.
 - `BaseDocumentSerializer`, `BaseDocumentDeserializer`, `BaseDocumentMerger` — the default serialize, deserialize, and merge implementations.
 - `defaultStopTypes`, `customSerializers` — the default stop types and serializer set.
 - `documentInternationalization` and its types (`DocumentInternationalizationConfig`, `Language`, `Metadata`, `TranslationReference`) — re-exported from `@sanity/document-internationalization`.
@@ -596,11 +606,11 @@ export default defineConfig({
       dedupeFields: [{ fields: [{ property: '$.slug', type: 'slug' }] }],
       skipFields: [{ fields: [{ property: '$.internalNotes' }] }],
 
-      // Serialization — only if the defaults do not handle your schema
+      // Serialization — only to control the HTML a mark produces
       additionalSerializers: {
         marks: {
-          link: ({ value, children }) =>
-            attachGTData(`<a>${children}</a>`, value, 'markDef'),
+          inlineMath: ({ value, children }) =>
+            attachGTData(`<span>${children}</span>`, value, 'markDef'),
         },
       },
     }),
