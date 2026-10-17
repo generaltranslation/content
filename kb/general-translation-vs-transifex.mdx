@@ -1,0 +1,74 @@
+---
+title: "General Translation vs. Transifex: which should you use?"
+summary: Transifex, now part of XTM, is a translation management system for software and websites, with AI translation, human translation partners, and Transifex Native SDKs that push strings from code. General Translation translates content in your code with the context of your components and generates every language in your build or a pull request.
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-crowdin, general-translation-vs-lokalise, general-translation-vs-phrase, general-translation-vs-smartling]
+---
+
+Transifex is a translation management system (TMS) for software and websites, and since January 2025 it has been [part of XTM International](https://xtm.ai/news/xtm-international-acquires-transifex). It offers two ways in: a file workflow, where resource files sync to Transifex through a CLI or Git integration, and Transifex Native, where SDKs mark strings in code, a CLI pushes them to Transifex, and the app fetches translations from Transifex's content delivery service (CDS) at run time. Either way, translation happens in Transifex, by its AI or by partner vendors. General Translation translates the content in your code as part of your build, with the context of the components around it.
+
+## What Transifex does well
+
+- **Strings from code without files.** [Transifex Native](https://developers.transifex.com/docs/javascript-sdk) marks strings with a translation function or a React component, uses the source text as the key by default, and pushes strings with `txjs-cli push`. The SDKs and the [CDS](https://github.com/transifex/transifex-delivery) are open source under the Apache-2.0 license, and the CDS can be self-hosted.
+- **AI with quality scores.** Transifex AI translates with your glossary, translation memory, and character limits, and its [Transifex Quality Index (TQI)](https://help.transifex.com/en/articles/9465000-transifex-quality-index-tqi) scores each AI translation, so ones that meet a per-language threshold can be marked as reviewed automatically.
+- **Human translation partners.** You can [order translations from partners](https://help.transifex.com/en/articles/6235673-ordering-translations) such as e2f, Gengo, and TextMaster inside Transifex.
+- **Websites without code changes.** [Transifex Live](https://help.transifex.com/en/articles/6244596-introduction-to-transifex-live) translates a website through a JavaScript snippet, though Transifex recommends Native for React and Vue apps.
+- **Unlimited collaborators.** The current plan doesn't charge for seats, projects, or hosted content.
+- **File formats.** [46+ formats](https://help.transifex.com/en/articles/6219670-introduction-to-file-formats), including XLIFF, Office files, and subtitles.
+
+## What Transifex still leaves to your engineers
+
+New copy still makes a round trip through Transifex:
+
+1. Mark each string for Transifex: extract it into a resource file under a key, or wrap it in Native's translation function or React component.
+2. Send it to Transifex with [`tx push`](https://github.com/transifex/cli), a Git integration, or `txjs-cli push`, typically as a CI step.
+3. Wait while Transifex AI or a partner vendor translates it. Transifex's help center says turnaround times vary from vendor to vendor.
+4. Bring the translations back. In the file workflow, a [Git integration](https://help.transifex.com/en/articles/6265125-github-via-transifex-ui) opens a pull request or commits once a language reaches a completion threshold, and you merge it and wire the language into the app. With Native, the app fetches translations from the CDS, which [caches content for up to an hour](https://developers.transifex.com/docs/content-delivery-service).
+
+Context reaches the AI as text attached to each string. By default [Transifex AI uses your glossary, translation memory, and character limits](https://help.transifex.com/en/articles/9867663-context-in-transifex-ai); instructions, developer notes, and keys are opt-in, according to its help center. The component a string sits in, and the variables and branches around it, stay in your code.
+
+Pricing is one AI-first plan sold through sales and billed on AI-translated words, with no public rates. (See [Transifex pricing](https://www.transifex.com/pricing), checked October 2026.)
+
+## Transifex vs. General Translation at a glance
+
+| Feature | Transifex | General Translation |
+| --- | --- | --- |
+| How strings get in | Resource files through `tx push` or Git integrations, or Native SDK strings through `txjs-cli push` | Content stays in your code inside [`<T>`](/docs/react/reference/components/t), or in the resource files you already have |
+| Who translates | Transifex AI with TQI scores, or partner vendors | AI with context from your code, Glossary, and Custom Prompts, reviewed by your team in the Dashboard |
+| Context for each string | Glossary, translation memory, and character limits by default; notes and keys opt-in | The component and elements around the string, its variables, context notes, Glossary, and Custom Prompts |
+| Delivery | Pull requests or commits for files; the CDS at run time for Native | Files in your repository or General Translation's CDN, written by your build or a Locadex pull request |
+| Pricing | One plan through sales, billed on AI-translated words | Usage-based with published rates; $0 platform fee on Starter |
+| Websites without code | Transifex Live | No snippet-based option |
+
+## Why teams choose General Translation over Transifex
+
+- **Faster.** [`npx gt translate`](/docs/cli/reference/commands/translate) runs in your build and returns translations in the same step, and [Locadex](/docs/platform/locadex/quickstart) can open a pull request when code changes, so new copy ships translated with the release that adds it. Adding a language is one line in `gt.config.json`.
+- **Cheaper to run.** With [`<T>`](/docs/react/reference/components/t), engineers keep writing JSX; there's no separate push step to maintain or translation threshold to wait on. Starter is self-serve, with a $0 platform fee and published usage rates.
+- **Higher quality.** Transifex AI uses your glossary, translation memory, and character limits by default, with notes and keys opt-in. General Translation generates each translation from the code itself: the component and elements around a string, the variables in the sentence, and the conditions that choose between versions of it, plus your Glossary and Custom Prompts across every project.
+- **Lower risk.** Like Transifex Native, General Translation's libraries are open source, under the MIT license. Translations can also ship as files in your build, so the app doesn't need a translation service to render them, and the libraries work without a General Translation account.
+
+Sierra ships 7+ locales across its web and go-to-market content with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
+
+## When Transifex is the better fit
+
+Choose Transifex when you want to translate a website with a snippet and no code changes, when you want to order human translation from its partner vendors, when TQI-based auto-approval fits your review process, when you exchange XLIFF, Office, or subtitle files, or when native iOS and Android apps need [over-the-air updates with offline bundles](https://developers.transifex.com/docs/ios-sdk).
+
+## Moving from Transifex to General Translation
+
+With the file workflow, point `gt.config.json` at the resource files your `.tx/config` lists and run [`npx gt upload`](/docs/cli/reference/commands/upload), which sends your sources and existing translations to the platform. With Native in a React app, replace each Native string with its copy inside [`<T>`](/docs/react/reference/components/t), set up `gt-react` or `gt-next` with the [Next.js Quickstart](/docs/react/nextjs-quickstart) or [React Quickstart](/docs/react/react-quickstart), and run [`npx gt translate`](/docs/cli/reference/commands/translate) before your build. Context Group imports accept CSV, TSV, JSON, and text files for your glossary. For how Transifex compares with other TMS platforms, see [Why use General Translation instead of a TMS?](/kb/general-translation-vs-tms)
+
+## Is General Translation an alternative to Transifex?
+
+Yes, for apps whose copy lives in code. General Translation translates that content in your build, with the context of your components, and ships translations as files or from its CDN. Transifex remains the better fit for snippet-based website translation, partner vendors, and native apps that need over-the-air updates.
+
+## How is Transifex Native different from General Translation?
+
+Both mark strings in code with open-source SDKs. Transifex Native pushes those strings to Transifex, where AI or vendors translate them, and the app fetches translations from Transifex's CDS at run time. General Translation translates strings in your build with the component around them as context, and the app can render them from files with no translation service.
+
+## Key takeaways
+
+- Transifex is a TMS with open-source Native SDKs, AI translation with quality scores, partner vendors, and Transifex Live for websites.
+- Engineers still push strings to Transifex and wait for translations to come back as pull requests or through the CDS, and the AI sees text and notes, not the component.
+- General Translation translates content where it's written, with the context of the code, and generates every language in your build or a Locadex pull request.
