@@ -29,7 +29,7 @@ The fix is a separate URL for each language, listed in `hreflang` alternates and
 
 ## Should language versions use subdirectories, subdomains, or separate domains?
 
-Use subdirectories, such as `example.com/es/about`, unless each market needs its own server location or its own site. Google lists subdirectories as easy to set up and low maintenance, because every language stays on one host and one Next.js deployment serves them all.
+Use subdirectories, such as `example.com/es/about`, unless each market needs its own server location or its own site. Google's guide to [managing multi-regional and multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) lists subdirectories as easy to set up and low maintenance, because every language stays on one host, and does not recommend URL parameters.
 
 | Structure | Example | Google's assessment | In a Next.js app |
 | --- | --- | --- | --- |
@@ -39,7 +39,7 @@ Use subdirectories, such as `example.com/es/about`, unless each market needs its
 | URL parameters | `example.com/about?lang=es` | Not recommended | Avoid |
 | Cookie or header only | `example.com/about` | Separate URLs recommended instead | Indexed in one language only |
 
-The assessments come from Google's guide to [managing multi-regional and multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites). Use subdomains or country domains when markets need separate hosting or country targeting; otherwise, subdirectories need the least code.
+Use subdomains or country domains when markets need separate hosting or country targeting. For a single Next.js deployment, subdirectories need the least code: General Translation's `gt-next` middleware serves `/es/about` by default, while subdomains and country domains need host-based routing you write.
 
 ## How do I give each language its own URL in Next.js?
 
@@ -111,7 +111,9 @@ The root layout belongs at `app/[locale]/layout.tsx` when pages are prerendered,
 
 ## How do I add hreflang alternate links and canonical URLs in the Next.js App Router?
 
-Return `alternates.canonical` and `alternates.languages` from each page's `generateMetadata`; Next.js renders `alternates.languages` as `hreflang` links. Google requires [each language version to list itself and every other version](https://developers.google.com/search/docs/specialty/international/localized-versions), and ignores `hreflang` links that two pages don't both declare, so every version of a page must return the same list. The `x-default` entry is the URL for visitors whose language matches none of the versions. For `/es/about` in an app with English, Spanish, and French, the rendered page contains:
+In the Next.js App Router, add `hreflang` alternate links by returning `alternates.languages` from each page's `generateMetadata`, and the canonical URL by returning `alternates.canonical`. Next.js renders each `alternates.languages` entry as a `<link rel="alternate" hreflang>` tag. In a General Translation `gt-next` app, `getLocales` supplies the list of languages.
+
+Google requires [each language version to list itself and every other version](https://developers.google.com/search/docs/specialty/international/localized-versions), and ignores `hreflang` links that two pages don't both declare, so every version of a page must return the same list. The `x-default` entry is the URL for visitors whose language matches none of the versions. For `/es/about` in an app with English, Spanish, and French, the rendered page contains:
 
 ```html
 <link rel="canonical" href="https://example.com/es/about" />
@@ -144,7 +146,7 @@ export function languageAlternates(path: string) {
 }
 ```
 
-Call it from each page. The `locale` parameter is the locale the middleware resolved, including the default locale for an unprefixed URL such as `/about`:
+Call the helper from each page's `generateMetadata`. The `locale` route parameter is the locale the middleware resolved, including the default locale for an unprefixed URL such as `/about`:
 
 ```tsx title="app/[locale]/about/page.tsx"
 import type { Metadata } from 'next';
@@ -196,7 +198,7 @@ Pass string literals, as above, so the build step can find them. Production tran
 }
 ```
 
-A page returns these fields and the `alternates` object from the same `generateMetadata` function. When the English title changes, the next build translates the new text into every locale, with no message files to update.
+Return the translated title and description together with the `alternates` object from the same `generateMetadata` function. When the English title changes, General Translation translates the new text into every locale on the next build, with no message files to update.
 
 ## How do I add every language to a Next.js sitemap?
 
