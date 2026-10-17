@@ -1,0 +1,126 @@
+---
+title: "General Translation vs. Babel and Flask-Babel: which should you use?"
+summary: Babel formats dates, numbers, and currencies for any locale and manages gettext catalogs, and Flask-Babel connects it to Flask, but neither translates your strings. General Translation's CLI fills in Babel's PO files for every language, plural forms included, so you can keep Flask-Babel and stop translating catalogs by hand.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-gettext, general-translation-vs-django-i18n, general-translation-vs-i18n-libraries, general-translation-vs-tms, i18n-without-translation-files]
+---
+
+Babel is the standard Python library for locale data: it formats dates, numbers, and currencies using the Unicode CLDR, and its `pybabel` command extracts, updates, and compiles gettext message catalogs. Flask-Babel connects Babel to Flask, adding `gettext` and `lazy_gettext`, a hook that picks each request's locale, and translation tags in Jinja templates. Neither one translates anything: every string in every catalog is written by you, your translators, or a service. General Translation fits in two ways: its CLI translates the PO files Babel manages, so you keep Flask-Babel, and its experimental `gt-flask` and `gt-fastapi` libraries replace the gettext workflow with inline strings.
+
+## What Babel and Flask-Babel do well
+
+- **Locale formatting from CLDR.** [Babel 2.18.0 bundles CLDR 47](https://babel.pocoo.org/en/latest/changelog.html#version-2-18-0) data for more than a thousand locale identifiers. `format_currency(1234.5, "EUR")` gives "1.234,50 €" in Spanish, and `format_date` gives "16 października 2026" in Polish.
+- **Catalog tools.** [`pybabel extract`](https://babel.pocoo.org/en/latest/cmdline.html) reads Python files and Jinja templates through a `babel.cfg` mapping, `pybabel init` starts a PO file with the right plural rule and slots (three for Polish), `pybabel update` merges new strings and marks changed ones fuzzy, and `pybabel compile` builds the `.mo` files.
+- **Flask integration.** A `locale_selector` and `timezone_selector` [decide each request's locale and time zone](https://python-babel.github.io/flask-babel/#configuration), `lazy_gettext` covers strings defined at import time, Jinja templates get `_()`, `{% trans %}`, and formatting filters, and `force_locale` switches locale temporarily, for example to send an email in another language.
+- **Stable and free.** Both are BSD-licensed (see [Babel's license](https://babel.pocoo.org/en/latest/license.html)). Babel works in any Python program; Flask-Babel's [current release is 4.0.0](https://github.com/python-babel/flask-babel/releases/tag/v4.0.0).
+
+## What Babel and Flask-Babel leave to you
+
+Here's a small Flask-Babel app:
+
+```python title="app.py"
+from datetime import date
+from flask import Flask, request
+from flask_babel import Babel, gettext, ngettext, format_currency, format_date
+
+
+def select_locale():
+    return request.accept_languages.best_match(["en", "es", "pl"])
+
+
+app = Flask(__name__)
+babel = Babel(app, locale_selector=select_locale)
+
+
+@app.route("/inbox/<int:count>")
+def inbox(count):
+    return {
+        "title": gettext("Inbox"),
+        "unread": ngettext("You have %(num)d unread message.", "You have %(num)d unread messages.", count),
+        "price": format_currency(1234.5, "EUR"),
+        "date": format_date(date(2026, 10, 16), format="long"),
+    }
+```
+
+`pybabel extract`, `pybabel init -l pl`, and `pybabel compile` produce a Polish catalog with every `msgstr` empty. With Flask-Babel 4.0.0, a request with `Accept-Language: pl` then returned:
+
+```json title="Output"
+{
+  "date": "16 października 2026",
+  "price": "1 234,50 €",
+  "title": "Inbox",
+  "unread": "You have 5 unread messages."
+}
+```
+
+Babel formats the date and price for Polish, and every string stays in English, with no warning. Each string waits for someone to fill in its PO entry, including all three Polish plural forms, then for `pybabel compile` and a redeploy. Every new or edited string repeats that in each language.
+
+## Translating Babel's catalogs with General Translation
+
+If Flask-Babel already works for you, keep it and let General Translation's CLI write the catalogs. Create an English catalog once and update it after each extraction, so the source sits in the same tree as the translations:
+
+```bash
+pybabel extract -F babel.cfg -k lazy_gettext -o messages.pot .
+pybabel init -i messages.pot -d translations -l en     # once
+pybabel update -i messages.pot -d translations -l en   # after each extract
+```
+
+Then point `gt.config.json` at it. This config was checked against `gt` 2.26.5:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "pl", "pt_BR"],
+  "customMapping": { "pt_BR": { "code": "pt-BR" } },
+  "files": {
+    "pot": {
+      "include": ["translations/[locale]/LC_MESSAGES/messages.po"],
+      "transformationFormat": "PO"
+    }
+  }
+}
+```
+
+The `pot` key reads PO and POT files, and `"transformationFormat": "PO"` writes translated `.po` files (see the [PO / POT format reference](/docs/cli/reference/formats/po-pot-files)). Babel uses underscore directory names such as `pt_BR`, which the CLI rejects as a locale code on its own, so [`customMapping`](/docs/cli/reference/config#custom-mapping) maps it to `pt-BR`. With the CLI set up (see the [CLI Quickstart](/docs/cli/quickstart)), run [`npx gt translate`](/docs/cli/reference/commands/translate), then `pybabel compile -d translations`.
+
+General Translation sends each entry with its `msgctxt`, translator comments, source references, and flags as context. For plural entries, it writes the target language's `Plural-Forms` header and fills every `msgstr[n]` slot, so Polish gets all three, and it checks that placeholders such as `%(num)d` come through intact. Unchanged entries reuse earlier translations on the next run. A Glossary and Custom Prompts in a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) keep terms consistent across your catalogs and the rest of your product, and reviewers can [edit each entry](/docs/platform/dashboard/guides/reviewing-translations) in the Dashboard. Run the CLI in CI so each deploy ships with current catalogs. Hand edits to generated PO files are overwritten on the next run unless you sync them with [`npx gt save-local`](/docs/cli/reference/commands/save-local).
+
+## The newer path: gt-flask and gt-fastapi
+
+General Translation also publishes its own Python libraries: `gt-flask` for Flask and `gt-fastapi` for FastAPI, built on a shared `gt-i18n` runtime. Instead of extracting and compiling catalogs, you write each source string inline with [`t`](/docs/python/reference/functions/t), in ICU MessageFormat, and [`npx gt translate`](/docs/cli/reference/commands/translate) finds the [`t()`](/docs/python/reference/functions/t) calls and translates them:
+
+```python title="app.py"
+t("You have {count, plural, one {# unread message} other {# unread messages}}.", count=count)
+t("Archive", _context="email verb")
+```
+
+Both are at version 0.1.0, require Python 3.10 or later, and are marked experimental in the [Python docs](/docs/python/quickstart), with breaking changes possible between releases. They translate strings in Python code only: there are no Jinja template tags, and the docs cover no date, number, or currency formatting, so Babel stays the tool for those. They're source-available under the Functional Source License (FSL-1.1-ALv2), not BSD or MIT. For a production Flask app today, translate Flask-Babel's catalogs with the CLI, and treat `gt-flask` and `gt-fastapi` as early previews.
+
+General Translation is usage-based, with a $0 platform fee and unlimited users, projects, and languages on Starter ([pricing](https://generaltranslation.com/pricing)).
+
+## Babel and Flask-Babel vs. General Translation at a glance
+
+| Feature | Babel and Flask-Babel | General Translation |
+| --- | --- | --- |
+| How you write strings | `gettext` calls and Jinja `{% trans %}`, extracted to PO files | Keep Flask-Babel's, or inline ICU strings in [`t`](/docs/python/reference/functions/t) with `gt-flask` |
+| Translates your content | No | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| Plural forms | `pybabel init` writes the slots; you fill each one | Fills every PO slot; [`t()`](/docs/python/reference/functions/t) uses CLDR plural categories |
+| Date, number, and currency formatting | Yes, from CLDR | Not documented in `gt-flask`; keep Babel |
+| Jinja templates | Yes | No template integration in `gt-flask` |
+| Frameworks | Babel anywhere; Flask-Babel for Flask | CLI for any PO files; `gt-flask` and `gt-fastapi` |
+| Maturity and license | Stable, BSD | CLI stable (MIT); Python libraries 0.1.0, experimental (FSL-1.1-ALv2) |
+| Cost | Free | Usage-based, $0 platform fee on Starter |
+
+## When to use which
+
+Keep Babel and Flask-Babel when translators or a TMS already fill your PO files, when you rely on Jinja translation tags, or when you need a stable API today. Add General Translation's CLI to that setup when you want every catalog translated, plural forms included, each time your strings change. Keep an eye on `gt-flask` and `gt-fastapi` if you want inline strings with no catalog cycle; they're early previews today.
+
+Moving from Flask-Babel to `gt-flask` isn't automatic: `gettext("Inbox")` becomes `t("Inbox")`, `pgettext` context becomes `_context`, and `ngettext` pairs become ICU plural messages, and the PO translations you already have aren't imported into [`t()`](/docs/python/reference/functions/t) lookups. Most teams should start by keeping Flask-Babel and translating its catalogs.
+
+## Key takeaways
+
+- Babel formats dates, numbers, and currencies for any locale and manages gettext catalogs, and Flask-Babel wires it into Flask, but neither translates your strings.
+- General Translation's CLI translates Babel's PO files with the `pot` key, `"transformationFormat": "PO"`, and `customMapping` for directories such as `pt_BR`, filling every plural slot for each language.
+- `gt-flask` and `gt-fastapi` 0.1.0 replace catalogs with inline [`t`](/docs/python/reference/functions/t) calls, but they're experimental and have no Jinja or formatting support, so use the CLI with Flask-Babel in production for now.
