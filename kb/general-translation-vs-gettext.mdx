@@ -1,20 +1,22 @@
 ---
 title: "General Translation vs. GNU gettext: do you need both?"
-summary: GNU gettext is the standard toolchain for translating software. It extracts strings into a POT template, keeps a PO file per language in sync, and compiles them for C, PHP, Python, and other runtimes, but it doesn't translate anything. General Translation doesn't replace gettext; its CLI fills in the PO files from your template.
+summary: GNU gettext is the standard toolchain for translating software. It extracts strings into a POT template, keeps a PO file per language in sync, and compiles them for many runtimes; since 1.0 it can also draft translations with a local LLM. General Translation doesn't replace gettext; its CLI fills in the PO files from your template.
 date: 2026-10-16
 category: internationalization
+authors: [kevin-wu, jackie]
 related: [general-translation-vs-django-i18n, general-translation-vs-flask-babel, general-translation-vs-tms, general-translation-vs-weblate, best-localization-software]
 ---
 
-GNU gettext is the toolchain most software translation still runs on. You wrap user-facing strings in `_()` or `gettext()`, `xgettext` extracts them into a POT template, `msginit` starts a PO file for each language, `msgmerge` updates those files when the source changes, and `msgfmt` compiles them into the `.mo` files your program loads at run time. C programs, PHP's gettext extension, Python's `gettext` module, WordPress, Django, and Babel all use this format. What gettext leaves to you is the translating: every `msgstr` in every PO file is written by you, your translators, or a service. General Translation doesn't replace any of the toolchain; its CLI writes those PO files from your template, so the rest of your gettext setup stays as it is.
+GNU gettext is the toolchain most software translation still runs on. You wrap user-facing strings in `_()` or `gettext()`, `xgettext` extracts them into a POT template, `msginit` starts a PO file for each language, `msgmerge` updates those files when the source changes, and `msgfmt` compiles them into the `.mo` files your program loads at run time. C programs, PHP's gettext extension, Python's `gettext` module, WordPress, Django, and Babel all use this format. What gettext leaves to you is most of the translating: since version 1.0 it can draft entries with a local LLM, but every `msgstr` in every PO file is finished by you, your translators, or a service. General Translation doesn't replace any of the toolchain; its CLI writes those PO files from your template, so the rest of your gettext setup stays as it is.
 
 ## What gettext does well
 
-- **The source text is the key.** Code reads `_("Inbox")`, not a key name, and a string with no translation falls back to the source text instead of an error.
-- **Plural rules per language.** Each PO file carries a `Plural-Forms` header with the language's rule, and `msginit` fills it in for you. Polish gets a three-form rule and three `msgstr[n]` slots for every plural entry.
-- **Context travels with the string.** `msgctxt` (from `pgettext`) separates "Archive" the verb from "Archive" the noun, `#.` comments carry notes to translators (`xgettext --add-comments`), `#:` lines point to the source, and flags such as `python-format` let `msgfmt --check` reject a translation that breaks a placeholder.
-- **Safe updates.** `msgmerge` keeps existing translations when the template changes and marks entries whose source changed as fuzzy, with the previous source kept for comparison (`--previous`).
-- **Support everywhere.** PO is the format PO editors such as Poedit and most translation management systems (TMSs) read and write, and the tools are free software (GPL, with the runtime library under the LGPL).
+- **The source text is the key.** Code reads `_("Inbox")`, not a key name, and a string with no translation [falls back to the source text](https://www.gnu.org/software/gettext/manual/html_node/Interface-to-gettext.html) instead of an error.
+- **Plural rules per language.** Each PO file carries a [`Plural-Forms` header with the language's rule](https://www.gnu.org/software/gettext/manual/html_node/Plural-forms.html), and `msginit` fills it in for you. Polish gets a three-form rule and three `msgstr[n]` slots for every plural entry.
+- **Context travels with the string.** `msgctxt` (from `pgettext`) [separates "Archive" the verb from "Archive" the noun](https://www.gnu.org/software/gettext/manual/html_node/Contexts.html), `#.` comments carry notes to translators (`xgettext --add-comments`), `#:` lines point to the source, and flags such as `python-format` let `msgfmt --check` reject a translation that breaks a placeholder.
+- **Safe updates.** `msgmerge` [keeps existing translations when the template changes](https://www.gnu.org/software/gettext/manual/html_node/msgmerge-Invocation.html) and marks entries whose source changed as fuzzy, with the previous source kept for comparison (`--previous`).
+- **Local LLM drafts.** Since version 1.0, [`msgpre` and `spit` pretranslate PO files](https://www.gnu.org/software/gettext/manual/html_node/Pretranslating.html) with a locally installed LLM through ollama, as a starting point for a translator to review.
+- **Support everywhere.** PO is the format PO editors such as Poedit and most translation management systems (TMSs) read and write, and the tools are [free software](https://www.gnu.org/software/gettext/manual/html_node/Licenses.html) (GPL, with the runtime library under the LGPL).
 
 ## What gettext leaves to you
 
@@ -34,7 +36,7 @@ print(t.ngettext("You have %d unread message.", "You have %d unread messages.", 
 print(t.pgettext("email verb", "Archive"))
 ```
 
-The gettext workflow, with GNU gettext 1.0:
+The gettext workflow, with [GNU gettext 1.0](https://lists.gnu.org/archive/html/info-gnu/2026-01/msg00007.html):
 
 ```bash
 xgettext --language=Python --keyword=pgettext:1c,2 --add-comments=TRANSLATORS -o po/inbox.pot inbox.py
@@ -57,7 +59,7 @@ msgstr[1] "Masz %d nieprzeczytane wiadomości."
 msgstr[2] "Masz %d nieprzeczytanych wiadomości."
 ```
 
-`msgfmt` leaves fuzzy entries out (it reports "2 translated messages, 1 fuzzy translation"), so the same command now prints "You have 5 new messages." in English, in the middle of a Polish screen, until a translator reviews the entry and removes the flag. That's the right default, since the old Polish still says "unread", and it's also the ongoing cost of gettext: every new or changed string waits in every language for a person to translate or review it.
+`msgfmt` [leaves fuzzy entries out](https://www.gnu.org/software/gettext/manual/html_node/msgfmt-Invocation.html) (it reports "2 translated messages, 1 fuzzy translation"), so the same command now prints "You have 5 new messages." in English, in the middle of a Polish screen, until a translator reviews the entry and removes the flag. That's the right default, since the old Polish still says "unread", and it's also the ongoing cost of gettext: every new or changed string waits in every language for a person to translate or review it.
 
 ## Translating gettext catalogs with General Translation
 
@@ -110,7 +112,7 @@ The tradeoffs: the CLI is a Node.js tool, so a C or PHP project adds `npx` to it
 | --- | --- | --- |
 | Extracts strings from code | Yes, `xgettext` | No; reads the POT template |
 | Creates a file per language | Yes, `msginit` | Yes, from the template, for every configured locale |
-| Writes translations | No | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| Writes translations | Drafts with a local LLM since 1.0, for a translator to finish | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
 | After a source string changes | `msgmerge` marks it fuzzy until someone reviews it | Retranslated on the next run; unchanged entries reused |
 | Plural forms | `msginit` writes the header; you fill each slot | Writes the header and fills every slot |
 | Context for translation | `msgctxt`, translator comments, references, flags | The same, plus Glossary and Custom Prompts |
@@ -125,6 +127,6 @@ There's nothing to migrate: General Translation keeps your `_()` calls, your tem
 
 ## Key takeaways
 
-- GNU gettext extracts, merges, compiles, and looks up translations, but it doesn't write them. New and changed strings show up in the source language until someone translates or reviews them.
+- GNU gettext extracts, merges, compiles, and looks up translations, and since 1.0 it can draft them with a local LLM, but it doesn't finish them. New and changed strings show up in the source language until someone translates or reviews them.
 - General Translation's CLI translates a POT template into a PO file per language, with the `pot` key, `"transformationFormat": "PO"`, a `transform` for the output path, and `customMapping` for names such as `pt_BR`.
 - For each plural entry, General Translation writes the target language's `Plural-Forms` header and every `msgstr[n]` slot, using `msgctxt` and translator comments as context. `msgfmt` and your gettext runtime stay in place.
