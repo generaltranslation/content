@@ -1,0 +1,65 @@
+---
+title: What does the Locadex agent do?
+summary: Locadex is General Translation's AI agent which internationalizes your code and translates your content in your GitHub repository. Its automations run when a pull request is opened, when a commit is pushed, or when you start one, and every change arrives as a pull request.
+date: 2026-10-13
+updated: 2026-10-14
+category: workflow-tools
+related: [ai-agent-i18n-setup, add-i18n-to-nextjs, translate-mintlify-docs, translations-in-ci, i18n-without-translation-files]
+---
+
+## What is Locadex?
+
+In an app in several languages, new interface text has to be wrapped in internationalization (i18n) calls and translated into each target language, and adding or removing a language means updating the configuration. Done by hand, that work happens after the code changes, so a feature ships in the source language first and its translations follow later.
+
+Locadex automates that work. Teams configure when each automation runs, what it changes, and how changes are delivered in GitHub. Each automation starts from one of three templates under **Project > Automations**:
+
+- **Generate code** finds untranslated interface text and wraps it in i18n calls, such as the [`<T>`](/docs/react/reference/components/t) component.
+- **Generate translations and push** translates new or updated source content into every target language.
+- **Keep locales in sync** updates the project files when languages are added or removed.
+
+Locadex supports Next.js; React apps built with Vite, Gatsby, Redwood, React Router, TanStack Start (its `gt-tanstack-start` library is experimental), and others; and the docs frameworks Mintlify, Fern, and Docusaurus.
+
+## How it works
+
+Locadex requires a Starter or Enterprise plan. Connect GitHub under **Project > Integrations > Catalog**, create an automation, and click **Run setup** to choose the source locale and target languages, for example, English into Spanish, French, and Japanese. In a React app, setup opens a pull request that configures translation loading and leaves your strings alone. After you merge it, **Generate code** wraps them in calls such as [`<T>`](/docs/react/reference/components/t), which in a Next.js page looks like this:
+
+```tsx title="app/page.tsx"
+import { T } from 'gt-next';
+
+export default function Home() {
+  return (
+    <main>
+      <T>
+        <h1>Welcome to my app</h1>
+        <p>This content will be translated automatically.</p>
+      </T>
+    </main>
+  );
+}
+```
+
+**Run when** sets each automation's trigger. With **A pull request changes**, Locadex runs when a pull request is opened, reopened, or marked ready for review, then opens a separate pull request and links to it in a comment on yours. With **A commit is pushed**, it runs when commits land on the target branch, usually `main`. With **Started manually**, it runs only when you click **Run now**.
+
+**Auto-merge** is off by default; turned on, it merges Locadex pull requests when checks pass.
+
+Locadex translations follow the [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations) assigned to your General Translation project (a Glossary that pins product terms and Custom Prompts that set tone). Locadex can also bring manual Dashboard edits into GitHub as pull requests.
+
+## Common problems
+
+If **Auto-merge** is on but a Locadex pull request stays open, a check failed, GitHub branch protection is blocking the merge, or it is a setup pull request, which never auto-merges. For branch protection, add **Locadex Agent** as a bypass on the blocking rules in the repository's rulesets.
+
+If a run fails because a package, script, or binary is missing, add a pre-process command that installs it. Commands run in the [Locadex sandbox](/docs/platform/locadex/reference/vm-image), which has no browser runtimes. They start from the repository root, so in a monorepo set **Target directory** to the app's folder and start each command with a `cd` into it.
+
+A new commit on a pull request cancels the Locadex run in progress and doesn't start another. Comment `/locadex` on the pull request when it's ready to process again.
+
+## When it matters
+
+| Approach | What it does well | When translation happens | What it leaves to you |
+| --- | --- | --- | --- |
+| An i18n library alone (`i18next`, `react-intl`, `next-intl`) | Mature runtimes for rendering translations and formatting values | Whenever someone updates the language files | Replacing each string with a key, adding it to every language file, and committing the changes yourself |
+| A coding agent you drive, such as Cursor or Claude Code with General Translation's [start prompt](/docs/overview/for-coding-agents#start-prompt) | Sets up i18n in a session you supervise | When you or your CI run [`npx gt translate`](/docs/cli/reference/commands/translate) | Supervising the session, then reviewing and committing its edits |
+| General Translation (Locadex) | Its **Generate code** automation wraps text in i18n calls on each run, and every change arrives as a pull request | On the trigger you choose: a pull request, a push, or **Run now** | Reviewing each pull request, or turning on **Auto-merge** |
+
+Use an i18n library alone when translators own the language files and each release can wait for them. Use a coding agent for a one-time setup you want to watch, then run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI before each build. Use Locadex when the app or docs change with most pull requests and you want each change's translations in a pull request without maintaining a pipeline step. For a stack outside Locadex's list, such as Vue or Node.js, use General Translation's libraries and the `gt` CLI.
+
+Locadex requires a Starter or Enterprise plan. Starter has a $0 platform fee, and Locadex runs are metered in Locadex Compute Units (LCUs). The [Locadex Quickstart](/docs/platform/locadex/quickstart) has the full steps.

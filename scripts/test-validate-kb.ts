@@ -295,6 +295,30 @@ assertEqual(
   "rejects a future date"
 );
 
+assertEqual(
+  findKbProblems([article("a.mdx", { updated: "2026-10-13" })], context).length,
+  0,
+  "accepts an updated date from the publish date to today"
+);
+
+assertEqual(
+  first([article("a.mdx", { updated: "2026-13-01" })]),
+  "kb/a.mdx: updated must be a real YYYY-MM-DD date.",
+  "rejects an impossible updated date"
+);
+
+assertEqual(
+  first([article("a.mdx", { updated: "2026-10-14" })]),
+  "kb/a.mdx: updated 2026-10-14 is in the future.",
+  "rejects a future updated date"
+);
+
+assertEqual(
+  first([article("a.mdx", { updated: "2025-12-31" })]),
+  "kb/a.mdx: updated 2025-12-31 is before date 2026-01-01.",
+  "rejects an updated date before the publish date"
+);
+
 // Body
 
 assertEqual(
