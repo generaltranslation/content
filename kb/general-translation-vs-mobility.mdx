@@ -43,44 +43,81 @@ That's the right behavior for a storage layer: Mobility saved the English values
 
 ## Filling Mobility attributes with General Translation
 
-General Translation's runtime translation endpoint, `POST https://api.gtx.dev/v2/translate`, translates strings on demand. It takes a project API key with **Runtime translation** permission as a bearer token, and a body with a `requests` object keyed by your own IDs, each with a `source` string and optional `metadata` such as a `context` note, plus `sourceLocale`, `targetLocale`, and a top-level `metadata` object (it can be empty). The response is keyed by the same IDs. A small Ruby method covers it:
+Keep Mobility as the store for published content. General Translation's [runtime endpoint](/docs/platform/openapi/reference/translation/translate-runtime) supplies translated strings using your project's Glossary and Custom Prompts. The Rails application decides when those strings become visible.
+
+Use a project API key with **Runtime translation** permission on the server. Treat a failed field as a failed batch: publishing a translated title beside an untranslated body is usually worse than leaving the previous version intact.
 
 ```ruby title="app/services/gt_translate.rb"
 require "net/http"
 require "json"
 
-# Translates a hash of { field => text } with General Translation's runtime API.
-# Returns { field => translation }, with nil for any entry that failed.
-def gt_translate(fields, from:, to:, context: nil)
-  uri = URI("https://api.gtx.dev/v2/translate")
-  requests = fields.to_h do |field, text|
-    [field.to_s, { source: text, metadata: { dataFormat: "STRING", context: context }.compact }]
+class TranslationFailure < StandardError; end
+
+class GtTranslate
+  def self.call(fields, from:, to:, context:)
+    uri = URI("https://api.gtx.dev/v2/translate")
+    requests = fields.to_h do |field, text|
+      raise TranslationFailure, "Missing source field: #{field}" unless text.is_a?(String)
+      [field.to_s, { source: text, metadata: { dataFormat: "STRING", context: context } }]
+    end
+    request = Net::HTTP::Post.new(uri)
+    request["Authorization"] = "Bearer #{ENV.fetch("GT_API_KEY")}"
+    request["Content-Type"] = "application/json"
+    request["gt-api-version"] = "2026-03-06.v1"
+    request.body = { requests:, sourceLocale: from, targetLocale: to, metadata: {} }.to_json
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true,
+                              open_timeout: 5, read_timeout: 30, write_timeout: 10) do |http|
+      http.request(request)
+    end
+    raise TranslationFailure, "Translation HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+    results = JSON.parse(response.body)
+    requests.keys.to_h do |field|
+      result = results.fetch(field)
+      unless result["success"] == true && result["translation"].is_a?(String)
+        raise TranslationFailure, "Translation failed for #{field}"
+      end
+      [field, result.fetch("translation")]
+    end
   end
-
-  request = Net::HTTP::Post.new(uri)
-  request["Authorization"] = "Bearer #{ENV.fetch("GT_API_KEY")}" # project key with Runtime translation permission
-  request["Content-Type"] = "application/json"
-  request["gt-api-version"] = "2026-03-06.v1"
-  request.body = { requests:, sourceLocale: from.to_s, targetLocale: to.to_s, metadata: {} }.to_json
-
-  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(request) }
-  raise "Translation failed (#{response.code}): #{response.body}" unless response.is_a?(Net::HTTPSuccess)
-
-  JSON.parse(response.body).transform_values { |result| result["success"] ? result["translation"] : nil }
 end
 ```
 
-```ruby
-translated = gt_translate({ title: post.title, body: post.body },
-                          from: :en, to: :es, context: "Blog post for an online shoe store")
-Mobility.with_locale(:es) { post.update!(translated.compact) }
+An HTTP success does not mean every field succeeded. This method rejects partial results, missing fields, and malformed responses before any database write. It reports status or field names without putting the response body into logs.
+
+For a background job, capture both the English source and the current target values when enqueueing. Disable Mobility fallbacks when reading those snapshots, so an empty Spanish field stays distinguishable from English fallback text:
+
+```ruby title="app/jobs/translate_post_job.rb"
+class TranslatePostJob < ApplicationJob
+  def self.snapshot(post, locale)
+    Mobility.with_locale(locale.to_sym) do
+      { "title" => post.title(fallback: false), "body" => post.body(fallback: false) }
+    end
+  end
+
+  def perform(post_id, locale, source, previous_target)
+    raise ArgumentError, "Cannot overwrite English" if locale == "en"
+    post = Post.find(post_id)
+    return unless self.class.snapshot(post, "en") == source &&
+                  self.class.snapshot(post, locale) == previous_target
+
+    translated = GtTranslate.call(source, from: "en", to: locale,
+                                 context: "Blog post for an online shoe store")
+    post.with_lock do
+      post.reload
+      return unless self.class.snapshot(post, "en") == source &&
+                    self.class.snapshot(post, locale) == previous_target
+      Mobility.with_locale(locale.to_sym) { post.update!(translated) }
+    end
+  end
+end
 ```
 
-Each entry comes back as `{ "success": true, "translation": "..." }` or `{ "success": false, "error": "...", "code": ... }`, so one failed field doesn't lose the others. (See the [endpoint reference](/docs/platform/openapi/reference/translation/translate-runtime) for every field.)
+Enqueue this job with `TranslatePostJob.snapshot(post, "en")` and `TranslatePostJob.snapshot(post, "es")` captured under the same post lock, after the source edit commits. Pass the same snapshots on retries. Allow only your configured target locales, and have every editor and importer acquire that parent-row lock before changing translated attributes. This contract matters because Mobility can store attributes in separate rows.
 
-General Translation does more here than a raw machine translation call: the endpoint translates with your project's Glossary and Custom Prompts, so product names and tone match the rest of your product, and it caches results, so translating the same text again is served from the cache. Call it from a background job after a record is saved, keep the API key on the server, and expect `429` responses above the [rate limits](/docs/platform/openapi/overview#api-basics). If part of your stack runs on Node.js, [`tx`](/docs/node/reference/functions/tx) in `gt-node` and the [Core library](/docs/platform/core/guides/translating-strings) do the same runtime translation from JavaScript.
+The job does the network work outside the lock, then checks again before writing. A source edit or a reviewer edit made while translation is running makes the result stale, so the job leaves it unapplied. A repeated delivery cannot overwrite the translation already saved by its earlier attempt; if the generated values already matched the previous target, repeating that identical write is harmless. Superseded work should enqueue a fresh snapshot. Configure bounded retries for timeouts, `429`, and server failures in your job runner; investigate authentication and invalid-content failures instead of retrying them indefinitely. See the [API rate limits](/docs/platform/openapi/overview#api-basics).
 
-The tradeoff: these translations go straight into your database the moment the job runs. If editors must approve a translation before readers see it, add that step yourself, for example by saving machine translations as drafts.
+This example publishes both fields together. If approval is required, save the result as a draft tied to its source snapshot and check that snapshot again when approving it. GT's Dashboard file-review workflow does not approve Mobility database rows. The application's draft and publication rules remain yours, while GT supplies context-aware translations. Node.js services can use [`tx`](/docs/node/reference/functions/tx) for the same runtime endpoint.
 
 ## Mobility vs. General Translation at a glance
 
