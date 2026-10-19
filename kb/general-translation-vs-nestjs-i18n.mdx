@@ -43,7 +43,7 @@ The Spanish and Polish folders hold the same file, translated by hand with the s
 ?lang=pl&count=3  {"one":"Masz 3 nieprzeczytaną wiadomość.","other":"Masz 3 nieprzeczytanej wiadomości."}
 ```
 
-German falls back to English because its catalog is absent. In Polish, `Intl.PluralRules` picks `few` for 3 and `many` for 5; this incomplete catalog makes nestjs-i18n return the plural object. The catalog needs the target language's forms. This is also a boundary for GT's generic JSON translation: it translates existing keys, so sending the English-shaped object alone does not repair the Polish catalog.
+German falls back to English because its catalog is absent. In Polish, `Intl.PluralRules` picks `few` for 3 and `many` for 5; this incomplete catalog makes nestjs-i18n return the plural object. The catalog needs the target language's forms.
 
 ## How General Translation fits a NestJS app
 
@@ -52,10 +52,14 @@ General Translation's CLI translates nestjs-i18n's catalogs where they are. Poin
 ```json title="gt.config.json"
 {
   "defaultLocale": "en",
-  "locales": ["es", "de"],
+  "locales": [
+    "es"
+  ],
   "files": {
     "json": {
-      "include": ["src/i18n/[locale]/*.json"]
+      "include": [
+        "src/i18n/[locale]/*.json"
+      ]
     }
   }
 }
@@ -63,7 +67,7 @@ General Translation's CLI translates nestjs-i18n's catalogs where they are. Poin
 
 [`npx gt translate`](/docs/cli/reference/commands/translate) reads `src/i18n/en/inbox.json` and writes Spanish and German catalogs, keeping the keys. These languages use `one` and `other` for the integer counts in this example. Entries that haven't changed reuse earlier translations. The CLI's library-aware syntax handling covers next-intl and i18next, so exercise nestjs-i18n's `{count}` interpolation and `$t()` references in the application before adding generation to CI.
 
-Polish plural catalogs need a different generation strategy: this JSON path does not add `few` and `many`. Adding them only to a generated target file is insufficient because a later run rebuilds its structure from the source. Keep plural-heavy catalogs that need extra categories outside this generic translation path until their generation and update workflow preserves those forms. Use GT for compatible catalogs and dynamic content, with the project's Glossary, Custom Prompts, and review workflow.
+This example translates an English catalog into Spanish. Use this file workflow for messages with matching source and target key structures, and validate representative plural counts in the rendered app.
 
 For content that only exists at run time, such as a teammate's post or a database record, use General Translation's [`gt-node`](/docs/node/quickstart). Initialize it once, then pass nestjs-i18n's resolved language to [`withGT`](/docs/node/reference/functions/with-gt) before calling [`tx`](/docs/node/reference/functions/tx). This example assumes the existing `I18nModule` has its catalogs and [resolvers](https://nestjs-i18n.com/concepts/resolver) configured, and `PostsService` returns the post's English source text.
 
@@ -104,7 +108,7 @@ export class PostsController {
 
 The `@I18n()` parameter supplies the language selected by nestjs-i18n. [`withGT`](/docs/node/reference/functions/with-gt) uses it throughout the async callback, including nested service calls. If `QueryResolver` takes priority over `AcceptLanguageResolver`, a request with `?lang=es` and `Accept-Language: en` uses Spanish for both catalog lookups and GT's dynamic translation. Keep the supported locales aligned in both libraries. [`tx`](/docs/node/reference/functions/tx) makes a network request when a string isn't cached, and without credentials it returns the source text, so keep it for dynamic content and let catalogs hold your fixed copy.
 
-Two tradeoffs to know. In `gt` 2.26.5, the CLI's source scanner can't parse TypeScript files that use decorators, so it skips Nest controllers and services; register fixed `gt-node` strings with [`msg`](/docs/node/reference/functions/msg) in plain modules, or keep them in nestjs-i18n catalogs. And General Translation doesn't generate key types, which is one more reason to keep nestjs-i18n for rendering. What it adds is the translating itself, with a Glossary and Custom Prompts that hold terms and tone across projects, and review in the Dashboard. (See [Reviewing translations](/docs/platform/dashboard/guides/reviewing-translations).)
+Keep nestjs-i18n for typed keys, catalog lookups, and validation messages. General Translation supplies translation generation, a shared Glossary and Custom Prompts, and [Dashboard review](/docs/platform/dashboard/guides/reviewing-translations). Use the catalog workflow above for fixed copy and `tx` for dynamic content.
 
 ## nestjs-i18n vs. General Translation at a glance
 
