@@ -1,6 +1,6 @@
 ---
 title: "General Translation vs. Rails I18n: do you need both?"
-summary: Rails I18n is the translation API built into Ruby on Rails. It looks up keys in YAML files and formats dates and numbers, but every translation is yours to write. General Translation has no Ruby SDK, so it doesn't replace Rails I18n; its CLI translates the YAML files Rails reads, with one rename step.
+summary: Keep Rails I18n for Ruby lookups and formatting, and add General Translation to generate compatible YAML catalogs with shared terminology and Dashboard review. A YAML adapter separates GT's catalogs from Rails' locale-rooted runtime files.
 date: 2026-10-16
 category: internationalization
 authors: [kevin-wu, jackie]
@@ -60,7 +60,48 @@ Counts 2 and 22 need "nieprzeczytane wiadomości". [i18n-tasks](/kb/general-tran
 
 ## Translating Rails locale files with General Translation
 
-Keep Rails I18n for lookups, and let General Translation write the other locale files. The `gt` CLI runs on Node.js, translates YAML, and keeps your keys. Point `gt.config.json` at your source file:
+Keep Rails I18n for rendering and use GT to generate compatible catalogs. Rails expects a locale root such as `es:`; GT's generic YAML workflow preserves source keys. Keep GT's catalogs outside Rails' load path, without that root, and generate the rooted files Rails reads. This prevents a downloaded Spanish file with an `en:` root from replacing English at runtime.
+
+The following adapter owns one catalog per locale. It imports existing translations once and exports the runtime files after each translation run. It parses YAML, rejects unexpected shapes and missing files, and prepares every output before writing any of them.
+
+```ruby title="script/rails_catalogs.rb"
+require "json"
+require "yaml"
+require "fileutils"
+
+config = JSON.parse(File.read("gt.config.json"))
+locales = ([config.fetch("defaultLocale")] + config.fetch("locales")).uniq
+abort "Invalid locale" unless locales.all? { |locale| /\A[a-zA-Z0-9-]+\z/.match?(locale) }
+FileUtils.mkdir_p("localization/rails")
+
+read_catalog = lambda do |path|
+  value = YAML.safe_load_file(path, aliases: false)
+  raise "Expected a message mapping: #{path}" unless value.is_a?(Hash)
+  value
+end
+
+case ARGV.fetch(0)
+when "import"
+  locale = ARGV.fetch(1)
+  abort "Locale is not configured" unless locales.include?(locale)
+  path = "localization/rails/#{locale}.yml"
+  abort "Catalog already imported: #{path}" if File.exist?(path)
+  rooted = read_catalog.call("config/locales/#{locale}.yml")
+  abort "Expected exactly the #{locale} root" unless rooted.keys == [locale] && rooted[locale].is_a?(Hash)
+  File.write(path, YAML.dump(rooted.fetch(locale)))
+when "export"
+  outputs = locales.to_h do |locale|
+    messages = read_catalog.call("localization/rails/#{locale}.yml")
+    ["config/locales/#{locale}.yml", YAML.dump({ locale => messages })]
+  end
+  outputs.each do |path, yaml|
+    File.write("#{path}.tmp", yaml)
+    File.rename("#{path}.tmp", path)
+  end
+else
+  abort "Usage: ruby script/rails_catalogs.rb import LOCALE | export"
+end
+```
 
 ```json title="gt.config.json"
 {
@@ -68,42 +109,32 @@ Keep Rails I18n for lookups, and let General Translation write the other locale 
   "locales": ["es"],
   "files": {
     "yaml": {
-      "include": ["config/locales/[locale].yml"]
+      "include": ["localization/rails/[locale].yml"]
     }
   }
 }
 ```
 
-With a project ID and API key set as `GT_PROJECT_ID` and `GT_API_KEY` ([Generating translations](/docs/cli/guides/generating-translations) covers credentials), running [`npx gt translate`](/docs/cli/reference/commands/translate) sends `config/locales/en.yml` to the General Translation API and writes `es.yml` and `pl.yml`. One thing to know: the CLI keeps every key, including the root, so `es.yml` comes back rooted at `en:`. Rails merges every file in `config/locales` by its root key, so the translated files overwrite your English: the English inbox renders in whichever translated file Rails loads last. Rename the root after each run:
-
-```ruby title="script/fix_locale_roots.rb"
-# Run after `npx gt translate`: renames the copied root key (en:) in each
-# translated file to the file's own locale (es:, pl:, and so on).
-require "json"
-
-config = JSON.parse(File.read("gt.config.json"))
-source = config.fetch("defaultLocale")
-
-config.fetch("locales").each do |locale|
-  next if locale == source
-
-  path = "config/locales/#{locale}.yml"
-  next unless File.exist?(path)
-
-  yaml = File.read(path, encoding: "UTF-8")
-  File.write(path, yaml.sub(/^(["']?)#{Regexp.escape(source)}\1:/, "#{locale}:"))
-end
-```
+Import English and any existing Spanish catalog before the first run:
 
 ```bash
-npx gt translate && ruby script/fix_locale_roots.rb
+ruby script/rails_catalogs.rb import en
+# Run this if a reviewed Spanish catalog already exists:
+ruby script/rails_catalogs.rb import es
 ```
 
-The script only touches the unindented root line, leaves comments and formatting alone, and does nothing to a file that's already correct, so it's safe to run every time.
+Edit source copy in `localization/rails/en.yml` from then on. Configure [credentials](/docs/cli/guides/generating-translations), and run [`gt upload`](/docs/cli/reference/commands/upload) once to import the source and existing translations before generating more. Keep GT's files and lockfile in version control; treat `config/locales/en.yml` and `es.yml` as generated outputs, and avoid defining the same keys in other Rails catalogs.
 
-That extra step buys you more than a raw translation API would. General Translation translates each file with your project's [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations), so a product name or a formal tone holds across every locale file, and your team can [review and edit translations](/docs/platform/dashboard/guides/reviewing-translations) in the Dashboard. Unchanged entries reuse earlier translations, so running the CLI in CI on every merge only translates what changed.
+```bash
+npx gt upload
+npx gt translate && ruby script/rails_catalogs.rb export
+```
 
-This example targets Spanish, whose integer plural categories fit the English `one` and `other` structure. Adding Polish requires a separate solution for its additional categories; GT's generic YAML translation does not create them. Keep those messages in a workflow that preserves their full target-language structure. Also check Rails `%{name}` interpolation: [custom syntax support](/docs/cli/reference/formats/yaml-files) is library-aware for next-intl and i18next, and `i18n-tasks check-consistent-interpolations` catches mismatched placeholders. GT's benefit here is contextual generation and review of compatible catalogs, not automatic repair of every Rails message format.
+For later local review, edit the downloaded files in `localization/rails` and run [`gt save-local`](/docs/cli/reference/commands/save-local) before translating again. Dashboard edits are another review path. In CI, run the second line and stop the build if either command fails. The exporter replaces each file atomically, but a filesystem failure can still leave only some locales updated; publish only after the whole command succeeds. YAML serialization normalizes formatting and drops comments. For multiple catalogs per locale, extend the explicit input/output mapping before using this adapter.
+
+General Translation applies your project's [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations), and reviewers can [edit translations in the Dashboard](/docs/platform/dashboard/guides/reviewing-translations). Repeated translation runs reuse unchanged entries, while the adapter keeps the file shape stable for local review and upload.
+
+This example targets Spanish, whose integer plural categories fit the English `one` and `other` structure. GT's generic YAML path does not add Polish `few` and `many` keys. Keep messages requiring extra categories in a workflow that preserves them. Run `i18n-tasks check-consistent-interpolations` and render representative counts to check Rails `%{count}` placeholders and plural behavior before release.
 
 ## Rails I18n vs. General Translation at a glance
 
@@ -124,4 +155,4 @@ Use Rails I18n on its own when translators or a vendor already deliver your loca
 
 - Rails I18n renders translations from `config/locales` and formats dates and numbers; rails-i18n adds plural rules and locale data. Neither writes translations.
 - General Translation has no Ruby SDK. Its CLI translates the YAML files Rails reads, using your Glossary and Custom Prompts.
-- The CLI keeps the `en:` root key in translated files, which overwrites English in Rails, so rename it after each [`npx gt translate`](/docs/cli/reference/commands/translate) with a short script like the one above.
+- Keep GT's catalogs outside Rails' load path and export locale-rooted runtime files after translation. Review the stable GT catalogs, then regenerate Rails' copies.
