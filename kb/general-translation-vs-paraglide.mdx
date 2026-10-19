@@ -118,13 +118,43 @@ Keep Paraglide JS when you build with SvelteKit, Astro, or Solid, or when per-me
 
 ## Using Paraglide JS and General Translation together
 
-The `gt` CLI doesn't read inlang projects. It can pick up `messages/[locale].json` as ordinary JSON, but it treats every string value as copy: plain messages such as `Hello {name}!` keep their placeholders, while a variant message's `declarations` and `selectors` entries would be sent as text, and target locales would get only the English-shaped variant keys. So don't point the CLI at a Paraglide project that uses variants. (See the [JSON file format](/docs/cli/reference/formats/json-files) for how the CLI handles JSON from other libraries.)
+You can keep Paraglide's compiler and typed `m.*` functions while using GT to generate compatible catalog files. The boundary is the file format: GT does not import `project.inlang` or understand the default format's `declarations`, `selectors`, and `match` metadata. Sending a native variant file through generic JSON translation would treat that metadata as copy and preserve the source-shaped branches.
 
-Moving one component at a time works. Paraglide's messages are plain functions and need no provider, so an `m.*` call and a [`<T>`](/docs/react/reference/components/t) block can render side by side while you convert routes. [Migrating i18n libraries](/docs/react/guides/migrating-i18n-libraries) covers the steps, starting from the [React Quickstart](/docs/react/react-quickstart) or the [Next.js Quickstart](/docs/react/nextjs-quickstart).
+Paraglide also accepts [format plugins](https://paraglidejs.com/file-formats). For example, this i18next plugin configuration compiles a flat catalog containing `inboxTitle` and `greeting: "Hello {{name}}!"`:
+
+```json title="project.inlang/settings.json"
+{
+  "baseLocale": "en",
+  "locales": ["en", "es"],
+  "modules": [
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-i18next@6.1.4/dist/index.js"
+  ],
+  "plugin.inlang.i18next": {
+    "pathPattern": "./locales/{locale}.json"
+  }
+}
+```
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es"],
+  "files": {
+    "json": {
+      "include": ["locales/[locale].json"]
+    }
+  }
+}
+```
+
+The GT CLI targets the catalog files, then Paraglide compiles the translated output. With Paraglide 2.29.0 and plugin 6.1.4, a supplied Spanish catalog containing `"Bandeja de entrada"` and `"¡Hola {{name}}!"` compiled successfully; `m.greeting({ name: 'Ada' }, { locale: 'es' })` returned `¡Hola Ada!`. This establishes file and compiler compatibility for those simple messages, not automatic migration of native variants or generated translation quality.
+
+Import existing reviewed translations before generating new ones with [`gt upload`](/docs/cli/reference/commands/upload). After generation, check placeholders, run Paraglide's compiler and inlang's completeness checks, and render the target messages. Keep native variant catalogs out of this generic JSON path. Changing plugins also changes the expected catalog format, so convert and validate existing messages before switching a populated project.
+
+Move components to [`<T>`](/docs/react/reference/components/t) when you want inline authoring and marked JSX structure as translation context. Paraglide functions and GT components can render side by side during that move; see [Migrating i18n libraries](/docs/react/guides/migrating-i18n-libraries). A rendering-library migration is optional for compatible catalogs.
 
 ## Key takeaways
 
 - Paraglide JS compiles messages into typed, tree-shakable functions, with plural support, locale strategies, and separate inlang tooling for generation and checks.
 - General Translation keeps copy inline in [`<T>`](/docs/react/reference/components/t) and generates translations with context from your code, your Glossary, and Custom Prompts, with review in the Dashboard.
-- Paraglide wins on per-message bundle size, typed messages, and framework reach beyond React and Vue; the `gt` CLI doesn't understand inlang variants, so migrate component by component instead of translating Paraglide's files.
-
+- Keep Paraglide's typed functions and tree-shaking when they fit your app. GT can generate compatible catalogs without replacing the compiler; native inlang variants need a separate workflow. Move to inline GT components when their authoring and context advantages are the reason to switch.
