@@ -43,7 +43,7 @@ The Spanish and Polish folders hold the same file, translated by hand with the s
 ?lang=pl&count=3  {"one":"Masz 3 nieprzeczytaną wiadomość.","other":"Masz 3 nieprzeczytanej wiadomości."}
 ```
 
-German silently falls back to English, because nobody wrote that catalog. Polish is worse: `Intl.PluralRules` picks `few` for 3 and `many` for 5, the Polish file only has the `one` and `other` keys copied from English, and nestjs-i18n returns the whole plural object instead of a sentence. The fix is to know which plural categories each language needs and write them. That's the work nestjs-i18n leaves to you: producing every catalog, in every language, with the right forms, and redoing it each time the English changes.
+German falls back to English because its catalog is absent. In Polish, `Intl.PluralRules` picks `few` for 3 and `many` for 5; this incomplete catalog makes nestjs-i18n return the plural object. The catalog needs the target language's forms. This is also a boundary for GT's generic JSON translation: it translates existing keys, so sending the English-shaped object alone does not repair the Polish catalog.
 
 ## How General Translation fits a NestJS app
 
@@ -52,7 +52,7 @@ General Translation's CLI translates nestjs-i18n's catalogs where they are. Poin
 ```json title="gt.config.json"
 {
   "defaultLocale": "en",
-  "locales": ["es", "pl", "de"],
+  "locales": ["es", "de"],
   "files": {
     "json": {
       "include": ["src/i18n/[locale]/*.json"]
@@ -61,9 +61,9 @@ General Translation's CLI translates nestjs-i18n's catalogs where they are. Poin
 }
 ```
 
-[`npx gt translate`](/docs/cli/reference/commands/translate) reads `src/i18n/en/inbox.json` and writes `src/i18n/es/inbox.json`, `src/i18n/pl/inbox.json`, and `src/i18n/de/inbox.json`, keeping every key. It checks that each translation keeps the source's `{name}` and `{count}` placeholders. Run it in CI, and entries that haven't changed reuse their earlier translations. The CLI doesn't know nestjs-i18n's syntax specifically (its library-aware mode covers next-intl and i18next), so review strings that use `$t()` references.
+[`npx gt translate`](/docs/cli/reference/commands/translate) reads `src/i18n/en/inbox.json` and writes Spanish and German catalogs, keeping the keys. These languages use `one` and `other` for the integer counts in this example. Entries that haven't changed reuse earlier translations. The CLI's library-aware syntax handling covers next-intl and i18next, so exercise nestjs-i18n's `{count}` interpolation and `$t()` references in the application before adding generation to CI.
 
-Plurals need planning. The CLI builds each translated catalog from the English file's structure, so a plural object gets the categories English has, `one` and `other`. General Translation doesn't add Polish `few` and `many`, and keys you add by hand to one language are dropped when that file is translated again. One way to handle it is to list every category your languages need in the English file (English never selects `few` or `many`), which also keeps `nestjs-i18n check` passing, and then review those forms in the Dashboard.
+Polish plural catalogs need a different generation strategy: this JSON path does not add `few` and `many`. Adding them only to a generated target file is insufficient because a later run rebuilds its structure from the source. Keep plural-heavy catalogs that need extra categories outside this generic translation path until their generation and update workflow preserves those forms. Use GT for compatible catalogs and dynamic content, with the project's Glossary, Custom Prompts, and review workflow.
 
 For content that only exists at run time, such as a teammate's post or a database record, use General Translation's [`gt-node`](/docs/node/quickstart). Initialize it once, then pass nestjs-i18n's resolved language to [`withGT`](/docs/node/reference/functions/with-gt) before calling [`tx`](/docs/node/reference/functions/tx). This example assumes the existing `I18nModule` has its catalogs and [resolvers](https://nestjs-i18n.com/concepts/resolver) configured, and `PostsService` returns the post's English source text.
 
