@@ -38,7 +38,7 @@ Here's `missing` and `unused` on a small Rails app with English, Polish, and Spa
 
 That report is accurate and useful. Filling the gaps is where the work stays with you:
 
-- **The translator sees values, not context.** In a run with the Google backend's network call stubbed out, `translate-missing es` sent this list and nothing else: no keys, no file, no view.
+- **The Google backend sends string values.** In a run with that backend's network call stubbed out, `translate-missing es` sent the values below with placeholders masked, without the keys, file, or view.
 
   ```text
   ["Inbox", "You have X__0 unread message.", "You have X__0 unread messages.", "Archived"]
@@ -46,11 +46,11 @@ That report is accurate and useful. Filling the gaps is where the work stays wit
 
 - **Plural forms keep English's shape.** For a Polish key that was missing entirely, it wrote `one` and `other`, and the next `missing` run reported `few, many`.
 - **Changed English isn't retranslated.** [`translate-missing` fills keys that don't exist in a locale](https://github.com/glebm/i18n-tasks#translate-missing-keys). When you edit an English string, the existing translations stay as they were.
-- **A failed backend can still write files.** With no Google API key set, `translate-missing --backend=google pl` warned that the slice failed, reported two keys as translated, copied the English values into `pl.yml`, and exited 0. Those keys then dropped out of `missing`; only `eq-base` (translations equal to the source) showed them.
+- **A failed Google request can still write files.** With no Google API key set, `translate-missing --backend=google pl` warned that the slice failed, reported two keys as translated, copied the English values into `pl.yml`, and exited 0. Those keys then dropped out of `missing`; only `eq-base` (translations equal to the source) showed them.
 
 ## Where General Translation fits
 
-General Translation replaces the `translate-missing` step, not the checks. Point the `gt` CLI at your English file and run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI. It writes every target locale, and on later runs it reuses translations for unchanged entries and retranslates the ones whose English changed. Each run uses your project's [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations), so terms and tone stay the same in every file, and your team can [review and edit translations](/docs/platform/dashboard/guides/reviewing-translations) in the Dashboard. Pricing is usage-based, with a $0 platform fee and unlimited users, projects, and languages on Starter ([pricing](https://generaltranslation.com/pricing)).
+General Translation handles translation generation while i18n-tasks checks the Rails catalogs. Point the `gt` CLI at your English file and run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI. It writes every target locale, and on later runs it reuses translations for unchanged entries and retranslates the ones whose English changed. Each run uses your project's [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations), so terms and tone stay the same in every file, and your team can [review and edit translations](/docs/platform/dashboard/guides/reviewing-translations) in the Dashboard.
 
 Keep i18n-tasks for Ruby source scanning and catalog validation. Run General Translation's Node.js CLI for translation generation, and map the resulting YAML to Rails' locale-rooted format as shown in [General Translation vs. Rails I18n](/kb/general-translation-vs-rails-i18n). Use that workflow for catalogs with matching source and target key structures.
 
@@ -58,17 +58,15 @@ Keep i18n-tasks for Ruby source scanning and catalog validation. Run General Tra
 
 | Feature | i18n-tasks | General Translation |
 | --- | --- | --- |
-| Finds keys used in code but missing | Yes | No |
-| Finds unused keys | Yes | No |
+| Role | Scans Ruby code and checks missing or unused catalog keys | Generates translations and keeps them current as source copy changes |
 | Plural validation | Checks required locale categories | Pair generation with i18n-tasks checks |
-| Sorts, moves, and renames keys | Yes | No |
 | Machine translation | `translate-missing`, through a provider you choose | [`npx gt translate`](/docs/cli/reference/commands/translate) |
-| What the translator sees | String values in batches, placeholders masked | Your file's strings, plus your Glossary and Custom Prompts |
+| Translation context | Depends on the backend; DeepL accepts glossary IDs and OpenAI accepts prompts | Your file's content and metadata, plus assigned Glossary and Custom Prompts |
 | When English changes | Existing translations stay | Changed entries are retranslated |
 | Review | Git diff | Dashboard and Git diff |
-| Cost | Free gem; provider bills per character or token | Usage-based |
+| Cost | Free gem; provider bills per character or token | [Usage-based translation](https://generaltranslation.com/pricing) |
 
-Choose i18n-tasks alone when translators write your locale files and you need CI to catch missing and unused keys, or when you only want a quick machine draft for a few strings. Use General Translation when you want every locale regenerated as the English changes, with consistent terminology and a review step, and keep i18n-tasks for the checks General Translation doesn't do.
+Choose i18n-tasks alone when translators write your locale files and you need CI to catch missing and unused keys, or when you only want a quick machine draft for a few strings. Use General Translation when you want translations updated as the English changes, with consistent terminology and Dashboard review. Keep i18n-tasks for Rails source scanning and catalog checks.
 
 ## Using both in CI
 
@@ -76,16 +74,16 @@ Use the English-to-Spanish catalog setup from the [Rails integration](/kb/genera
 
 ```bash
 npx gt translate
-ruby script/fix_locale_roots.rb                          # rename en: to each file's locale
+ruby script/export_rails_locales.rb                     # export catalogs for Rails
 bundle exec i18n-tasks missing                           # keys used in code, plus plural forms
 bundle exec i18n-tasks unused
 bundle exec i18n-tasks check-consistent-interpolations   # %{name} matches the source
 ```
 
-Each `i18n-tasks` command exits with status 1 on a problem, so the job fails before a broken file merges. The CLI needs a project ID and an API key with **Files > Write** and **Translation queue > Enabled** permissions, set as `GT_PROJECT_ID` and `GT_API_KEY`. (See [Generating translations](/docs/cli/guides/generating-translations).)
+You can configure the build to stop if translation or validation fails. Set `GT_PROJECT_ID` and `GT_API_KEY` using the permissions in [Generating translations](/docs/cli/guides/generating-translations).
 
 ## Key takeaways
 
-- i18n-tasks finds missing, unused, and incomplete plural keys in Rails apps and fails CI when it does. That's work General Translation doesn't do.
-- Its `translate-missing` sends bare string values to a provider, fills only keys that don't exist yet, and can write English into a locale file if the provider call fails.
+- i18n-tasks checks missing, unused, and incomplete plural keys in Rails apps.
+- `translate-missing` fills missing keys; it leaves existing translations unchanged when you edit the English source.
 - General Translation translates whole locale files with your Glossary and Custom Prompts and keeps them current as English changes; run it before i18n-tasks checks in the same CI job.
