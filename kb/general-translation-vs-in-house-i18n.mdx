@@ -1,24 +1,24 @@
 ---
 title: Should you build your own i18n or use General Translation?
-summary: Hand-rolled i18n (a dictionary per language and a small t() helper) is fine for one or two languages and a little copy. As an app grows, you rebuild plural rules, fallbacks, and file syncing, and someone still writes every translation. General Translation's open-source libraries handle the run-time work, and General Translation generates the translations from your code.
+summary: Compare the full workflow before building your own i18n. A small helper can suit stable copy; an established library can connect to automated translation; General Translation combines inline authoring with generation and review. The decision is which rendering, translation, and release responsibilities your team wants to own.
 date: 2026-10-16
 category: internationalization
 authors: [kevin-wu, jackie]
 related: [general-translation-vs-i18n-libraries, how-to-handle-plurals-in-react, multilingual-nextjs-seo, i18n-without-translation-files, general-translation-vs-google-translate]
 ---
 
-You can build internationalization (i18n) yourself: a messages object per language, a `t()` helper that looks up a key and fills in variables, a locale switcher, and the built-in `Intl` APIs for numbers and dates. For one or two languages and a few dozen strings, that's often all you need, and it's what a coding agent will often write when you ask it to add a language. What grows with the app is everything around the helper: plural rules, missing keys, keeping every language file in step with the code, and producing every translation in the first place. General Translation's open-source libraries do the run-time half of that work, and General Translation generates and updates the translations from your code.
+Building your own i18n means owning more than a lookup helper: message selection, formatting, fallback behavior, translation production, and release checks. A small dictionary can be enough for stable copy. An established library plus a translation service is another complete option. General Translation combines its libraries with generation and review, so developers can keep source copy inline while the service maintains target translations.
 
 ## When hand-rolled i18n is enough
 
-- **No dependencies.** A dictionary and a twenty-line helper add nothing to your bundle, and you control every line.
+- **No third-party runtime dependency.** A dictionary and a small helper still add their own bytes, but you control that code and its loading strategy.
 - **The platform does the formatting.** `Intl.NumberFormat`, `Intl.DateTimeFormat`, `Intl.PluralRules`, and `Intl.Locale` are [built into modern browsers and Node.js](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) and format currencies, dates, and plural categories per locale.
 - **Small, stable copy.** A prototype, an internal tool, or a site with one extra language that a teammate writes doesn't need more.
 - **Languages that pluralize like English.** English and German both use only [`one` and `other`](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html).
 
 ## What breaks as it grows
 
-Here's a typical first version, with a Polish dictionary added:
+Here's a minimal helper with two deliberate gaps: an English-only plural rule and no missing-key handling. These are avoidable design errors, not proof that every custom implementation fails:
 
 ```js title="i18n.mjs"
 const messages = {
@@ -115,8 +115,8 @@ export function Inbox({ name, count }: { name: string; count: number }) {
       <h1>Welcome back, <Var>{name}</Var></h1>
       <Plural
         n={count}
-        one={<p>You have <Num>{count}</Num> unread message.</p>}
-        other={<p>You have <Num>{count}</Num> unread messages.</p>}
+        singular={<p>You have <Num>{count}</Num> unread message.</p>}
+        plural={<p>You have <Num>{count}</Num> unread messages.</p>}
       />
     </T>
   );
@@ -141,7 +141,9 @@ The bigger change is that General Translation produces the translations:
 - **Reviewed by people.** Your team edits translations in the Dashboard. (See [Reviewing and editing translations](/docs/platform/dashboard/guides/reviewing-translations).)
 - **Direction and routing.** [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) returns `'rtl'` for Arabic, and `gt-next` can serve each locale at its own URL with its [middleware](/docs/react/nextjs/app-router-middleware).
 
-The tradeoff is a dependency and a service: `gt-react` or `gt-next` plus the `gt` CLI, with generated translations billed by usage. The libraries are MIT-licensed and work without a General Translation account, so you can also load translations you write yourself. And translation covers the plural branches you write: from English `one` and `other`, Polish also gets two branches, and counts Polish treats as `few` or `many` render the `other` branch, so check them in review.
+The generic `plural` branch above gives GT's JSX translation pipeline source text for target categories such as Polish `few` and `many`; runtime selection then uses the translated branches. That differs from generic JSON translation, which preserves a catalog's source keys. Review the generated forms and render representative counts before release: branch selection alone cannot establish translation quality.
+
+The tradeoff is adopting GT's library and workflow. Its JavaScript libraries are MIT-licensed and can render supplied translations without an account; hosted generation is [billed by usage](https://generaltranslation.com/pricing). Bundled translations do not require runtime calls to GT. An existing library connected to a translation service can also generate, review, and deliver catalogs automatically, so compare that complete option with GT's inline workflow.
 
 At the other end of the scale, Profound ships its platform and docs in 47+ locales with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
 
@@ -150,11 +152,11 @@ At the other end of the scale, Profound ships its platform and docs in 47+ local
 | | Hand-rolled dictionary and helper | Open-source library, such as i18next | General Translation |
 | --- | --- | --- | --- |
 | Dependencies | None | The library plus framework bindings, such as `react-i18next` | `gt-react` or `gt-next`, plus the `gt` CLI |
-| Plurals | Your selection code, and every form in every file | Selected with CLDR rules; you write each form in each catalog | [`<Plural>`](/docs/react/reference/components/plural) selects with CLDR rules; the branches you write are translated with the sentence |
+| Plurals | Your selection code and complete target-language forms | CLDR selection; translators or connected automation supply target forms | [`<Plural>`](/docs/react/reference/components/plural) selects with CLDR rules; JSX generation uses generic source branches for target categories |
 | Numbers, dates, currencies | `Intl` APIs you call yourself | Built-in formatters on top of `Intl` | [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency), and [`<DateTime>`](/docs/react/reference/components/datetime) |
 | Missing translations | Whatever your helper does | [Falls back to a configured language, then shows the key](https://www.i18next.com/principles/fallback) | Renders the source content |
-| Keeping languages in sync | By hand or with your own script | Extraction tools add new keys; someone fills them in | Each [`npx gt translate`](/docs/cli/reference/commands/translate) translates new and changed content |
-| Who translates | You or someone you hire | You, translators, or a translation management system | AI with your code's context, Glossary, and Custom Prompts; your team reviews in the Dashboard |
+| Keeping languages in sync | Your extraction, generation, and validation process | Extraction plus a connected translation workflow; can run in CI | Each [`npx gt translate`](/docs/cli/reference/commands/translate) generates new and changed content before release |
+| Who translates | People or a service you integrate | People, a TMS, or an automated service, including GT for compatible catalogs | AI with marked JSX context, Glossary, and Custom Prompts; your team reviews in the Dashboard |
 | Cost | Your time | Free library; translation is separate | Free JavaScript libraries; [usage-based translation](https://generaltranslation.com/pricing) |
 
 ## When to build it yourself
@@ -168,7 +170,7 @@ You don't have to rewrite your helper to stop translating by hand. Move each lan
 ```json title="gt.config.json"
 {
   "defaultLocale": "en",
-  "locales": ["es", "pl", "ar"],
+  "locales": ["es"],
   "files": {
     "json": {
       "include": ["locales/[locale].json"]
@@ -177,7 +179,7 @@ You don't have to rewrite your helper to stop translating by hand. Move each lan
 }
 ```
 
-[`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) lists `locales/en.json` as the source, and a full run writes `locales/es.json`, `locales/pl.json`, and `locales/ar.json`. A companion `locales/en.metadata.json` can add a `context` note or `maxChars` limit per key. (See [JSON](/docs/cli/reference/formats/json-files) and [Keyed metadata](/docs/cli/reference/keyed-metadata).) Two limits apply. The CLI translates values and keeps your keys, so Polish `few` and `many` keys still need adding. And the docs note that custom message syntax, such as ICU plurals, is handled exactly only for next-intl and i18next files, so keep placeholders simple, such as `{name}`.
+[`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) lists `locales/en.json` as the source, and a full run writes `locales/es.json`. A companion `locales/en.metadata.json` can add context or character limits per key. See [JSON](/docs/cli/reference/formats/json-files) and [Keyed metadata](/docs/cli/reference/keyed-metadata). This preserves your helper and keys, but does not repair the helper's missing-key behavior. Generic JSON generation also does not add target-only plural keys: keep Polish or Arabic plural messages in a workflow that preserves their full categories. Review custom placeholders and render the actual target output.
 
 To move off the helper, wrap one component at a time in [`<T>`](/docs/react/reference/components/t), or keep keys with [`useTranslations`](/docs/react/guides/translating-with-dictionaries). If a coding agent is doing the work, give it General Translation's [agent instructions](/docs/overview/for-coding-agents) instead of asking for a `t()` helper. Start with the [Next.js Quickstart](/docs/react/nextjs-quickstart) or the [React SPA Quickstart](/docs/react/react-spa-quickstart).
 
