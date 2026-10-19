@@ -1,6 +1,6 @@
 ---
 title: "General Translation vs. GNU gettext: do you need both?"
-summary: GNU gettext is the standard toolchain for translating software. It extracts strings into a POT template, keeps a PO file per language in sync, and compiles them for many runtimes; since 1.0 it can also draft translations with a local LLM. General Translation doesn't replace gettext; its CLI fills in the PO files from your template.
+summary: Keep GNU gettext for extraction and rendering, and add General Translation to generate and maintain the PO files. General Translation carries translator notes and message context into generation, applies shared terminology, and gives reviewers a Dashboard editor. Your existing gettext calls and compiled catalogs stay in place.
 date: 2026-10-16
 category: internationalization
 authors: [kevin-wu, jackie]
@@ -59,7 +59,7 @@ msgstr[1] "Masz %d nieprzeczytane wiadomości."
 msgstr[2] "Masz %d nieprzeczytanych wiadomości."
 ```
 
-`msgfmt` [leaves fuzzy entries out](https://www.gnu.org/software/gettext/manual/html_node/msgfmt-Invocation.html) (it reports "2 translated messages, 1 fuzzy translation"), so the same command now prints "You have 5 new messages." in English, in the middle of a Polish screen, until a translator reviews the entry and removes the flag. That's the right default, since the old Polish still says "unread", and it's also the ongoing cost of gettext: every new or changed string waits in every language for a person to translate or review it.
+`msgfmt` [leaves fuzzy entries out](https://www.gnu.org/software/gettext/manual/html_node/msgfmt-Invocation.html) (it reports "2 translated messages, 1 fuzzy translation"), so the same command now prints "You have 5 new messages." in English, in the middle of a Polish screen. The old Polish still says "unread", so it needs an updated translation. General Translation can generate that update from the new template as part of your build.
 
 ## Translating gettext catalogs with General Translation
 
@@ -87,7 +87,7 @@ General Translation's CLI reads your POT template, translates every entry, and w
 
 - **`pot` reads PO and POT files**, and `"transformationFormat": "PO"` makes the output translated `.po` files. (See the [PO / POT format reference](/docs/cli/reference/formats/po-pot-files).)
 - **`transform` names the output.** `{locale}` is the locale exactly as written in `locales`, so you get `po/pl.po` and `po/pt_BR.po`. (See [`transform`](/docs/cli/reference/config#files).)
-- **gettext's underscore names need a mapping.** The CLI rejects `pt_BR` as a locale code on its own, so [`customMapping`](/docs/cli/reference/config#custom-mapping) maps it to the standard `pt-BR`. The same pattern fits other layouts, such as a WordPress plugin's `languages/my-plugin.pot` and `languages/my-plugin-de_DE.po`.
+- **Keep gettext's locale names.** [`customMapping`](/docs/cli/reference/config#custom-mapping) connects `pt_BR` to the standard locale code `pt-BR`. The same pattern fits other layouts, such as a WordPress plugin's `languages/my-plugin.pot` and `languages/my-plugin-de_DE.po`.
 
 With the CLI set up (see the [CLI Quickstart](/docs/cli/quickstart)), the workflow becomes:
 
@@ -100,24 +100,24 @@ msgfmt --check -o locale/pl/LC_MESSAGES/inbox.mo po/pl.po
 
 `xgettext` leaves `charset=CHARSET` as a placeholder in the template header, and `msgconv` sets it to UTF-8, as `msginit` would for a language file. [`npx gt translate`](/docs/cli/reference/commands/translate) sends each entry with what the PO file knows about it as context: the `msgctxt`, the `#.` translator comments, the `#:` references, and the format flags. For a plural entry, General Translation writes the target language's `Plural-Forms` header and fills every `msgstr[n]` slot the header calls for (three for Polish, six for Arabic), and it checks that placeholders such as `%d` come through intact.
 
-When a `msgid` changes, General Translation translates the new text on the next run, so there's no fuzzy entry waiting for review before it ships; entries that didn't change reuse their earlier translations, and `--force` retranslates everything. If your PO files already have translations, run [`npx gt upload`](/docs/cli/reference/commands/upload) once first so General Translation starts from them. Hand edits to generated PO files are overwritten on the next run unless you sync them with `--save-local` or [`npx gt save-local`](/docs/cli/reference/commands/save-local).
+When a `msgid` changes, General Translation generates a translation of the new text on the next run; unchanged entries reuse their earlier translations. Import existing PO translations with [`npx gt upload`](/docs/cli/reference/commands/upload) before your first generation run. For later edits made in a local PO editor, [`npx gt save-local`](/docs/cli/reference/commands/save-local) saves them back to the platform before you generate again.
 
 What General Translation adds beyond filling in `msgstr` is the rest of the stack. A Glossary and Custom Prompts in a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) keep terms and tone consistent across your PO files and every other surface you translate, reviewers can [check and edit](/docs/platform/dashboard/guides/reviewing-translations) each PO entry, with the target language's plural forms, in the Dashboard, and the CLI runs in CI so each release ships with current catalogs.
 
-The tradeoffs: the CLI is a Node.js tool, so a C or PHP project adds `npx` to its build, and General Translation doesn't read or write `.mo` files, so `msgfmt` (or your platform's equivalent) still compiles the output. Translations are AI-generated, so review the ones that matter in the Dashboard; approval workflows require an Enterprise plan. Pricing is usage-based, with a $0 platform fee and unlimited users, projects, and languages on Starter ([pricing](https://generaltranslation.com/pricing)).
+Run the Node.js CLI in your build, then compile its PO output with `msgfmt`. Your application continues to load the compiled translations locally.
 
 ## GNU gettext vs. General Translation at a glance
 
 | Feature | GNU gettext | General Translation |
 | --- | --- | --- |
-| Extracts strings from code | Yes, `xgettext` | No; reads the POT template |
+| Extracts strings from code | Yes, `xgettext` | Reads your existing POT template |
 | Creates a file per language | Yes, `msginit` | Yes, from the template, for every configured locale |
 | Writes translations | Drafts with a local LLM since 1.0, for a translator to finish | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
 | After a source string changes | `msgmerge` marks it fuzzy until someone reviews it | Retranslated on the next run; unchanged entries reused |
 | Plural forms | `msginit` writes the header; you fill each slot | Writes the header and fills every slot |
 | Context for translation | `msgctxt`, translator comments, references, flags | The same, plus Glossary and Custom Prompts |
-| Compiles and looks up translations at run time | Yes, `msgfmt` and the gettext runtime | No; keeps using gettext's |
-| Cost | Free software | Usage-based, $0 platform fee on Starter |
+| Compiles and looks up translations at run time | Yes, `msgfmt` and the gettext runtime | Keeps your gettext compiler and runtime |
+| Cost | Free software | [Usage-based translation](https://generaltranslation.com/pricing) |
 
 ## When to use which
 
