@@ -1,13 +1,13 @@
 ---
 title: "General Translation vs. Weblate: which should you use?"
-summary: Weblate and General Translation both automate translation of existing catalogs. Choose Weblate for community participation, self-hosting, and broad file support. Choose GT for hosted generation and review connected to your build, with shared terminology across product surfaces and an inline option for React.
+summary: Choose General Translation to make translation part of development and releases, with code context for inline React content, shared terminology, and built-in review. Keep your existing gettext catalogs or write copy directly in components. Weblate fits projects organized around volunteer translation or a self-hosted translation platform.
 date: 2026-10-16
 category: workflow-tools
 authors: [kevin-wu, jackie]
 related: [general-translation-vs-tms, general-translation-vs-gettext, general-translation-vs-tolgee, general-translation-vs-django-i18n, best-localization-software]
 ---
 
-Weblate is an open-source translation platform built around Git, with human and automatic translation, review, and repository synchronization. General Translation generates translations through a CLI and hosted service, with Dashboard review. For an existing gettext app, both can produce the same PO files; the choice is how you want generation, review, and delivery to fit your team.
+General Translation connects translation generation to the code changes you ship. Run its CLI in CI, or use [Locadex](/docs/platform/locadex/quickstart) to prepare translation changes as pull requests. Your team reviews translations in the Dashboard, and the release includes the translated copy. For a Weblate project, you can start with the gettext files you already use.
 
 ## What Weblate does well
 
@@ -20,38 +20,6 @@ Weblate is an open-source translation platform built around Git, with human and 
 - **Quality checks.** [Dozens of checks](https://docs.weblate.org/en/latest/user/checks.html) cover placeholders, missing plural forms, maximum length, ICU MessageFormat syntax, and unchanged translations, and automatic fixups correct whitespace and ellipses.
 - **Community translation.** Volunteers can suggest translations and comment, reviewers approve them, and a project can [commit only approved strings](https://docs.weblate.org/en/latest/workflows.html). Screenshots, glossaries, and source references give translators context.
 
-## How each workflow handles new copy
-
-Consider the same Python gettext app in both workflows:
-
-```python title="app.py"
-import gettext
-t = gettext.translation("messages", localedir="locale", languages=["es"])
-_ = t.gettext
-print(_("Inbox"))
-print(_("No messages yet."))
-```
-
-If the Spanish catalog contains only the first message, either workflow renders:
-
-```text title="Output before translating the new message"
-Bandeja de entrada
-No messages yet.
-```
-
-That fallback shows an incomplete catalog. Both platforms can automate the work that closes the gap; neither removes Python's extraction, MO compilation, or deployment steps.
-
-| Step | Weblate | General Translation |
-| --- | --- | --- |
-| Extract | Regenerate the POT template and commit it; a webhook triggers synchronization | Regenerate the same POT template before running the GT CLI |
-| Translate | An automatic-translation add-on or people fill the PO entries, with configured checks and review | [`gt translate`](/docs/cli/reference/commands/translate) generates the PO entries using assigned terminology and prompts; reviewers can edit them in the Dashboard |
-| Deliver | Commit and push translations, or open a pull request, according to the project's workflow | Download translations in CI or commit reviewed outputs to the repository |
-| Release | Compile the PO files to MO files, test, and deploy | Compile the same PO files to MO files, test, and deploy |
-
-Weblate batches pending edits using lazy commits, but its default pending-change interval is not a mandatory release delay: [repository operations and explicit commits can flush changes earlier](https://docs.weblate.org/en/latest/vcs.html). Both workflows need a clear owner for each catalog when people or automation edit files concurrently.
-
-For this Python example, GT receives the catalog and its metadata. Switching translation providers does not automatically send the surrounding Python source. GT's additional inline JSX context applies when an application uses its React or Next.js libraries.
-
 Self-hosting Weblate is free. Hosted Weblate charges by hosted strings; see its [hosting plans](https://weblate.org/en/hosting/) for current allowances.
 
 ## Weblate vs. General Translation at a glance
@@ -60,33 +28,40 @@ Self-hosting Weblate is free. Hosted Weblate charges by hosted strings; see its 
 | --- | --- | --- |
 | Where strings live | Translation files in your repository, mirrored in Weblate components | In your code inside [`<T>`](/docs/react/reference/components/t), or in the resource files you already have |
 | How code connects | Weblate pulls from Git, then pushes commits or opens pull requests | [`npx gt translate`](/docs/cli/reference/commands/translate) in your build, or [Locadex](/docs/platform/locadex/quickstart) pull requests |
-| Who translates | Volunteers, your translators, machine translation, or LLMs | AI with context from your code, Glossary, and Custom Prompts, reviewed by your team in the Dashboard |
+| Who translates | Volunteers, your translators, machine translation, or LLMs | AI with inline code context or catalog content and metadata, plus assigned Glossary and Custom Prompts; your team reviews in the Dashboard |
 | Context for each string | Source references, screenshots, glossary, and translation memory | Inline blocks carry their marked element structure and context notes; catalogs carry file content and metadata. Assigned Context Groups supply Glossary and Custom Prompts |
-| File formats | About 50, including XLIFF, ARB, Fluent, and Java properties | JSON, YAML, PO, Markdown and MDX, iOS and Android strings, and more; no XLIFF, ARB, Fluent, or properties |
+| File formats | About 50, including XLIFF, ARB, Fluent, and Java properties | JSON, YAML, PO, Markdown and MDX, iOS and Android strings, and more |
 | Hosting | Self-hosted for free, or Hosted Weblate | Hosted platform; open-source libraries and CLI |
 | Pricing | Self-hosted free; hosted plans by hosted strings; free Libre plan for public libre projects | [Usage-based translation](https://generaltranslation.com/pricing) |
 | License | GPL-3.0-or-later | MIT-licensed CLI and JavaScript libraries |
 
 ## Why teams choose General Translation over Weblate
 
-For the gettext app above, GT offers a hosted generation and review workflow that fits directly into CI. Use the POT configuration below, run translation before MO compilation, and make successful validation a condition of release.
+GT brings generation, context, and review into your development workflow. In React and Next.js, copy stays readable inside [`<T>`](/docs/react/reference/components/t), with text, elements, variables, and branches translated together. For an existing gettext app, the CLI generates the PO files your application already loads.
 
-- **Translation in the release workflow.** The CLI generates new and changed content during CI and reuses unchanged translations. Weblate can also automate translation; GT's appeal here is running generation alongside the build with the same CLI used for other product content.
-- **Shared product terminology.** Assigned Context Groups apply Glossary terms and Custom Prompts across the app, docs, and marketing projects. Reviewers edit generated file translations in the Dashboard.
-- **Less platform administration.** GT runs the translation service. That removes the installation, upgrade, and backup work of self-hosted Weblate; Hosted Weblate also removes that administration.
-- **An inline option for React.** In a React or Next.js app, GT can translate marked JSX with its element and branch structure. That is a separate integration choice from translating this Python app's existing PO files.
+- **Faster.** Run [`npx gt translate`](/docs/cli/reference/commands/translate) before your build to generate new and changed content and reuse existing translations. Or configure Locadex to open a pull request when code changes. Translation follows your release process, so new copy can ship translated with the feature that introduces it.
+- **Cheaper to run.** Moving from self-hosted Weblate removes a translation server from your team's installation, upgrade, and backup responsibilities. GT also includes unlimited reviewer seats, so you can involve translators, product managers, and regional reviewers without per-seat charges. See [pricing](https://generaltranslation.com/pricing) for usage rates.
+- **Higher quality.** Inline component structure and developer-provided notes give GT the context to distinguish a document's “Save” action from “Save money.” For catalog workflows, file content and metadata accompany your assigned [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations). Share those instructions across the app, docs, and marketing site to keep product terminology consistent, then refine translations in the [Dashboard editor](/docs/platform/dashboard/guides/reviewing-translations).
+- **Lower risk.** Adopt GT without rewriting your gettext application: keep its message calls, PO files, and MO compilation, and add generation to CI. Translations remain files you can review and version in your repository. GT's CLI and JavaScript libraries are MIT-licensed, and the gettext app continues to load its compiled translations locally.
 
-Keep catalog changes in your normal pull request and release checks. GT-generated files can still conflict with concurrent edits, so automation needs ownership rules just as Weblate does.
-
-Profound uses General Translation across its platform and docs. See [production deployments](https://generaltranslation.com/enterprise) and [pricing](https://generaltranslation.com/pricing). Choose Weblate when volunteer coordination or running the whole translation platform yourself matters most.
+[Profound uses General Translation](https://generaltranslation.com/enterprise) across its platform and docs, an example of using one translation platform for both product and documentation.
 
 ## When Weblate is the better fit
 
-Choose Weblate when an open-source project wants volunteers to translate it, when you need to self-host the whole platform under a copyleft license, or when you work in formats General Translation doesn't support, such as XLIFF, ARB, Fluent, Java properties, PHP arrays, or Qt Linguist files. Choose General Translation when most of your product's text lives in React, Next.js, or Vue code, or in JSON, YAML, PO, or Markdown files, and you want every release to ship in every language.
+Choose Weblate when volunteer participation is central to your project, you want to operate the translation platform yourself, or its XLIFF, ARB, Fluent, and other format integrations fit your existing toolchain. Its community workflows, self-hosting, and broad format support are established strengths.
 
 ## Using both on gettext files
 
-General Translation's CLI translates the same gettext files Weblate reads. Point a `pot` entry at your template and map each output to the folder layout Weblate uses:
+You can add GT's generation to an existing gettext project while keeping Weblate for community translation. The application keeps its message calls and catalog layout. Here's where each platform fits:
+
+| Step | Weblate | General Translation |
+| --- | --- | --- |
+| Extract | Regenerate the POT template and commit it; a webhook triggers synchronization | Regenerate the POT template before running the GT CLI |
+| Translate | An automatic-translation add-on or people fill the PO entries, with configured checks and review | [`gt translate`](/docs/cli/reference/commands/translate) generates PO entries using assigned terminology and prompts; reviewers can edit them in the Dashboard |
+| Deliver | Commit and push translations, or open a pull request, according to the project's workflow | Download translations in CI or commit reviewed outputs to the repository |
+| Release | Compile PO files to MO files, test, and deploy | Compile PO files to MO files, test, and deploy |
+
+Point a `pot` entry at your template and map each output to the folder layout Weblate uses:
 
 ```json title="gt.config.json"
 {
@@ -109,10 +84,10 @@ With `gt` 2.26.5, this config maps `locale/messages.pot` to `locale/es/LC_MESSAG
 
 ## Is General Translation an alternative to Weblate?
 
-Yes, for supported catalogs such as PO, JSON, and YAML, and for teams choosing GT's inline React workflow. Both platforms can automate translation. GT combines hosted generation, shared terminology, and Dashboard review with a CLI that runs in your build. Weblate offers volunteer workflows, self-hosting, and broader file-format support.
+Yes. Choose General Translation when you want translation generated alongside development, guided by product context, and reviewed in one platform. You can keep existing PO, JSON, or YAML catalogs, or use inline authoring in React, Next.js, and Vue. For a gettext project, start with the POT configuration above; for a React app, start with the [React quickstart](/docs/react/react-quickstart).
 
 ## Key takeaways
 
-- Weblate combines Git synchronization, automatic and human translation, review, and community participation, with free self-hosting.
-- For the same gettext app, both workflows still extract messages, produce PO files, compile MO files, and deploy. Configure automation and review before comparing release time.
-- GT adds hosted translation generation and shared product context to existing catalogs. Its inline JSX workflow offers richer structural context when you use its React libraries.
+- Choose General Translation to connect translation generation and review to the releases you already ship, with shared product terminology across your app and docs.
+- Keep your existing gettext application and catalogs, or use inline components to give GT the structure and context of your React UI.
+- Weblate remains a fit for community-led translation and self-hosting. You can introduce GT language by language while keeping volunteer translation in Weblate.
