@@ -38,7 +38,7 @@ Here's `missing` and `unused` on a small Rails app with English, Polish, and Spa
 
 That report is accurate and useful. Filling the gaps is where the work stays with you:
 
-- **The translator sees values, not context.** In a run with the Google backend's network call stubbed out, `translate-missing es` sent this list and nothing else: no keys, no file, no view.
+- **The Google backend sends values.** In a run with that backend's network call stubbed out, `translate-missing es` sent this list and nothing else: no keys, no file, no view. This probe doesn't describe every backend: DeepL supports configured glossaries, and OpenAI supports system and per-locale prompts.
 
   ```text
   ["Inbox", "You have X__0 unread message.", "You have X__0 unread messages.", "Archived"]
@@ -50,7 +50,7 @@ That report is accurate and useful. Filling the gaps is where the work stays wit
 
 ## Where General Translation fits
 
-General Translation replaces the `translate-missing` step, not the checks. Point the `gt` CLI at your English file and run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI. It writes every target locale, and on later runs it reuses translations for unchanged entries and retranslates the ones whose English changed. Each run uses your project's [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations), so terms and tone stay the same in every file, and your team can [review and edit translations](/docs/platform/dashboard/guides/reviewing-translations) in the Dashboard. Pricing is usage-based, with a $0 platform fee and unlimited users, projects, and languages on Starter ([pricing](https://generaltranslation.com/pricing)).
+General Translation replaces the `translate-missing` step, not the checks. Point the `gt` CLI at your English file and run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI. It writes every target locale, and on later runs it reuses translations for unchanged entries and retranslates the ones whose English changed. Each run uses your project's [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations), so terms and tone stay the same in every file, and your team can [review and edit translations](/docs/platform/dashboard/guides/reviewing-translations) in the Dashboard.
 
 Know the tradeoffs. General Translation doesn't scan Ruby code, so it can't tell you a key is missing or unused. It also translates the plural forms your English file has and doesn't add Polish `few` or `many`. Its YAML support keeps keys, including the root locale key, so a Rails `es.yml` comes back rooted at `en:` and needs a rename step after each run; [General Translation vs. Rails I18n](/kb/general-translation-vs-rails-i18n) has a tested script. And it runs on Node.js and needs a General Translation project, where i18n-tasks is a gem in your Gemfile.
 
@@ -63,10 +63,10 @@ Know the tradeoffs. General Translation doesn't scan Ruby code, so it can't tell
 | Missing plural forms | Reports them | Doesn't add them |
 | Sorts, moves, and renames keys | Yes | No |
 | Machine translation | `translate-missing`, through a provider you choose | [`npx gt translate`](/docs/cli/reference/commands/translate) |
-| What the translator sees | String values in batches, placeholders masked | Your file's strings, plus your Glossary and Custom Prompts |
+| Translation context | Backend-dependent: string values, with configurable DeepL glossaries or OpenAI prompts | File content and assigned Glossary and Custom Prompts, managed with Dashboard review |
 | When English changes | Existing translations stay | Changed entries are retranslated |
 | Review | Git diff | Dashboard and Git diff |
-| Cost | Free gem; provider bills per character or token | Usage-based |
+| Cost | Free gem; provider bills per character or token | [Usage-based translation](https://generaltranslation.com/pricing) |
 
 Choose i18n-tasks alone when translators write your locale files and you need CI to catch missing and unused keys, or when you only want a quick machine draft for a few strings. Use General Translation when you want every locale regenerated as the English changes, with consistent terminology and a review step, and keep i18n-tasks for the checks General Translation doesn't do.
 
@@ -87,5 +87,5 @@ Each `i18n-tasks` command exits with status 1 on a problem, so the job fails bef
 ## Key takeaways
 
 - i18n-tasks finds missing, unused, and incomplete plural keys in Rails apps and fails CI when it does. That's work General Translation doesn't do.
-- Its `translate-missing` sends bare string values to a provider, fills only keys that don't exist yet, and can write English into a locale file if the provider call fails.
+- `translate-missing` fills keys that don't exist yet; context options depend on the provider. In the tested Google backend failure, it wrote English into the locale file and exited successfully.
 - General Translation translates whole locale files with your Glossary and Custom Prompts and keeps them current as English changes; run it before i18n-tasks checks in the same CI job.

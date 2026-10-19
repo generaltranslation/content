@@ -65,11 +65,11 @@ General Translation's CLI translates nestjs-i18n's catalogs where they are. Poin
 
 Plurals need planning. The CLI builds each translated catalog from the English file's structure, so a plural object gets the categories English has, `one` and `other`. General Translation doesn't add Polish `few` and `many`, and keys you add by hand to one language are dropped when that file is translated again. One way to handle it is to list every category your languages need in the English file (English never selects `few` or `many`), which also keeps `nestjs-i18n check` passing, and then review those forms in the Dashboard.
 
-For content that only exists at run time, such as a teammate's post or a database record, use General Translation's [`gt-node`](/docs/node/quickstart). Initialize it once, bind each request's locale with [`withGT`](/docs/node/reference/functions/with-gt), and call [`tx`](/docs/node/reference/functions/tx) in a controller:
+For content that only exists at run time, such as a teammate's post or a database record, use General Translation's [`gt-node`](/docs/node/quickstart). Initialize it once, then pass nestjs-i18n's resolved language to [`withGT`](/docs/node/reference/functions/with-gt) before calling [`tx`](/docs/node/reference/functions/tx). This example assumes the existing `I18nModule` has its catalogs and [resolvers](https://nestjs-i18n.com/concepts/resolver) configured, and `PostsService` returns the post's English source text.
 
 ```ts title="src/main.ts"
 import { NestFactory } from '@nestjs/core';
-import { getRequestLocale, initializeGT, withGT } from 'gt-node';
+import { initializeGT } from 'gt-node';
 import { AppModule } from './app.module';
 
 // Reads GT_PROJECT_ID and GT_API_KEY (a project key with Runtime translation) from the environment.
@@ -77,8 +77,6 @@ initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'pl', 'de'] });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  // Bind the request's locale for gt-node.
-  app.use((req, res, next) => withGT(getRequestLocale(req), () => next()));
   await app.listen(3000);
 }
 bootstrap();
@@ -86,7 +84,8 @@ bootstrap();
 
 ```ts title="src/posts.controller.ts"
 import { Controller, Get, Param } from '@nestjs/common';
-import { tx } from 'gt-node';
+import { I18n, I18nContext } from 'nestjs-i18n';
+import { tx, withGT } from 'gt-node';
 import { PostsService } from './posts.service';
 
 @Controller('posts')
@@ -94,15 +93,16 @@ export class PostsController {
   constructor(private readonly posts: PostsService) {}
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const post = await this.posts.findOne(id);
-    // Translated on demand into the request's locale.
-    return { ...post, body: await tx(post.body, { $context: 'A post written by a user' }) };
+  async findOne(@Param('id') id: string, @I18n() i18n: I18nContext) {
+    return withGT(i18n.lang, async () => {
+      const post = await this.posts.findOne(id);
+      return { ...post, body: await tx(post.body, { $context: 'A post written by a user' }) };
+    });
   }
 }
 ```
 
-That's all the glue it needs: Nest's default Express adapter runs the middleware, and [`withGT`](/docs/node/reference/functions/with-gt) keeps the locale for the rest of the request alongside nestjs-i18n's own context. [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) reads `Accept-Language`; to follow nestjs-i18n's resolvers instead, pass the language they chose. [`tx`](/docs/node/reference/functions/tx) makes a network request when a string isn't cached, and without credentials it returns the source text, so keep it for dynamic content and let catalogs hold your fixed copy.
+The `@I18n()` parameter supplies the language selected by nestjs-i18n. [`withGT`](/docs/node/reference/functions/with-gt) uses it throughout the async callback, including nested service calls. If `QueryResolver` takes priority over `AcceptLanguageResolver`, a request with `?lang=es` and `Accept-Language: en` uses Spanish for both catalog lookups and GT's dynamic translation. Keep the supported locales aligned in both libraries. [`tx`](/docs/node/reference/functions/tx) makes a network request when a string isn't cached, and without credentials it returns the source text, so keep it for dynamic content and let catalogs hold your fixed copy.
 
 Two tradeoffs to know. In `gt` 2.26.5, the CLI's source scanner can't parse TypeScript files that use decorators, so it skips Nest controllers and services; register fixed `gt-node` strings with [`msg`](/docs/node/reference/functions/msg) in plain modules, or keep them in nestjs-i18n catalogs. And General Translation doesn't generate key types, which is one more reason to keep nestjs-i18n for rendering. What it adds is the translating itself, with a Glossary and Custom Prompts that hold terms and tone across projects, and review in the Dashboard. (See [Reviewing translations](/docs/platform/dashboard/guides/reviewing-translations).)
 
@@ -112,11 +112,11 @@ Two tradeoffs to know. In `gt` 2.26.5, the CLI's source scanner can't parse Type
 | --- | --- | --- |
 | Role | Resolves the request language and renders messages from catalogs | Translates catalogs, and translates dynamic content at run time |
 | Translates your content | No | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) and [`tx`](/docs/node/reference/functions/tx) |
-| Language detection | Query, header, cookie, `Accept-Language`, GraphQL, gRPC, and custom resolvers | [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) reads `Accept-Language` |
+| Language selection in this integration | The configured resolver order selects the language | [`withGT`](/docs/node/reference/functions/with-gt) uses the language selected by nestjs-i18n |
 | Plurals | Per-language category keys, chosen with `Intl.PluralRules` | Translates the plural keys your source file has |
 | Type safety | Generated key types and a missing-key check | None for catalogs |
 | Validation messages | class-validator integration | Translates the catalogs those messages come from |
-| Cost | Free and MIT-licensed | Usage-based; $0 platform fee and unlimited users, projects, and languages on [Starter](https://generaltranslation.com/pricing) |
+| Cost | Free and MIT-licensed | [Usage-based translation](https://generaltranslation.com/pricing) |
 
 ## When to use which
 
@@ -125,12 +125,13 @@ Keep nestjs-i18n for rendering: its resolvers, typed keys, and validation integr
 ## Using both
 
 1. Leave nestjs-i18n and its folders as they are.
-2. Add `gt.config.json` with your catalog path, and run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI with `GT_API_KEY` and `GT_PROJECT_ID` set. (See [Configuring the CLI](/docs/cli/guides/configuring#credentials).)
-3. Upload the translations you already have with [`npx gt upload`](/docs/cli/reference/commands/upload) so the Dashboard starts from your current catalogs.
-4. Add `gt-node` only where you need runtime translation.
+2. Add `gt.config.json` with your catalog path and set `GT_API_KEY` and `GT_PROJECT_ID`. (See [Configuring the CLI](/docs/cli/guides/configuring#credentials).)
+3. Before generating translations, run [`npx gt upload`](/docs/cli/reference/commands/upload) to import your existing sources and translated catalogs. Check a known reviewed translation in the Dashboard against the committed file.
+4. Change one source string and run [`npx gt translate`](/docs/cli/reference/commands/translate). Inspect the diff and confirm that unrelated reviewed translations remain intact before adding the command to CI. Preserve later local translation edits with the opt-in [`--save-local`](/docs/cli/reference/commands/translate) step or [`gt save-local`](/docs/cli/reference/commands/save-local).
+5. Add `gt-node` only where you need runtime translation, using nestjs-i18n's resolved language as above.
 
 ## Key takeaways
 
 - nestjs-i18n handles language detection, typed keys, plurals, and validation messages in NestJS, but every catalog in every language is yours to write, including each language's plural forms.
-- General Translation's CLI translates nestjs-i18n's JSON catalogs in place, and `gt-node` translates dynamic content per request with a single middleware.
+- General Translation's CLI translates nestjs-i18n's JSON catalogs in place; `gt-node` translates dynamic content using the same resolved language.
 - Use them together: nestjs-i18n renders, General Translation translates.
