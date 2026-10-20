@@ -1,0 +1,147 @@
+---
+title: What is pseudo-localization?
+summary: Pseudo-localization is a test that replaces your source text with an automatically altered version, adding accents, padding it longer, and wrapping it in brackets, or flipping it right to left, so you can find hardcoded strings, truncation, font problems, and concatenated sentences before any real translation exists.
+date: 2026-10-20
+category: internationalization
+related: [find-hardcoded-strings, right-to-left-css, multilingual-app-launch-checklist, internationalization-vs-localization]
+---
+
+Pseudo-localization (also written pseudolocalization) tests whether your code is ready for translation, not whether a translation is good. Because the altered text stays readable, anyone on the team can click through the app in a pseudo-locale and spot what breaks. It runs in seconds, costs nothing, and works from the first day of development.
+
+## What pseudo-localization is
+
+[Microsoft's globalization docs](https://learn.microsoft.com/en-us/globalization/methodology/pseudolocalization) split it into two parts:
+
+- **Pseudotranslation** transforms the strings themselves: "Save changes" becomes something like `[Šáṽé çĥáñĝéš~~~~~]`.
+- **Pseudo-locales** are fake locale codes, such as Windows' `qps-ploc` or Android's `en-XA`, that you can select like a real language. Some also carry deliberately unusual date, time, and number formats to test formatting code.
+
+Microsoft recommends codes that are well-formed but will never describe a real locale, such as the Windows `qps-` codes, which sit in a range BCP 47 reserves for private use. It learned this the hard way: its first pseudo-locale was `tk-TM` (Turkmen, Turkmenistan), which later shipped as a real Windows locale and collided with build and test systems.
+
+## What it catches
+
+- **Hardcoded strings.** Any text that didn't go through your i18n layer stays plain English while everything around it is accented, so it stands out on every screen. (For finding these in code, see [How do I find hardcoded strings that aren't translated?](/kb/find-hardcoded-strings))
+- **Truncation and overflow from text expansion.** Padded strings show which buttons, tabs, and table headers clip, wrap badly, or push controls off screen.
+- **Encoding and font problems.** Accented and non-Latin characters reveal broken encodings, fonts without the glyphs, and line heights that cut off diacritics.
+- **Concatenation.** A sentence assembled from fragments shows up as several bracketed pieces, `[Ýöû ĥáṽé~~~~] 3 [íţéɱš~~]`, instead of one, which tells you translators would get the fragments without the sentence.
+- **Missing right-to-left support.** An RTL pseudo-locale shows whether the layout mirrors, which icons need flipping, and where left-to-right values break. (See [How do I support right-to-left languages in CSS?](/kb/right-to-left-css))
+
+## Typical transformations
+
+Most tools combine some of these:
+
+- **Accents and other scripts.** Replace `a` with characters like `á`, `ä`, or `å`, and digits with circled digits, as Microsoft's guide suggests.
+- **Expansion.** Lengthen each string. For English sources, Microsoft suggests about 40% as a heuristic, and notes that some strings run 200% or even 400% longer once translated, with one- or two-word strings growing the most.
+- **Delimiters.** Wrap each string in markers such as brackets or carets. A missing closing marker means the text was truncated.
+- **Identifiers.** Optionally add a short ID to each string so a tester can find its source.
+- **Right-to-left.** Reverse the text direction so the UI behaves as it would in Arabic or Hebrew, as Android's `ar-XB` and Windows' mirrored `qps-plocm` do.
+
+Translations also get shorter. On General Translation's landing page, "Save changes" is 63% wider in German than in English, but 25% narrower in Japanese and Arabic and 18% narrower in Hebrew. Pseudo-localization usually simulates only growth, because shrinkage causes fewer layout problems and is hard to simulate.
+
+## Built-in pseudo-locales by platform
+
+| Platform | Pseudo-locales | What they do | How to turn them on |
+| --- | --- | --- | --- |
+| Android | `en-XA`, `ar-XB` | `en-XA` adds accents, expands text, and brackets each message; `ar-XB` switches messages to right-to-left | `pseudoLocalesEnabled` on the debug build type, then pick the pseudo-locale in the device's language settings |
+| Xcode (iOS, macOS) | Double-Length, Right-to-Left, Accented, Bounded String, Tall, and other pseudolanguages | Double string length, flip direction, add accents, wrap strings to expose truncation, add vertical height | **Product > Scheme > Edit Scheme > Run > Options**, then choose from the **App Language** menu |
+| Windows | `qps-ploc`, `qps-plocm`, `qps-ploca` (plus `qps-Latn-x-sh` from Windows 10) | Base, mirrored (right-to-left), and East Asian pseudo-locales with test data for dates, fonts, and string lengths | Pass the pseudo-locale name to the NLS APIs, such as `GetLocaleInfoEx`; Microsoft's Multilingual App Toolkit pseudo-translates resources |
+| Lingui (JavaScript) | Any locale you name, such as `pseudo-LOCALE` | Generates accented messages at compile time, with an optional right-to-left variant | The `pseudoLocale` key in the Lingui config |
+
+On Android, the [pseudolocales guide](https://developer.android.com/guide/topics/resources/pseudolocales) enables them in the module's Gradle file:
+
+```kotlin title="build.gradle.kts"
+android {
+    buildTypes.getByName("debug") {
+        isPseudoLocalesEnabled = true
+    }
+}
+```
+
+The [Gradle reference](https://developer.android.com/reference/tools/gradle-api/8.3/null/com/android/build/api/dsl/BuildType) notes that a `resourceConfigurations` filter can strip the pseudo-locale resources from the APK. In Xcode, the same scheme sheet also has **Show non-localized strings**, which renders strings Xcode won't export in all caps. (See Apple's [Preparing your interface for localization](https://developer.apple.com/documentation/xcode/preparing-your-interface-for-localization).) Windows lists its codes on the [Pseudo-Locales](https://learn.microsoft.com/en-us/windows/win32/intl/pseudo-locales) page and notes that they aren't enumerated as system locales by default ([Using pseudo-locales](https://learn.microsoft.com/en-us/windows/win32/intl/using-pseudo-locales-for-localization-testing)), and Lingui documents its setup in the [pseudolocalization guide](https://lingui.dev/guides/pseudolocalization).
+
+## Pseudo-localize strings in JavaScript
+
+On the web there's no built-in pseudo-locale, but a transform is a few lines. This one accents ASCII letters, pads by about 40%, and brackets the result, while leaving `{placeholders}` and HTML tags untouched so interpolation and markup still work:
+
+```js title="pseudo.mjs"
+// Accented look-alikes for ASCII letters
+const ACCENTS = {
+  a: 'á', b: 'ƀ', c: 'ç', d: 'ð', e: 'é', f: 'ƒ', g: 'ĝ', h: 'ĥ', i: 'í',
+  j: 'ĵ', k: 'ķ', l: 'ļ', m: 'ɱ', n: 'ñ', o: 'ö', p: 'þ', q: 'ǫ', r: 'ŕ',
+  s: 'š', t: 'ţ', u: 'û', v: 'ṽ', w: 'ŵ', x: 'ẋ', y: 'ý', z: 'ž',
+  A: 'Á', B: 'Ɓ', C: 'Ç', D: 'Ð', E: 'É', F: 'Ƒ', G: 'Ĝ', H: 'Ĥ', I: 'Í',
+  J: 'Ĵ', K: 'Ķ', L: 'Ļ', M: 'Ṁ', N: 'Ñ', O: 'Ö', P: 'Þ', Q: 'Ǫ', R: 'Ŕ',
+  S: 'Š', T: 'Ţ', U: 'Û', V: 'Ṽ', W: 'Ŵ', X: 'Ẋ', Y: 'Ý', Z: 'Ž',
+};
+
+// Placeholders like {name} and tags like <b> must survive untouched
+const PROTECTED = /(\{[^}]*\}|<[^>]+>)/;
+
+export function pseudoLocalize(text, { expansion = 0.4 } = {}) {
+  const accented = text
+    .split(PROTECTED)
+    .map((part, i) =>
+      i % 2 === 1 ? part : part.replace(/[A-Za-z]/g, (ch) => ACCENTS[ch])
+    )
+    .join('');
+  // Pad by about 40% of the source length to simulate longer translations
+  const padding = '~'.repeat(Math.ceil(text.length * expansion));
+  // Brackets show where a string starts and ends, so truncation is visible
+  return `[${accented}${padding}]`;
+}
+```
+
+```js title="demo.mjs"
+import { pseudoLocalize } from './pseudo.mjs';
+
+for (const source of ['Save changes', 'Hello, {name}!', 'Read the <a>terms</a>']) {
+  console.log(pseudoLocalize(source));
+}
+```
+
+Running `node demo.mjs` with Node.js 24:
+
+```text title="Output"
+[Šáṽé çĥáñĝéš~~~~~]
+[Ĥéļļö, {name}!~~~~~~]
+[Ŕéáð ţĥé <a>ţéŕɱš</a>~~~~~~~~~]
+```
+
+To use it, apply it to every message your i18n layer returns while a debug flag or a fake locale is active. Then a concatenated sentence gives itself away:
+
+```js title="concatenation.mjs"
+import { pseudoLocalize } from './pseudo.mjs';
+
+// ❌ Three pieces: translators never see the whole sentence
+console.log(pseudoLocalize('You have') + ' 3 ' + pseudoLocalize('items'));
+// ✅ One message with a placeholder
+console.log(pseudoLocalize('You have {count} items'));
+```
+
+```text title="Output"
+[Ýöû ĥáṽé~~~~] 3 [íţéɱš~~]
+[Ýöû ĥáṽé {count} íţéɱš~~~~~~~~~]
+```
+
+The placeholder regex handles simple `{name}` variables. ICU plural and select messages nest braces, so pseudo-localize the formatted output instead of the raw message. The same applies to the [`pseudo-localization`](https://github.com/tryggvigy/pseudo-localization) npm package: its `pseudoLocalizeString('Hello, {name}!')` returns `Ħḗḗŀŀǿǿ, {ƞȧȧḿḗḗ}!`, accenting the placeholder name too, so run it on translated output as its README shows. That package also has a `bidi` strategy for right-to-left testing and a DOM mode that pseudo-localizes a whole page. For an RTL check of your own, set `dir="rtl"` on the `<html>` element while the pseudo-locale is active.
+
+## What pseudo-localization doesn't test
+
+Pseudo-localization says nothing about translation quality, word order, or tone. It also can't exercise plural rules: English has 2 plural forms and Arabic has 6, and an accented English string still has English's 2. Microsoft's guide says it "isn't a complete replacement" for validating the translated application, so test real languages before launch, too. The [multilingual app launch checklist](/kb/multilingual-app-launch-checklist) covers what to check.
+
+## Pseudo-localization and General Translation
+
+General Translation doesn't have a pseudo-localization feature or a pseudo-locale. It closes the same gap a different way: real translations are fast to generate, so you can test with German, Arabic, and Japanese while you build instead of a simulation.
+
+- **During development.** With a project API key that has runtime translation permission, `gt-next` translates content on demand in development, so switching the app to German shows how much longer your UI text gets as you work. (See the [Next.js Quickstart](/docs/react/nextjs-quickstart).)
+- **Before a release.** [`npx gt translate`](/docs/cli/reference/commands/translate) generates translations for every locale in `gt.config.json`, including a right-to-left locale such as `ar` or `he` to test mirroring with translated text.
+- **Untranslated text stands out.** Content outside [`<T>`](/docs/react/reference/components/t) or a translation function stays in the source language when you switch locales, the same signal pseudo-localization gives you.
+- **Mistakes caught in code.** The [ESLint plugin](/docs/react/guides/linting-your-code) flags dynamic content inside [`<T>`](/docs/react/reference/components/t) that isn't wrapped in a variable component, and non-static strings passed to translation functions.
+
+Pseudo-localization is still useful alongside this: it's instant, needs no API key, and lets testers who don't read German click through a stretched UI.
+
+## Key takeaways
+
+- Pseudo-localization replaces source text with accented, padded, bracketed, or mirrored versions to find i18n bugs before translation starts.
+- It catches hardcoded strings, truncation, font and encoding problems, concatenated sentences, and missing right-to-left support.
+- Android (`en-XA`, `ar-XB`), Xcode (pseudolanguages in the scheme options), and Windows (`qps-ploc`, `qps-plocm`, `qps-ploca`) have it built in; on the web, a short transform function or the `pseudo-localization` package does the job.
+- It doesn't test translation quality or plural rules. General Translation has no pseudo-localization feature, but it generates translations during development, so you can test translated text length and right-to-left layouts early.

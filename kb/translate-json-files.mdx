@@ -1,0 +1,169 @@
+---
+title: What's the best way to translate JSON locale files?
+summary: Use a tool that parses the JSON and translates only the string values, leaves keys, placeholders such as {{name}}, and markup unchanged, adds the plural forms each target language needs, and gives the translator context for short strings. Then check the output against the source, because pasting the file into a generic translator often breaks one of these.
+date: 2026-10-20
+category: translation
+related: [icu-message-format, i18n-key-naming, general-translation-vs-i18n-libraries, i18n-without-translation-files, is-ai-translation-accurate]
+---
+
+This answer covers the locale files that i18n libraries such as i18next, react-intl, next-intl, and vue-i18n load, where each key maps to a UI string. Arbitrary data JSON (API responses, product catalogs) needs a different approach, because there you choose field by field what to translate.
+
+## What JSON locale files look like
+
+Most locale files follow one of two shapes. A flat file uses dotted keys, and a nested file groups keys into objects:
+
+```json title="locales/en/common.json"
+{
+  "nav": { "home": "Home", "save": "Save" },
+  "greeting": "Hello, {{name}}!",
+  "inbox_one": "You have {{count}} new message",
+  "inbox_other": "You have {{count}} new messages",
+  "terms": "Read our <1>terms</1> before you continue."
+}
+```
+
+The string syntax inside depends on the library, and a translation has to keep it intact:
+
+- **i18next** interpolates with double braces (`{{name}}`) and stores plurals as separate keys with [suffixes](https://www.i18next.com/translation-function/plurals) such as `_one`, `_few`, `_many`, and `_other`, following each language's plural rules. react-i18next's `<Trans>` component adds numbered tags such as `<1>terms</1>`.
+- **react-intl and next-intl** store ICU messages, where placeholders use single braces and plurals live inside the string: `{count, plural, one {# message} other {# messages}}`. (See [What is ICU message format?](/kb/icu-message-format)).
+- **vue-i18n** uses single-brace placeholders and separates plural forms with a pipe: `no apples | one apple | {count} apples` ([vue-i18n pluralization](https://vue-i18n.intlify.dev/guide/essentials/pluralization)).
+
+How the keys are named matters too, because a translator often sees nothing but the key and the value. (See [How should I name i18n translation keys?](/kb/i18n-key-naming)).
+
+## What goes wrong when you paste JSON into a translator
+
+A general-purpose translator treats the file as text, so the structure is at risk:
+
+- **Keys get translated.** `"nav"` becomes `"nawigacja"`, and the app can no longer find the string.
+- **Placeholders change.** `{{name}}` becomes `{{nombre}}`, or a brace goes missing, and interpolation fails at run time.
+- **Tags break.** `<1>terms</1>` gets translated, renumbered, or dropped, so the link no longer wraps the right words.
+- **The file stops being valid JSON.** Curly quotes, an unescaped `"` inside a translated string, or a trailing comma make the whole file fail to parse.
+- **Plural forms are missing.** English has two plural categories; Polish has four (`one`, `few`, `many`, `other`) and Arabic six ([CLDR plural rules](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html)). Translating `inbox_one` and `inbox_other` leaves Polish without `inbox_few` and `inbox_many`, so "5 messages" has no correct Polish form to show.
+- **Short strings lose their meaning.** `"save": "Save"` in German is *speichern* (store a file) or *sparen* (spend less), and the key alone rarely says which.
+
+## Ways to translate JSON locale files
+
+| Approach | Keys and placeholders | Plural forms | Context for short strings | Keeping up with changes |
+| --- | --- | --- | --- | --- |
+| By hand, or a translator working in the file | Safe if the person is careful | The person adds them, if they know the rules | The person can ask | Manual for every change |
+| Online JSON translator (upload a file, download a translation) | Varies by tool; test with a placeholder-heavy file first | Varies by tool | Varies by tool | Re-upload the file for each change |
+| Script against the DeepL or Google Cloud Translation API | You walk the JSON and send only values; DeepL's document API also accepts `.json` and protects placeholders by default | You generate the missing keys yourself | DeepL's `context` parameter; Google has none per string | You rerun the script and diff the output |
+| Prompt an LLM with the file | Usually kept, but nothing guarantees it | Added if you ask and name the categories | Whatever you put in the prompt | You rerun the prompt and validate every run |
+| Translation management system (TMS) | Parsed by format, so keys are safe | Depends on the TMS and file format | Screenshots, comments, and descriptions per key | Sync files through the TMS's repository integration |
+| General Translation CLI | Parsed by format; i18next and next-intl syntax kept | Run the check below for languages with more categories | Keyed metadata per string, plus Glossary and Custom Prompts | [`npx gt translate`](/docs/cli/reference/commands/translate) translates what changed on each run |
+
+Two of the scripted options need more detail. DeepL's [document API](https://developers.deepl.com/api-reference/document) lists `json` as a supported format and, by default, keeps placeholders such as `{stars}` or `{{userName}}` verbatim and protects ICU plural skeletons, translating only their branch text. Google's [document translation](https://docs.cloud.google.com/translate/docs/advanced/translate-documents) accepts Office files and PDFs but not JSON, and the consumer Google Translate site takes only `.docx`, `.pdf`, `.pptx`, and `.xlsx` uploads, so with Google you extract the string values and send them to the text API yourself.
+
+Use a careful manual pass or DeepL's document API when you translate a small file once. Use a script or an LLM prompt when you'll own the validation and rerun it yourself. Use a [translation management system](/kb/what-is-a-translation-management-system) when a team of translators works outside the codebase. Use a CLI that runs in your build, such as General Translation's, when the files live in your repository and change with every release.
+
+## How to translate JSON files with General Translation
+
+General Translation's CLI, `gt`, translates JSON files regardless of which i18n library you use. It needs Node.js 20 or later and a project with a `package.json`.
+
+1. Install the CLI and run the setup wizard, which creates `gt.config.json` and signs you in when it needs to (otherwise, run [`npx gt login`](/docs/cli/reference/commands/login) and set `GT_PROJECT_ID`):
+
+   ```bash
+   npm install gt --save-dev
+   npx gt init
+   ```
+
+2. Point the `files.json.include` pattern at your source files in `gt.config.json`. The `[locale]` placeholder tells the CLI where to read the source locale and where to write each target locale:
+
+   ```json title="gt.config.json"
+   {
+     "defaultLocale": "en",
+     "locales": ["de", "es", "pl"],
+     "files": {
+       "json": {
+         "include": ["locales/[locale]/*.json"]
+       }
+     }
+   }
+   ```
+
+3. Translate. The CLI reads every file under `locales/en/`, translates it, and writes `locales/de/`, `locales/es/`, and `locales/pl/`, ready to commit:
+
+   ```bash
+   npx gt translate
+   ```
+
+If your `package.json` declares `i18next` (including react-i18next and next-i18next projects with `i18next` as a direct dependency) or `next-intl`, the CLI detects it and preserves that library's string syntax, including ICU messages. Other libraries' custom syntax, such as vue-i18n's pipe-separated plurals, may translate less accurately. Run [`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) first to list the files the CLI found without sending anything to the API. (See the [JSON format reference](/docs/cli/reference/formats/json-files) and [`gt translate`](/docs/cli/reference/commands/translate)).
+
+To give a short string its meaning, add a companion file next to the source with the same keys. The `context` note resolves "Save", and `maxChars` asks for a translation that fits a button:
+
+```json title="locales/en/common.metadata.json"
+{
+  "nav": {
+    "save": {
+      "context": "Editor toolbar button. Save means write the document to disk.",
+      "maxChars": 12
+    }
+  }
+}
+```
+
+The CLI detects the companion file, checks that its keys exist in the source, and sends the notes with each string. (See [Keyed metadata](/docs/cli/reference/keyed-metadata)). Glossary terms and Custom Prompts from the Context Groups assigned to your project apply as well, and reviewers can edit JSON translations under **Files** on the Dashboard's **Translations** page. On later runs, the CLI translates only content whose source changed. If you'd rather not keep JSON files at all, see [Can I do i18n without translation files?](/kb/i18n-without-translation-files) or the comparison in [General Translation vs. i18next, react-intl, and next-intl](/kb/general-translation-vs-i18n-libraries).
+
+## Check the translated files before they ship
+
+Whatever tool translates the files, a short Node.js script catches the mechanical errors: missing or extra keys, changed placeholders and tags, invalid JSON, and plural categories the target language needs but the file lacks. It uses `Intl.PluralRules`, so the plural check follows the same CLDR rules i18next uses.
+
+```js title="check-json.mjs"
+// Usage: node check-json.mjs <source.json> <translated.json> <target-locale>
+import { readFileSync } from 'node:fs';
+
+const [src, out, locale] = process.argv.slice(2);
+const flatten = (obj, prefix = '') =>
+  Object.entries(obj).flatMap(([k, v]) =>
+    v && typeof v === 'object' ? flatten(v, `${prefix}${k}.`) : [[`${prefix}${k}`, String(v)]]
+  );
+const source = new Map(flatten(JSON.parse(readFileSync(src, 'utf8'))));
+const target = new Map(flatten(JSON.parse(readFileSync(out, 'utf8')))); // throws on invalid JSON
+
+// {{name}} (i18next), {name} (ICU), and tags such as <1>, </1>, <b>
+const tokens = (s) => (s.match(/\{\{[^{}]+\}\}|\{[^{}\s,]+\}|<\/?\w+\s*\/?>/g) ?? []).sort().join(' ');
+const problems = [];
+
+for (const [key, text] of source) {
+  if (!target.has(key)) problems.push(`missing key: ${key}`);
+  else if (tokens(text) !== tokens(target.get(key)))
+    problems.push(`placeholders differ in ${key}: "${tokens(text)}" vs "${tokens(target.get(key))}"`);
+}
+for (const key of target.keys()) if (!source.has(key)) problems.push(`extra key: ${key}`);
+
+// i18next plural suffixes: the target locale needs every category its CLDR rules use
+const suffix = /_(zero|one|two|few|many|other)$/;
+const bases = new Set([...source.keys()].filter((k) => suffix.test(k)).map((k) => k.replace(suffix, '')));
+for (const base of bases)
+  for (const cat of new Intl.PluralRules(locale).resolvedOptions().pluralCategories)
+    if (!target.has(`${base}_${cat}`)) problems.push(`missing plural form for ${locale}: ${base}_${cat}`);
+
+console.log(problems.length ? problems.join('\n') : `OK: ${source.size} keys match`);
+process.exitCode = problems.length ? 1 : 0;
+```
+
+Run against the English file above, a correct German translation passes, and a Polish file with a translated key, a renamed placeholder, and only English plural forms fails:
+
+```bash
+$ node check-json.mjs locales/en/common.json locales/de/common.json de
+OK: 6 keys match
+
+$ node check-json.mjs locales/en/common.json locales/pl/common.json pl
+missing key: nav.home
+missing key: nav.save
+placeholders differ in greeting: "{{name}}" vs "{{imię}}"
+extra key: nawigacja.home
+extra key: nawigacja.save
+missing plural form for pl: inbox_few
+missing plural form for pl: inbox_many
+```
+
+The script exits with code 1 on any problem, so you can run it in CI after translation. It compares placeholders, not meaning, so a person still reviews the strings that matter most.
+
+## Key takeaways
+
+- Translate values only: keys, `{{name}}` or `{name}` placeholders, and tags such as `<1>` must come back unchanged, and the file must still parse.
+- Plural categories differ by language: Polish needs `_few` and `_many` keys that an English source doesn't have.
+- DeepL's document API accepts JSON and protects placeholders by default; Google's document translation doesn't accept JSON.
+- With General Translation, set `files.json.include` to a `[locale]` pattern and run [`npx gt translate`](/docs/cli/reference/commands/translate); keyed metadata adds per-string context and length limits.
+- Check every translated file against its source with a script before release.

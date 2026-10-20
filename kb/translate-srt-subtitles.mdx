@@ -1,0 +1,161 @@
+---
+title: How do I translate SRT subtitle files?
+summary: Translate only the text lines of each cue, and keep cue numbers, timecodes, blank-line separators, and tags such as <i> exactly as they are. Then check that every translated subtitle still fits the line length and reading speed limits for its language, because the timing stays fixed while the text grows or shrinks.
+date: 2026-10-20
+category: translation
+related: [translate-markdown-files, translate-json-files, is-ai-translation-accurate, general-translation-vs-google-translate]
+---
+
+SRT (SubRip) has no formal specification. The Library of Congress describes it as ["not well standardized"](https://www.loc.gov/preservation/digital/formats/fdd/fdd000569.shtml), so players and platforms differ in what they accept, and a translated file is safest when it stays as plain as its source.
+
+## What an SRT file contains
+
+An SRT file is a list of cues separated by blank lines. Each cue has a sequence number, a timing line in `HH:MM:SS,mmm --> HH:MM:SS,mmm` form (with a comma before the milliseconds), and one or more lines of text:
+
+```text title="subtitles/en/intro.srt"
+1
+00:00:01,000 --> 00:00:03,500
+Welcome back to the channel.
+
+2
+00:00:03,600 --> 00:00:06,200
+Today we're looking at
+<i>how subtitles are timed</i>.
+
+3
+00:00:06,400 --> 00:00:08,000
+Let's get started.
+```
+
+A translation must keep everything except the text unchanged:
+
+- **Cue numbers**, in order, one per cue.
+- **Timing lines**, character for character. A dot in place of the comma, or a shifted millisecond, can make a player reject the cue or show it at the wrong moment.
+- **The blank line between cues.** Merging two cues into one, or splitting one into two, shifts every cue after it.
+- **Line breaks inside a cue**, which keep each line short enough to read. A translation can rebalance where a line breaks, but it shouldn't add a third line.
+- **Tags** such as `<i>`, `<b>`, and `<font>`, and position tags such as `{\an8}`, which players read as formatting. Whether they render depends on the player: YouTube, for example, accepts only basic SRT files, recognizes no markup, and requires plain UTF-8 ([supported subtitle files](https://support.google.com/youtube/answer/2734698)).
+- **The text encoding.** SRT has no encoding standard, so save translations as UTF-8 unless your player needs something else.
+
+## Line length and reading speed
+
+The timing stays fixed while the translated text changes length, so a subtitle that was comfortable in English can flash by too fast in another language. Netflix publishes limits for this per language. Its [English (USA) Timed Text Style Guide](https://partnerhelp.netflixstudios.com/hc/en-us/articles/217350977-English-USA-Timed-Text-Style-Guide) allows 42 characters per line, a maximum of two lines, and a reading speed of up to 20 characters per second for adult programs (17 for children's programs). The [German guide](https://partnerhelp.netflixstudios.com/hc/en-us/articles/217351587-German-Timed-Text-Style-Guide) keeps 42 characters per line but lowers reading speed to 17 characters per second for adults and 13 for children.
+
+German translations often run longer than the English source ("Save changes" is 63% longer in German), so a German subtitle often has to say the same thing in fewer words. That's a translation decision, made per cue, and a word-for-word translation rarely makes it.
+
+## Cue by cue or with the whole file as context
+
+Dialogue often runs across two or three cues. Translating each cue on its own keeps the structure safe, but it translates fragments: German, for example, puts the verb at the end of a subordinate clause, which may land in the next cue. Translating with the surrounding cues as context reads better, as long as the text goes back into the same cues with the same timing. Subtitle Edit's advanced local LLM engines, for example, translate in batches with surrounding context, a synopsis, and a glossary.
+
+## Ways to translate an SRT file
+
+| Approach | Handles SRT structure | Machine translation | Reading speed checks | Fits when |
+| --- | --- | --- | --- | --- |
+| YouTube Studio | Accepts basic `.srt` uploads, one per language; markup isn't recognized | YouTube's auto-translated subtitles | None | The video lives only on YouTube |
+| Subtitle Edit (free, open source) | Parses and writes SRT | Google Translate, DeepL, LLM APIs, and local models | Netflix-style checks for characters per second, line length, and line count | One person translates and polishes a file by hand |
+| DeepL document translation | Accepts `.srt` uploads | DeepL | None | You want a quick first draft of one file |
+| Google Translate | No SRT upload in the consumer app or Cloud document translation | Text API only; you rebuild the file | None | You'll script it and own the file handling |
+| Prompt an LLM with the file | Reads the file as plain text; nothing guarantees the structure survives | Any model you choose | Only if you ask, and unverified | A one-off file you'll check line by line |
+| General Translation CLI | Translates only cue text and keeps the rest unchanged | General Translation, with your Glossary and Custom Prompts | None built in; run a check afterward | Subtitle files in a repository that change with each release |
+
+A few details behind the table. In YouTube Studio, you open **Subtitles**, select the video, click **Add language**, choose the language, and upload the file under **Subtitles** ([add subtitles and captions](https://support.google.com/youtube/answer/2734796)). [Subtitle Edit](https://github.com/SubtitleEdit/subtitleedit) (MIT-licensed, for Windows, macOS, and Linux) has a **Translate > Auto-translate** dialog with engines including Google Translate, DeepL, ChatGPT, Claude, Gemini, and local models through Ollama, plus a **Tools > Check and fix Netflix errors** checker. DeepL's [document API](https://developers.deepl.com/api-reference/document) lists `srt` among its supported formats. Google's [document translation](https://docs.cloud.google.com/translate/docs/advanced/translate-documents) takes Office files and PDFs, and the [consumer site](https://support.google.com/translate/answer/2534559?co=GENIE.Platform%3DDesktop) takes only `.docx`, `.pdf`, `.pptx`, and `.xlsx`.
+
+Use YouTube Studio when the video lives only on YouTube. Use Subtitle Edit when one person translates and polishes a file by hand, because it pairs machine translation with timing and reading speed checks. Use DeepL's document translation for a quick first draft of a single file. Use the General Translation CLI when subtitle files sit in a repository next to the rest of your product and need translating into several languages every time they change.
+
+## How to translate SRT files with General Translation
+
+General Translation's CLI, `gt`, translates `.srt` files from version 2.22.2. After you install it and sign in (see the [CLI Quickstart](/docs/cli/quickstart)), add an `srt` entry under `files` in `gt.config.json`, with a `[locale]` placeholder in the path:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "de"],
+  "files": {
+    "srt": {
+      "include": ["subtitles/[locale]/**/*.srt"]
+    }
+  }
+}
+```
+
+Then run the translation. The CLI reads the source subtitles from `subtitles/en/` and writes translations to `subtitles/es/` and `subtitles/de/`:
+
+```bash
+npx gt translate
+```
+
+To translate subtitles into English from another language, set `defaultLocale` to the source language (for example, `"es"`) and list `"en"` in `locales`.
+
+According to the [SRT format reference](/docs/cli/reference/formats/srt-files), only cue text is translated. These stay unchanged:
+
+- Cue numbers
+- Timing lines, including any position data after the timestamps
+- Blank-line separators and anything outside a valid cue
+- Markup such as `<i>`, `<b>`, `<u>`, and `<font>`, and leading `{\an1}` to `{\an9}` position tags
+
+Translated lines keep the cue's original line endings. Files without a byte order mark are read as UTF-8, files with one can be UTF-8, UTF-16, or UTF-32, and downloads use the source file's encoding. An empty file is skipped and reported, and a block without a valid timing line is left untranslated. On later runs, translations for unchanged cues can be reused, and the Context Groups assigned to your project (Glossary and Custom Prompts) apply to subtitles as they do to your other files. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)).
+
+The timing lines stay exactly as in the source, so check reading speed on the translated files, especially for languages that run longer than your source.
+
+## Check the translated file
+
+This Node.js script checks that a translated file has the same cue count, cue numbers, and timecodes as the source, and that no cue is empty. Pass a third argument to flag cues over a reading speed, such as 17 characters per second for German:
+
+```js title="check-srt.mjs"
+// Usage: node check-srt.mjs <source.srt> <translated.srt> [max characters per second]
+import { readFileSync } from 'node:fs';
+
+const TIMING = /^(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/;
+const cues = (file) =>
+  readFileSync(file, 'utf8')
+    .replace(/^﻿/, '')
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
+    .filter((lines) => lines[0])
+    .map(([number, timing = '', ...text]) => ({ number, timing, text }));
+
+const [srcFile, outFile, maxCps] = process.argv.slice(2);
+const [source, target] = [srcFile, outFile].map(cues);
+const seconds = (tc) => tc.split(/[:,]/).reduce((acc, n, i) => acc + n * [3600, 60, 1, 0.001][i], 0);
+const problems = [];
+if (source.length !== target.length) problems.push(`cue count: ${source.length} in source, ${target.length} translated`);
+
+source.forEach((cue, i) => {
+  const t = target[i];
+  if (!t) return;
+  if (cue.number !== t.number) problems.push(`cue ${i + 1}: number "${cue.number}" became "${t.number}"`);
+  if (!TIMING.test(t.timing)) problems.push(`cue ${cue.number}: invalid timing line "${t.timing}"`);
+  else if (cue.timing !== t.timing) problems.push(`cue ${cue.number}: timing changed to "${t.timing}"`);
+  if (!t.text.join('').trim()) problems.push(`cue ${cue.number}: empty text`);
+  const [, start, end] = TIMING.exec(t.timing) ?? [];
+  if (maxCps && start) {
+    // Count spaces and punctuation, not markup such as <i> or {\an8}
+    const chars = t.text.join(' ').replace(/<[^>]+>|\{\\an\d\}/g, '').length;
+    const cps = chars / (seconds(end) - seconds(start));
+    if (cps > maxCps) problems.push(`cue ${cue.number}: ${cps.toFixed(1)} characters per second`);
+  }
+});
+
+console.log(problems.length ? problems.join('\n') : `OK: ${source.length} cues, numbers and timecodes match`);
+process.exitCode = problems.length ? 1 : 0;
+```
+
+Run on the example file, a Spanish translation passes the structure check, and a German translation that merged two cues and used a dot in a timecode fails:
+
+```bash
+$ node check-srt.mjs subtitles/en/intro.srt subtitles/es/intro.srt 20
+OK: 3 cues, numbers and timecodes match
+
+$ node check-srt.mjs subtitles/en/intro.srt subtitles/de/intro.srt 17
+cue count: 3 in source, 2 translated
+cue 1: 22.4 characters per second
+cue 2: invalid timing line "00:00:03,600 --> 00:00:06.200"
+```
+
+The script exits with code 1 on any problem, so it can run in CI after translation. It checks structure and speed, not wording, so a person who speaks the language still watches the result.
+
+## Key takeaways
+
+- Only cue text changes in a translation; cue numbers, `HH:MM:SS,mmm --> HH:MM:SS,mmm` timing lines, blank lines, and tags such as `<i>` stay exactly as they are.
+- Netflix allows 42 characters per line and two lines, with reading speed up to 20 characters per second in English and 17 in German for adult programs.
+- DeepL's document translation and Subtitle Edit accept SRT files; Google Translate's document upload doesn't.
+- With General Translation, add `files.srt.include` with a `[locale]` path and run [`npx gt translate`](/docs/cli/reference/commands/translate) (`gt` 2.22.2 or later); only cue text is translated, and timing stays as in the source.

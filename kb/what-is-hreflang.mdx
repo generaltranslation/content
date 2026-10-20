@@ -1,0 +1,150 @@
+---
+title: What is hreflang, and how do I set it up?
+summary: Hreflang is an annotation that tells search engines which URLs are language or regional versions of the same page, so results can show each searcher the right one. Add it with HTML link elements, HTTP Link headers, or an XML sitemap, and have every version list every version, including itself.
+date: 2026-10-20
+category: multilingual-seo
+related: [multilingual-nextjs-seo, multilingual-url-structure, locale-routing-seo, locale-codes, multilingual-app-launch-checklist]
+---
+
+Hreflang only works once each language already has its own URL, because it maps one URL to another. If you haven't picked that structure yet, start with [subdirectories, subdomains, or country domains](/kb/multilingual-url-structure), then come back to annotate it.
+
+## What hreflang does and doesn't do
+
+Hreflang groups the URLs of one page into a cluster and labels each with a language, and optionally a region. When a German speaker's search matches your English pricing page, Google can show the German URL from the same cluster instead. Google's [localized versions guide](https://developers.google.com/search/docs/specialty/international/localized-versions) says it may find alternate versions without annotations, but recommends declaring them explicitly.
+
+It's easy to expect more from it than it delivers:
+
+- **It isn't a redirect.** Hreflang changes which URL appears in search results. A visitor who clicks lands on that URL, and anything after that is your server's decision (covered in [how a site should pick the language it serves](/kb/locale-routing-seo)).
+- **It doesn't detect language.** Google says it uses neither hreflang nor the HTML `lang` attribute to detect a page's language; it determines the language from the content with its own algorithms.
+- **It doesn't fix untranslated pages.** Google treats localized versions as duplicates only when the main content remains untranslated. Translating just the navigation and footer leaves a page that hreflang can label but can't make distinct.
+
+## The three ways to add hreflang
+
+Google treats HTML, HTTP headers, and sitemaps as equivalent and says using more than one has no benefit in Search. Pick the one that fits how your site is built.
+
+### HTML link elements
+
+Put one `<link rel="alternate">` per version, including the current page, inside the `<head>`. The set is identical on every version. URLs must be fully qualified (`https://example.com/de/preise`, not `/de/preise`).
+
+```html
+<!-- In the <head> of /en/pricing, /de/preise, and /fr/tarifs alike -->
+<link rel="alternate" hreflang="en" href="https://example.com/en/pricing" />
+<link rel="alternate" hreflang="de" href="https://example.com/de/preise" />
+<link rel="alternate" hreflang="fr" href="https://example.com/fr/tarifs" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/en/pricing" />
+```
+
+Don't combine hreflang with other attributes such as `media` in a single `<link>`, and check the rendered HTML: a link that ends up outside a well-formed `<head>` doesn't count.
+
+### HTTP Link headers
+
+For files without a `<head>`, such as PDFs, return the same cluster in a `Link` response header. Each URL sits inside angle brackets, and entries are comma-separated.
+
+```http
+Link: <https://example.com/en/guide.pdf>; rel="alternate"; hreflang="en",
+      <https://example.com/de/leitfaden.pdf>; rel="alternate"; hreflang="de",
+      <https://example.com/fr/guide.pdf>; rel="alternate"; hreflang="fr"
+```
+
+### XML sitemap
+
+A sitemap keeps the annotations out of your pages. Declare the `xhtml` namespace, give each URL its own `<url>` entry, and list every version, including itself, under each one. Google says these child entries don't count toward the sitemap URL limit.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://example.com/en/pricing</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/pricing"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/preise"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr/tarifs"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/en/pricing"/>
+  </url>
+  <url>
+    <loc>https://example.com/de/preise</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/pricing"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/preise"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr/tarifs"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/en/pricing"/>
+  </url>
+  <url>
+    <loc>https://example.com/fr/tarifs</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/pricing"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/preise"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr/tarifs"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/en/pricing"/>
+  </url>
+</urlset>
+```
+
+A sitemap can only list URLs under the directory it's served from, so host it at the root when the cluster spans several locale folders.
+
+## The rules every method shares
+
+- **Every version lists every version, including itself.** Three language versions means three entries on each page, and the same three on all of them.
+- **Links must be reciprocal.** If page X lists page Y but Y doesn't list X back, Google ignores the pair. This stops another site from claiming to be your German version.
+- **Use `x-default` for everyone else.** It names the fallback for searchers whose language matches none of your versions. Google says it was designed for language selector pages and also suggests it for auto-redirecting home pages, though any page can be the target.
+- **Codes are a language, then an optional region.** The language is ISO 639-1 (`de`), the region is ISO 3166-1 alpha-2 (`de-CH`), and case doesn't matter. A region alone is invalid, and a country code in the language slot means something else: `be` is Belarusian, not Belgium.
+- **Scripts are allowed.** Google accepts ISO 15924 script subtags such as `zh-Hans` and `zh-Hant`, optionally with a region (`zh-Hans-US`). With `zh-TW`, it derives Traditional Chinese from the region.
+- **Give regional variants a language-only fallback.** If you have `en-IE`, `en-CA`, and `en-AU` pages, add an `en` page (it can be one of the three) for English speakers everywhere else.
+
+Some valid [locale codes](/kb/locale-codes) still fail here. `es-419` (Spanish for Latin America) is a correct BCP 47 tag, and General Translation's [locale codes guide](/docs/platform/core/guides/locale-codes) lists it, but Google's hreflang supports only ISO 3166-1 regions, so annotate that page as `es` or with specific countries such as `es-MX` and `es-AR`.
+
+## Hreflang and canonical tags
+
+Each language version should canonicalize to itself. Google's [duplicate URL guidance](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls) says that when you use hreflang, the canonical should be a page in the same language. Pointing every language's canonical at the English page tells Google the German page is a copy of the English one, which contradicts the cluster you just declared.
+
+```html
+<!-- In the <head> of https://example.com/de/preise -->
+<link rel="canonical" href="https://example.com/de/preise" />
+<link rel="alternate" hreflang="en" href="https://example.com/en/pricing" />
+<link rel="alternate" hreflang="de" href="https://example.com/de/preise" />
+<link rel="alternate" hreflang="fr" href="https://example.com/fr/tarifs" />
+```
+
+Two related details from the same page: Google ignores `rel="canonical"` links that carry an `hreflang` attribute, so keep the two link types separate, and for canonicalization it prefers URLs that belong to an hreflang cluster. Use the canonical URL of each version in the cluster, never a variant with tracking parameters.
+
+## Common hreflang errors
+
+- **Missing return links.** First on Google's list of common mistakes. Usually one locale's template omits the block, or a new language was added to some pages but not others.
+- **Invalid codes.** Google ignores reserved region codes such as `UK` and `EU`, so the region in `en-UK` has no effect; use `en-GB`. Unsupported regions such as `419` in `es-419` aren't recognized either.
+- **Relative or mixed-protocol URLs.** Alternates must be fully qualified, and Google warns against listing `http://` URLs in hreflang when the site is on HTTPS.
+- **Alternates that don't resolve to an indexable page.** A URL that redirects, returns an error, or carries `noindex` can't confirm a return link. Google notes that `noindex` blocks a page from Search entirely, so there is nothing to swap in. Crawlers such as Screaming Frog treat non-200 alternates as errors.
+- **Pages where only the template is translated.** Hreflang can't make them distinct, and Google says the repeated content makes a poor search experience.
+
+## How Bing treats language signals
+
+Bing's own guidance is a 2011 webmaster blog post, [How to tell Bing your website's country and language](https://web.archive.org/web/20170109032116/http://blogs.bing.com/webmaster/2011/03/01/how-to-tell-bing-your-websites-country-and-language), which doesn't mention hreflang. It lists signals in priority order: a `content-language` meta tag, then `lang` on `<html>` or `<title>`, the `Content-Language` HTTP header, a country-code domain, and the server's IP location.
+
+The meta tag is the awkward one. The [HTML standard](https://html.spec.whatwg.org/multipage/semantics.html#attr-meta-http-equiv-content-language) marks it non-conforming and asks authors to use `lang` instead, so set `<html lang="de">` on every page as the standards-compliant signal from Bing's list, and keep hreflang for Google.
+
+## How to check hreflang
+
+Search Console's International Targeting report is gone: Google [deprecated it](https://support.google.com/webmasters/answer/12474899) along with its country targeting setting, and says it continues to support and use hreflang. Use these checks instead:
+
+- **Spot-check one page.** Fetch the HTML and confirm the page lists itself and every sibling:
+
+  ```bash
+  curl -s https://example.com/de/preise | grep -o '<link[^>]*hreflang[^>]*>'
+  ```
+
+- **Test a live page.** Google's guide points to two third-party tools it doesn't maintain: [Merkle's hreflang tag tester](https://technicalseo.com/seo-tools/hreflang/) for a single URL and [Aleyda Solis's hreflang generator](https://www.aleydasolis.com/english/international-seo-tools/hreflang-tags-generator/) for writing tags.
+- **Crawl the whole site.** A crawler checks reciprocity across every page. [Screaming Frog's hreflang audit](https://www.screamingfrog.co.uk/seo-spider/tutorials/how-to-audit-hreflang/) reports missing return links, non-200 and `noindex` alternates, invalid codes, and alternates that aren't the canonical URL.
+- **Validate the sitemap.** Run `xmllint --noout sitemap.xml` to catch malformed XML before Google does.
+
+## Setting up hreflang with General Translation
+
+General Translation's `gt-next` gives every language its own URL, the prerequisite for hreflang. In the App Router, [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) routes `/es/about` and `/fr/about` while the default locale stays unprefixed, or prefixed too with `prefixDefaultLocale`. Its `pathConfig` option gives a page a localized slug per locale, such as `/fr/a-propos`, and each slug becomes the `href` you list in the cluster.
+
+The annotations themselves stay in your app. The `gt-next` docs say your app remains responsible for `<html lang>`, canonical URLs, language alternates, and sitemap entries, and Next.js writes the `<link rel="alternate" hreflang>` tags from `metadata.alternates.languages`. If you route a locale under an alias, such as `/cn` for Chinese, the [locale alias SEO guide](/docs/react/nextjs/locale-alias-seo) uses [`resolveCanonicalLocale`](/docs/react/nextjs/reference/functions/resolve-canonical-locale) so hreflang carries the BCP 47 code `zh` while the URL keeps `/cn`.
+
+For the full Next.js setup (a helper that returns the canonical and every alternate in one call, translated titles, and a `sitemap.ts` with alternates), follow [How do I set up SEO for a multilingual Next.js app?](/kb/multilingual-nextjs-seo). Build the hreflang map from the same `locales` list in `gt.config.json` that drives translation, so a language you add to translate also appears in your annotations.
+
+## Key takeaways
+
+- Hreflang maps URLs to languages and regions for search results. It doesn't redirect visitors or tell Google what language a page is in.
+- Use one method (HTML `<link>`, HTTP `Link` header for PDFs, or sitemap `xhtml:link`); Google treats them as equivalent.
+- Every version lists every version, including itself, with fully qualified URLs, plus an `x-default` fallback.
+- Codes are ISO 639-1 plus an optional ISO 3166-1 alpha-2 region or ISO 15924 script: `en-GB`, not `en-UK`; `es-MX`, not `es-419`.
+- Canonicalize each language to itself, and check reciprocity with a crawler now that Search Console's International Targeting report is deprecated.

@@ -1,0 +1,171 @@
+---
+title: Should a multilingual site pick the language from the URL, a cookie, or the Accept-Language header?
+summary: Let the URL decide which language a page serves, so every version has its own crawlable, indexable address. Use a cookie to remember a language the visitor chose, and treat the Accept-Language header and IP location as first-visit suggestions, never as reasons to redirect away from a localized URL.
+date: 2026-10-20
+category: multilingual-seo
+related: [detect-user-language, language-switcher, what-is-hreflang, multilingual-url-structure, multilingual-nextjs-seo]
+---
+
+All three signals are useful, but they answer different questions. The URL says which version was requested, a cookie says what this visitor chose before, and `Accept-Language` says what their browser is set to. Only the URL looks the same to a crawler as to your visitors, so it has to be the signal that decides what a page contains.
+
+## Why search engines need a URL per language
+
+Google's guidance on [locale-adaptive pages](https://developers.google.com/search/docs/specialty/international/locale-adaptive-pages) explains the problem. If a page returns different content based on the visitor's perceived country or language, Google might not crawl, index, or rank every version, because Googlebot's default IP addresses appear to be in the USA and the crawler sends requests without an `Accept-Language` header. Google recommends separate URLs per locale, annotated with [hreflang](/kb/what-is-hreflang).
+
+Googlebot does also crawl from IP addresses outside the USA, but Google's [multi-regional sites guide](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) says it doesn't vary the crawler's location to discover a site's variations. It recommends different URLs for each language "rather than using cookies or browser settings."
+
+The consequence is concrete. Suppose `/pricing` returns German to a browser that prefers German and English to everyone else. Googlebot arrives with no `Accept-Language` and no cookie, gets English, and indexes English. The German version exists for users but never makes it into search.
+
+## What each signal is good for
+
+| Signal | What it tells you | What a crawler sends | Use it for |
+| --- | --- | --- | --- |
+| URL (`/de/preise`) | The version that was requested | The URL it found in a link, sitemap, or hreflang | Deciding the content: the indexable source of truth |
+| Cookie (`locale=de`) | The language this visitor picked earlier | None of your visitors' choices | Remembering an explicit choice on later visits |
+| `Accept-Language` | The browser's UI language and configured preferences | Nothing (Googlebot omits the header) | Suggesting a language on a first visit |
+| IP geolocation | An approximate country, not a language | A mostly US address | Suggesting a region; rarely worth it |
+
+The browser header is weaker than it looks. MDN's [`Accept-Language` reference](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Language) calls it a hint, notes it's often out of the user's control (when traveling, for example), says Safari and Chrome's incognito mode list only one language, and states that a server should never override an explicit language choice. IP is weaker still: Google calls IP location analysis "difficult and generally not reliable" and tells sites not to use it to adapt content.
+
+## Precedence: URL, then saved choice, then header
+
+When the signals disagree, resolve them in this order:
+
+1. **The URL.** A request for `/de/preise` gets German, from every browser, every time. This keeps each URL's content stable, which is what crawlers and caches depend on.
+2. **The saved choice.** A cookie or account setting the visitor set by picking a language. It decides where the neutral root sends them and which version the [language switcher](/kb/language-switcher) highlights, but it doesn't rewrite a localized URL they clicked.
+3. **The `Accept-Language` header.** Used only when there's no saved choice, and only to pick a destination from the root or to offer a suggestion.
+4. **The default locale.** The fallback when nothing matches, which is also what Googlebot gets.
+
+When a lower signal disagrees with the URL, offer the other version instead of switching. A banner reading "This page is available in Deutsch" respects both the link the visitor followed and the language they probably want. The mechanics of reading these signals are covered in [how to detect a user's preferred language](/kb/detect-user-language).
+
+## The auto-redirect trap
+
+The common mistake is redirecting localized URLs by header or IP: a visitor with a French browser who opens `/en/pricing` gets bounced to `/fr/tarifs`. Google's guide tells sites to avoid this, saying redirects based on what you think the user's language is could keep users and search engines from viewing all versions of the site. A French speaker who wants the English page can't reach it, and a crawler from a US address can't reach anything but English.
+
+Two things replace it:
+
+- **Links between versions.** Google recommends linking each page to its other language versions so users can choose. A switcher on every page also gives crawlers a path to every version.
+- **One redirect, at a neutral root.** A root URL such as `/` that has no content of its own can redirect by saved choice or header, or show a language selector. Annotate it as the `x-default` in your hreflang: Google says `x-default` was designed for language selector pages and suggests it for auto-redirecting home pages.
+
+### Which status code to use at the root
+
+Use a temporary redirect, `302` or `307`, because the destination depends on who is asking. Google's [redirects guide](https://developers.google.com/search/docs/crawling-indexing/301-redirects) says a temporary redirect isn't used as a signal that the target is canonical, and search results keep showing the source URL. A permanent `301` or `308` tells Google the target replaces the source. Googlebot would receive the default-language target, so a permanent redirect would tell Google to show `/en/` in place of the root you meant as the `x-default`.
+
+## Caching when responses vary
+
+A cache stores responses by URL. If one URL returns different languages depending on a header or cookie, a CDN can hand one visitor's language to the next. HTTP handles this with the `Vary` response header:
+
+- **`Vary: Accept-Language`** makes caches key the response on the URL plus the header, per [MDN's caching guide](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching#vary). Header values vary a lot (`en-US,en;q=0.9` and `en-GB,en;q=0.9,de;q=0.8` are different keys), so the hit rate drops.
+- **`Vary: Cookie`** is worse. [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111#section-4.1) only reuses a stored response when the nominated request headers match, and the `Cookie` header carries every cookie, sessions and analytics included. MDN recommends `Cache-Control: private` instead of varying on cookies when responses are personalized.
+
+Locale-in-the-URL avoids most of this. `/de/preise` is identical for everyone, so it caches with the URL as the key. Only the root redirect depends on the visitor, so mark that one response `Vary: Accept-Language, Cookie` and `Cache-Control: private`.
+
+## A framework-neutral example
+
+This function applies the precedence above to one request: it redirects only from the root and returns a suggestion when the visitor seems to prefer another language. It has no dependencies, and recent Node.js versions run the TypeScript file directly (tested with Node.js 24).
+
+```ts title="routeLocale.ts"
+const LOCALES = ['en', 'de', 'fr', 'es-MX'];
+const DEFAULT_LOCALE = 'en';
+const COOKIE = 'locale';
+
+type Decision =
+  | { action: 'serve'; locale: string; suggest?: string }
+  | { action: 'redirect'; status: 302; location: string; headers: Record<string, string> }
+  | { action: 'not-found' };
+
+// Match a tag like "de-AT" to a supported locale: exact first, then by language.
+function match(tag: string): string | undefined {
+  const lower = tag.toLowerCase();
+  return (
+    LOCALES.find((l) => l.toLowerCase() === lower) ??
+    LOCALES.find((l) => l.toLowerCase().split('-')[0] === lower.split('-')[0])
+  );
+}
+
+// Parse "fr-CH, fr;q=0.9, en;q=0.8" into tags ordered by quality value.
+function fromAcceptLanguage(header: string | undefined): string | undefined {
+  if (!header) return undefined;
+  const tags = header
+    .split(',')
+    .map((part) => {
+      const [tag, ...params] = part.trim().split(';');
+      const q = params.find((p) => p.trim().startsWith('q='));
+      return { tag: tag.trim(), q: q ? Number(q.trim().slice(2)) : 1 };
+    })
+    .filter(({ tag, q }) => tag && tag !== '*' && q > 0)
+    .sort((a, b) => b.q - a.q);
+  for (const { tag } of tags) {
+    const locale = match(tag);
+    if (locale) return locale;
+  }
+}
+
+function fromCookie(cookieHeader: string | undefined): string | undefined {
+  const value = cookieHeader
+    ?.split(';')
+    .map((c) => c.trim().split('='))
+    .find(([name]) => name === COOKIE)?.[1];
+  return value ? match(value) : undefined;
+}
+
+export function routeLocale(
+  pathname: string,
+  headers: { cookie?: string; 'accept-language'?: string }
+): Decision {
+  // A saved choice beats the browser header; both are only preferences.
+  const preferred = fromCookie(headers.cookie) ?? fromAcceptLanguage(headers['accept-language']);
+
+  // 1. The neutral root (the x-default URL) is the only place we redirect.
+  if (pathname === '/') {
+    return {
+      action: 'redirect',
+      status: 302, // temporary: the target depends on who is asking
+      location: `/${preferred ?? DEFAULT_LOCALE}/`,
+      headers: { Vary: 'Accept-Language, Cookie', 'Cache-Control': 'private' },
+    };
+  }
+
+  // 2. A locale in the URL always wins. Never redirect away from it.
+  const segment = pathname.split('/')[1];
+  const urlLocale = LOCALES.find((l) => l.toLowerCase() === segment.toLowerCase());
+  if (!urlLocale) return { action: 'not-found' };
+
+  // 3. If the visitor seems to prefer another language, offer it in a banner.
+  return preferred && preferred !== urlLocale
+    ? { action: 'serve', locale: urlLocale, suggest: preferred }
+    : { action: 'serve', locale: urlLocale };
+}
+```
+
+Running it against seven requests, the first of which looks like Googlebot (no header, no cookie):
+
+```text title="Output"
+/ {} -> {"action":"redirect","status":302,"location":"/en/","headers":{"Vary":"Accept-Language, Cookie","Cache-Control":"private"}}
+/ {"accept-language":"de-AT,de;q=0.9,en;q=0.8"} -> {"action":"redirect","status":302,"location":"/de/","headers":{"Vary":"Accept-Language, Cookie","Cache-Control":"private"}}
+/ {"accept-language":"es-MX","cookie":"locale=fr"} -> {"action":"redirect","status":302,"location":"/fr/","headers":{"Vary":"Accept-Language, Cookie","Cache-Control":"private"}}
+/de/preise {} -> {"action":"serve","locale":"de"}
+/de/preise {"accept-language":"fr-CH, fr;q=0.9"} -> {"action":"serve","locale":"de","suggest":"fr"}
+/en/pricing {"cookie":"session=abc; locale=de"} -> {"action":"serve","locale":"en","suggest":"de"}
+/pt/precos {} -> {"action":"not-found"}
+```
+
+The saved `fr` cookie beats the `es-MX` header at the root, `de-AT` falls back to `de`, and a German page stays German for a visitor whose browser prefers French. Call `routeLocale` from your server or edge middleware, and set the cookie when the visitor picks a language.
+
+## How General Translation's gt-next decides the language
+
+General Translation's `gt-next` makes this decision in its middleware. [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) checks the locale in the URL before the saved locale cookie and the `Accept-Language` header; only a language the visitor has just selected ranks higher. So a localized URL serves its own language. The middleware then stores the result in a locale cookie and, with `localeRouting` on, redirects or rewrites to the matching localized path. The full resolution order and cookie name are in [how to detect a user's preferred language](/kb/detect-user-language).
+
+The SEO-relevant choice is the default locale's prefix. By default it's unprefixed, so English lives at `/about` and French at `/fr/about`. A crawler with no header or cookie gets English at `/about`, and every prefixed URL stays reachable. Unprefixed URLs, though, are where cookie and header detection can send a visitor elsewhere. To make every content URL carry its language, set `prefixDefaultLocale: true` so English moves to `/en/about`. To stop header-based detection entirely, set [`ignoreBrowserLocales`](/docs/react/nextjs/config#ignore-browser-locales) to `true` in `withGTConfig`.
+
+For switching, `gt-next` stores the chosen locale in a cookie and refreshes Server Components, and its locale-aware [`<Link>`](/docs/react/nextjs/link) takes a `locale` prop for linking straight to another version without an extra middleware redirect. Pages Router apps use [Next.js internationalized routing](/docs/react/nextjs/pages-router-middleware) instead, where `localeDetection: false` turns off the automatic browser and cookie redirects.
+
+Some setups pick the language by cookie and header with no locale in the URL, which is fine for pages you don't need indexed per language. General Translation's [React Router quickstart](/docs/react/react-router-quickstart) works this way, and it says to send `Vary: Cookie, Accept-Language` on document responses or keep them out of shared caches. For hreflang, canonical tags, and the sitemap that complete a Next.js setup, see [How do I set up SEO for a multilingual Next.js app?](/kb/multilingual-nextjs-seo).
+
+## Key takeaways
+
+- Googlebot sends no `Accept-Language` header and mostly crawls from US addresses, so content chosen by header, cookie, or IP may never be indexed in other languages.
+- Resolve the language as URL, then saved choice, then `Accept-Language`, then the default, and never let a lower signal override the URL.
+- Redirect only from a content-free root marked `x-default`, with a temporary `302` or `307`; elsewhere, suggest the other version in a banner.
+- Locale URLs cache with the URL as the key; header- or cookie-dependent responses need `Vary` or `Cache-Control: private`.
+- In `gt-next`, the URL locale outranks the cookie and header; `prefixDefaultLocale` and `ignoreBrowserLocales` tighten the rules.

@@ -1,0 +1,184 @@
+---
+title: What is ICU message format?
+summary: ICU message format is a syntax for writing one translatable string that covers variables, plurals, gender or other choices, and ordinals, such as {count, plural, one {# file} other {# files}}. Translators rewrite each branch for their language, and a library picks the right branch at run time using Unicode CLDR rules.
+date: 2026-10-20
+category: locale-formatting
+related: [how-to-handle-plurals-in-react, general-translation-vs-react-intl, locale-codes, general-translation-vs-i18next, i18n-key-naming]
+---
+
+The syntax comes from the MessageFormat class in ICU (International Components for Unicode), the Unicode Consortium's internationalization library for C and Java, and JavaScript libraries such as FormatJS implement the same grammar. It's now also called MessageFormat 1, since a redesigned MessageFormat 2 exists.
+
+## What problem it solves
+
+Code that builds sentences from pieces works in English and breaks elsewhere. `'You have ' + n + ' files'` hard-codes English word order and English's two plural forms. Polish needs four forms for the same sentence: 1 plik, 2 pliki, 5 plików, and 1,5 pliku. A gendered sentence ("She replied" or "He replied") changes other words in many languages, and ordinals (1st, 2nd, 3rd) follow their own rules.
+
+ICU message format puts all of those cases into one string. The translator sees the whole sentence with every branch, rewrites it for their language, and adds or removes branches as the grammar requires. The [ICU user guide](https://unicode-org.github.io/icu/userguide/format_parse/messages/) recommends writing a complete sentence in every branch for the same reason: a translator can't fix the grammar of a fragment they can't see.
+
+## The syntax, with runnable examples
+
+Every example below was run with FormatJS's [`intl-messageformat`](https://formatjs.github.io/docs/intl-messageformat) 12.1.4 on Node.js 24. A message is parsed once and formatted with values:
+
+```js
+import { IntlMessageFormat } from 'intl-messageformat';
+
+const msg = new IntlMessageFormat(
+  'You have {count, plural, =0 {no messages} one {# message} other {# messages}}.',
+  'en'
+);
+
+msg.format({ count: 0 });    // 'You have no messages.'
+msg.format({ count: 1 });    // 'You have 1 message.'
+msg.format({ count: 1234 }); // 'You have 1,234 messages.'
+```
+
+### Arguments
+
+`{name}` inserts a value: `Hello, {name}!` with `{ name: 'Ada' }` gives "Hello, Ada!". Typed arguments format the value for the locale, so `Total: {price, number, ::currency/EUR}` with `1234.5` gives "Total: €1,234.50" in English.
+
+### plural, `#`, and exact matches
+
+`{count, plural, ...}` picks a branch by the locale's plural category: `zero`, `one`, `two`, `few`, `many`, or `other`. Inside a branch, `#` is the number, formatted for the locale; the German message `Sie haben {count, plural, one {# Nachricht} other {# Nachrichten}}.` prints "Sie haben 1.234 Nachrichten." An exact match such as `=0` wins over the category, which is how the example above says "no messages" instead of "0 messages."
+
+The same Polish sentence, with the branches Polish uses:
+
+```text
+{count, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}
+```
+
+With `pl`, that formats 1, 2, 5, 22, and 1.5 as "1 plik," "2 pliki," "5 plików," "22 pliki," and "1,5 pliku."
+
+### select
+
+`select` chooses a branch by a string value, and the `other` branch catches everything else:
+
+```text
+{gender, select, female {She} male {He} other {They}} replied to your comment.
+```
+
+`{ gender: 'female' }` gives "She replied to your comment." and `{ gender: 'nonbinary' }` gives "They replied to your comment."
+
+### selectordinal
+
+`selectordinal` uses ordinal rules, which in English have four categories:
+
+```text
+You finished {place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}.
+```
+
+That prints "1st," "2nd," "3rd," "4th," "11th," "22nd," and "103rd."
+
+### offset
+
+`offset:1` subtracts one from the number before choosing a category and printing `#`, which suits "you and N others" messages. Exact matches compare the original value:
+
+```text
+{guests, plural, offset:1
+  =0 {Nobody is going}
+  =1 {{host} is going}
+  one {{host} and # other person are going}
+  other {{host} and # other people are going}}.
+```
+
+With `host: 'Mia'`, 0, 1, 2, and 5 guests give "Nobody is going.", "Mia is going.", "Mia and 1 other person are going.", and "Mia and 4 other people are going."
+
+### Nested arguments
+
+Arguments nest. The ICU guide suggests putting `select` on the outside and `plural` inside, with a full sentence in each branch:
+
+```text
+{gender, select,
+  female {{count, plural, one {She has # new follower} other {She has # new followers}}}
+  other {{count, plural, one {They have # new follower} other {They have # new followers}}}}
+```
+
+### Apostrophes and escaping
+
+An ASCII apostrophe quotes syntax characters, and two apostrophes print one. Since ICU 4.8, a single apostrophe starts quoted text only when it comes right before a character that needs quoting, so ordinary contractions work:
+
+```text
+It's {name}'s turn. Type '{name}' to insert a name. I''m here.
+```
+
+With `{ name: 'Ada' }`, that prints "It's Ada's turn. Type {name} to insert a name. I'm here." Inside a plural, `'#'` prints a literal `#`. FormatJS's [ICU syntax guide](https://formatjs.github.io/docs/core-concepts/icu-syntax) recommends the typographic apostrophe (’) in human-readable text, which sidesteps the question.
+
+## CLDR plural categories
+
+The categories come from [Unicode CLDR plural rules](https://cldr.unicode.org/index/cldr-spec/plural-rules), the same data behind JavaScript's `Intl.PluralRules`. Here's what `Intl.PluralRules` reports for a few languages:
+
+| Language | Cardinal categories |
+| --- | --- |
+| English (`en`) | `one`, `other` |
+| Polish (`pl`), Russian (`ru`) | `one`, `few`, `many`, `other` |
+| Arabic (`ar`) | `zero`, `one`, `two`, `few`, `many`, `other` |
+| Japanese (`ja`) | `other` |
+
+`one` doesn't mean exactly 1: in Russian, 21 is also `one`. Use `=1` only when you mean the literal number. For the component-level version of this in React, see [How do I handle plurals in React?](/kb/how-to-handle-plurals-in-react).
+
+## Common problems
+
+- **Syntax errors surface late.** A missing brace is just a string until it's parsed, and `intl-messageformat` then throws `EXPECT_ARGUMENT_CLOSING_BRACE`. Parse or lint messages in CI, or precompile them.
+- **No `other` branch.** `intl-messageformat` throws `MISSING_OTHER_CLAUSE` for a plural without `other`, and FormatJS requires it for `select` too.
+- **Branches that don't fit the target language.** An English message has `one` and `other`; the Polish translation needs `few` and `many` as well, and the Japanese one needs only `other`. Your translation process has to add and remove branches, not only translate the text inside them.
+- **Fragments.** `{count} {count, plural, one {file} other {files}} deleted` gives translators pieces to reorder. Put the whole sentence in each branch.
+- **Mixed dialects.** i18next's default syntax is `{{name}}` with plural keys like `key_one`, not ICU. Teams that want ICU there add the [`i18next-icu`](https://github.com/i18next/i18next-icu) plugin.
+
+## Libraries that implement it
+
+- **ICU4J and ICU4C** are the reference implementations, in Java and C/C++.
+- **FormatJS**: [`intl-messageformat`](https://formatjs.github.io/docs/intl-messageformat) is the parser and formatter under react-intl, with number and date skeletons such as `::currency/EUR` and rich-text tags. (See [General Translation vs. react-intl](/kb/general-translation-vs-react-intl).)
+- **messageformat**: [`@messageformat/core`](https://messageformat.github.io/messageformat/) compiles ICU messages to JavaScript functions; version 4 of the `messageformat` package implements MessageFormat 2 instead.
+- **i18next-icu**: the i18next plugin that switches i18next to ICU syntax, built on `intl-messageformat`.
+- **Lingui**: its [macros](https://lingui.dev/ref/macro) turn JSX and tagged templates into ICU MessageFormat messages at compile time.
+- **next-intl**: its [messages use ICU syntax](https://next-intl.dev/docs/usage/messages).
+
+## MessageFormat 2
+
+MessageFormat 2 (MF2) is the Unicode Consortium's redesign, with new syntax: declarations such as `.input` and `.match`, and patterns in double braces. Its specification is [Part 9 of Unicode LDML](https://www.unicode.org/reports/tr35/tr35-messageFormat.html), marked as a stable document (some functions are still labeled Draft), and it's built into ICU4C and ICU4J. In JavaScript, the TC39 [`Intl.MessageFormat` proposal](https://github.com/tc39/proposal-intl-messageformat) is at Stage 1, so it isn't part of JavaScript yet; the `messageformat` 4.x package is a polyfill. The plural example in MF2 looks like this:
+
+```text
+.input {$count :number}
+.match $count
+0   {{You have no messages.}}
+one {{You have {$count} message.}}
+*   {{You have {$count} messages.}}
+```
+
+Run with `messageformat` 4.1.0, it prints "You have no messages.", "You have 1 message.", and "You have 1,234 messages." for 0, 1, and 1234. MF2 messages aren't compatible with MessageFormat 1 strings, and the other libraries above read MessageFormat 1.
+
+## How General Translation handles ICU
+
+In General Translation's React SDKs, string functions take ICU syntax directly, and the translations are generated for you. In `gt-react` and `gt-next`, [`useGT`](/docs/react/reference/hooks/use-gt) returns a function that accepts an ICU message and its values:
+
+```tsx title="Inbox.tsx"
+import { useGT } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  const gt = useGT();
+  return (
+    <p>
+      {gt('You have {count, plural, =0 {no messages} one {# message} other {# messages}}.', {
+        count,
+        $context: 'Unread message count in the inbox',
+      })}
+    </p>
+  );
+}
+```
+
+Rendered in the source locale with `gt-react` 11.4.12, that prints the same three outputs as the `intl-messageformat` example above, and `selectordinal` works the same way. [`npx gt translate`](/docs/cli/reference/commands/translate) extracts these strings and generates a translation for each target locale, using `$context` and your Glossary and Custom Prompts as context. Elsewhere in the stack:
+
+- **Dictionaries.** Entries read through [`useTranslations`](/docs/react/reference/hooks/use-translations) can use ICU formatting, such as `{dollars, number, ::currency/USD}`.
+- **Server and Python.** `gt-node`'s [`getGT`](/docs/node/reference/functions/get-gt) function and the Python SDKs' [`t`](/docs/python/reference/functions/t) interpolate with [ICU placeholders](/docs/node/guides/translating-strings). Not every API parses ICU: `gt-node`'s [`tx`](/docs/node/reference/functions/tx) and `gt-vue`'s [`useGT`](/docs/vue/reference/composables/use-gt) and [`<T>`](/docs/vue/reference/components/t) treat braces as literal text.
+- **Existing JSON catalogs.** The CLI detects next-intl and i18next (including `i18next-icu`) from `package.json` and translates their JSON files while keeping that library's syntax. (See [JSON files](/docs/cli/reference/formats/json-files).)
+- **Linting.** The `static-string` rule in `@generaltranslation/react-core-linter` reports malformed ICU messages and can rewrite a ternary into a `select`. (See [Lint rules](/docs/react/reference/lint-rules#static-string).)
+- **Formatting without translation.** The Core library's [`formatMessage`](/docs/platform/core/reference/utility-functions/formatting/format-message) formats an ICU message for a locale. Every MessageFormat 1 example on this page gave the same output through `generaltranslation` 9.5.7 as through `intl-messageformat`.
+
+The ICU parser and formatter are General Translation's own dependency-free packages, not FormatJS. For JSX, [`<Plural>`](/docs/react/reference/components/plural) and [`<Branch>`](/docs/react/reference/components/branch) inside [`<T>`](/docs/react/reference/components/t) cover the same plural and select cases without writing the syntax by hand.
+
+## Key takeaways
+
+- ICU message format packs variables, `plural`, `select`, `selectordinal`, and `offset` into one translatable string, with `#` for the formatted number and `=0`-style exact matches.
+- Plural categories come from CLDR: English has 2 cardinal forms, Polish and Russian 4, Arabic 6, and Japanese 1, so translations must add or drop branches.
+- Write full sentences in every branch, always include `other`, and validate syntax before it reaches production.
+- MessageFormat 2 is a stable Unicode spec built into ICU4C and ICU4J, but `Intl.MessageFormat` is still a Stage 1 TC39 proposal.
+- General Translation's [`useGT`](/docs/react/reference/hooks/use-gt) accepts ICU strings in `gt-react` and `gt-next`, and [`npx gt translate`](/docs/cli/reference/commands/translate) generates the translations.

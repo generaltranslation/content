@@ -1,0 +1,88 @@
+---
+title: Is AI translation accurate enough for a production app?
+summary: Often, yes. Large language models and engines such as DeepL and Google Translate now produce translations good enough to ship for most product strings and content, as long as each string arrives with context, important terms are fixed in a glossary, and people review high-risk text. They still fail on ambiguous short strings, placeholders, plurals, and low-resource languages.
+date: 2026-10-20
+category: translation
+related: [general-translation-vs-google-translate, translate-json-files, what-is-a-translation-management-system, general-translation-vs-tms, how-to-handle-plurals-in-react]
+---
+
+How accurate a translation is depends less on which engine you pick than on what you give it. A full paragraph translates well almost everywhere. A lone button label such as "Save" can come back wrong from any engine, because the engine never sees the button.
+
+## What the evidence says
+
+The General Machine Translation shared task, run each year by WMT (the Conference on Machine Translation), compares translation systems with professional human annotators. In the [WMT25 findings](https://aclanthology.org/2025.wmt-1.22/) (Kocmi et al., 2025), the organizers ran 60 systems, including 20 LLMs and three online translation services, on deliberately difficult documents, and professional annotators scored the top systems by automatic ranking (a target of 18 per pair) across 16 language pairs. Four results matter for an app team:
+
+- **The best AI output matches professional translation agencies on many language pairs.** Gemini 2.5 Pro placed in the top cluster for 14 of the 16 pairs, on par with or better than the human translation in 10 of them. Human reference translations made the top cluster in only 6 of the 15 pairs where they were available, which the authors say may partly reflect annotators' stylistic preferences.
+- **Terminology and grammar still break.** The task's test suites found that top systems still struggle with domain-specific terminology, non-standard input, and gender choice and agreement in some language pairs.
+- **Low-resource languages are a different story.** Output into Maasai was "largely unusable," with systems often writing Swahili instead, and systems asked for Egyptian Arabic tended to produce Modern Standard Arabic.
+- **Automatic scores mislead.** The system that topped the automatic metrics ranked considerably lower with human annotators, and the authors conclude that human evaluation should remain the final arbiter of quality.
+
+Two limits apply. WMT anonymizes the commercial services as ONLINE-B, ONLINE-G, and ONLINE-W, so it doesn't settle "DeepL vs. Google Translate." And it tests whole documents (news, social posts, speech transcripts, literary and educational text), which give a model far more to work with than a two-word UI string does.
+
+## Machine translation engines, LLMs, and human translators
+
+All three can produce accurate translations. They differ in what context they accept and what they leave to you.
+
+| Approach | What it does well | Context it can use | What it leaves to you |
+| --- | --- | --- | --- |
+| Neural machine translation engines (Google Translate, DeepL) | Fast, consistent, inexpensive translation of sentences and documents | Glossaries; DeepL adds a context field, formality, and custom instructions; Google's Advanced edition adds example sentence pairs | Context for short strings, placeholders, plural forms, review, and delivery |
+| LLMs called directly (OpenAI API, Claude API, Gemini API) | Fluent output that follows instructions about tone, terms, and format | Whatever you put in the prompt | Assembling context for every string, keeping terms consistent across runs, validating output, and delivery |
+| Professional human translators | Judgment on idiom, culture, brand voice, and legal or regulated text | The product itself, a style guide, and questions back to you | Turnaround time and cost per word, which grow with every release |
+| General Translation | AI translation with context gathered from your code, plus a team review step | Surrounding component or file context, developer notes, Glossary, and Custom Prompts | Deciding which surfaces a person reviews before release |
+
+On DeepL vs. Google Translate specifically: WMT doesn't name them, so compare what each API accepts. DeepL's [translate API](https://developers.deepl.com/api-reference/translate) has a `context` parameter that influences the translation without being translated or billed, a `formality` setting for supported languages, glossaries, and up to 10 custom instructions. Google's [Cloud Translation](https://docs.cloud.google.com/translate/docs/overview) Advanced edition has a Translation LLM alongside its neural model, glossaries, and adaptive translation, which learns from a small set of example sentence pairs. Run a sample of your own strings through both, in your target languages, before you pick one.
+
+## Where AI translation errors come from
+
+Most errors in a shipped app trace back to information the model didn't have:
+
+- **Ambiguous short strings.** "Save" in German is *speichern* (write to disk) or *sparen* (spend less money). A model given only the word has to guess.
+- **Terminology drift.** A product name or feature term translated one way in the app and another way in the docs, or differently from one release to the next.
+- **Formality and register.** German *du* vs. *Sie*, French *tu* vs. *vous*, Japanese politeness levels. Without a rule, a model picks one per string, and a screen can mix both.
+- **Placeholders and markup.** `{{name}}`, `{count}`, or `<1>terms</1>` can be translated, reordered, or dropped, which breaks interpolation at run time.
+- **Plural forms.** English has two plural categories, while Polish uses four and Arabic six ([CLDR plural rules](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html)). Translating the English `one` and `other` strings leaves the rest missing. (See [How do I handle plurals in React?](/kb/how-to-handle-plurals-in-react)).
+- **Length limits.** "Save changes" renders 63% wider in German than in English, enough to overflow a fixed-width button or tab.
+- **Low-resource languages and dialects.** As WMT25 showed, quality drops sharply outside widely spoken languages, and dialects can collapse into the standard variety.
+
+## How teams make AI translation production-grade
+
+Teams that ship AI translation do five things around the model:
+
+1. **Send context with each string**: where it appears, what it does, and a note for anything ambiguous.
+2. **Pin terms in a glossary**, including names that should never be translated.
+3. **Write style rules once**: formality, audience, and conventions per language.
+4. **Review high-risk surfaces by hand**: pricing, checkout, legal text, safety messages, and anything regulated. Let low-risk strings ship after automated checks.
+5. **Run automated QA checks** that catch mechanical errors before release: matching keys and placeholders, every plural category the target language needs, and length limits. [What's the best way to translate JSON locale files?](/kb/translate-json-files) includes a small script that does the first two.
+
+Use a machine translation engine or an LLM directly for one-off text, internal content, or a prototype you'll check yourself. Use professional translators for legal, medical, and regulated text, and for brand copy where nuance matters most. Use an AI translation platform with context, a glossary, and review when translations ship in your product and have to stay current with every release.
+
+## How General Translation does it
+
+AI translation has gotten very good. To be production-grade, it needs two things a model doesn't have on its own: context about your product, and consistency across every surface, language, and release. General Translation provides both by connecting your code, content, and translations, which is why the world's best companies turn to us to ship their products in every language.
+
+General Translation sends context with every string. In a React app, the [`<T>`](/docs/react/reference/components/t) component sends its content as one unit with the surrounding elements, and the [`context`](/docs/react/reference/components/t#context) prop adds a note for anything ambiguous:
+
+```tsx title="SaveButton.tsx"
+import { T } from 'gt-react';
+
+export function SaveButton() {
+  return (
+    <T context="Editor toolbar. Save means write the document to disk.">
+      <button>Save</button>
+    </T>
+  );
+}
+```
+
+The note tells the model this "Save" is *speichern*, not the *sparen* a pricing toggle ("Save 20%") needs. For JSON and YAML files translated with the CLI, a companion [keyed metadata](/docs/cli/reference/keyed-metadata) file does the same job per key, with an optional `maxChars` length limit.
+
+Consistency comes from Context Groups in the Dashboard: a Glossary pins terms such as product names in every language, and Custom Prompts set rules such as formal "Sie" in German, shared across every project you assign them to. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)). Reviewers then check and edit any translation on the Dashboard's **Translations** page, comparing locales side by side. (See [Reviewing and editing translations](/docs/platform/dashboard/guides/reviewing-translations)). For how this differs from calling Google Translate on each string, see [Why use General Translation instead of Google Translate?](/kb/general-translation-vs-google-translate)
+
+General Translation supports 120+ locales and is trusted by the world's best developer teams, including at Cursor, Ramp, Profound, Cognition, Sierra, and ClickHouse.
+
+## Key takeaways
+
+- In WMT25, Gemini 2.5 Pro matched or beat the human reference translations in 10 of 16 language pairs, but quality into low-resource languages such as Maasai was largely unusable.
+- Most production errors come from missing information: ambiguous short strings, unpinned terms, formality, placeholders, plural categories, and length.
+- Context per string, a glossary, style rules, review of high-risk surfaces, and automated checks make AI translation safe to ship.
+- WMT anonymizes commercial engines, so compare DeepL and Google Translate on your own strings and by what their APIs accept: DeepL has a context field and formality, Google has adaptive translation from example pairs.

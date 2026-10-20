@@ -1,0 +1,212 @@
+---
+title: How do I detect a user's preferred language?
+summary: Read the browser's ordered language list (navigator.languages in JavaScript, the Accept-Language header on the server), match it against the locales you support with a fallback, and let an explicit choice override it. Don't use IP geolocation; it tells you where someone is, not which language they read.
+date: 2026-10-20
+category: internationalization
+related: [locale-routing-seo, language-switcher, locale-codes, make-website-multilingual]
+---
+
+The browser already holds the answer: an ordered list of languages the user set in the browser or operating system. The work is reading that list correctly, matching it to the locales you have translations for, and knowing when a stronger signal should win.
+
+## Where a language preference comes from
+
+Five signals can tell you which language to show. Only some of them are about language.
+
+| Signal | Where you read it | What it tells you | Reliability | Use it for |
+| --- | --- | --- | --- | --- |
+| `navigator.languages` | Browser JavaScript | Ordered language preferences | Good, but some browsers expose only one language | Client-rendered pages on a first visit |
+| `Accept-Language` header | Every HTTP request | The same list, weighted with q-values | Good, but often outside the user's control while traveling | Server-rendered pages on a first visit |
+| Locale in the URL | The request path, such as `/fr/` | The version the visitor asked for | High | Public, shareable pages |
+| Saved preference | A cookie or an account setting | A choice the user made before | High | Return visits |
+| IP geolocation | A lookup service | Approximate location | Not a language signal | Region defaults such as currency, not language |
+
+### In the browser: `navigator.language` and `navigator.languages`
+
+[`navigator.languages`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/languages) returns the user's preferred languages as BCP 47 tags, most preferred first, and [`navigator.language`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/language) is the first element of that array:
+
+```js
+navigator.language;  // "en-US"
+navigator.languages; // ["en-US", "zh-CN", "ja-JP"]
+```
+
+When the user changes their preferences, the browser fires a `languagechange` event on `window`. To reduce fingerprinting, Safari always reports only one language, and so does Chrome in incognito mode, so treat the list as possibly shorter than the user's full preferences.
+
+### On the server: the `Accept-Language` header
+
+Browsers send the same preferences with every request. [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-accept-language) defines the header as a comma-separated list of language ranges, each with an optional quality value (`q`) from 0 to 1. A missing `q` means 1, and `q=0` means "not acceptable." The RFC's own example:
+
+```http
+Accept-Language: da, en-gb;q=0.8, en;q=0.7
+```
+
+That reads as "I prefer Danish, but will accept British English and other types of English." A `*` wildcard [stands for](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Language) any language not listed. Browsers also add language-only fallbacks: per [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/languages), Chrome and Safari send `en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7` for a user whose `navigator.languages` is `["en-US", "zh-CN"]`. Sort entries by `q`, because the RFC says listing order "cannot be relied upon."
+
+The header is a hint. MDN states that a server "should never override an explicit user language choice," and points out that the header is often outside the user's control, for example while traveling. If you cache pages chosen by the header, add [`Vary: Accept-Language`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Vary) so a cache doesn't serve one visitor's language to the next.
+
+### Why IP geolocation is the wrong signal
+
+A location isn't a language. As the W3C [puts it](https://www.w3.org/International/questions/qa-link-lang), "numerous countries have more than one official language," and travelers, expatriates, and VPN users read a language that their IP address doesn't predict. Google is direct about it: "Don't use IP analysis to adapt your content," partly because "the Googlebot crawler usually originates from the USA," per its [multi-regional sites guidance](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites). A page that picks a language by IP shows crawlers one version and hides the rest. Location can still pick a sensible default currency or shipping region; keep that decision separate from language.
+
+## Match preferences against your locales
+
+A user asking for `pt-PT` on a site that has `pt-BR` needs a fallback rule. Two algorithms exist, and the [`Intl` APIs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) use the same names:
+
+- **Lookup** follows [RFC 4647](https://www.rfc-editor.org/rfc/rfc4647.html#section-3.4): try each preferred tag in turn, dropping subtags from the end (`zh-Hant-CN`, then `zh-Hant`, then `zh`) until one matches, else return the default.
+- **Best fit** lets the implementation return a locale "at least, but possibly more, suited" than lookup would, for example a sibling regional variant.
+
+The difference shows up with regional variants. Using [`@formatjs/intl-localematcher`](https://www.npmjs.com/package/@formatjs/intl-localematcher) 0.9.0 against `['en', 'fr', 'de', 'pt-BR']` with default `en`:
+
+| Requested | Lookup | Best fit |
+| --- | --- | --- |
+| `pt-PT` | `en` | `pt-BR` |
+| `en-GB` | `en` | `en` |
+| `fr-CA`, `de` | `fr` | `fr` |
+| `zh-TW` | `en` | `en` |
+
+Lookup is predictable and easy to explain. Best fit serves more people a language they can read; whether a Portuguese reader in Portugal prefers Brazilian Portuguese to English is a product decision, so test both against your locale list.
+
+## Example: negotiate on the server
+
+This Node.js server checks the URL, then a saved cookie, then the header. It uses [`negotiator`](https://www.npmjs.com/package/negotiator) 1.1.0 to parse and sort `Accept-Language` by q-value, and `@formatjs/intl-localematcher` to match the result with best fit.
+
+```bash
+npm install negotiator @formatjs/intl-localematcher
+```
+
+```js title="server.mjs"
+import { createServer } from 'node:http';
+import Negotiator from 'negotiator';
+import { match } from '@formatjs/intl-localematcher';
+
+const SUPPORTED = ['en', 'fr', 'de', 'pt-BR'];
+const DEFAULT_LOCALE = 'en';
+
+// Drop "*" and malformed tags; match() throws a RangeError on them.
+function isValidTag(tag) {
+  try {
+    Intl.getCanonicalLocales(tag);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function pickLocale(req) {
+  // 1. A locale in the URL path, such as /fr/pricing
+  const { pathname } = new URL(req.url, 'http://localhost');
+  const fromPath = pathname.split('/')[1];
+  if (SUPPORTED.includes(fromPath)) return { locale: fromPath, source: 'url' };
+
+  // 2. A choice saved on an earlier visit
+  const fromCookie = /(?:^|;\s*)locale=([^;]+)/.exec(req.headers.cookie ?? '')?.[1];
+  if (SUPPORTED.includes(fromCookie)) return { locale: fromCookie, source: 'cookie' };
+
+  // 3. Accept-Language, sorted by q-value, matched against your locales
+  const requested = new Negotiator(req).languages().filter(isValidTag);
+  if (requested.length === 0) return { locale: DEFAULT_LOCALE, source: 'default' };
+  return { locale: match(requested, SUPPORTED, DEFAULT_LOCALE), source: 'header' };
+}
+
+createServer((req, res) => {
+  const { locale, source } = pickLocale(req);
+  res.setHeader('Content-Language', locale);
+  res.setHeader('Vary', 'Accept-Language, Cookie');
+  res.end(`${locale} (from ${source})\n`);
+}).listen(3000);
+```
+
+Run it with `node server.mjs`, then send requests with `curl -H "Accept-Language: ..." localhost:3000/`. Output on Node.js 24:
+
+```text
+da, en-gb;q=0.8, en;q=0.7                      -> en (from header)
+pt-PT,pt;q=0.9,en;q=0.8                        -> pt-BR (from header)
+fr-CH, fr;q=0.9, en;q=0.8, de;q=0.7, *;q=0.5   -> fr (from header)
+ja, de;q=0.5                                   -> de (from header)
+en;q=0.5, de                                   -> de (from header)
+*                                              -> en (from default)
+(no header)                                    -> en (from default)
+fr, with cookie locale=de                      -> de (from cookie)
+/fr/pricing, with cookie locale=de             -> fr (from url)
+```
+
+The `isValidTag` filter matters: without it, a header containing `*` makes `match()` throw `RangeError: Incorrect locale information provided`, which would crash the request.
+
+## Example: detect in the browser
+
+On a client-rendered page you can apply the same idea to `navigator.languages`. This version implements a simple RFC 4647 lookup without dependencies:
+
+```js title="detect-locale.js"
+const SUPPORTED = ['en', 'fr', 'de', 'pt-BR'];
+const DEFAULT_LOCALE = 'en';
+
+// Lookup: try each preferred tag, dropping subtags from the end.
+function lookup(requested, supported, fallback) {
+  const lower = supported.map((tag) => tag.toLowerCase());
+  for (const tag of requested) {
+    const parts = tag.split('-');
+    while (parts.length) {
+      const i = lower.indexOf(parts.join('-').toLowerCase());
+      if (i !== -1) return supported[i];
+      parts.pop();
+    }
+  }
+  return fallback;
+}
+
+function preferredLocale(nav) {
+  const requested = nav.languages?.length ? nav.languages : [nav.language];
+  return lookup(requested, SUPPORTED, DEFAULT_LOCALE);
+}
+
+// In the browser: preferredLocale(navigator)
+```
+
+Output for sample preference lists, run in Node.js 24 with a stand-in `navigator` object:
+
+```text
+["fr-CA","en-US"] -> fr
+["pt-BR","pt"]    -> pt-BR
+["pt-PT","en"]    -> en
+["ja-JP"]         -> en
+["de-AT","de"]    -> de
+```
+
+Check a saved choice before calling `preferredLocale`, and use the result as a starting point: render in that language and show the switcher. Don't redirect on it.
+
+## Decide which signal wins
+
+Detection is only the first-visit guess. When signals disagree, use this order:
+
+1. **The choice the user just made** in your language switcher, which should take them to that language's URL.
+2. **The locale in the URL**, on pages that have one. Someone who opens a shared `/de/` link expects German, and crawlers depend on each URL showing the language it names.
+3. **A saved preference**, from a cookie or an account setting, for URLs without a locale, such as `/` or an app that doesn't put locales in its URLs.
+4. **`Accept-Language` or `navigator.languages`**, matched with a fallback.
+5. **Your default locale.**
+
+The W3C recommends using the header as a [starting point](https://www.w3.org/International/questions/qa-accept-lang-locales), letting users change the language, and storing the result "in a database or a cookie for later visits." When a detected preference disagrees with the URL, suggest the other version instead of redirecting; Google asks sites to [avoid automatic redirects](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) between language versions. The SEO side of this order is covered in [locale routing and SEO](/kb/locale-routing-seo), and the switcher itself in [building a language switcher](/kb/language-switcher).
+
+## How General Translation detects the locale
+
+General Translation's libraries implement this order for you. In `gt-next`, [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) resolves each request's locale in this order: a locale the visitor has just selected (tracked by a reset cookie), the URL locale (such as `/es/about`), the saved locale cookie, a referrer locale cookie from the previous client route, the `Accept-Language` header, and finally your `defaultLocale`. It sets the locale cookie (`generaltranslation.locale` by default, renamable through [`headersAndCookies`](/docs/react/nextjs/config#headers-and-cookies)) and, with locale routing on, redirects or rewrites to the localized path. Set [`ignoreBrowserLocales`](/docs/react/nextjs/config#ignore-browser-locales) to skip the header entirely.
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware();
+
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
+};
+```
+
+To read the result, call [`useLocale`](/docs/react/reference/hooks/use-locale) in client components and synchronous server components, or [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) from `gt-next/server` in async code. When a requested locale isn't supported, the libraries pick the best supported match from the browser's preferences, then a locale that shares the language (`en-GB` for `en-US`), then the default. A choice made with [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) or [`useSetLocale`](/docs/react/reference/hooks/use-set-locale) is stored in the cookie, so it wins on the next request.
+
+In a React single-page app, `gt-react`'s [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) resolves the locale from cookies and the browser before the first render, and a selection is saved to the `generaltranslation.locale` cookie. On a Node.js server, `gt-node`'s [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) negotiates `Accept-Language` against the locales passed to [`initializeGT`](/docs/node/reference/functions/initialize-gt). With `en`, `fr`, `de`, and `pt-BR` configured, it returned `fr` for `fr-CH, fr;q=0.9, en;q=0.8`, `pt-BR` for `pt-PT,pt;q=0.9`, and `en` for `ja`. Put a cookie or path check in front of it, as the [gt-node locale guide](/docs/node/guides/detecting-locale) shows. The experimental Python SDKs, `gt-flask` and `gt-fastapi`, read `Accept-Language` by default and accept a custom [`get_locale`](/docs/python/guides/detecting-locale) callback.
+
+## Key takeaways
+
+- `navigator.languages` and `Accept-Language` carry the same ordered preferences; Safari and Chrome incognito expose only one language.
+- Parse q-values (0 to 1, default 1), sort by them, and drop `*` and malformed tags before matching; `@formatjs/intl-localematcher` throws on `*`.
+- Lookup maps `pt-PT` to your default when you only have `pt-BR`; best fit maps it to `pt-BR`. Choose deliberately.
+- A choice made in the switcher wins, then the locale in the URL, then a saved preference, then the header, then your default. IP geolocation is never a language signal.
+- After a locale the visitor has just selected, `gt-next` middleware checks the URL, then the locale cookie, then `Accept-Language`, then `defaultLocale`, and `gt-node`'s [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) handles header negotiation on any Node.js server.

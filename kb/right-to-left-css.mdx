@@ -1,0 +1,218 @@
+---
+title: How do I support right-to-left languages in CSS?
+summary: Set dir="rtl" and the matching lang attribute on the html element, then write layout with CSS logical properties such as margin-inline-start and text-align start, so spacing, alignment, and positioning follow the text direction. Then fix what doesn't flip on its own, mirror directional icons, and isolate mixed-direction text.
+date: 2026-10-20
+category: locale-formatting
+related: [multilingual-app-launch-checklist, pseudo-localization, how-to-handle-plurals-in-react, i18n-without-translation-files]
+---
+
+Arabic, Hebrew, Persian, and Urdu read from right to left. Once the document declares that direction, the browser already reverses flex rows, grid columns, and default text alignment for you. Most RTL bugs come from CSS that names a physical side: `left`, `right`, `margin-left`, `translateX`.
+
+## Set the direction in HTML
+
+Put the direction and the language on the root element:
+
+```html
+<html lang="ar" dir="rtl">
+```
+
+The W3C's [guidance on text direction](https://www.w3.org/International/questions/qa-html-dir) is to declare base direction in markup, not with the CSS `direction` property, so it survives when styles don't load; MDN's [`direction` reference](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) agrees. The `lang` attribute doesn't set direction, even with a script subtag such as `ar-Arab`, so you need both. Add `dir` deeper in the page only when a block changes direction, such as an English quote inside an Arabic article.
+
+## Which approach to use
+
+With the direction set, the work is making the stylesheet follow it. There are four common ways to do that:
+
+| Approach | How layout flips | Upkeep | Main risk |
+| --- | --- | --- | --- |
+| CSS `direction: rtl` instead of `dir` | Text and logical properties flip; physical properties don't | Low | `:dir()` ignores it, and the direction disappears without CSS |
+| Separate RTL stylesheet, hand-written or generated with [RTLCSS](https://rtlcss.com/) | A second stylesheet swaps physical sides | Two stylesheets to ship and keep in sync | Overrides drift as the LTR styles change |
+| `dir` attribute plus CSS logical properties | Each property resolves to the correct side from `dir` | One stylesheet | Physical properties that slip back in during later changes |
+| Tailwind CSS logical utilities plus `rtl:` and `ltr:` variants | Utilities compile to logical properties | One set of classes | Variants used where a logical utility would do |
+
+Use logical properties (directly or through Tailwind) for new code and for any component you touch; one stylesheet serves both directions. Use a generated RTL stylesheet when a large legacy codebase is full of `left` and `right` and you need RTL before you can refactor it.
+
+## Write layout with logical properties
+
+[CSS logical properties](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_logical_properties_and_values) name sides by the flow of text: inline-start is the left in LTR and the right in RTL. They're Baseline widely available; `inset-inline-start`, for example, has worked across browsers since April 2021. Here's a card before and after:
+
+```css
+/* Before: physical sides stay put in RTL */
+.card {
+  margin-left: 16px;
+  padding-right: 24px;
+  text-align: left;
+  border-left: 4px solid var(--accent);
+  border-top-left-radius: 8px;
+}
+.card .badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* After: logical sides flip with dir */
+.card {
+  margin-inline-start: 16px;
+  padding-inline-end: 24px;
+  text-align: start;
+  border-inline-start: 4px solid var(--accent);
+  border-start-start-radius: 8px;
+}
+.card .badge {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+}
+```
+
+In a page with `dir="rtl"`, `margin-inline-start: 16px` computes to a 16px right margin, and `border-start-start-radius` rounds the top-right corner. Use `margin-inline` and `padding-inline` to set both inline sides at once.
+
+### What flips on its own
+
+- **Flexbox rows:** with `flex-direction: row`, the first item sits at the right edge.
+- **Grid columns:** column 1 is the rightmost column.
+- **Text alignment:** the initial value of `text-align` is `start`, so unstyled text aligns right.
+- **Inline content and table columns:** both follow the base direction.
+
+### What doesn't flip
+
+- `left` and `right` on positioned elements: `left: 0` stays on the left.
+- `margin-left`, `padding-right`, `border-left`, `float: left`, and `text-align: left`.
+- `transform: translateX()`: a positive value always moves right, so slide-in drawers and carousels move the wrong way.
+- `background-position: left`, `linear-gradient(to right, …)`, and the horizontal offset of `box-shadow`. These have no logical form, so override them under `:dir(rtl)`.
+
+For transforms, flip the sign with a custom property:
+
+```css
+:root { --inline-sign: 1; }
+:root:dir(rtl) { --inline-sign: -1; }
+
+/* A drawer that hides off its inline-start edge */
+.drawer[data-state="closed"] {
+  transform: translateX(calc(-100% * var(--inline-sign)));
+}
+```
+
+### Tailwind CSS
+
+In Tailwind CSS v4.3, the logical utilities are `ms-*` and `me-*` (margin), `ps-*` and `pe-*` (padding), `inset-s-*` and `inset-e-*` (the older `start-*` and `end-*` still compile), `text-start`, `border-s-*`, and `rounded-s-*`; each utility's page, such as [margin](https://tailwindcss.com/docs/margin), lists them. The [`rtl:` and `ltr:` variants](https://tailwindcss.com/docs/hover-focus-and-other-states#rtl-support) compile to selectors that include `:dir()`, so `ltr:` also matches pages that never set `dir="ltr"`. Prefer `ms-3` to `ltr:ml-3 rtl:mr-3`, and save the variants for transforms and icons, such as `rtl:-scale-x-100`.
+
+## Handle icons, mixed-direction text, and fonts
+
+### Mirror only directional icons
+
+Flip an icon horizontally under RTL:
+
+```css
+.icon-directional:dir(rtl) {
+  transform: scaleX(-1);
+}
+```
+
+The [`:dir()` pseudo-class](https://developer.mozilla.org/en-US/docs/Web/CSS/:dir) matches the direction an element inherits, while `[dir="rtl"]` matches only the element that carries the attribute. `:dir()` has been available across browsers since December 2023 and is now Baseline widely available. If you support older browsers, use `[dir="rtl"] .icon-directional` instead.
+
+Apple's [right-to-left guidelines](https://developer.apple.com/design/human-interface-guidelines/right-to-left) are a good rule set for the web too:
+
+- **Mirror:** back and forward arrows, next and previous controls, progress bars and sliders, icons that show lines of text, and icons that show forward motion.
+- **Don't mirror:** logos, universal marks such as the checkmark, physical objects such as clocks, tools drawn for right-handed use, and photos or illustrations.
+- **Never reverse digits:** a phone number or the number 541 reads in the same order in every language.
+
+### Isolate bidirectional text
+
+When RTL and LTR text share a line, neutral characters such as spaces, hyphens, and numbers can attach to the wrong side; the W3C's [inline bidi markup guide](https://www.w3.org/International/articles/inline-bidi-markup/) calls this spillover. In MDN's [`<bdi>` example](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdi), an Arabic name followed by "- 1st place" renders with the "1" at the wrong end. Wrap each value whose direction differs from the text around it:
+
+```html
+<!-- A name from your database, direction unknown -->
+<li><bdi>اَلأَعْشَى</bdi> - 1st place</li>
+
+<!-- A value that is always LTR inside Arabic text -->
+<p>اتصل بنا على <span dir="ltr">+1 (555) 010-2030</span></p>
+
+<!-- Text the user types, direction unknown -->
+<textarea dir="auto"></textarea>
+```
+
+`<bdi>` acts like `dir="auto"`, taking its direction from the first strong character. Use `dir="ltr"` on values that are always left-to-right: phone numbers, email addresses, URLs, and order IDs. The CSS property `unicode-bidi: isolate` does the same isolation from a stylesheet, but MDN [warns authors not to override `unicode-bidi`](https://developer.mozilla.org/en-US/docs/Web/CSS/unicode-bidi), so prefer `dir` and `<bdi>` in markup.
+
+### Fonts
+
+- **Cover the script.** Scope a font with Arabic or Hebrew glyphs by language: `:lang(ar) { font-family: "Noto Sans Arabic", system-ui, sans-serif; }`.
+- **Don't letter-space Arabic.** Its letters join, and the [CSS Text spec](https://www.w3.org/TR/css-text-3/) tells authors to avoid `letter-spacing` on cursive scripts because results aren't interoperable.
+- **Balance against capitals.** Arabic and Hebrew have no uppercase, so all-caps Latin beside them looks larger; Apple suggests raising the RTL font size by about 2 points.
+
+## Common RTL bugs and fixes
+
+### The page is translated but still reads left to right
+
+**Cause:** the translated page sets `lang="ar"` but no `dir`, or sets `direction: rtl` on an inner wrapper. **Fix:** set `dir="rtl"` on `<html>` from the active locale on every render, including server-rendered HTML.
+
+### Spacing sits on the wrong side of icons and labels
+
+**Cause:** `margin-left` or `padding-right` between an icon and its text. **Fix:** switch to `margin-inline-end` or Tailwind's `me-*`, or use `gap` in a flex container, which has no side at all.
+
+### Badges, tooltips, and dropdowns open from the wrong edge
+
+**Cause:** `position: absolute` with `left` or `right`, or a JavaScript positioning library computing from the left. **Fix:** use `inset-inline-start` and `inset-inline-end`, and pass the direction to the positioning library if it accepts one.
+
+### Drawers and carousels slide the wrong way
+
+**Cause:** `translateX()` is physical. **Fix:** multiply by a direction sign, as in the drawer example above, and test swipe gestures in RTL.
+
+### The back arrow points forward, or the logo is mirrored
+
+**Cause:** icons are flipped all or nothing. **Fix:** mirror only directional icons.
+
+### Punctuation or numbers jump to the other end of a line
+
+**Cause:** an inserted value with a different direction from its surroundings, such as a username, product name, or phone number. **Fix:** wrap it in `<bdi>`, or in an element with `dir="ltr"` when you know it's left-to-right.
+
+### Arabic letters look disconnected
+
+**Cause:** a global `letter-spacing` meant for Latin headings. **Fix:** reset `letter-spacing` to 0 for `:lang(ar)` and other cursive scripts.
+
+## How General Translation helps
+
+General Translation's libraries return the text direction for the active locale, so you can set `dir` from the same locale that picks the translations. In a Next.js App Router layout, `gt-next` exposes [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) from `gt-next/server`:
+
+```tsx title="app/[locale]/layout.tsx"
+import { getLocale, getLocaleDirection } from 'gt-next/server';
+
+export default async function LocaleLayout({ children }) {
+  const [locale, direction] = await Promise.all([
+    getLocale(),
+    getLocaleDirection(),
+  ]);
+  return <html lang={locale} dir={direction}>{children}</html>;
+}
+```
+
+In `gt-react`, `gt-next`, and `gt-react-native`, the [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) hook returns `'ltr'` or `'rtl'` for the active locale. A React app renders below `<html>`, so copy the value to the root element from a component in your tree. A single-page app set up with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) needs no provider; in a server-rendered `gt-react` app, render the component inside [`<GTProvider>`](/docs/react/reference/components/gt-provider):
+
+```tsx
+import { useEffect } from 'react';
+import { useLocale, useLocaleDirection } from 'gt-react';
+
+export function DocumentDirection() {
+  const locale = useLocale();
+  const dir = useLocaleDirection();
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = dir;
+  }, [locale, dir]);
+  return null;
+}
+```
+
+For other stacks, including Vue, `gt-tanstack-start`, and server templates, the Core library's [`getLocaleDirection`](/docs/platform/core/reference/utility-functions/locales/get-locale-direction) from `generaltranslation` runs locally with no API key: `getLocaleDirection('ar-SA')` returns `'rtl'`, `'he-IL'` and `'fa'` do too, and an invalid code falls back to `'ltr'`.
+
+General Translation doesn't rewrite your CSS; the logical properties and icon rules above make the layout flip. It handles the translation side: Arabic and Hebrew are among its 120+ locales, and UI wrapped in [`<T>`](/docs/react/reference/components/t) is translated in place. RTL text isn't always longer: on the General Translation landing page, "Save changes" is 25% narrower in Arabic and 18% narrower in Hebrew than in English, so test layouts for shrinking text too. Arabic also uses one of 6 plural forms for a count where English uses one of 2, which [`<Plural>`](/docs/react/reference/components/plural) handles per locale (see [handling plurals in React](/kb/how-to-handle-plurals-in-react)).
+
+Before launch, run the right-to-left check in the [multilingual app launch checklist](/kb/multilingual-app-launch-checklist), and use [pseudo-localization](/kb/pseudo-localization) to catch overflow and unwrapped strings before translations exist.
+
+## Key takeaways
+
+- Put `lang` and `dir="rtl"` on `<html>`; `lang` alone doesn't change direction, and the CSS `direction` property shouldn't carry it.
+- Flex rows, grid columns, and default text alignment flip on their own; `left`, `right`, `margin-left`, `translateX()`, `background-position`, and shadow offsets don't.
+- Replace physical properties with logical ones (`margin-inline-start`, `inset-inline-end`, `text-align: start`, `border-start-start-radius`), or Tailwind's `ms-*`, `ps-*`, and `inset-s-*`.
+- Mirror arrows and progress indicators with `:dir(rtl)`, never logos, checkmarks, or clocks, and wrap mixed-direction values in `<bdi>` or `dir="ltr"`.
+- With General Translation, set `dir` from [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) (Next.js server code or the Core library) or `useLocaleDirection` (React).

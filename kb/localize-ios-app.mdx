@@ -1,0 +1,191 @@
+---
+title: How do I localize an iOS app with String Catalogs?
+summary: Add your languages in Xcode, write user-facing text with localizable APIs such as SwiftUI Text and String(localized:), and build so Xcode extracts every string into a String Catalog (.xcstrings). Then translate each language in the catalog editor, through an exported XLIFF file, or with a tool that edits the catalog, and test with scheme languages and pseudolanguages.
+date: 2026-10-20
+category: internationalization
+related: [translate-android-strings, pseudo-localization, find-hardcoded-strings, locale-codes, general-translation-vs-tms]
+---
+
+A String Catalog holds one string table in every language in a single JSON file, and Xcode syncs it with your code on every build. That leaves you two jobs: getting every user-facing string into the catalog, and getting good translations back into it.
+
+## Set up localization in Xcode
+
+### Add your languages
+
+In the project editor, select the project, open **Info**, and click the add button under **Localizations** (the String Catalog editor's sidebar has one too). Each entry has a language ID such as `de`, `ja`, or `en-IN` ([Apple: Adding support for languages and regions](https://developer.apple.com/documentation/xcode/adding-support-for-languages-and-regions)). Choose a regional variant only when the text differs, as with `pt-BR` and `pt-PT`. (See [What are locale codes, and which ones should I use?](/kb/locale-codes))
+
+### Add a String Catalog and build
+
+Choose **File > New > File from Template**, filter for "string", and pick **String Catalog**. The default name is `Localizable.xcstrings`. Then choose **Product > Build**: Xcode discovers the localizable strings in your code and adds them to the catalog, and it updates the catalog on every later build ([Apple: Localizing and varying text with a string catalog](https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog)).
+
+String Catalogs arrived in Xcode 15 ([release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-15-release-notes)). At build time they compile to `.strings` and `.stringsdict` files, so adopting them doesn't require raising your minimum deployment target ([WWDC23: Discover String Catalogs](https://developer.apple.com/videos/play/wwdc2023/10155/)).
+
+### Write text with localizable APIs
+
+Xcode only extracts strings passed to localizable APIs. In SwiftUI, string literals in views are [`LocalizedStringKey`](https://developer.apple.com/documentation/swiftui/localizedstringkey) values and are extracted automatically. Elsewhere, use `String(localized:)` ([Apple: Preparing your app's text for translation](https://developer.apple.com/documentation/xcode/preparing-your-apps-text-for-translation)):
+
+```swift
+import SwiftUI
+
+struct CartView: View {
+    let itemCount: Int
+    let couponCode: String
+
+    var body: some View {
+        VStack {
+            // String literals in SwiftUI views are LocalizedStringKey values,
+            // so Xcode adds them to the String Catalog when you build.
+            Text("Your cart")
+
+            // Interpolation becomes a format specifier (%lld) that you can vary by plural.
+            Text("\(itemCount) items")
+
+            // A comment tells translators where and how the text is used.
+            Text("Checkout", comment: "Button that starts payment for the items in the cart.")
+
+            // A String variable is displayed as-is. Text(verbatim:) makes that explicit.
+            Text(verbatim: couponCode)
+        }
+    }
+}
+
+// Outside SwiftUI views, create localizable text with String(localized:).
+let emptyCartMessage = String(
+    localized: "Your cart is empty",
+    comment: "Shown when the cart has no items."
+)
+```
+
+The common miss is `Text(someString)`: a `String` variable isn't looked up in the catalog. To pass localizable text between views, use `LocalizedStringResource`, which Apple recommends and which also carries a comment and table name.
+
+Comments matter because "Checkout" alone could be a noun or a verb. Add them with the `comment:` parameter, or Control-click a key in the catalog and choose **Generate Comment** to have Xcode write one from the surrounding code.
+
+To find text that never reached the catalog, open **Product > Scheme > Edit Scheme > Run > Options** and turn on **Show non-localized strings**; those strings render in all caps when the app runs ([Apple: Preparing your interface for localization](https://developer.apple.com/documentation/xcode/preparing-your-interface-for-localization)). (See [How do I find hardcoded strings that aren't translated?](/kb/find-hardcoded-strings))
+
+## Handle plurals, devices, and Info.plist
+
+Control-click a key with an interpolated number and choose **Vary by Plural**. Xcode adds the plural categories each language needs: `one` and `other` for English, and `one`, `few`, `many`, and `other` when you add Russian. **Vary by Device** gives a key a different value per device, such as "Tap to learn more" on iPhone and "Click to learn more" on Mac.
+
+Under the editor, the catalog is JSON, which diffs cleanly in pull requests. Here's a small excerpt with an English plural and a Spanish translation:
+
+```json title="Localizable.xcstrings"
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld items" : {
+      "comment" : "Number of items in the shopping cart.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld item"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld items"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Checkout" : {
+      "comment" : "Button that starts payment for the items in the cart.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pagar"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
+```
+
+System-facing text in `Info.plist`, such as the app's display name and the usage descriptions in permission prompts, goes in a separate catalog. Add an `InfoPlist.xcstrings` file to the target, and Xcode fills it with the known localizable `Info.plist` keys on each build.
+
+## Track string states
+
+Each translation in the catalog has a state, shown in the editor's **State** column:
+
+- **New:** not yet translated into that language.
+- **Needs Review:** the source changed after translation, or someone flagged it; choose **Mark as Reviewed** to keep the current value.
+- **Translated:** a green checkmark; nothing left to do.
+- **Stale:** Xcode can no longer find the string in code. Untranslated strings that disappear from code are removed; translated ones are kept and marked stale until you delete them.
+
+Strings you add by hand, such as keys built at run time, can be set to manual management, so builds never update or remove them.
+
+## Migrate from .strings and .stringsdict
+
+To convert an existing project, choose **Edit > Convert > To String Catalog** (or Control-click a file and choose **Migrate to String Catalog**). Migration runs per file and per target, and catalogs can coexist with legacy files while you migrate. A catalog and a `.strings` or `.stringsdict` file with the same name in the same target is a build error, so finish each table before moving on. Migrating `InfoPlist.strings` keeps its comments when it has them.
+
+## Choose how to translate
+
+Five approaches put translations into the catalog:
+
+| Approach | Who translates | Context the translator gets | Repeatable on every release | What it leaves to you |
+| --- | --- | --- | --- | --- |
+| Type in the catalog editor | You or a bilingual teammate | The whole app | No | Every string in every language, by hand |
+| Xcode coding agent (Xcode 27) | The agent you enable in Xcode | Where each string is used, similar strings, plural needs, Apple's language style guides | Run per request in Xcode | Agent setup, reviewing machine-translated strings, keeping terms in sync with your web and Android apps |
+| Export `.xcloc` and XLIFF to translators or a translation management system (TMS) | Professional translators | Comments, plus screenshots you add to the `Notes` folder | Scriptable with `xcodebuild` | A round trip per release, and waiting on it |
+| Script machine translation or an LLM over the JSON | A model or translation API | Whatever your script sends | Yes | Variations, substitutions, plural categories per language, format specifiers, states, and review |
+| General Translation CLI | AI translation with your Glossary and Custom Prompts | Your Context Groups, shared across projects | Yes, one command | Reviewing output and App Store metadata |
+
+**Exporting.** **Product > Export Localizations** creates one Xcode Localization Catalog (a `.xcloc` folder) per language, with an XLIFF file inside ([Apple: Exporting localizations](https://developer.apple.com/documentation/xcode/exporting-localizations)). Turn on the **Use Compiler to Extract Swift Strings** build setting so the export includes every Swift string. Bring translations back with **Product > Import Localizations**, or script both directions with `xcodebuild -exportLocalizations` and `xcodebuild -importLocalizations` ([Apple: Importing localizations](https://developer.apple.com/documentation/xcode/importing-localizations)).
+
+**What changed in Xcode 27.** Agents in Xcode can now translate String Catalogs: Xcode adds the languages, creates any missing String Catalogs, and gives the agent context for each string ([Xcode 27 release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes), [WWDC26: Translate your app using agents in Xcode](https://developer.apple.com/videos/play/wwdc2026/213/)). The catalog editor gains a **Generate Translations** button, agent output gets the **Machine Translated** state, and exported XLIFF marks it with `state-qualifier="leveraged-mt"`. A localization comment of "do not translate" now marks a string **Don't Translate** in the catalog and `translate="no"` in XLIFF. You can point `AGENTS.md` or `CLAUDE.md` at a `TRANSLATION.md` file with a glossary and a list of strings the agent shouldn't translate ([Apple: Localizing your app using agents](https://developer.apple.com/documentation/xcode/localizing-your-app-using-agents)).
+
+Use the catalog editor for one or two languages you speak. Use Xcode's agent when you want machine translation inside Xcode and the iOS app is your only surface. Use an XLIFF export when professional translators or an existing [TMS](/kb/what-is-a-translation-management-system) own the work. (See [Why use General Translation instead of a TMS?](/kb/general-translation-vs-tms)) Use General Translation's CLI when translation should run as a repeatable command, and the same terminology should hold across your iOS app, website, and Android app.
+
+## Translate String Catalogs with General Translation
+
+General Translation's CLI, `gt`, translates `.xcstrings` files in place (`gt` 2.21.0 or later; the CLI needs Node.js 20 or later). Add an `xcstrings` entry to `gt.config.json` that points directly at each catalog:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja"],
+  "files": {
+    "xcstrings": {
+      "include": ["Resources/Localizable.xcstrings", "Resources/InfoPlist.xcstrings"]
+    }
+  }
+}
+```
+
+Every locale lives in the same file, so the `include` paths have no `[locale]` placeholder, and the catalog's `sourceLanguage` must match `defaultLocale` or the run stops before uploading. Sign in with [`npx gt login`](/docs/cli/reference/commands/login), set `GT_PROJECT_ID` ([CLI credentials](/docs/cli/guides/configuring#credentials)), and run:
+
+```bash
+npx gt translate
+```
+
+On upload, the CLI sends only the source-language slice of the catalog. On download, it merges each target locale back into the file and changes only that locale's localization for matching entries. Other locales, comments, extraction states, substitutions, variations, and fields it doesn't recognize stay as they are ([`.xcstrings` reference](/docs/cli/reference/formats/xcstrings-files)). In CI, store a project API key with **Files > Write** and **Translation queue > Enabled** as `GT_API_KEY`, set `GT_PROJECT_ID`, and run the same command.
+
+The CLI also covers the legacy layout: the `dotStrings` and `dotStringsdict` keys translate `.strings` tables and `.stringsdict` plural files in each `.lproj` folder, and the `.stringsdict` translation rebuilds plural forms for each target language's rules ([`.stringsdict` reference](/docs/cli/reference/formats/dot-stringsdict-files)). A project uses one layout or the other.
+
+Reviewers can correct translations in the Dashboard's [Translation Editor](/docs/platform/dashboard/guides/reviewing-translations), which opens `.xcstrings` translations in an editable raw view and updates only the selected locale. If you edit translations in Xcode instead, run [`npx gt save-local`](/docs/cli/reference/commands/save-local) so later runs keep them; syncing local edits is opt-in. Assign one [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) to your iOS, web, and [Android](/kb/translate-android-strings) projects, and a Glossary term like your plan names stays the same on every surface.
+
+Ramp uses General Translation for "11+ locales across dashboard, landing page, iOS" ([Enterprise](https://generaltranslation.com/enterprise)).
+
+## Test every language
+
+Choose **Product > Scheme > Edit Scheme**, select **Run**, then **Options**, and set **App Language** and **App Region** for the next run ([Apple: Testing localizations](https://developer.apple.com/documentation/xcode/testing-localizations-when-running-your-app)). The same **App Language** menu lists pseudolanguages: **Double-Length** for text expansion, **Right-to-Left** for mirrored layouts, **Accented** and **Tall** for taller glyphs, and **Bounded String** for truncation. (See [What is pseudo-localization?](/kb/pseudo-localization)) For SwiftUI previews, set `.environment(\.locale, .init(identifier: "de"))`.
+
+App Store metadata (name, description, screenshots) is localized separately in [App Store Connect](https://developer.apple.com/help/app-store-connect/manage-app-information/localize-app-information).
+
+## Key takeaways
+
+- Build once after adding `Localizable.xcstrings`: Xcode extracts SwiftUI literals and `String(localized:)` text, but not `Text` built from a `String` variable.
+- Use **Vary by Plural** for counts; Xcode adds each language's categories, such as four for Russian.
+- Translated strings removed from code become **Stale** instead of disappearing, so clean them up on purpose.
+- Xcode 27 adds agent translation, a **Machine Translated** state, and `leveraged-mt` in exported XLIFF.
+- General Translation's CLI translates the catalog in place with `"xcstrings": { "include": [...] }` and [`npx gt translate`](/docs/cli/reference/commands/translate), keeping other locales, comments, and variations intact.

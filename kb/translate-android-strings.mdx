@@ -1,0 +1,157 @@
+---
+title: How do I translate Android strings.xml files?
+summary: Keep the default-language text in res/values/strings.xml and give each language its own locale-qualified folder, such as values-es or values-b+sr+Latn, holding the same resource names. Translate every string, plurals, and string-array value while keeping format arguments, placeholders, and escapes intact, then use lint's MissingTranslation check to catch gaps.
+date: 2026-10-20
+category: internationalization
+related: [localize-ios-app, pseudo-localization, locale-codes, find-hardcoded-strings, general-translation-vs-tms]
+---
+
+Android picks the `values-*` folder that best matches the user's locale and falls back to `res/values/` for anything it can't find there. That fallback is mandatory: if the default file is missing a string the app needs, the app doesn't run ([Android: Localize your app](https://developer.android.com/guide/topics/resources/localization)).
+
+## How Android finds translations
+
+Each translation is a copy of `strings.xml` with the same resource names, in a folder named for its locale ([Android: App resources overview](https://developer.android.com/guide/topics/resources/providing-resources)):
+
+- **Language only:** `res/values-es/strings.xml`, `res/values-ja/strings.xml`
+- **Language and region,** with a lowercase `r` before the region: `res/values-pt-rBR/`, `res/values-fr-rCA/`
+- **BCP 47 tags** (Android 7.0 and later), joined with `+`: `res/values-b+sr+Latn/` for Serbian in Latin script, `res/values-b+es+419/` for Latin American Spanish
+
+Qualifiers are case-insensitive, and a region can't stand alone. Translation tools and config files usually write tags as `pt-BR` or `sr-Latn`, so something has to convert them to Android's spelling. (See [What are locale codes, and which ones should I use?](/kb/locale-codes))
+
+## What a translatable strings.xml looks like
+
+This file uses each resource type a translator meets:
+
+```xml title="app/src/main/res/values/strings.xml"
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- App name shown on the home screen. Brand name, never translated. -->
+    <string name="app_name" translatable="false">Hearth</string>
+
+    <!-- Button that confirms an RSVP. Fits about 20 characters. -->
+    <string name="rsvp_yes">I\'m going</string>
+
+    <!-- Greeting on the home screen. -->
+    <string name="welcome">Hi, <xliff:g id="first_name" example="Maya">%1$s</xliff:g>! You have %2$d new invites.</string>
+
+    <!-- Guest count under an event title. -->
+    <plurals name="guest_count">
+        <item quantity="one">%d guest</item>
+        <item quantity="other">%d guests</item>
+    </plurals>
+
+    <string-array name="rsvp_options">
+        <item>Going</item>
+        <item>Maybe</item>
+        <item>Can\'t go</item>
+    </string-array>
+</resources>
+```
+
+### Plurals
+
+A `<plurals>` resource holds one `<item>` per quantity category: `zero`, `one`, `two`, `few`, `many`, or `other`. Android picks the category from the language's grammar, not the number itself, so English ignores a `zero` item even when the count is 0. Korean only ever uses `other` ([Android: String resources](https://developer.android.com/guide/topics/resources/string-resource)). A translated file therefore needs the categories its own language uses: Polish needs `one`, `few`, `many`, and `other`, while Japanese needs only `other`. For a "No guests yet" message, use a separate string and an `if`, not a `zero` item. When the text includes the number, pass the count twice: `getQuantityString(R.plurals.guest_count, count, count)`.
+
+### Escapes, formats, and placeholders
+
+| Character or need | How to write it |
+| --- | --- |
+| Apostrophe | `\'`, or wrap the whole value in double quotes |
+| Double quote | `\"` |
+| `@` or `?` at the start | `\@` or `\?`; an unescaped leading `@` or `?` reads as a resource reference |
+| New line, tab | `\n`, `\t` |
+| Repeated spaces | Wrap the value in double quotes; Android collapses whitespace otherwise |
+
+Use positional format arguments (`%1$s`, `%2$d`) so a translator can reorder them. Wrap any text that must survive translation unchanged, such as a placeholder, a URL, or a symbol, in `<xliff:g>` with an `id` that says what it is and an `example` of a run-time value. Declare the `xliff` namespace on `<resources>`, as above.
+
+### Untranslatable strings and comments
+
+Mark brand names, API keys, and debug values `translatable="false"`. The `MissingTranslation` lint docs also suggest keeping them in a separate `donottranslate.xml` file. Put a comment above each string saying where it appears and how much space it has; Android's localization guide points out that a button allows less room than a text box.
+
+## Catch missing and extra translations
+
+Android Studio's Translations Editor shows the default and every translated file side by side. Right-click `strings.xml` and choose **Open Translations Editor**; click the globe icon to add a locale, which creates its `values-*` folder. The **Untranslatable** checkbox writes `translatable="false"` for you, and errors show as red text ([Android Studio: Translations Editor](https://developer.android.com/studio/write/translations-editor)).
+
+Two lint checks guard coverage:
+
+- [`MissingTranslation`](https://googlesamples.github.io/android-custom-lint-rules/checks/MissingTranslation.md.html) is an error when a default string has no entry in a locale you support. Set `tools:locale` on the default `<resources>` element so lint knows the source language.
+- [`ExtraTranslation`](https://googlesamples.github.io/android-custom-lint-rules/checks/ExtraTranslation.md.html) is fatal when a locale file has a name the default file doesn't, usually a string deleted from the source but not from translations.
+
+Neither check sees text that never made it into `strings.xml`. Lint's [`HardcodedText`](https://googlesamples.github.io/android-custom-lint-rules/checks/HardcodedText.md.html) warning flags literal text in layout files, such as `android:text="Button"`. Its documentation covers layout files only, so check Kotlin and Compose code as well. (See [How do I find hardcoded strings that aren't translated?](/kb/find-hardcoded-strings))
+
+## Let users pick the app language
+
+Android 13 added per-app language preferences. With Android Studio Giraffe and AGP 8.1 or later and `compileSdk` 33 or higher, turn on the generated locale list, and declare the default folder's language in `res/resources.properties` with `unqualifiedResLocale=en-US` ([Android: Per-app language preferences](https://developer.android.com/guide/topics/resources/app-languages)):
+
+```kotlin title="app/build.gradle.kts"
+android {
+    androidResources {
+        // Builds the locale list from your values-* folders.
+        generateLocaleConfig = true
+    }
+}
+```
+
+Without the generated list, write `res/xml/locale_config.xml` by hand and reference it with `android:localeConfig` in the manifest; the build fails if you do both. To set the language from your own settings screen, including before Android 13, call `AppCompatDelegate.setApplicationLocales` (AppCompat 1.6.0 or later; on Android 12 and lower, also turn on `autoStoreLocales` in the manifest).
+
+## Test with pseudolocales
+
+Set `isPseudoLocalesEnabled = true` on the debug build type, enable Developer options on the device, and pick a pseudolocale in the system language settings ([Android: Test with pseudolocales](https://developer.android.com/guide/topics/resources/pseudolocales)). `en-XA` accents and lengthens every string and brackets each message, which exposes clipped layouts and sentences assembled from pieces. `ar-XB` flips text to right-to-left. (See [What is pseudo-localization?](/kb/pseudo-localization))
+
+## Choose how to translate
+
+| Approach | Who translates | Plurals per language | Repeatable on every release | What it leaves to you |
+| --- | --- | --- | --- | --- |
+| Translations Editor by hand | You or a bilingual teammate | You add each category | No | Every string in every locale, by hand |
+| A translation management system (TMS) or vendor | Professional translators | Depends on the tool | Through its sync or import step | Exporting, importing, and waiting on each round |
+| A script over machine translation or an LLM | A model or translation API | Only if your script rebuilds them | Yes | Parsing XML, escapes, `<xliff:g>`, `translatable="false"`, resource references, review |
+| General Translation CLI | AI translation with your Glossary and Custom Prompts | Rebuilt per target language | Yes, one command | Reviewing output and Play Store listing text |
+
+Android's [localization guide](https://developer.android.com/guide/topics/resources/localization) also points to Gemini in Android Studio for translating string resources in the project, and to Play Console's App Translation Service for ordering professional translations.
+
+Use the Translations Editor for one or two languages you speak. Use a [TMS](/kb/what-is-a-translation-management-system) when professional translators own the work, or when you need [over-the-air string updates](https://developers.lokalise.com/docs/ota-sdk) between Play releases, which several TMS vendors ship as SDKs. (See [Why use General Translation instead of a TMS?](/kb/general-translation-vs-tms)) Use General Translation's CLI when translation should run as a repeatable command, and the same terms should hold across your Android app, [iOS app](/kb/localize-ios-app), and website.
+
+## Translate strings.xml with General Translation
+
+General Translation's CLI, `gt`, translates Android string resources with the `androidStrings` key (`gt` 2.19.0 or later). The default file has no locale in its path, so point `include` at it and route output with `transform`:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "pt-BR", "sr-Latn"],
+  "files": {
+    "androidStrings": {
+      "include": ["app/src/main/res/values/strings.xml"],
+      "transform": {
+        "match": "app/src/main/res/values/(.*)",
+        "replace": "app/src/main/res/values-{locale}/$1"
+      }
+    }
+  }
+}
+```
+
+The CLI converts each locale to Android's folder spelling, so this config writes `values-es/`, `values-pt-rBR/`, and `values-b+sr+Latn/` ([strings.xml reference](/docs/cli/reference/formats/android-strings-files)). Don't use `res/values-[locale]/strings.xml` in a standard project: the placeholder resolves to `values-en/`, matches nothing, and the run translates nothing. Sign in with [`npx gt login`](/docs/cli/reference/commands/login), set `GT_PROJECT_ID` ([CLI credentials](/docs/cli/guides/configuring#credentials)), and run:
+
+```bash
+npx gt translate
+```
+
+Translations keep resource names, `<xliff:g>` placeholders, and inline markup. Each `<plurals>` is rebuilt for the target language's CLDR rules, adding the categories that language needs and dropping the ones it never selects, including an English `zero`, which Android wouldn't reach anyway. The CLI leaves these alone:
+
+- Resources marked `translatable="false"` (`False` and `FALSE` count too)
+- Unquoted values that start with `@` or `?`, which reference other resources
+- A whole `<plurals>` or `<string-array>` when any item is a resource reference
+- Non-text resources such as `<bool>`, `<integer>`, and `<color>`
+
+The comment above a resource goes to the translation engine as context, so the RSVP comment in the example above reaches it with the string. In CI, store a project API key with **Files > Write** and **Translation queue > Enabled** as `GT_API_KEY`, set `GT_PROJECT_ID`, and run the same command. Reviewers can fix wording in the Dashboard's [Translation Editor](/docs/platform/dashboard/guides/reviewing-translations); if someone edits a `values-*` file directly, run [`npx gt save-local`](/docs/cli/reference/commands/save-local) so later runs keep the edit (opt-in). Assign one [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) to your Android, iOS, and web projects so Glossary terms match everywhere.
+
+Partiful uses General Translation for "2+ locales across web, iOS, Android" ([Enterprise](https://generaltranslation.com/enterprise)).
+
+## Key takeaways
+
+- The default `res/values/strings.xml` must contain every string; locale folders override it per resource.
+- Folder names use `-r` for a region (`values-pt-rBR`) and `b+` for script or numeric regions (`values-b+sr+Latn`).
+- Provide `one` and `other` in English; translated `<plurals>` need their own language's categories, and English ignores `zero`.
+- Escape apostrophes, quotes, and leading `@` or `?`, and protect placeholders with `<xliff:g>`.
+- General Translation's CLI translates `strings.xml` with `androidStrings`, an `include` on the default file, and a `transform` to `values-{locale}`, skipping `translatable="false"` resources.

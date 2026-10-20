@@ -1,0 +1,106 @@
+---
+title: Should a multilingual site use subdirectories, subdomains, or country domains?
+summary: Most multilingual sites should use subdirectories such as example.com/de/, because they are the simplest to run on one host and Google lists them as easy to set up and low maintenance. Choose country domains when you run separate businesses per country, subdomains when a locale needs separate hosting, and avoid language URL parameters.
+date: 2026-10-20
+category: multilingual-seo
+related: [what-is-hreflang, locale-routing-seo, multilingual-nextjs-seo, locale-codes]
+---
+
+Every structure here gives each language its own URL, and Google's [multi-regional and multilingual sites guide](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) compares them on targeting and upkeep without ranking one above another. So the decision comes down to two questions: are you targeting languages or countries, and how many sites do you want to operate?
+
+## The four URL structures compared
+
+The pros and cons below paraphrase Google's own table. The last option, a URL parameter, is the one Google marks as not recommended.
+
+| Structure | Example | Google's pros | Google's cons |
+| --- | --- | --- | --- |
+| Country-code top-level domain (ccTLD) | `example.de` | Clear geotargeting; server location irrelevant; easy to separate sites | Expensive and sometimes unavailable; more infrastructure; strict ccTLD requirements in some countries; targets one country only |
+| Subdomain | `de.example.com` | Easy to set up; allows different server locations; easy to separate sites | Users can't tell from the URL whether `de` means a language or a country |
+| Subdirectory | `example.com/de/` | Easy to set up; low maintenance (same host) | Users may not recognize the targeting from the URL; single server location; harder to separate sites |
+| URL parameter | `example.com?lang=de` | None listed (not recommended) | Hard to segment by URL; users may not recognize the targeting |
+
+Two details from the same guidance narrow the gap:
+
+- **Among URL forms, only a ccTLD signals a country.** Google says language subdomains such as `en` or `de` aren't used to determine a page's audience; you map that explicitly with [hreflang](/kb/what-is-hreflang), and the same goes for a `/de/` folder.
+- **Some ccTLDs count as generic.** Google treats `.io`, `.ai`, `.co`, `.me`, `.tv`, and other "vanity" ccTLDs, plus regional domains like `.eu`, as generic top-level domains. A startup on `example.io` isn't targeting the British Indian Ocean Territory.
+
+Google also notes that server location is "not a definitive signal" because sites use CDNs, which softens the "single server location" con for subdirectories.
+
+A fifth option keeps one URL and changes the language by cookie or browser header. Google advises against it because its crawler might not find every version; the tradeoffs are covered in [how a site should pick the language it serves](/kb/locale-routing-seo).
+
+## What each structure costs to run
+
+Google's table stops at "more infrastructure." In practice, the structures differ in how many separate things you maintain:
+
+- **Country domains:** a domain to buy and renew per country, with local registration rules in some countries. Each domain needs its own TLS certificate (or a certificate covering several names), its own Search Console property, and its own backlinks.
+- **Subdomains:** one domain, but a DNS record and certificate coverage per subdomain. Google's [canonicalization guidance](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls) warns that the certificate must match the full host or be a wildcard, or Google may prefer the HTTP version.
+- **Subdirectories:** one host, one certificate, one deployment, and one analytics property. The tradeoff is that every locale ships with the same app and infrastructure.
+
+Link equity is the argument you'll hear most. Many SEO practitioners hold that subdirectories consolidate backlinks on one host while subdomains and country domains each start from zero. That's a practitioner view, not something Google's documentation states, so weigh it below the operational costs you can count.
+
+## Language targeting vs. country targeting
+
+Google separates a **multilingual** site (the same offering in several languages, like a Canadian business in English and French) from a **multi-regional** one (different offerings per country, like a manufacturer shipping to Canada and the US). The URL structure should follow which one you are:
+
+- **Target a language** when the content is the same for every speaker. One `/es/` section annotated `es` serves Spanish speakers in Mexico, Spain, and Argentina.
+- **Target a country** when something changes per country: prices and currency, shipping, legal terms, or the product catalog. Use `/es-mx/` and `/es-es/`, or `example.mx`, and annotate them `es-MX` and `es-ES`.
+
+Country targeting has a cost. Google says geotargeting can improve rankings in the target country "at the expense of results in other locales or languages," and a ccTLD can only target one country. If you do split by country, Google [recommends](https://developers.google.com/search/docs/specialty/international/localized-versions) also offering a language-only page (`es`) for speakers everywhere else. For choosing between codes such as `es` and `es-MX`, see [which locale codes to use](/kb/locale-codes).
+
+## Localized slugs
+
+The locale prefix tells search engines and users which version they're on; the rest of the path can be translated too, as in `/de/ueber-uns` instead of `/de/about-us`. Google says localized words in URLs are fine, as are internationalized domain names, as long as URLs use UTF-8 and are escaped properly when you link to them. A non-ASCII slug like `/de/über-uns` travels as `/de/%C3%BCber-uns`, so that encoded form is what belongs in hreflang and sitemaps.
+
+Translated slugs read naturally in search results, but they add a slug map per locale, and a slug whose translation changes needs a redirect from the old URL. Teams that skip localized slugs keep `/de/about-us` and still get a distinct, indexable URL per language.
+
+## Which structure should you use?
+
+Use **subdirectories** when one product serves several languages from one codebase. That's most teams. You get Google's "easy to set up" and "low maintenance," one place to deploy, and its main con (one server location) matters less behind a CDN.
+
+Use **country domains** when each country is effectively its own business: separate legal entities, catalogs, or marketing teams, and you want the strongest country signal and can pay for the upkeep.
+
+Use **subdomains** when a locale needs different hosting or infrastructure, for example when one market must be served from servers in that country.
+
+Avoid **URL parameters** for language. Google doesn't recommend them, and they make it hard to segment reports and caches by URL.
+
+Whichever you choose, keep it consistent, list every version in hreflang, and give each version a self-referencing canonical.
+
+## How General Translation supports each structure
+
+General Translation's `gt-next` covers the default case directly. In the App Router, [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) routes each locale under a path prefix (`/es/about`). The default locale stays unprefixed (`/about`) unless you set `prefixDefaultLocale: true`, which gives every locale a prefix, including `/en/about`.
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware({
+  prefixDefaultLocale: true,
+  pathConfig: {
+    // English: /en/about, German: /de/ueber-uns
+    '/about': {
+      de: '/ueber-uns',
+    },
+  },
+});
+
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
+};
+```
+
+The same middleware handles the related options:
+
+- **Localized slugs:** `pathConfig` maps a shared path to a localized path per locale, including dynamic and catch-all segments (`/product/[id]` to `/fr/produit/[id]`).
+- **Custom URL segments:** `customMapping` in `gt.config.json` lets a route use an alias such as `/cn` while translations use the canonical code `zh`. The [locale alias SEO guide](/docs/react/nextjs/locale-alias-seo) keeps the alias in URLs and the canonical code in `lang` and hreflang.
+- **Country sections with fewer pages:** `localeRoutes` limits which shared paths a locale serves. Requests for a missing route redirect to the default-locale URL.
+
+Pages Router apps get the same prefix scheme from [Next.js internationalized routing](/docs/react/nextjs/pages-router-middleware), and TanStack Start (experimental) uses [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) with the default locale unprefixed.
+
+Subdomains and country domains are a different case: the `gt-next` docs document path-based routing, not routing by hostname. If you choose either, map each host to a locale in your own code and hand that locale to the library, for example through a custom request locale function set with [`getLocalePath`](/docs/react/nextjs/config#request-function-paths), or with [`withGT`](/docs/node/reference/functions/with-gt) in `gt-node` for a Node.js server. For the rest of a Next.js setup (canonical tags, hreflang, translated metadata, and the sitemap), see [How do I set up SEO for a multilingual Next.js app?](/kb/multilingual-nextjs-seo).
+
+## Key takeaways
+
+- Google compares ccTLDs, subdomains, and subdirectories on targeting and upkeep, not ranking, and doesn't recommend language URL parameters.
+- Only a ccTLD signals a country by itself; subdomains and subdirectories need hreflang, and Google treats `.io`, `.ai`, and `.co` as generic.
+- Default to subdirectories (`example.com/de/`): one host, one certificate, one deployment.
+- Split by country (`es-MX`) only when prices, shipping, legal terms, or catalogs differ; otherwise target the language (`es`).
+- `gt-next` provides path-prefix routing, optional default-locale prefixes, and localized slugs through `pathConfig`.
