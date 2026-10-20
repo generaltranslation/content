@@ -1,6 +1,6 @@
 ---
 title: "General Translation vs. vue-i18n: which should you use?"
-summary: vue-i18n is a mature i18n plugin for Vue 3, but it doesn't translate anything. You write a keyed message file for each language, and version 11 needs a custom plural rule for languages such as Polish. General Translation's gt-vue renders translations the same way and also does the translating, from copy written inline in your templates.
+summary: General Translation lets Vue teams write source copy directly in templates and generate translations with the CLI. Its gt-vue plugin renders that content with locale-aware plural and number formatting. Choose it to remove keyed source-file maintenance; vue-i18n remains a fit for teams using Nuxt's i18n module and an established catalog workflow.
 date: 2026-10-16
 category: internationalization
 authors: [kevin-wu, jackie]
@@ -46,12 +46,12 @@ const { t } = useI18n()
 </template>
 ```
 
-Every other language needs its own file, written by hand or sent out for translation, and a string added to the template is missing from every other file until someone adds it. Two details catch teams out:
+Every target language needs translated messages, supplied by your team or a translation service. Two implementation details matter for the example:
 
-- **Plural rules.** vue-i18n 11's default rule picks a form by position: one form for zero, one for one, and one for everything else. Polish uses different forms for 1, 2, 5, and 22, so a Polish message with all four forms renders "Masz 1 nieprzeczytane wiadomości" for one message, where Polish needs "Masz 1 nieprzeczytaną wiadomość," until you write a [custom `pluralRules` function](https://github.com/intlify/vue-i18n/blob/master/docs/guide/v11/essentials/pluralization.md) for the locale. vue-i18n 12, still in alpha, [switches to `Intl.PluralRules`](https://github.com/intlify/vue-i18n/releases/tag/v12.0.0-alpha.4).
+- **Plural rules.** vue-i18n 11's default rule selects forms by position. Polish uses `one`, `few`, `many`, and `other` categories, so configure a [custom `pluralRules` function](https://github.com/intlify/vue-i18n/blob/master/docs/guide/v11/essentials/pluralization.md) to map counts to your translated forms. vue-i18n 12, still in alpha, [switches to `Intl.PluralRules`](https://github.com/intlify/vue-i18n/releases/tag/v12.0.0-alpha.4).
 - **Numbers inside messages.** The `{n}` in a plural message isn't formatted for the locale, so 12345 renders as "12345" in Spanish instead of "12.345" unless you pass a formatted value.
 
-## General Translation does the same, and generates the translations
+## Inline templates with generated translations
 
 `gt-vue` does the same job as vue-i18n. It renders each locale's messages, picks plural forms with each locale's CLDR rules, and formats numbers, currencies, and dates with [`<Num>`](/docs/vue/reference/components/num), [`<Currency>`](/docs/vue/reference/components/currency), and [`<DateTime>`](/docs/vue/reference/components/datetime). Then General Translation does what vue-i18n doesn't: it generates the translations. Here's the same inbox, with the copy inline:
 
@@ -68,8 +68,8 @@ defineProps({ count: { type: Number, required: true } })
     <p>
       <T>
         <Plural :n="count">
-          <template #one>You have <Num :value="count" /> unread message</template>
-          <template #other>You have <Num :value="count" /> unread messages</template>
+          <template #singular>You have <Num :value="count" /> unread message</template>
+          <template #plural>You have <Num :value="count" /> unread messages</template>
         </Plural>
       </T>
     </p>
@@ -77,9 +77,9 @@ defineProps({ count: { type: Number, required: true } })
 </template>
 ```
 
-[`npx gt translate`](/docs/cli/reference/commands/translate) scans your templates, sends each [`<T>`](/docs/vue/reference/components/t) block with its structure to the General Translation API, and writes a catalog for every target locale. [`<Plural>`](/docs/vue/reference/components/plural) picks a branch with `Intl.PluralRules`, the locale's CLDR rules, so there's no plural rule to configure for Polish, and [`<Num>`](/docs/vue/reference/components/num) formats the count for each locale: 12,345 in English, 12.345 in Spanish, and 12 345 in Polish. To translate by hand instead, [`gt generate`](/docs/cli/reference/commands/generate) writes template catalogs without calling the API.
+[`npx gt translate`](/docs/cli/reference/commands/translate) scans your templates, sends each [`<T>`](/docs/vue/reference/components/t) block with its structure to the General Translation API, and writes a catalog for every target locale. The `singular` and `plural` slots supply source wording for the target language's forms. [`<Plural>`](/docs/vue/reference/components/plural) selects those forms using locale rules, and [`<Num>`](/docs/vue/reference/components/num) formats the count: 12,345 in English, 12.345 in Spanish, and 12 345 in Polish.
 
-`gt-vue` is much newer than vue-i18n. It's a 0.x package, its [Quickstart](/docs/vue/quickstart) marks it unstable, so its API can change between releases, and it requires Vue 3.3 or later.
+The example uses `gt-vue` 0.1.22 with Vue 3.3 or later; the [Vue Quickstart](/docs/vue/quickstart) covers plugin and catalog-loader setup. Your team can refine the generated text in the [Dashboard](/docs/platform/dashboard/guides/reviewing-translations), while [shared Glossary terms and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations) keep terminology consistent across projects.
 
 ## vue-i18n vs. General Translation at a glance
 
@@ -89,23 +89,20 @@ defineProps({ count: { type: Number, required: true } })
 | Translates your content | No | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
 | Plural forms | Forms separated by a vertical bar; version 11 needs a custom rule for languages such as Polish | [`<Plural>`](/docs/vue/reference/components/plural) slots chosen with CLDR rules for every locale |
 | Numbers in messages | Formatted when you pass a formatted value | [`<Num>`](/docs/vue/reference/components/num) formats for each locale |
-| Nuxt | `@nuxtjs/i18n` adds routing, language detection, and SEO tags | No Nuxt module |
-| Maturity | On npm since 2014; version 11 is stable | 0.x, marked unstable |
+| App integration | Vue plugin; `@nuxtjs/i18n` adds Nuxt routing, language detection, and SEO tags | Vue plugin with reactive locale switching and catalog loading |
 
-Keep vue-i18n when you build on Nuxt and rely on `@nuxtjs/i18n` for routing and SEO, when your catalogs and translation process already work, or when you need a library at a stable major version. Choose General Translation when you'd rather keep copy inline in your templates and have every language translated with each build, and a 0.x library fits your project.
+Keep vue-i18n when you rely on `@nuxtjs/i18n` for Nuxt routing and SEO or already have a catalog workflow you want to retain. Choose General Translation to keep copy readable in Vue templates, generate translations during your build, and let reviewers edit them in the Dashboard.
 
 ## Moving from vue-i18n
 
-Move one component at a time: replace each key lookup with its English copy inside [`<T>`](/docs/vue/reference/components/t), and turn pipe-separated plural messages into [`<Plural>`](/docs/vue/reference/components/plural) slots, as in the example above. Set up `gt-vue` with the [Vue Quickstart](/docs/vue/quickstart), then run [`npx gt translate`](/docs/cli/reference/commands/translate) before your build.
-
-The `gt` CLI can also translate JSON files from any library, but its [JSON format docs](/docs/cli/reference/formats/json-files) note that custom message syntax is supported only for next-intl and i18next, so vue-i18n's pipe-separated plurals may not translate accurately. For a Vue app, `gt-vue` is the supported path. (See [General Translation vs. i18next, react-intl, and next-intl](/kb/general-translation-vs-i18n-libraries) for how the other libraries compare.)
+Move one component at a time: replace each key lookup with its English copy inside [`<T>`](/docs/vue/reference/components/t), and turn pipe-separated plural messages into `singular` and `plural` slots in [`<Plural>`](/docs/vue/reference/components/plural), as in the example above. Keep vue-i18n and its reviewed catalogs for components that have not moved. Set up `gt-vue` with the [Vue Quickstart](/docs/vue/quickstart), then run [`npx gt translate`](/docs/cli/reference/commands/translate) before your build.
 
 ## Why does vue-i18n show the wrong plural form in Polish?
 
-vue-i18n 11's default rule picks a form by position, not by each language's plural rules, so Polish needs a custom `pluralRules` function. vue-i18n 12, still in alpha, switches to `Intl.PluralRules`. `gt-vue`'s [`<Plural>`](/docs/vue/reference/components/plural) selects forms with each locale's CLDR rules, so there's no rule to configure, but translations get only the forms your source has, so review languages that have more forms than English.
+Configure a `pluralRules` function in vue-i18n 11 that maps Polish categories to the positions in your message. For example, 1 selects `one`, 2 and 22 select `few`, and 5 selects `many`. With General Translation, the inline example supplies the source wording, the service generates translated forms, and [`<Plural>`](/docs/vue/reference/components/plural) handles their selection.
 
 ## Key takeaways
 
 - vue-i18n is a mature i18n plugin with strong Nuxt support, but it doesn't translate anything, and version 11 needs a custom plural rule for languages such as Polish.
-- General Translation's `gt-vue` renders translations the same way and also does the translating, from copy written inline in [`<T>`](/docs/vue/reference/components/t), with CLDR plural selection and number formatting for each locale.
-- Keep vue-i18n for Nuxt routing and SEO or a stable major version. Choose `gt-vue` to stop maintaining keyed message files.
+- General Translation's CLI generates translations from inline [`<T>`](/docs/vue/reference/components/t) blocks; `gt-vue` renders them with plural selection and number formatting for each locale.
+- Keep vue-i18n for an established Nuxt or catalog workflow. Choose `gt-vue` to stop maintaining keyed source files.
