@@ -1,13 +1,13 @@
 ---
 title: "General Translation vs. Mobility: which should you use?"
-summary: Mobility is a Ruby gem that stores translations of model attributes, such as a post's title in each language, in your database. It doesn't produce translations. General Translation has no Ruby SDK, but a Rails app can call its runtime translation API to fill Mobility's attributes, using your Glossary and Custom Prompts.
+summary: Mobility stores translated model attributes in your database. General Translation produces those translations through its API, using your Glossary and Custom Prompts. Use both to translate product listings, posts, and other database content while keeping your Rails models.
 date: 2026-10-16
 category: internationalization
 authors: [kevin-wu, jackie]
 related: [general-translation-vs-rails-i18n, general-translation-vs-i18n-tasks, general-translation-vs-google-translate, general-translation-vs-i18n-libraries, general-translation-vs-tms]
 ---
 
-Mobility is a Ruby gem for translating the data in your database: you declare `translates :title` on a model, and `post.title` returns the title in the current locale, read from whichever storage backend you choose. It stores and retrieves translations; writing them is up to your editors, translators, or a service. General Translation can be that service, through its HTTP API, but it doesn't replace Mobility: General Translation has no Ruby library, and Mobility is where the translations live.
+Mobility is a Ruby gem for translating the data in your database: you declare `translates :title` on a model, and `post.title` returns the title in the current locale, read from whichever storage backend you choose. It stores and retrieves translations; writing them is up to your editors, translators, or a service. General Translation supplies them through its HTTP API. Mobility keeps the translated attributes in your existing database, ready for the same queries and model methods you use today.
 
 ## What Mobility does well
 
@@ -48,7 +48,7 @@ require "net/http"
 require "json"
 
 # Translates a hash of { field => text } with General Translation's runtime API.
-# Returns { field => translation }, with nil for any entry that failed.
+# Returns every requested translation, or raises before any database write.
 def gt_translate(fields, from:, to:, context: nil)
   uri = URI("https://api.gtx.dev/v2/translate")
   requests = fields.to_h do |field, text|
@@ -61,36 +61,48 @@ def gt_translate(fields, from:, to:, context: nil)
   request["gt-api-version"] = "2026-03-06.v1"
   request.body = { requests:, sourceLocale: from.to_s, targetLocale: to.to_s, metadata: {} }.to_json
 
-  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(request) }
-  raise "Translation failed (#{response.code}): #{response.body}" unless response.is_a?(Net::HTTPSuccess)
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true,
+                            open_timeout: 5, read_timeout: 30) { |http| http.request(request) }
+  raise "Translation request failed (#{response.code})" unless response.is_a?(Net::HTTPSuccess)
 
-  JSON.parse(response.body).transform_values { |result| result["success"] ? result["translation"] : nil }
+  results = JSON.parse(response.body)
+  requests.keys.to_h do |field|
+    result = results.fetch(field)
+    unless result["success"] == true && result["translation"].is_a?(String)
+      raise "Translation incomplete for #{field}"
+    end
+    [field, result.fetch("translation")]
+  end
 end
 ```
 
+For a one-off translation of the post above, read its English attributes and save the complete Spanish result:
+
 ```ruby
-translated = gt_translate({ title: post.title, body: post.body },
+source = Mobility.with_locale(:en) do
+  { title: post.title(fallback: false), body: post.body(fallback: false) }
+end
+translated = gt_translate(source,
                           from: :en, to: :es, context: "Blog post for an online shoe store")
-Mobility.with_locale(:es) { post.update!(translated.compact) }
+Mobility.with_locale(:es) { post.update!(translated) }
 ```
 
-Each entry comes back as `{ "success": true, "translation": "..." }` or `{ "success": false, "error": "...", "code": ... }`, so one failed field doesn't lose the others. (See the [endpoint reference](/docs/platform/openapi/reference/translation/translate-runtime) for every field.)
+The helper checks that every requested field has a translation before updating the post. Your model's normal validations still apply. (See the [endpoint reference](/docs/platform/openapi/reference/translation/translate-runtime) for request and response fields.)
 
-General Translation does more here than a raw machine translation call: the endpoint translates with your project's Glossary and Custom Prompts, so product names and tone match the rest of your product, and it caches results, so translating the same text again is served from the cache. Call it from a background job after a record is saved, keep the API key on the server, and expect `429` responses above the [rate limits](/docs/platform/openapi/overview#api-basics). If part of your stack runs on Node.js, [`tx`](/docs/node/reference/functions/tx) in `gt-node` and the [Core library](/docs/platform/core/guides/translating-strings) do the same runtime translation from JavaScript. Pricing is usage-based, with a $0 platform fee and unlimited users, projects, and languages on Starter ([pricing](https://generaltranslation.com/pricing)).
+General Translation does more here than a raw machine translation call: the endpoint translates with your project's [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations), so product names and tone match the rest of your product. The context note tells it that the text is for a shoe store; shared terminology keeps those product descriptions consistent with your app and marketing site. Keep the API key on the server. For ongoing automation, connect translation to your existing content publication workflow and follow the API's [rate limits](/docs/platform/openapi/overview#api-basics).
 
-The tradeoff: these translations go straight into your database the moment the job runs. If editors must approve a translation before readers see it, add that step yourself, for example by saving machine translations as drafts.
+The example saves directly to the model. For content your editors approve before publication, save the result through the same draft and publishing process as the source article.
 
 ## Mobility vs. General Translation at a glance
 
 | Feature | Mobility | General Translation |
 | --- | --- | --- |
 | What it is | Ruby gem for storing translated model attributes | Translation platform with an HTTP API, CLI, libraries for JavaScript and Python, and a Dashboard |
-| Stores translations in your database | Yes, with eight storage backends | No; Mobility or your own columns hold them |
+| Stores translations in your database | Yes, with eight storage backends | Supplies translations to those same model attributes |
 | Produces translations | No | Yes, through `POST /v2/translate` |
-| Ruby integration | Native | HTTP calls from Ruby; no Ruby SDK |
-| Fallbacks, querying, dirty tracking | Yes | Not applicable |
+| Ruby integration | Model attributes and locale accessors | HTTP API called from Ruby |
 | Consistent terms and tone | Up to your translators | Glossary and Custom Prompts applied to every request |
-| Cost | Free, MIT | Usage-based |
+| Cost | Free, MIT | [Usage-based](https://generaltranslation.com/pricing) |
 
 ## When Mobility alone is enough
 
@@ -99,5 +111,5 @@ Keep Mobility on its own when people already write your translations: editors wh
 ## Key takeaways
 
 - Mobility stores and retrieves translated model attributes across eight backends, with fallbacks and querying. It doesn't produce translations.
-- General Translation has no Ruby SDK, so a Rails app calls `POST /v2/translate` over HTTP and saves the results through Mobility.
-- Runtime translations use your Glossary and Custom Prompts and land in your database right away, so add your own approval step if editors need one.
+- A Rails app calls General Translation's `POST /v2/translate` endpoint and saves the translated attributes through Mobility.
+- General Translation applies your Glossary, Custom Prompts, and content-specific context while your existing models and publication workflow stay in place.
