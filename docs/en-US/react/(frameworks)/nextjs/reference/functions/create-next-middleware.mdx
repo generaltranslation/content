@@ -41,12 +41,15 @@ It then sets a locale cookie and, when `localeRouting` is enabled, redirects or 
 
 ## Options [#options]
 
-`createNextMiddleware` takes a single options object. All fields are optional.
+`createNextMiddleware` takes a single options object. All fields are optional. Each option can also be set in [`withGTConfig`](/docs/react/nextjs/config#routing). Options passed to `createNextMiddleware` take precedence over `withGTConfig`, which takes precedence over the defaults.
+
+Set routing options in `withGTConfig` and call `createNextMiddleware()` without arguments. The [`<Link>`](/docs/react/nextjs/link) component and [`useLocalizeHref`](/docs/react/nextjs/reference/hooks/use-localize-href) read `prefixDefaultLocale` and `enableSmartRouting` only from `withGTConfig`. In development, the middleware logs a warning when its values for these options differ from `withGTConfig`, because links may then take an extra redirect.
 
 | Option | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | [`localeRouting`](#locale-routing) | Enable locale-based routing. | `boolean` | Yes | `true` |
 | [`prefixDefaultLocale`](#prefix-default-locale) | Prefix the default locale in the URL too. | `boolean` | Yes | `false` |
+| [`enableSmartRouting`](#enable-smart-routing) | Send returning visitors on unprefixed URLs to their saved locale. | `boolean` | Yes | `true` |
 | [`ignoreSourceMaps`](#ignore-source-maps) | Skip Next.js source-map requests. | `boolean` | Yes | `true` |
 | [`pathConfig`](#path-config) | Localized path aliases. | `object` | Yes | `{}` |
 | [`routeOverrides`](#route-overrides) | Use a locale-specific page implementation without changing its public URL. | `RouteOverrides` | Yes | `{}` |
@@ -65,6 +68,12 @@ Enables locale-based routing and redirects. When `false`, the middleware still d
 **Type** `boolean` · **Optional** · **Default** `false`
 
 When `false` (the default), the default locale is served without a prefix (`/about`) while other locales are prefixed (`/es/about`). When `true`, every locale is prefixed, including the default (`/en/about`).
+
+### `enableSmartRouting` [#enable-smart-routing]
+
+**Type** `boolean` · **Optional** · **Default** `true`
+
+Applies when `prefixDefaultLocale` is `false`. When `true` (the default), an unprefixed URL follows the visitor's locale cookie, so a returning French visitor who opens `/about` is redirected to `/fr/about`. When `false`, a returning visitor's unprefixed URL is treated as the default locale. First visits without a locale cookie still negotiate the locale from the browser in both modes.
 
 ### `ignoreSourceMaps` [#ignore-source-maps]
 
@@ -200,10 +209,12 @@ In this example, visitors using `en-GB` can view the pricing page and the blog, 
 
 ## Example [#example]
 
-```ts title="proxy.ts"
-import { createNextMiddleware } from 'gt-next/middleware';
+Set the routing options in `withGTConfig`:
 
-export default createNextMiddleware({
+```ts title="next.config.ts"
+import { withGTConfig } from 'gt-next/config';
+
+export default withGTConfig(nextConfig, {
   prefixDefaultLocale: true,
   pathConfig: {
     '/about': {
@@ -211,6 +222,14 @@ export default createNextMiddleware({
     },
   },
 });
+```
+
+Then create the middleware without arguments:
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware();
 
 export const config = {
   matcher: ['/((?!api|static|.*\\..*|_next).*)'],
