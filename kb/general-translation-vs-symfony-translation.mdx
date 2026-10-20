@@ -1,0 +1,124 @@
+---
+title: "General Translation vs. Symfony Translation: which should you use?"
+summary: Symfony Translation renders messages in PHP and Twig. General Translation translates its YAML catalogs in CI, keeps them current as your source changes, and gives reviewers a Dashboard to edit them. Keep Symfony's rendering and add automated translation to your release workflow.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, general-translation-vs-gettext, general-translation-vs-rails-i18n, general-translation-vs-django-i18n]
+---
+
+Symfony's Translation component is how a Symfony app shows text in the reader's language: `trans()` in PHP and the `|trans` filter in Twig look up a key in the catalog for the current locale, with ICU MessageFormat for plurals and selects. It organizes and renders translations, but it doesn't produce them: each language's catalog is written by you, your translators, or a translation management system (TMS) that Symfony syncs with. That missing step is where General Translation fits. General Translation's CLI translates your Symfony YAML catalogs, and Symfony keeps rendering them.
+
+## What Symfony Translation does well
+
+- **One API for PHP and Twig.** `$translator->trans()`, [the `|trans` filter and `{% trans %}` tag in templates](https://symfony.com/doc/current/translation.html#translations-in-templates), and `t()` with `TranslatableMessage` for messages you create now and translate later, such as flash messages.
+- **Domains and many file formats.** Catalogs are named `domain.locale.format` (`messages.fr.yaml`, `validators.fr.yaml`), and Symfony loads YAML, XLIFF, PHP, JSON, PO and MO, CSV, INI, Qt, and ICU resource bundles. [Its docs recommend YAML for simple projects](https://symfony.com/doc/current/translation.html#translation-resource-file-names-and-locations) and XLIFF when specialized tools or teams produce translations.
+- **ICU MessageFormat.** [Add `+intl-icu` to a catalog's name](https://symfony.com/doc/current/reference/formats/message_format.html) (`messages+intl-icu.en.yaml`) and its messages use ICU syntax for plurals, selects, and number and date formats. This needs PHP's `intl` extension; Symfony's polyfill covers English only.
+- **Extraction and checks.** [`translation:extract` finds messages in Twig templates, PHP code, and validation constraints](https://symfony.com/doc/current/translation.html#extracting-translation-contents-and-updating-catalogs-automatically) and adds them to your catalogs, as XLIFF 1.2 unless you pass `--format`. `debug:translation` lists missing, unused, and fallback messages, and `lint:translations` checks catalog contents.
+- **Fallbacks.** A missing `es_AR` message [falls back through `es_419` and `es` to your fallback locales](https://symfony.com/doc/current/translation.html#fallback-translation-locales), and the miss is logged.
+- **Translation providers.** [`translation:push` and `translation:pull` sync catalogs with Crowdin, Loco, Lokalise, and Phrase](https://symfony.com/doc/current/translation.html#translation-providers) through official bridge packages, and you can write your own provider.
+- **Framework messages included.** The Validator component ships its built-in constraint messages translated into more than 50 languages.
+
+The component is [MIT-licensed; version 8.1 requires PHP 8.4.1 or later](https://packagist.org/packages/symfony/translation), and 7.4 is the long-term support release.
+
+## What Symfony Translation leaves to you
+
+Here's an ICU plural in an English catalog:
+
+```yaml title="translations/messages+intl-icu.en.yaml"
+inbox:
+  title: Inbox
+  unread: >-
+    {count, plural,
+      =0 {You have no unread messages.}
+      one {You have # unread message.}
+      other {You have # unread messages.}
+    }
+```
+
+Someone also wrote `messages+intl-icu.es.yaml` by hand, with the same keys and the plural rewritten in Spanish. Rendering both, plus German, with the standalone component (`symfony/translation` 8.1.5):
+
+```php title="render.php"
+<?php
+require __DIR__.'/vendor/autoload.php';
+
+use Symfony\Component\Translation\Loader\YamlFileLoader;
+use Symfony\Component\Translation\Translator;
+
+$translator = new Translator('en');
+$translator->setFallbackLocales(['en']);
+$translator->addLoader('yaml', new YamlFileLoader());
+
+// The +intl-icu suffix turns on ICU MessageFormat for the messages domain.
+foreach (['en', 'es'] as $locale) {
+    $file = __DIR__."/translations/messages+intl-icu.$locale.yaml";
+    $translator->addResource('yaml', $file, $locale, 'messages+intl-icu');
+}
+
+foreach (['en', 'es', 'de'] as $locale) {
+    echo $locale, ': ', $translator->trans('inbox.unread', ['count' => 3], 'messages', $locale), "\n";
+}
+```
+
+```text title="Output"
+en: You have 3 unread messages.
+es: Tienes 3 mensajes sin leer.
+de: You have 3 unread messages.
+```
+
+Spanish works because a person translated it. German has no catalog, so Symfony quietly falls back to English: in a full app the miss is logged and `debug:translation de` lists it, but nothing writes the German. Every new key repeats the cycle in every language. `translation:extract --force` adds the key to each catalog, prefixed with `__` (or empty with `--no-fill`), and someone translates it, either by hand or in a TMS that the provider commands push to and pull from. A provider moves files; the translating, and the TMS plan it runs on, are still separate.
+
+## How General Translation fits a Symfony app
+
+Keep Symfony in charge of rendering, and let General Translation's CLI fill in the catalogs. Point a `yaml` entry at your translations directory, with `[locale]` where the locale goes in each file name:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "de"],
+  "files": {
+    "yaml": {
+      "include": ["translations/*.[locale].yaml"]
+    }
+  }
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) picks up every English catalog that matches, such as `messages+intl-icu.en.yaml` and `validators.en.yaml`, and writes `messages+intl-icu.es.yaml`, `validators.es.yaml`, and the same for each target locale, with your keys and domain names intact. Run it in CI after `translation:extract` adds new keys to the English catalogs. Entries that haven't changed reuse their earlier translations, so each run translates only new or changed text.
+
+A few details matter for Symfony:
+
+- **ICU messages.** Keep `+intl-icu` in the catalog names so Symfony formats the translated messages with ICU. Run `lint:translations` after generation and preview the inbox message with counts of 0, 1, and 3.
+- **Locale codes.** Keep your app's existing locale names. For `pt_BR`, add it to `locales` and set `"customMapping": { "pt_BR": { "code": "pt-BR" } }` in `gt.config.json`. The CLI uses Portuguese for Brazil and writes Symfony's `messages.pt_BR.yaml` filename. (See [`customMapping`](/docs/cli/reference/config#custom-mapping).)
+- **Node.js in CI.** The CLI is an npm package, so your CI job needs Node.js, plus `GT_API_KEY` and `GT_PROJECT_ID` in its secrets. (See [Configuring the CLI](/docs/cli/guides/configuring#credentials).)
+
+Beyond filling catalogs, General Translation keeps them consistent: a Context Group's Glossary and Custom Prompts apply the same terms and tone to every project it's assigned to, and your team [reviews and edits translations in the Dashboard](/docs/platform/dashboard/guides/reviewing-translations). Use the same Context Group for your Symfony app, documentation, and marketing site so a product term stays consistent across all three. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations).)
+
+## Symfony Translation vs. General Translation at a glance
+
+| Feature | Symfony Translation | General Translation |
+| --- | --- | --- |
+| Role | Looks up and renders messages in PHP and Twig | Produces the catalogs your PHP and Twig calls use |
+| Translates your content | No; providers sync catalogs with Crowdin, Loco, Lokalise, or Phrase | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| Catalog formats | YAML, XLIFF, PHP, JSON, PO and MO, CSV, INI, Qt, ICU resource bundles | YAML and JSON for this catalog workflow |
+| Finding new strings | `translation:extract` scans Twig, PHP, and constraints | Translates whatever is in the English catalogs |
+| ICU MessageFormat | `+intl-icu` catalogs with the `intl` extension | Translates catalog values for Symfony's ICU renderer |
+| Missing translations | Fallback chain, logs, `debug:translation` | Writes every configured locale on each run |
+| Cost | Free and MIT-licensed; providers bill separately | [Usage-based](https://generaltranslation.com/pricing) |
+
+## When to use which
+
+This isn't an either-or choice for rendering: a Symfony app should keep Symfony Translation. The decision is how its catalogs get filled. Keep a translation provider when translators work in XLIFF inside a TMS, when you buy professional human translation, or when your process already works. (See [Why use General Translation instead of a TMS?](/kb/general-translation-vs-tms)) Use General Translation when you want every locale's YAML catalog translated in CI on each change, with shared terminology and review in the Dashboard, and no files to send out and wait for.
+
+## Using both
+
+1. Start with your Symfony YAML catalogs and add `gt.config.json` as above.
+2. If you already have translations, upload them with [`npx gt upload`](/docs/cli/reference/commands/upload) before generating new ones.
+3. Run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI after Symfony extracts new messages into your English catalogs.
+4. Review translations in the Dashboard. If you edit downloaded YAML locally, sync it with [`npx gt save-local`](/docs/cli/reference/commands/save-local) before the next generation run.
+
+## Key takeaways
+
+- Symfony Translation renders messages, extracts keys, and syncs with TMS providers; producing translations remains a separate step.
+- General Translation translates Symfony's YAML catalogs in CI, keeping your keys and domains so PHP and Twig continue to use the same messages.
+- Keep a TMS provider for XLIFF and professional translators; use General Translation when you want catalogs translated with each change.
