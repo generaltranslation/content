@@ -13,6 +13,9 @@
  * - Titles are unique.
  * - A summary is at most SUMMARY_MAX_WORDS words, ends with a period, and has
  *   no backticks or Markdown links (it is reused as plain text).
+ * - The meta description is `description` when set, else the summary, and is
+ *   at most DESCRIPTION_MAX_CHARS characters. A `description` ends with a
+ *   period and has no backticks or Markdown links.
  * - `authors` is optional (the site credits the team without it); every
  *   listed author has a file in authors/.
  * - `date` is a real YYYY-MM-DD date, not in the future.
@@ -57,6 +60,9 @@ export const RELATED_MAX = 5;
 
 export const SUMMARY_MAX_WORDS = 60;
 
+/** Longest meta description; search results truncate anything longer. */
+export const DESCRIPTION_MAX_CHARS = 200;
+
 /** Below this many words of text, an article without code reads as a placeholder. */
 export const MIN_BODY_WORDS = 50;
 
@@ -65,6 +71,7 @@ const REQUIRED_FIELDS = ["title", "summary", "date", "category"];
 /** Every frontmatter field the site reads for a KB article. */
 const KNOWN_FIELDS = new Set([
   ...REQUIRED_FIELDS,
+  "description",
   "authors",
   "redirectFrom",
   "related",
@@ -176,6 +183,41 @@ function summaryProblems(path: string, summary: unknown): string[] {
   if (summary.includes("`") || /\]\(/.test(summary)) {
     problems.push(
       `${path}: summary must not contain backticks or Markdown links.`
+    );
+  }
+  return problems;
+}
+
+/** The site uses `description` as the meta description, falling back to the summary. */
+function descriptionProblems(
+  path: string,
+  description: unknown,
+  summary: unknown
+): string[] {
+  if (description === undefined || description === null) {
+    if (typeof summary === "string" && summary.length > DESCRIPTION_MAX_CHARS) {
+      return [
+        `${path}: summary is ${summary.length} characters, too long for a meta description; add a description of ${DESCRIPTION_MAX_CHARS} or fewer.`,
+      ];
+    }
+    return [];
+  }
+  if (typeof description !== "string") {
+    return [`${path}: description must be text.`];
+  }
+
+  const problems: string[] = [];
+  if (description.length > DESCRIPTION_MAX_CHARS) {
+    problems.push(
+      `${path}: description is ${description.length} characters; keep it to ${DESCRIPTION_MAX_CHARS} or fewer.`
+    );
+  }
+  if (!description.trim().endsWith(".")) {
+    problems.push(`${path}: description must end with a period.`);
+  }
+  if (description.includes("`") || /\]\(/.test(description)) {
+    problems.push(
+      `${path}: description must not contain backticks or Markdown links.`
     );
   }
   return problems;
@@ -524,6 +566,11 @@ export function findKbProblems(
 
     problems.push(
       ...summaryProblems(path, frontmatter.summary),
+      ...descriptionProblems(
+        path,
+        frontmatter.description,
+        frontmatter.summary
+      ),
       ...categoryProblems(path, frontmatter.category, categoryList.slugs),
       ...authorProblems(path, frontmatter.authors, authors),
       ...dateProblems(path, frontmatter.date, context.today),

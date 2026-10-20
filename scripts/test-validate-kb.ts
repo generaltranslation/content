@@ -249,6 +249,52 @@ assertEqual(
   "accepts a bare component tag in the summary"
 );
 
+// Descriptions
+
+assertEqual(
+  first([article("a.mdx", { summary: `${"x".repeat(200)}.` })]),
+  "kb/a.mdx: summary is 201 characters, too long for a meta description; add a description of 200 or fewer.",
+  "rejects a summary over 200 characters without a description"
+);
+
+assertEqual(
+  findKbProblems(
+    [
+      article("a.mdx", {
+        summary: `${"x".repeat(200)}.`,
+        description: "A short meta description.",
+      }),
+    ],
+    context
+  ).length,
+  0,
+  "accepts a long summary with a short description"
+);
+
+assertEqual(
+  first([article("a.mdx", { description: `${"x".repeat(200)}.` })]),
+  "kb/a.mdx: description is 201 characters; keep it to 200 or fewer.",
+  "rejects a description over 200 characters"
+);
+
+assertEqual(
+  first([article("a.mdx", { description: "A short meta description" })]),
+  "kb/a.mdx: description must end with a period.",
+  "rejects a description without a closing period"
+);
+
+assertEqual(
+  first([article("a.mdx", { description: "Use the `<Plural>` component." })]),
+  "kb/a.mdx: description must not contain backticks or Markdown links.",
+  "rejects backticks in the description"
+);
+
+assertEqual(
+  first([article("a.mdx", { description: 3 })]),
+  "kb/a.mdx: description must be text.",
+  "rejects a description that is not text"
+);
+
 // Authors
 
 assertEqual(
