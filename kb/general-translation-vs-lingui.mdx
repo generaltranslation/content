@@ -1,6 +1,6 @@
 ---
 title: "General Translation vs. Lingui: which should you use?"
-summary: Lingui keeps source text inline with macros, generates message IDs, and extracts messages into PO catalogs, but it doesn't translate anything. Each language's catalog is filled in by you, your translators, or a service such as Crowdin. General Translation's libraries also keep copy inline, and General Translation does the translating, with the context of your code.
+summary: Choose General Translation to keep inline React copy while the CLI generates and updates translations using the marked JSX's structure. Lingui also keeps copy inline, compiling macros through a PO-catalog workflow. General Translation combines that authoring convenience with translation generation and Dashboard review.
 date: 2026-10-16
 category: internationalization
 authors: [kevin-wu, jackie]
@@ -40,7 +40,7 @@ export function Inbox({ count }) {
 }
 ```
 
-`lingui extract` adds each message to every locale's PO catalog with an empty `msgstr`, and someone then fills in each one, keeping the ICU plural syntax intact. Here's the Spanish catalog once that's done:
+`lingui extract` adds new target-language messages to PO catalogs with empty translations. Your translators or a connected service fill those entries while preserving ICU syntax. Here's the Spanish catalog once that's done:
 
 ```text title="locales/es/messages.po"
 #: src/Inbox.jsx:7
@@ -54,7 +54,7 @@ msgstr "Tienes {count, plural, one {# mensaje sin leer} other {# mensajes sin le
 
 Then [`lingui compile`](https://lingui.dev/ref/cli) turns the catalog into a module the app loads. That cycle of extract, translate, and compile repeats for every change, the macros need a [build transform](https://lingui.dev/installation) (Lingui's Babel plugin, its Vite plugin, or an experimental SWC plugin), and whoever translates works from the PO entry and its comments, not the component.
 
-## General Translation does the same, and generates the translations
+## Keep inline copy and let General Translation produce the catalogs
 
 General Translation's libraries keep the same inline authoring: copy stays in [`<T>`](/docs/react/reference/components/t), plural forms go in [`<Plural>`](/docs/react/reference/components/plural), and [`<Num>`](/docs/react/reference/components/num) formats values for each locale. Then General Translation does what Lingui doesn't: it generates the translations. Here's the same inbox with `gt-react`:
 
@@ -68,8 +68,8 @@ export function Inbox({ count }: { count: number }) {
         <h1>Inbox</h1>
         <Plural
           n={count}
-          one={<p>You have <Num>{count}</Num> unread message.</p>}
-          other={<p>You have <Num>{count}</Num> unread messages.</p>}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
         />
       </section>
     </T>
@@ -77,7 +77,9 @@ export function Inbox({ count }: { count: number }) {
 }
 ```
 
-[`npx gt translate`](/docs/cli/reference/commands/translate) sends each [`<T>`](/docs/react/reference/components/t) block, with its element structure, to the General Translation API before your build and writes a translation for every target locale, so there's no catalog to fill in or compile. You write the plural forms English uses, each one is translated with the rest of the block, and [`<Plural>`](/docs/react/reference/components/plural) picks a branch using the reader's locale's plural rules. Strings outside JSX go through [`useGT`](/docs/react/reference/hooks/use-gt), the counterpart of Lingui's string macro.
+[`npx gt translate`](/docs/cli/reference/commands/translate) sends each [`<T>`](/docs/react/reference/components/t) block with its element structure and generates the target catalogs before your build. The `singular` and `plural` source branches supply wording for the forms each target language needs. [`<Plural>`](/docs/react/reference/components/plural) selects the translated branch at runtime. Strings outside JSX go through [`useGT`](/docs/react/reference/hooks/use-gt), the counterpart of Lingui's string macro.
+
+In this example, the inbox heading and message branches travel together into translation. You can also add a [`context` note](/docs/react/reference/components/t#context) to explain product-specific meaning. Reviewers edit the generated text in the [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations); the next CLI run reuses unchanged translations and generates new copy, without a separate catalog-compilation command.
 
 Profound's platform and docs ship in 47+ locales with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
 
@@ -89,16 +91,16 @@ Profound's platform and docs ship in 47+ locales with General Translation. (See 
 | Translates your content | No | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
 | Steps per change | Extract, translate each PO catalog, compile, with a macro transform in your build | [`npx gt translate`](/docs/cli/reference/commands/translate) before your build |
 | Catalogs | PO files per locale, compiled to JavaScript modules | Generated per locale, stored in your repository or on General Translation's CDN |
-| What the translator sees | The message, plus `context` and `comment` fields | The surrounding JSX, a context note, your Glossary, and Custom Prompts |
+| What the translator sees | The message, plus `context` and `comment` fields | The structure inside marked JSX blocks, context notes, and shared Glossary and Custom Prompts |
 
 Keep Lingui when your translators work in gettext PO catalogs, when its compiled, minimal runtime matters for your bundle, or when your translation process already works. Choose General Translation when you want the same inline authoring without the extract, translate, and compile cycle, and translations generated with the context of your code.
 
 ## Moving from Lingui
 
-Move one component or route at a time. Lingui's `<Trans>` maps to [`<T>`](/docs/react/reference/components/t), its `<Plural value={count} one="…" other="…" />` maps to [`<Plural>`](/docs/react/reference/components/plural) with `n={count}` and [`<Num>`](/docs/react/reference/components/num) for the number, and its string macro maps to [`useGT`](/docs/react/reference/hooks/use-gt). Once the last component has moved, remove the macro transform and the extract and compile scripts. [Migrating i18n libraries](/docs/react/guides/migrating-i18n-libraries) covers running both libraries during the move and keeping existing translations, which aren't imported automatically. (See [General Translation vs. i18next, react-intl, and next-intl](/kb/general-translation-vs-i18n-libraries) for how Lingui compares with the rest.)
+Move one component or route at a time. Lingui's `<Trans>` maps to [`<T>`](/docs/react/reference/components/t), its `<Plural value={count} one="…" other="…" />` maps to [`<Plural>`](/docs/react/reference/components/plural) with `n={count}`, `singular` and `plural` branches, and [`<Num>`](/docs/react/reference/components/num) for the number. Its string macro maps to [`useGT`](/docs/react/reference/hooks/use-gt). Keep loading Lingui's existing translations for components you have not moved. Once the last component has moved, remove the macro transform and the extract and compile scripts. (See [Migrating i18n libraries](/docs/react/guides/migrating-i18n-libraries).)
 
 ## Key takeaways
 
-- Lingui keeps copy inline and compiles a small runtime, but it doesn't translate anything. Every PO catalog is yours to fill in, compile, and keep current.
+- Lingui keeps copy inline and compiles a small runtime; translators or a connected service supply each target catalog.
 - General Translation's libraries keep the same inline authoring, and General Translation also does the translating, with the context of your code and no catalog cycle.
 - Lingui's macros map closely to [`<T>`](/docs/react/reference/components/t), [`<Plural>`](/docs/react/reference/components/plural), and [`useGT`](/docs/react/reference/hooks/use-gt), so you can migrate one component at a time.
