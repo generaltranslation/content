@@ -1,95 +1,49 @@
 ---
 
 title: Localized navigation
-description: Navigate directly to localized App Router routes with the locale-aware Link component. API reference for Link.
+description: Navigate directly to localized App Router routes with General Translation's locale-aware Link component. API reference for Link.
 
 ---
 
-The `<Link>` component from `gt-next/link` wraps Next.js's `<Link>` and adds a locale prefix to internal App Router URLs before navigation, so the middleware does not need to redirect. For navigation that does not render a link, such as `router.push()`, use [`useLocalizeHref`](/docs/react/nextjs/reference/hooks/use-localize-href). (See the [App Router middleware setup](/docs/react/nextjs/app-router-middleware)).
+The `<Link>` component from `gt-next/link` wraps Next.js's `<Link>` and adds the locale prefix to internal App Router URLs before navigation. This avoids an extra middleware redirect when changing locales. See the [App Router middleware setup](/docs/react/nextjs/app-router-middleware).
 
-*Note: Pages Router apps should use `next/link` or `next/router` with Next.js's `locale` option. (See [Pages Router locale routing](/docs/react/nextjs/pages-router-middleware)).*
+*Note: Pages Router apps should use `next/link` or `next/router` with Next.js's `locale` option. See [Pages Router locale routing](/docs/react/nextjs/pages-router-middleware).*
 
 ## Overview [#overview]
 
-Import the default export from `gt-next/link` and use it like `next/link`. It accepts the same props and forwards refs. Render it inside [`<GTProvider>`](/docs/react/reference/components/gt-provider).
+Import the default export from `gt-next/link` and use it like `next/link` inside [`<GTProvider>`](/docs/react/reference/components/gt-provider). It accepts the same props and forwards refs.
 
 ```tsx title="app/nav.tsx"
 import Link from 'gt-next/link';
 
 export function Navigation() {
-  return <Link href="/home">Home</Link>; // /fr/home for a French visitor, /home for the default locale
+  return <Link href="/home">Home</Link>; // /fr/home for a French visitor
 }
 ```
 
-## How it works [#how-it-works]
-
-`<Link>` prefixes internal paths with the target locale, except default-locale paths when `prefixDefaultLocale` is `false`. The middleware still resolves localized path aliases and locale availability (see [Limitations](#limitations)). With the default routing options and `en` as the default locale:
-
-| Link | Current locale | Rendered `href` |
-| --- | --- | --- |
-| `<Link href="/home">` | `fr` | `/fr/home` |
-| `<Link href="/home">` | `en` | `/home` |
-| `<Link href="/home" locale="fr">` | Any | `/fr/home` |
-| `<Link href="/home" locale="en">` | Any | `/en/home` |
-| `<Link href="/home" locale={false}>` | Any | `/home` |
-| `<Link href="https://example.com">` | Any | `https://example.com` |
-
-- **Current locale.** Without a `locale` prop, links use the current locale. Links for the default locale stay unprefixed unless [`prefixDefaultLocale`](/docs/react/nextjs/reference/functions/create-next-middleware#prefix-default-locale) is `true`.
-- **Explicit default locale.** A `locale` prop that names the default locale, such as `locale="en"` in a language switcher, keeps its prefix while [`enableSmartRouting`](/docs/react/nextjs/reference/functions/create-next-middleware#enable-smart-routing) is `true` (the default), so the switch overrides the visitor's locale cookie. When `enableSmartRouting` is `false`, the link is unprefixed.
-- **Other locales.** Links for any other locale are always prefixed.
-- **Unchanged hrefs.** `locale={false}`, external URLs, protocol-relative URLs (`//cdn.example.com`), and relative paths (`about`, `#section`, `?page=2`) are left as they are.
-- **URL objects.** For object hrefs, `<Link>` localizes only the `pathname` and preserves the other fields.
-
-### Routing options [#routing-options]
-
-`<Link>` reads `prefixDefaultLocale` and `enableSmartRouting` from [`withGTConfig`](/docs/react/nextjs/config#routing), not from [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware). Set routing options in `withGTConfig` and call [`createNextMiddleware()`](/docs/react/nextjs/reference/functions/create-next-middleware) without arguments so links and the middleware agree:
-
-```ts title="next.config.ts"
-import { withGTConfig } from 'gt-next/config';
-
-export default withGTConfig(nextConfig, {
-  prefixDefaultLocale: true,
-});
-```
-
-When options passed to [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) differ from those in `withGTConfig`, the middleware logs a warning in development, and links may take an extra redirect.
-
-<Callout type="info">
-  **Changed in v11.4.13:** `<Link>` no longer prefixes current default-locale links when `prefixDefaultLocale` is `false`, and it leaves explicit default-locale links unprefixed when `enableSmartRouting` is `false`. Previously, every internal link was prefixed. Move routing options from [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) to `withGTConfig` so `<Link>` can read them. `<Link>` now requires [`<GTProvider>`](/docs/react/reference/components/gt-provider) even when you pass a `locale` prop.
-</Callout>
-
 ## The `locale` prop [#locale-prop]
 
-**Type** `string | false | undefined` · **Optional** · **Default** `undefined`
+**Type** `string | false | undefined`
 
 Controls the locale prefix:
 
-- **Omitted** - Use the current locale from [`useLocale`](/docs/react/reference/hooks/use-locale)
-- **Locale string** - Link directly to that locale, such as from a language switcher
+- **Omitted** - Use the current locale from [`useLocale`](/docs/react/reference/hooks/use-locale). The default locale is not prefixed unless `prefixDefaultLocale` is `true`.
+- **Locale string** - Link directly to that locale, such as from a language switcher. The default locale keeps its prefix unless `enableSmartRouting` is `false`.
 - **`false`** - Leave the href unchanged
 
 ```tsx
 import Link from 'gt-next/link';
 
-// Current locale: /fr/home for a French visitor, /home for the default locale
+// Current locale (default): /fr/home, or /home for the default locale
 <Link href="/home">Home</Link>;
 
 // Explicit locale: /fr/home
-<Link href="/home" locale="fr">Français</Link>;
-
-// Explicit default locale: /en/home while enableSmartRouting is true
-<Link href="/home" locale="en">English</Link>;
+<Link href="/home" locale="fr">French</Link>;
 
 // No prefix: /legal
 <Link href="/legal" locale={false}>Legal</Link>;
 ```
 
-## Limitations [#limitations]
+Pass unlocalized paths; hrefs that already contain a locale are prefixed again. External URLs remain unchanged. For object hrefs, `<Link>` localizes only the `pathname` and preserves the other fields.
 
-- **Pass unlocalized paths.** `<Link>` does not detect a locale that is already in the href, so `/de/about` becomes `/de/de/about`. Use `locale={false}` for an href that is already localized.
-- **Path aliases and locale availability.** `<Link>` does not apply [`pathConfig`](/docs/react/nextjs/reference/functions/create-next-middleware#path-config) aliases or [`localeRoutes`](/docs/react/nextjs/reference/functions/create-next-middleware#locale-routes) availability. The middleware still resolves them, which can add a redirect.
-- **Disabled locale routing.** `<Link>` does not read [`localeRouting`](/docs/react/nextjs/reference/functions/create-next-middleware#locale-routing). When it is `false`, pass `locale={false}` or use `next/link`.
-
-<Callout type="info">
-  **Next.js 16.3 and later:** a Next.js issue ([vercel/next.js#97244](https://github.com/vercel/next.js/issues/97244)) can make prefetches return 404 on pages that mix unprefixed and prefixed links behind middleware rewrites. Navigation still works. To avoid the failed prefetches, set `experimental.optimisticRouting` to `false` in `next.config`, or pass `prefetch={false}` to cross-locale links.
-</Callout>
+`<Link>` reads `prefixDefaultLocale` and `enableSmartRouting` from [`withGTConfig`](/docs/react/nextjs/config#routing). To localize a path without rendering a link, such as for `router.push()`, use [`useLocalizeHref`](/docs/react/nextjs/reference/hooks/use-localize-href).
