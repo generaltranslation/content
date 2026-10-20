@@ -1,0 +1,100 @@
+---
+
+title: listBranchFiles
+description: List one page of the source files on a branch with their head versions. API reference for listBranchFiles.
+
+---
+
+Lists the source files on a branch of the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance, in the order they were added. Compare the listed file IDs with your local files to find files that were removed or moved locally.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { items, nextCursor } = await gt.listBranchFiles('branch-id');
+```
+
+Signature:
+
+```typescript
+listBranchFiles(
+  branchId: string,
+  query?: { cursor?: string; limit?: number },
+  options?: { timeout?: number }
+): Promise<ListBranchFilesResponse>
+```
+
+*Note: `listBranchFiles` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:read` permission.*
+
+## How it works [#how-it-works]
+
+- **One page per call.** Pass `nextCursor` as `cursor` to read the next page; it is `null` on the last page.
+- **Head versions.** Each item names the file's version at the branch head.
+- **Independent pages.** Files changed between requests can be missed or repeated.
+- **Errors.** An unknown `branchId` fails with `404` and throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`branchId`](#branch-id) | The branch to list. | `string` | No | — |
+| [`query`](#query) | Paging. | `{ cursor?: string; limit?: number }` | Yes | `{}` |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `branchId` [#branch-id]
+
+**Type** `string` · **Required**
+
+ID of the branch, as returned by [`listBranches`](/docs/platform/core/reference/gt-class-methods/branches/list-branches).
+
+### `query`
+
+**Type** `{ cursor?: string; limit?: number }` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `cursor` | The `nextCursor` from the previous page. Omit for the first page. | `string` | Yes | — |
+| `limit` | Files per page, 1–100. | `number` | Yes | `50` |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<ListBranchFilesResponse>`
+
+```typescript
+type ListBranchFilesResponse = {
+  items: { fileId: string; versionId: string; fileName: string }[];
+  nextCursor: string | null;
+};
+```
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+// Find files on the branch that are no longer in the local file set.
+const localFileIds = new Set(['file-a', 'file-b']);
+const removed: string[] = [];
+let cursor: string | undefined;
+do {
+  const page = await gt.listBranchFiles('branch-id', { cursor, limit: 100 });
+  for (const file of page.items) {
+    if (!localFileIds.has(file.fileId)) removed.push(file.fileId);
+  }
+  cursor = page.nextCursor ?? undefined;
+} while (cursor);
+```
+
+Use [`moveFiles`](/docs/platform/core/reference/gt-class-methods/files/move-files) to carry a moved file's translations over to its new file ID. (See the [List branch files](/docs/platform/openapi/reference/branches/list-branch-files) endpoint for the HTTP contract).

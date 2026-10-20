@@ -9,7 +9,7 @@ related:
 
 ---
 
-The `generaltranslation` library can translate full source files. This page explains how to upload, enqueue, status, and download workflows for files.
+The `generaltranslation` library can translate full source files. This page walks through uploading a file, queueing its translation, waiting for the job, and downloading the result.
 
 ## Before you start [#before-start]
 
@@ -20,13 +20,13 @@ Make sure you've completed the [Quickstart](/docs/platform/core/quickstart) to i
 Files are translated as jobs:
 
 1. Upload the source file.
-2. Enqueue the file for translation.
-3. Check translation status.
+2. Queue the file for translation.
+3. Wait for the translation jobs.
 4. Download the translated file.
 
 File translation uses multiple calls because projects often translate many files. Separate steps give you more flexibility in using the API: making it easier to batch files, retry failed work, poll jobs, and download output when ready.
 
-Uploading creates source-file records. Calling [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) can then launch one job for each source-file and target-locale pair that still requires work. (See the [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) and [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) methods for more information).
+Uploading creates source-file records. Calling [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files) then queues one job for each file and target locale that still needs translating. Batch calls report each item separately: an upload resolves with a `summary` and one result per file, so one failed file does not stop the others. (See the [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files) and [`queryFilesContent`](/docs/platform/core/reference/gt-class-methods/files/query-files-content) methods for more information).
 
 For SVG files, pass the UTF-8 XML source with `fileFormat: 'SVG'`. Translation updates text nodes while preserving shapes and styles. An asynchronous layout pass can recenter text and shorten overflowing translations while preserving authored font sizes, so wait until the file is complete before downloading it. Malformed XML is rejected.
 
@@ -41,7 +41,7 @@ As an example, this guide translates this English JSON file:
 }
 ```
 
-Read the file, format contents, and then call [uploadSourceFiles](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) to upload files.
+Read the file, format contents, and then call [uploadSourceFiles](/docs/platform/core/reference/gt-class-methods/files/upload-source-files) to upload files.
 
 ```typescript title="src/index.ts"
 import fs from 'fs';
@@ -62,43 +62,47 @@ const fileUpload: FileUpload = {
 const files = [ { source: fileUpload } ];
 
 // (iii) Upload the file
-const { uploadedFiles } = await gt.uploadSourceFiles(
+const { results } = await gt.uploadSourceFiles(
   files,
   {
     sourceLocale: 'en'
   }
 );
+
+// (iv) Stop if the file was not saved
+const [uploaded] = results;
+if (uploaded.status === 'failed') {
+  throw new Error(`Upload failed: ${uploaded.error}`);
+}
 ```
 
-The response returns a list of file references. This allows you to later enqueue the file for translation, check the status of the file, and download the translated file.
+The response has a `summary` and one result per file, in request order. Each succeeded result carries the file references you use to queue, check, and download the translation.
 
 ```ts title="Output"
-[
-  {
-    fileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
-    versionId: '427269616e204c6f75206d6f7265206c696b65204c696f6e2042726f20686121',
-    branchId: '123456789',
-    fileName: '/Users/demo/en.json',
-    fileFormat: 'JSON'
-  }
-]
+{
+  summary: { total: 1, succeeded: 1, failed: 0 },
+  results: [
+    {
+      branchId: '123456789',
+      fileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
+      versionId: '427269616e204c6f75206d6f7265206c696b65204c696f6e2042726f20686121',
+      fileName: '/Users/demo/en.json',
+      fileFormat: 'JSON',
+      status: 'succeeded'
+    }
+  ]
+}
 ```
 
-## 2. Enqueue the file for translation [#enqueue]
+## 2. Queue the file for translation [#enqueue]
 
-Use [enqueueFiles](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) with the uploaded file reference and target locales. In this example, we will translate to Spanish (`es`).
+Use [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files) with the uploaded file and target locales. In this example, we will translate to Spanish (`es`).
 
 ```typescript title="src/index.ts"
-const fileUploadRef = {
-  fileId: uploadedFiles[0].fileId,
-  versionId: uploadedFiles[0].versionId,
-  branchId: uploadedFiles[0].branchId,
-  fileName: uploadedFiles[0].fileName,
-  fileFormat: uploadedFiles[0].fileFormat,
-};
+const { fileId, versionId, branchId } = uploaded;
 
-const enqueueResult = await gt.enqueueFiles(
-  [fileUploadRef],
+const { jobs } = await gt.translateFiles(
+  [{ fileId, versionId, branchId }],
   {
     sourceLocale: 'en',
     targetLocales: ['es'],
@@ -106,83 +110,62 @@ const enqueueResult = await gt.enqueueFiles(
 );
 ```
 
-The response returns a result with job information.
+The response lists one job per file and target locale that needs translating:
 
 ```ts title="Output"
 {
-  jobData: {
-    'job-123456': {
-      sourceFileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
-      fileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
-      versionId: '427269616e204c6f75206d6f7265206c696b65204c696f6e2042726f20686121',
-      branchId: '123456789',
-      targetLocale: 'es',
-      projectId: 'your-project-id',
-      force: false
-    }
-  },
-  locales: ['es'],
-  message: 'Successfully enqueued 1 file translation jobs in 1 batch(es)'
-}
-```
-
-## 3. Check file status [#status]
-
-Wait with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs), then use [queryFileData](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) to confirm the requested version is ready, even if no new jobs were needed.
-
-```typescript title="src/index.ts"
-const { fileId, versionId, branchId } = uploadedFiles[0];
-const jobs = await gt.awaitJobs(enqueueResult, { timeoutSeconds: 300 });
-if (!jobs.complete || jobs.jobs.some((job) => job.status !== 'completed')) {
-  throw new Error('Translation jobs did not complete successfully');
-}
-
-const status = await gt.queryFileData({
-  translatedFiles: [
+  jobs: [
     {
-      fileId,
-      versionId,
-      branchId,
-      locale: 'es',
-    },
-  ],
-});
-const translatedFile = status.translatedFiles?.[0];
-if (!translatedFile || translatedFile.completedAt === null) {
-  throw new Error('The requested translation is not ready to download');
-}
-```
-
-If the file is still being translated, `completedAt` is `null`. When complete, it contains a timestamp:
-
-```ts title="Output"
-{
-  translatedFiles: [
-    {
-      fileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
-      versionId: '427269616e204c6f75206d6f7265206c696b65204c696f6e2042726f20686121',
-      branchId: '123456789',
-      locale: 'es',
-      completedAt: '2024-01-15T12:00:00Z'
+      id: 'job-123456',
+      status: 'queued',
+      subject: {
+        type: 'file_translation',
+        branchId: '123456789',
+        fileId: '41726368696562616c64204d6342616c64792074686973206973206a6f6b652e',
+        versionId: '427269616e204c6f75206d6f7265206c696b65204c696f6e2042726f20686121',
+        locale: 'es'
+      }
     }
   ]
 }
 ```
 
-## 4. Download the translated file [#download]
+`jobs` is empty when the file is already translated into every target locale.
 
-Finally, download the translated file with the [downloadFile](/docs/platform/core/reference/gt-class-methods/translation/download-file) method.
+## 3. Wait for the translation [#status]
+
+Wait for the jobs with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs). It polls until every job is finished or the timeout is reached.
 
 ```typescript title="src/index.ts"
-const content = await gt.downloadFile({
-  fileId,
-  versionId,
-  branchId,
-  locale: 'es',
-});
+const result = await gt.awaitJobs(
+  jobs.map((job) => job.id),
+  { timeoutSeconds: 300 }
+);
+if (!result.complete || result.jobs.some((job) => job.status !== 'completed')) {
+  throw new Error('Translation jobs did not complete successfully');
+}
 ```
 
-The response returns the translated file content. This example returns:
+`complete` is `false` when the timeout is reached, and each job's `status` is `completed`, `failed`, or `not_found` once it finishes.
+
+## 4. Download the translated file [#download]
+
+Finally, download the translated file with the [`queryFilesContent`](/docs/platform/core/reference/gt-class-methods/files/query-files-content) method. It returns one result per requested file, in request order.
+
+```typescript title="src/index.ts"
+const {
+  results: [translation],
+} = await gt.queryFilesContent([
+  { fileId, versionId, branchId, locale: 'es' },
+]);
+
+if (translation.status !== 'ready') {
+  throw new Error(`The translation is ${translation.status}`);
+}
+console.log(translation.data);
+```
+
+A result is `ready` with the content in `data`, `pending` when the translation is stored but not completed yet (for example during a layout pass; request it again later), or `not_found`. A translation is `not_found` until its job stores it, which is why this guide waits for the jobs first. This example prints:
 
 ```json title="Output"
 {

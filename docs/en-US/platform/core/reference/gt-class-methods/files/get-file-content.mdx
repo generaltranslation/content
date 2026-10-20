@@ -1,0 +1,108 @@
+---
+
+title: getFileContent
+description: Download the content of one source file or one of its translations. API reference for getFileContent.
+
+---
+
+Downloads one file from the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance: the source file, or with `locale` one of its translations. Use [`queryFilesContent`](/docs/platform/core/reference/gt-class-methods/files/query-files-content) to download several files in one call.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const file = await gt.getFileContent('file-123', { locale: 'es' });
+if (file.status === 'ready') console.log(file.data);
+```
+
+Signature:
+
+```typescript
+getFileContent(
+  fileId: string,
+  query?: { branchId?: string; versionId?: string; locale?: string },
+  options?: { timeout?: number }
+): Promise<GetFileContentResponse>
+```
+
+*Note: `getFileContent` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:read` permission.*
+
+## How it works [#how-it-works]
+
+- **Decoded content.** `data` is the decoded file content. Binary formats such as `LOTTIE` stay base64-encoded.
+- **Pending translations.** When a translation is stored but not completed yet, for example during a layout pass, the method resolves with `status: 'pending'` and `data: null`. Request it again later.
+- **Wait for the job first.** Until its translation job stores the translation, the request fails with `404`. Wait for the job with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs), [`getJob`](/docs/platform/core/reference/gt-class-methods/jobs/get-job), or [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs) before reading it.
+- **Version.** Without `versionId`, a translation is the newest completed version on the branch, and `pending` only while none is completed. To wait for a specific version, pass its `versionId`.
+- **Errors.** An unknown file, branch, version, or translation fails with `404` and throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`fileId`](#file-id) | The source file. | `string` | No | — |
+| [`query`](#query) | Branch, source version, and translation locale. | `{ branchId?: string; versionId?: string; locale?: string }` | Yes | `{}` |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `fileId` [#file-id]
+
+**Type** `string` · **Required**
+
+ID of the source file.
+
+### `query`
+
+**Type** `{ branchId?: string; versionId?: string; locale?: string }` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `branchId` | Branch of the file. | `string` | Yes | Default branch |
+| `versionId` | Source version. | `string` | Yes | Branch head for the source file; newest completed version for a translation |
+| `locale` | Translation locale. Omit to download the source file. | `string` | Yes | — |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<GetFileContentResponse>`
+
+```typescript
+type GetFileContentResponse = {
+  status: 'ready' | 'pending';
+  branchId: string;
+  fileId: string;
+  versionId: string;
+  locale?: string; // the requested locale, for translations
+  fileName?: string; // when ready; for a translation, its source file's name
+  data: string | null; // null exactly when pending
+  metadata?: JsonObject;
+  fileFormat?: FileFormat;
+};
+```
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import fs from 'node:fs';
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const file = await gt.getFileContent('file-123', {
+  versionId: 'version-1',
+  locale: 'es',
+});
+
+if (file.status === 'ready' && file.data !== null) {
+  fs.writeFileSync('./locales/es.json', file.data);
+}
+```
+
+(See the [Get file content](/docs/platform/openapi/reference/files/get-file-content) endpoint for the HTTP contract).

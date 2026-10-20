@@ -1,0 +1,90 @@
+---
+
+title: createBranch
+description: Create a branch in a project, or return the existing branch with the same name. API reference for createBranch.
+
+---
+
+Creates a branch in the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance. Branches keep separate file versions and translations, so you can translate work in progress without changing the default branch.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { branch } = await gt.createBranch({ name: 'feature/checkout' });
+```
+
+Signature:
+
+```typescript
+createBranch(body: {
+  name: string;
+  isDefault?: boolean;
+}): Promise<CreateBranchResponse>
+```
+
+*Note: `createBranch` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:write` permission. Free Organizations can create only the default branch.*
+
+## How it works [#how-it-works]
+
+- **Existing name.** When the project already has a branch with this name, the method looks it up with [`listBranches`](/docs/platform/core/reference/gt-class-methods/branches/list-branches) and returns it instead of failing. The lookup needs `project:files:read`; without it, the original `409` [`ApiError`](/docs/platform/core/reference/api-client#api-error) is thrown.
+- **Default branch.** `isDefault: true` creates the project's default branch. If the project already has a default branch under another name, the request fails with `409`. Change the default with [`updateBranch`](/docs/platform/core/reference/gt-class-methods/branches/update-branch) instead.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`body`](#body) | The branch to create. | `{ name: string; isDefault?: boolean }` | No | — |
+
+### `body`
+
+**Type** `{ name: string; isDefault?: boolean }` · **Required**
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `name` | Branch name, unique within the project. | `string` | No | — |
+| `isDefault` | Create the project's default branch. | `boolean` | Yes | `false` |
+
+## Returns [#returns]
+
+**Type** `Promise<CreateBranchResponse>`
+
+```typescript
+type CreateBranchResponse = {
+  branch: { id: string; name: string; isDefault: boolean };
+};
+```
+
+The created branch, or the existing branch with the same name.
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+// Safe to run on every CI build: an existing branch is returned.
+const { branch } = await gt.createBranch({ name: 'feature/checkout' });
+
+await gt.uploadSourceFiles(
+  [
+    {
+      source: {
+        content: '{"title":"Checkout"}',
+        fileName: 'checkout.json',
+        fileFormat: 'JSON',
+        locale: 'en',
+        branchId: branch.id,
+      },
+    },
+  ],
+  { sourceLocale: 'en' }
+);
+```
+
+(See the [Create a branch](/docs/platform/openapi/reference/branches/create-branch) endpoint for the HTTP contract).

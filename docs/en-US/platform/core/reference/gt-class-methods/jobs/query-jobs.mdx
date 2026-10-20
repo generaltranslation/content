@@ -1,0 +1,110 @@
+---
+
+title: queryJobs
+description: Read the current status of translation and context generation jobs by ID. API reference for queryJobs.
+
+---
+
+Reads the status of jobs in the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance. It makes one status check; use [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs) to poll until jobs finish.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { results } = await gt.queryJobs(['job-123', 'job-456']);
+```
+
+Signature:
+
+```typescript
+queryJobs(
+  jobIds: string[],
+  options?: { timeout?: number }
+): Promise<QueryJobsResponse>
+```
+
+*Note: `queryJobs` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:read` permission.*
+
+## How it works [#how-it-works]
+
+- **Positional results.** The method returns one result per job ID, in request order.
+- **Unknown jobs.** A job the project does not have is `not_found`; the call does not fail.
+- **Unique IDs.** Each job ID may appear once. A repeated ID rejects the request with a `400` [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+- **Batches.** The method sends at most 100 job IDs per request and returns the results in request order.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`jobIds`](#job-ids) | The jobs to read. | `string[]` | No | — |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `jobIds` [#job-ids]
+
+**Type** `string[]` · **Required**
+
+Job IDs returned by [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files) or [`generateProjectContext`](/docs/platform/core/reference/gt-class-methods/translation/generate-project-context).
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<QueryJobsResponse>`
+
+```typescript
+type QueryJobsResponse = {
+  results: {
+    id: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed' | 'not_found';
+    subject?: JobSubject; // absent when not_found
+    error?: string | null; // failure reason of a failed job; absent when not_found
+  }[];
+};
+
+type JobSubject =
+  | {
+      type: 'file_translation';
+      branchId: string; // branch of the translated source file
+      fileId: string; // translated source file
+      versionId: string; // translated source file version
+      locale: string; // target locale
+    }
+  | { type: 'context_generation' }
+  | { type: 'search_index' };
+```
+
+| Status | Meaning |
+| --- | --- |
+| `queued` | Accepted and waiting to run. |
+| `processing` | Running, or waiting to retry after a failed attempt. |
+| `completed` | Finished successfully. Final. |
+| `failed` | Finished with an error. Final. |
+| `not_found` | The project has no job with this ID. |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const { results } = await gt.queryJobs(['job-123', 'job-456']);
+
+for (const job of results) {
+  if (job.status === 'failed') {
+    console.error(`Job ${job.id} failed: ${job.error}`);
+  } else if (job.subject?.type === 'file_translation') {
+    console.log(`${job.subject.fileId} → ${job.subject.locale}: ${job.status}`);
+  }
+}
+```
+
+(See the [Query jobs](/docs/platform/openapi/reference/jobs/query-jobs) endpoint for the HTTP contract).

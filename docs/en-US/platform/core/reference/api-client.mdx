@@ -5,22 +5,20 @@ description: Create a typed client for the General Translation API and call gene
 
 ---
 
-Import the TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The module combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for batching and translation-job polling.
+Import the TypeScript client from `@generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The package combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for pagination, batching, and job polling.
 
-`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.5.4 and the equivalent standalone `@generaltranslation/api` 0.5.2 package.
-
-The generated helpers reflect the installed package version, which can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview). Use the public reference when checking which endpoints and file formats are live.
+The generated helpers reflect the installed package version. Use the [public OpenAPI reference](/docs/platform/openapi/overview) to check which endpoints and file formats are live.
 
 ## Overview [#overview]
 
 | Export | Description |
 | --- | --- |
 | [`createApiClient`](#create-client) | Creates an authenticated client with version, retry, and timeout handling. |
-| [`ApiClientConfig`](#client-config) | Configures the client transport and shared request headers. |
-| [`API_VERSION`](#api-version) | Current API contract version sent by default. |
+| [`ApiClientConfig`](#client-config) | Configures the client transport. |
+| [`API_VERSION`](#api-version) | API contract version the client sends. |
 | [Endpoint helpers](#endpoint-helpers) | Typed functions for the public operations listed below. |
 | [`paginate`](#pagination) | Iterate every item of a list operation. |
-| [`awaitJobs`](#job-polling) and [`pollJobs`](#job-polling) | Poll translation jobs until they finish or time out. |
+| [`awaitJobs`](#job-polling), [`queryJobsInBatches`](#job-polling), and [`pollJobs`](#job-polling) | Read and poll translation and context generation jobs. |
 | [`processBatches`](#batch-processing) and [`DEFAULT_BATCH_SIZE`](#batch-processing) | Process an input array in configurable batches. |
 | [`ApiError`](#api-error) | Error thrown for a failed HTTP response. |
 | [Generated types](#types-errors) | Describe endpoint data, responses, errors, and client contracts. |
@@ -32,31 +30,31 @@ The generated helpers reflect the installed package version, which can differ fr
 function createApiClient(config: ApiClientConfig): Client;
 ```
 
-The client adds the configured API version, API key, and project ID to every request. Pass it to a generated endpoint helper:
+The client adds the API key and the `gt-api-version` header to every request. Project-scoped operations take the project ID in the path. Pass the client to a generated endpoint helper:
 
 ```ts title="project-info.ts"
-import { createApiClient, getProjectInfo } from 'generaltranslation/api';
+import { API_VERSION, createApiClient, getProject } from '@generaltranslation/api';
 
 const projectId = process.env.GT_PROJECT_ID!;
 const client = createApiClient({
   apiKey: process.env.GT_API_KEY,
   baseUrl: 'https://api.gtx.dev',
-  projectId,
 });
 
-const result = await getProjectInfo({
+const result = await getProject({
   client,
+  headers: { 'gt-api-version': API_VERSION },
   path: { projectId },
 });
 
 if (result.error) {
-  throw new Error('Could not load Project information');
+  throw new Error('Could not load the project');
 }
 
 console.log(result.data);
 ```
 
-The examples below reuse this configured `client`.
+The examples below reuse this configured `client` and `projectId`.
 
 ## `ApiClientConfig` [#client-config]
 
@@ -66,7 +64,6 @@ The examples below reuse this configured `client`.
 | [`apiVersion`](#apiversion) | Contract version sent as `gt-api-version`. | `ApiVersion` | Yes | `API_VERSION` |
 | [`baseUrl`](#baseurl) | API origin. | `string` | No | — |
 | [`fetch`](#fetch) | Custom Fetch API implementation. | `typeof fetch` | Yes | `globalThis.fetch` |
-| [`projectId`](#projectid) | project ID sent as `gt-project-id`. | `string` | Yes | — |
 | [`retryPolicy`](#retrypolicy) | Retry delay strategy. | `'exponential' \| 'linear' \| 'none'` | Yes | `'exponential'` |
 | [`timeoutMs`](#timeoutms) | Per-attempt timeout, or `false` to disable the built-in timeout. | `number \| false` | Yes | `60000` |
 
@@ -94,12 +91,6 @@ API origin. Use `https://api.gtx.dev` for the hosted General Translation API.
 
 Custom Fetch API implementation. Use this for instrumentation, testing, or a runtime without a global fetch implementation.
 
-### `projectId`
-
-**Type** `string` · **Optional**
-
-Project ID sent in the `gt-project-id` header. Organization keys need this header for project-scoped endpoints that do not carry the project ID in the path.
-
 ### `retryPolicy`
 
 **Type** `'exponential' | 'linear' | 'none'` · **Optional** · **Default** `'exponential'`
@@ -108,7 +99,7 @@ GET, HEAD, OPTIONS, PUT, and DELETE retry network errors and `5xx` responses up 
 
 For `429`, the delay comes from `Retry-After` (seconds or an HTTP date), then `RateLimit-Reset` (seconds), then a 60-second fallback. Other exponential delays are 500, 1000, and 2000 ms; linear delays are 500, 1000, and 1500 ms. Retry sleeps are not abort-aware, so cancellation is not guaranteed to interrupt a wait immediately.
 
-Class runtime translation disables these transport retries, including `429`. The generated runtime-translation helper uses the supplied client's retry policy instead.
+Class runtime translation disables these transport retries, including `429`. The generated `translateContent` helper uses the supplied client's retry policy instead.
 
 ### `timeoutMs`
 
@@ -122,22 +113,27 @@ These settings are not [`GT`](/docs/platform/core/reference/gt-class/constructor
 
 **Type** `ApiVersion`
 
-The current default contract version is `2026-03-06.v1`. Pass a different supported version through `apiVersion` when maintaining an integration against an older response contract.
+The contract version the client sends by default: `2026-10-08.v1`. Operations whose generated types mark the `gt-api-version` header as required need `2026-10-08.v1` or later and return `400` when the header is missing or older.
 
 ## Endpoint helpers [#endpoint-helpers]
 
 Generated helpers accept one object with the shared `client` plus the endpoint's `body`, `headers`, `path`, and `query` fields as applicable. They return `{ data, error, request, response }` by default.
 
-```ts title="project-info.ts"
-import { getProjectInfo } from 'generaltranslation/api';
+Operations that require the version header type it as a required per-call header. Pass `API_VERSION`, or the version you configured, because per-call headers override the client's:
 
-const result = await getProjectInfo({
+```ts title="file-content.ts"
+import { API_VERSION, queryFilesContent } from '@generaltranslation/api';
+
+const { data } = await queryFilesContent({
   client,
-  path: { projectId: 'your-project-id' },
+  headers: { 'gt-api-version': API_VERSION },
+  path: { projectId },
+  body: { files: [{ fileId: 'file-123', locale: 'es' }] },
   throwOnError: true,
 });
 
-console.log(result.data.name);
+// One result per selector, in selector order
+console.log(data.results[0].status); // 'ready' | 'pending' | 'not_found'
 ```
 
 Common generated options include:
@@ -148,78 +144,70 @@ Common generated options include:
 | `body` | Typed JSON request body. | Endpoint-specific | Varies | — |
 | `path` | Typed path parameters. | Endpoint-specific | Varies | — |
 | `query` | Typed query parameters. | Endpoint-specific | Varies | — |
-| `headers` | Per-call headers that override shared client headers. | Endpoint-specific | Yes | — |
+| `headers` | Per-call headers that override shared client headers. | Endpoint-specific | Varies | — |
 | `throwOnError` | Throw for an unsuccessful response instead of returning `error`. | `boolean` | Yes | `false` |
 | `responseStyle` | Return all response fields or only parsed data. | `'fields' \| 'data'` | Yes | `'fields'` |
 | `signal` | Cancel the request with a Fetch API signal. | `AbortSignal` | Yes | — |
 | `meta` | Values exposed to custom client integrations. | `Record<string, unknown>` | Yes | — |
 
-The installed 0.5.2 SDK provides generated helpers for these 48 public operations:
+The package provides generated helpers for these public operations:
 
-| Function | Operation |
-| --- | --- |
-| [`listProjects`](/docs/platform/openapi/reference/projects/list-projects) | List one page of projects selected by API-key binding. |
-| [`listOrgs`](/docs/platform/openapi/reference/organizations/list-orgs) | List the Organization associated with an Organization or project API key. |
-| [`createProject`](/docs/platform/openapi/reference/projects/create-project) | Create a project in a selected Organization. |
-| [`createProjectApiKey`](/docs/platform/openapi/reference/projects/create-project-api-key) | Create a project API key with permissions delegated by the caller. |
-| [`uploadSourceFiles`](/docs/platform/openapi/reference/files/upload-source-files) | Upload source files. |
-| [`uploadTranslations`](/docs/platform/openapi/reference/files/upload-translations) | Upload translated files linked to existing source files. |
-| `uploadAssets` | Upload project assets. |
-| `submitUserEditDiffs` | Submit local translation edits. |
-| `generateProjectContext` | Generate project context. |
-| `enqueueFileTranslations` | Queue uploaded files for translation. |
-| `publishFiles` | Publish or unpublish files. |
-| [`downloadFile`](/docs/platform/openapi/reference/files/get-file-content) | Download one file. |
-| `downloadFiles` | Download multiple files. |
-| `getBranchInfo` | Read branch information. |
-| `createBranch` | Create a branch. |
-| [`createTag`](/docs/platform/openapi/reference/branches/set-tag) | Create or update a tag. |
-| `getProjectInfo` | Read project information. |
-| `updateProjectInfo` | Update project information. |
-| `getTranslationJobInfo` | Read translation-job status. |
-| [`translate`](/docs/platform/openapi/reference/translation/translate-content) | Translate content at runtime. |
-| `getFileInfo` | Read file metadata. |
-| `getTranslationStatus` | Read a file's translation status. |
-| `processFileMoves` | Move or rename files. |
-| `getOrphanedFiles` | Find orphaned files. |
-| [`listContextGroups`](/docs/platform/openapi/reference/context-groups/list-context-groups) | List Context Groups in an Organization. |
-| [`createContextGroup`](/docs/platform/openapi/reference/context-groups/create-context-group) | Create a Context Group. |
-| [`getContextGroup`](/docs/platform/openapi/reference/context-groups/get-context-group) | Read a Context Group. |
-| [`updateContextGroup`](/docs/platform/openapi/reference/context-groups/update-context-group) | Update a Context Group. |
-| [`deleteContextGroup`](/docs/platform/openapi/reference/context-groups/delete-context-group) | Delete a Context Group. |
-| [`listProjectContextGroups`](/docs/platform/openapi/reference/context-groups/list-project-context-groups) | List a project's assigned Context Groups. |
-| [`getProjectContextGroup`](/docs/platform/openapi/reference/context-groups/get-project-context-group) | Read one assigned Context Group. |
-| [`assignContextGroup`](/docs/platform/openapi/reference/context-groups/assign-context-group) | Assign a Context Group to a project. |
-| [`unassignContextGroup`](/docs/platform/openapi/reference/context-groups/unassign-context-group) | Unassign a Context Group from a project. |
-| [`reorderContextGroup`](/docs/platform/openapi/reference/context-groups/reorder-context-group) | Change an assigned Context Group's priority. |
-| [`listContextGlossary`](/docs/platform/openapi/reference/glossary/list-context-glossary) | List Glossary terms in a Context Group. |
-| [`upsertContextGlossary`](/docs/platform/openapi/reference/glossary/upsert-context-glossary) | Create or update Glossary terms. |
-| [`getContextGlossaryEntry`](/docs/platform/openapi/reference/glossary/get-context-glossary-entry) | Read one Glossary term. |
-| [`updateContextGlossaryEntry`](/docs/platform/openapi/reference/glossary/update-context-glossary-entry) | Update one Glossary term. |
-| [`deleteContextGlossaryEntry`](/docs/platform/openapi/reference/glossary/delete-context-glossary-entry) | Delete one Glossary term. |
-| [`listContextGlossaryTranslations`](/docs/platform/openapi/reference/glossary/list-context-glossary-translations) | List a Glossary term's translations. |
-| [`setContextGlossaryTranslation`](/docs/platform/openapi/reference/glossary/set-context-glossary-translation) | Set a Glossary term translation. |
-| [`deleteContextGlossaryTranslation`](/docs/platform/openapi/reference/glossary/delete-context-glossary-translation) | Delete a Glossary term translation. |
-| [`listContextCustomPrompts`](/docs/platform/openapi/reference/custom-prompts/list-context-custom-prompts) | List Custom Prompts in a Context Group. |
-| [`upsertContextCustomPrompts`](/docs/platform/openapi/reference/custom-prompts/upsert-context-custom-prompts) | Create or update Custom Prompts. |
-| [`updateContextCustomPrompt`](/docs/platform/openapi/reference/custom-prompts/update-context-custom-prompt) | Update one Custom Prompt. |
-| [`deleteContextCustomPrompt`](/docs/platform/openapi/reference/custom-prompts/delete-context-custom-prompt) | Delete one Custom Prompt. |
-| [`importContextContent`](/docs/platform/openapi/reference/context-groups/import-context-content) | Import Glossary terms and Custom Prompts. |
-| [`exportContextContent`](/docs/platform/openapi/reference/context-groups/export-context-content) | Export Glossary terms and Custom Prompts. |
+| Function | Endpoint | Operation |
+| --- | --- | --- |
+| [`listProjects`](/docs/platform/openapi/reference/projects/list-projects) | `GET /v2/projects` | List Projects. |
+| [`createProject`](/docs/platform/openapi/reference/projects/create-project) | `POST /v2/orgs/{orgId}/projects` | Create a Project. |
+| [`getProject`](/docs/platform/openapi/reference/projects/get-project) | `GET /v2/projects/{projectId}` | Get a Project. |
+| [`updateProject`](/docs/platform/openapi/reference/projects/update-project) | `PATCH /v2/projects/{projectId}` | Update a Project. |
+| [`createProjectApiKey`](/docs/platform/openapi/reference/projects/create-project-api-key) | `POST /v2/projects/{projectId}/api-keys` | Create a Project API key. |
+| [`listOrgs`](/docs/platform/openapi/reference/organizations/list-orgs) | `GET /v2/orgs` | List Organizations. |
+| [`upsertAssets`](/docs/platform/openapi/reference/organizations/upsert-assets) | `POST /v2/orgs/{orgId}/assets` | Upsert Organization assets. |
+| [`listBranches`](/docs/platform/openapi/reference/branches/list-branches) | `GET /v2/projects/{projectId}/branches` | List branches. |
+| [`createBranch`](/docs/platform/openapi/reference/branches/create-branch) | `POST /v2/projects/{projectId}/branches` | Create a branch. |
+| [`updateBranch`](/docs/platform/openapi/reference/branches/update-branch) | `PATCH /v2/projects/{projectId}/branches/{branchId}` | Update a branch. |
+| [`listBranchFiles`](/docs/platform/openapi/reference/branches/list-branch-files) | `GET /v2/projects/{projectId}/branches/{branchId}/files` | List branch files. |
+| [`setTag`](/docs/platform/openapi/reference/branches/set-tag) | `PUT /v2/projects/{projectId}/tags/{tagId}` | Set a tag. |
+| [`uploadSourceFiles`](/docs/platform/openapi/reference/files/upload-source-files) | `POST /v2/projects/{projectId}/files` | Upload source files. |
+| [`uploadTranslations`](/docs/platform/openapi/reference/files/upload-translations) | `POST /v2/projects/{projectId}/files/translations` | Upload translations. |
+| [`overwriteTranslations`](/docs/platform/openapi/reference/files/overwrite-translations) | `POST /v2/projects/{projectId}/files/translations/overwrite` | Overwrite translations. |
+| [`moveFiles`](/docs/platform/openapi/reference/files/move-files) | `POST /v2/projects/{projectId}/files/move` | Move or rename files. |
+| [`publishFiles`](/docs/platform/openapi/reference/files/publish-files) | `POST /v2/projects/{projectId}/files/publish` | Publish or unpublish files. |
+| [`queryFiles`](/docs/platform/openapi/reference/files/query-files) | `POST /v2/projects/{projectId}/files/query` | Query file metadata. |
+| [`queryFilesContent`](/docs/platform/openapi/reference/files/query-files-content) | `POST /v2/projects/{projectId}/files/content/query` | Query file content. |
+| [`getFileContent`](/docs/platform/openapi/reference/files/get-file-content) | `GET /v2/projects/{projectId}/files/{fileId}/content` | Get file content. |
+| [`getFileStatus`](/docs/platform/openapi/reference/files/get-file-status) | `GET /v2/projects/{projectId}/files/{fileId}/status` | Get file status. |
+| [`translateFiles`](/docs/platform/openapi/reference/translation/translate-files) | `POST /v2/projects/{projectId}/files/translate` | Translate files. |
+| [`generateProjectContext`](/docs/platform/openapi/reference/translation/generate-project-context) | `POST /v2/projects/{projectId}/context/generate` | Generate project context. |
+| [`translateContent`](/docs/platform/openapi/reference/translation/translate-content) | `POST /v2/projects/{projectId}/translate` | Translate content. |
+| [`getJob`](/docs/platform/openapi/reference/jobs/get-job) | `GET /v2/projects/{projectId}/jobs/{jobId}` | Get a job. |
+| [`queryJobs`](/docs/platform/openapi/reference/jobs/query-jobs) | `POST /v2/projects/{projectId}/jobs/query` | Query jobs. |
+| [`listContextGroups`](/docs/platform/openapi/reference/context-groups/list-context-groups) | `GET /v2/orgs/{orgId}/context-groups` | List context groups. |
+| [`createContextGroup`](/docs/platform/openapi/reference/context-groups/create-context-group) | `POST /v2/orgs/{orgId}/context-groups` | Create a context group. |
+| [`getContextGroup`](/docs/platform/openapi/reference/context-groups/get-context-group) | `GET /v2/context-groups/{groupId}` | Get a context group. |
+| [`updateContextGroup`](/docs/platform/openapi/reference/context-groups/update-context-group) | `PATCH /v2/context-groups/{groupId}` | Update a context group. |
+| [`deleteContextGroup`](/docs/platform/openapi/reference/context-groups/delete-context-group) | `DELETE /v2/context-groups/{groupId}` | Delete a context group. |
+| [`listProjectContextGroups`](/docs/platform/openapi/reference/context-groups/list-project-context-groups) | `GET /v2/projects/{projectId}/context-groups` | List project context groups. |
+| [`getProjectContextGroup`](/docs/platform/openapi/reference/context-groups/get-project-context-group) | `GET /v2/projects/{projectId}/context-groups/{groupId}` | Get a project context group. |
+| [`assignContextGroup`](/docs/platform/openapi/reference/context-groups/assign-context-group) | `PUT /v2/projects/{projectId}/context-groups/{groupId}` | Assign a context group. |
+| [`unassignContextGroup`](/docs/platform/openapi/reference/context-groups/unassign-context-group) | `DELETE /v2/projects/{projectId}/context-groups/{groupId}` | Unassign a context group. |
+| [`reorderContextGroup`](/docs/platform/openapi/reference/context-groups/reorder-context-group) | `PATCH /v2/projects/{projectId}/context-groups/{groupId}` | Reorder a context group. |
+| [`importContextContent`](/docs/platform/openapi/reference/context-groups/import-context-content) | `POST /v2/context-groups/{groupId}/import` | Import context content. |
+| [`exportContextContent`](/docs/platform/openapi/reference/context-groups/export-context-content) | `GET /v2/context-groups/{groupId}/export` | Export context content. |
+| [`listContextGlossary`](/docs/platform/openapi/reference/glossary/list-context-glossary) | `GET /v2/context-groups/{groupId}/glossary` | List glossary terms. |
+| [`upsertContextGlossary`](/docs/platform/openapi/reference/glossary/upsert-context-glossary) | `POST /v2/context-groups/{groupId}/glossary` | Upsert glossary terms. |
+| [`getContextGlossaryEntry`](/docs/platform/openapi/reference/glossary/get-context-glossary-entry) | `GET /v2/context-groups/{groupId}/glossary/{entryId}` | Get a glossary term. |
+| [`updateContextGlossaryEntry`](/docs/platform/openapi/reference/glossary/update-context-glossary-entry) | `PATCH /v2/context-groups/{groupId}/glossary/{entryId}` | Update a glossary term. |
+| [`deleteContextGlossaryEntry`](/docs/platform/openapi/reference/glossary/delete-context-glossary-entry) | `DELETE /v2/context-groups/{groupId}/glossary/{entryId}` | Delete a glossary term. |
+| [`listContextGlossaryTranslations`](/docs/platform/openapi/reference/glossary/list-context-glossary-translations) | `GET /v2/context-groups/{groupId}/glossary/{entryId}/translations` | List term translations. |
+| [`setContextGlossaryTranslation`](/docs/platform/openapi/reference/glossary/set-context-glossary-translation) | `PUT /v2/context-groups/{groupId}/glossary/{entryId}/translations/{locale}` | Set a term translation. |
+| [`deleteContextGlossaryTranslation`](/docs/platform/openapi/reference/glossary/delete-context-glossary-translation) | `DELETE /v2/context-groups/{groupId}/glossary/{entryId}/translations/{locale}` | Delete a term translation. |
+| [`listContextCustomPrompts`](/docs/platform/openapi/reference/custom-prompts/list-context-custom-prompts) | `GET /v2/context-groups/{groupId}/custom-prompts` | List custom prompts. |
+| [`upsertContextCustomPrompts`](/docs/platform/openapi/reference/custom-prompts/upsert-context-custom-prompts) | `POST /v2/context-groups/{groupId}/custom-prompts` | Upsert custom prompts. |
+| [`updateContextCustomPrompt`](/docs/platform/openapi/reference/custom-prompts/update-context-custom-prompt) | `PATCH /v2/context-groups/{groupId}/custom-prompts/{customPromptId}` | Update a custom prompt. |
+| [`deleteContextCustomPrompt`](/docs/platform/openapi/reference/custom-prompts/delete-context-custom-prompt) | `DELETE /v2/context-groups/{groupId}/custom-prompts/{customPromptId}` | Delete a custom prompt. |
 
-<Callout type="info">
-  **Changed in v0.5.2:** The generated client added Context Management helpers for Context Groups, assignments, Glossary terms, Custom Prompts, and imports and exports.
+Batch writes ([`uploadSourceFiles`](/docs/platform/openapi/reference/files/upload-source-files), [`uploadTranslations`](/docs/platform/openapi/reference/files/upload-translations), [`moveFiles`](/docs/platform/openapi/reference/files/move-files), [`overwriteTranslations`](/docs/platform/openapi/reference/files/overwrite-translations), [`publishFiles`](/docs/platform/openapi/reference/files/publish-files), and [`upsertAssets`](/docs/platform/openapi/reference/organizations/upsert-assets)) return `200` with a `summary` of `total`, `succeeded`, and `failed` and one result per item, in request order. A failed item has `status: 'failed'` and an `error` while the other items are saved, so check `summary.failed` instead of relying on `error`. Batch reads ([`queryFiles`](/docs/platform/openapi/reference/files/query-files), [`queryFilesContent`](/docs/platform/openapi/reference/files/query-files-content), and [`queryJobs`](/docs/platform/openapi/reference/jobs/query-jobs)) return one result per selector, in selector order, with a per-result status such as `pending` or `not_found`.
 
-  **Changed in v0.5.0:** list responses return `items` instead of `projects` or `orgs`, matching the current API. Failed `throwOnError` calls throw [`ApiError`](#api-error) instead of the decoded response body.
-
-  **Changed in v0.3.0:** `encodeBase64`, `decodeBase64`, `encodeFileContent`, and `decodeFileContent` are no longer exported. Encode file content before passing it to a generated upload helper.
-
-  **Changed in v0.2.1:** [`createProject`](/docs/platform/openapi/reference/projects/create-project) now requires `path.orgId` and calls `POST /v2/orgs/{orgId}/projects`. This release also added [`createProjectApiKey`](/docs/platform/openapi/reference/projects/create-project-api-key) and removed `shouldGenerateProjectContext` and `getProjectContextGenerationStatus`.
-</Callout>
-
-Use `generateProjectContext` with `getTranslationJobInfo` for context jobs. The [`downloadFile`](/docs/platform/openapi/reference/files/get-file-content) helper remains deprecated; use `downloadFiles` for batch and single-file downloads.
-
-Use the [public OpenAPI reference](/docs/platform/openapi/overview) for live endpoint permissions, rate limits, schemas, and status codes.
+Use the [public OpenAPI reference](/docs/platform/openapi/overview) for live endpoint permissions, rate limits, schemas, and status codes. The [`GT`](/docs/platform/core/reference/gt-class/constructor) class wraps the project-scoped operations, splits large inputs into batches, and decodes file content. (See the [GT class methods](/docs/platform/core/reference/gt-class-methods/translation/translate-files)).
 
 ### Discovery and provisioning
 
@@ -228,7 +216,7 @@ Use [`listOrgs`](/docs/platform/openapi/reference/organizations/list-orgs) to fi
 Project discovery returns one page selected by the API key's binding: a project key returns its project, and an Organization key returns projects in its Organization. No resource permission is required. Use [`paginate`](#pagination) to iterate every project:
 
 ```ts title="list-projects.ts"
-import { listProjects, paginate } from 'generaltranslation/api';
+import { listProjects, paginate } from '@generaltranslation/api';
 
 for await (const project of paginate(listProjects, {
   client,
@@ -267,11 +255,12 @@ Pages are read independently, so items that change during iteration can be misse
 
 ## Job polling [#job-polling]
 
-[`awaitJobs`](#job-polling) uses a configured client to call `getTranslationJobInfo` until every requested job is complete, failed, unknown, or missing, or until the overall timeout expires.
+[`awaitJobs`](#job-polling) uses a configured client to read jobs with [`queryJobs`](/docs/platform/openapi/reference/jobs/query-jobs) until every requested job is `completed`, `failed`, or `not_found`, or until the overall timeout expires.
 
 ```ts
 function awaitJobs(
   client: Client,
+  projectId: string,
   jobIds: readonly string[],
   options?: AwaitJobsOptions
 ): Promise<AwaitJobsResult>;
@@ -281,38 +270,69 @@ function awaitJobs(
 | --- | --- | --- | --- | --- |
 | `pollingIntervalSeconds` | Delay between status requests. | `number` | Yes | `5` |
 | `timeoutSeconds` | Overall polling deadline. | `number` | Yes | `600` |
-| `onPoll` | Receives each successful raw status response before terminal bookkeeping. | `(statuses: GetTranslationJobInfoResponse) => void` | Yes | — |
+| `onPoll` | Receives each poll's job results before terminal bookkeeping. | `(statuses: JobResult[]) => void` | Yes | — |
 
 ```ts
 import {
+  API_VERSION,
   awaitJobs,
-  enqueueFileTranslations,
-} from 'generaltranslation/api';
+  translateFiles,
+} from '@generaltranslation/api';
 
-const result = await enqueueFileTranslations({
+const { data } = await translateFiles({
   client,
+  headers: { 'gt-api-version': API_VERSION },
+  path: { projectId },
   body: {
     files: [{ fileId: 'homepage', versionId: 'version-1' }],
-    sourceLocale: 'en',
     targetLocales: ['es'],
   },
   throwOnError: true,
 });
 
-if (!('jobData' in result.data)) {
-  throw new Error('Expected the current enqueue response');
-}
+const result = await awaitJobs(
+  client,
+  projectId,
+  data.jobs.map((job) => job.id)
+);
 
-const jobs = await awaitJobs(client, Object.keys(result.data.jobData));
-
-if (!jobs.complete) {
+if (!result.complete) {
   console.warn('Translation jobs did not finish before the timeout');
 }
 ```
 
-`AwaitJobsResult` contains `complete`, which is `false` only when polling times out, and `jobs`, which contains the latest result for every requested ID. A missing job receives the `unknown` status. Passing an empty array resolves immediately with `{ complete: true, jobs: [] }`.
+`AwaitJobsResult` contains `complete`, which is `false` only when polling times out, and `jobs`, which contains the latest result for every requested ID, in request order:
 
-An API or status-loader error before the overall deadline rejects the polling promise. If the request fails after the deadline has elapsed, polling returns the latest results with `complete: false`.
+```ts
+type AwaitJobsResult = {
+  complete: boolean;
+  jobs: Array<JobResult | UnpolledJobResult>;
+};
+
+// One queryJobs result
+type JobResult = {
+  id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'not_found';
+  subject?: JobSubject; // absent when not_found
+  error?: string | null; // absent when not_found
+};
+
+// A job not polled before the deadline; the API never returns this status
+type UnpolledJobResult = { id: string; status: 'unknown' };
+```
+
+Passing an empty array resolves immediately with `{ complete: true, jobs: [] }`. An API or status-loader error before the overall deadline rejects the polling promise. If the request fails after the deadline has elapsed, polling returns the latest results with `complete: false`.
+
+`queryJobsInBatches` makes one status read without polling. It sends at most 100 job IDs per [`queryJobs`](/docs/platform/openapi/reference/jobs/query-jobs) request and returns the results in `jobIds` order. Each job ID may appear once.
+
+```ts
+function queryJobsInBatches(
+  client: Client,
+  projectId: string,
+  jobIds: readonly string[],
+  signal?: AbortSignal
+): Promise<JobResult[]>;
+```
 
 `pollJobs` exposes the same polling loop with an injected status loader:
 
@@ -326,12 +346,12 @@ function pollJobs(
 type GetJobStatuses = (
   jobIds: string[],
   signal: AbortSignal
-) => Promise<GetTranslationJobInfoResponse>;
+) => Promise<JobResult[]>;
 ```
 
-Use it when you need custom request or error normalization. Polls are sequential and request only pending IDs. The loader receives an abort signal capped by the remaining overall deadline and a 60-second per-poll limit. Late results are discarded; timeout returns the last accepted statuses, which can still be queued, processing, or initially unknown. A loader that ignores the signal can delay resolution.
+Use it when you need custom request or error normalization. Polls are sequential and request only pending IDs. The loader must return a result for every requested ID; a missing ID rejects polling. The loader receives an abort signal capped by the remaining overall deadline and a 60-second per-poll limit. [`awaitJobs`](#job-polling) loads each batch of 100 on its own: when a poll ends after the deadline, the batches that loaded are kept and a failed batch does not reject. Timeout returns the latest statuses, which can still be `queued`, `processing`, or `unknown`. A loader that ignores the signal can delay resolution.
 
-`complete: true` means no pending jobs, not that every job succeeded. Inspect each status before using results. Both API polling helpers accept `onPoll`; the class [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/translation/await-jobs) options do not. No polling option exposes a caller signal, and stopping local polling does not cancel remote jobs.
+`complete: true` means no pending jobs, not that every job succeeded. Inspect each status before using results. No polling option exposes a caller signal, and stopping local polling does not cancel remote jobs.
 
 ## Batch processing [#batch-processing]
 
@@ -357,9 +377,10 @@ If a batch processor rejects, `processBatches` rejects. With parallel processing
 ```ts
 import { Buffer } from 'node:buffer';
 import {
+  API_VERSION,
   processBatches,
   uploadSourceFiles,
-} from 'generaltranslation/api';
+} from '@generaltranslation/api';
 
 // Generated endpoint helpers expect file content encoded for transport.
 const content = Buffer.from('{"greeting":"Hello"}', 'utf8').toString('base64');
@@ -375,16 +396,19 @@ const files = [{
 const results = await processBatches(files, async (batch) => {
   const result = await uploadSourceFiles({
     client,
-    body: { data: batch },
+    headers: { 'gt-api-version': API_VERSION },
+    path: { projectId },
+    body: { data: batch, sourceLocale: 'en' },
     throwOnError: true,
   });
-  return result.data.uploadedFiles;
+  // One result per file; failed files have status: 'failed' and an error.
+  return result.data.results;
 });
 ```
 
 ## Types and errors [#types-errors]
 
-The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, and the generated OpenAPI types for the public operations listed above.
+The package exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `UnpolledJobResult`, `BatchOptions`, and the generated OpenAPI types for the public operations listed above.
 
 For each public operation listed above, the package exports:
 
@@ -398,7 +422,7 @@ With the default `throwOnError: false`, a generated operation returns either `da
 
 ### `ApiError` [#api-error]
 
-With a `createApiClient` client, failed HTTP responses from `throwOnError` calls, [`paginate`](#pagination), [`awaitJobs`](#job-polling), and [`GT`](/docs/platform/core/reference/gt-class/constructor) class methods throw `ApiError`, with `name: 'ApiError'`, the HTTP status as numeric `code`, and `message`. Import it from `generaltranslation/api` or `generaltranslation/errors`. Calls without `throwOnError` still return the decoded response body in `error`. Network, configuration, cancellation, and timeout failures can reject the entire class call; they are not necessarily per-item translation failures.
+With a `createApiClient` client, failed HTTP responses from `throwOnError` calls, [`paginate`](#pagination), [`awaitJobs`](#job-polling), and [`GT`](/docs/platform/core/reference/gt-class/constructor) class methods throw `ApiError`, with `name: 'ApiError'`, the HTTP status as numeric `code`, and `message`. Import it from `@generaltranslation/api` or `generaltranslation/errors`. Calls without `throwOnError` still return the decoded response body in `error`. Network, configuration, cancellation, and timeout failures can reject the entire class call; they are not necessarily per-item translation failures.
 
 ```ts
 import { ApiError } from 'generaltranslation/errors';

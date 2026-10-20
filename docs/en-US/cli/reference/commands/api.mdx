@@ -13,12 +13,14 @@ Use `gt api` when you need direct access to an endpoint without adding an HTTP c
 npx gt api [endpoint] [options]
 ```
 
-Pass an endpoint path such as `/v2/project/info/PROJECT_ID` to make a request. Use `--list` without an endpoint to discover operations, or pass an operation ID, specification path, or concrete request path with `--spec` to inspect a smaller contract.
+Pass an endpoint path such as `/v2/projects/PROJECT_ID` to make a request. Use `--list` without an endpoint to discover operations, or pass an operation ID, specification path, or concrete request path with `--spec` to inspect a smaller contract.
 
 ## How it works [#how-it-works]
 
 - Uses an explicit key from `--api-key` or `GT_API_KEY`, otherwise the saved login. (See [authentication precedence](/docs/cli/guides/configuring#credentials)).
-- Resolves the project ID from `--project-id`, `gt.config.json`, or `GT_PROJECT_ID`.
+- Sends `gt-api-version: 2026-10-08.v1`. Override it with `--header`.
+- Takes the project from the endpoint path: replace `PROJECT_ID` with your project ID.
+- Resolves the project ID from `--project-id`, `gt.config.json`, or `GT_PROJECT_ID`, and sends it as the `gt-project-id` header, which routes without a project in the path read. A `gt-project-id` header passed with `--header` takes precedence.
 - Sends the request to the configured `baseUrl`, which defaults to `https://api.gtx.dev`.
 - Writes the raw response body to standard output without retrying network failures or HTTP 429/5xx responses.
 - Writes a summary to standard error and exits with status 1 for a non-2xx response.
@@ -39,7 +41,7 @@ If `gt.config.json` provides a project ID that differs from `--project-id` or th
 | `--list` | Prints every bundled API operation as tab-separated method, path, operation ID, and summary fields. | `boolean` | Yes | `false` |
 | `-c, --config <path>` | Path to `gt.config.json`. The `.json` suffix may be omitted. | `string` | Yes | Auto-resolved |
 | `--api-key <key>` | Explicit tooling key override. | `string` | Yes | `GT_API_KEY`, otherwise login |
-| `--project-id <id>` | project ID override. | `string` | Yes | Config or `GT_PROJECT_ID` |
+| `--project-id <id>` | Project ID sent as the `gt-project-id` header, for routes without a project in the path. | `string` | Yes | Config or `GT_PROJECT_ID` |
 
 `--list` and `--spec` work offline without a login, API key, project ID, or valid translation settings. They cannot be combined. If a focused specification lookup does not match an operation, the command exits with status 1 and suggests `--list`.
 
@@ -53,23 +55,23 @@ npx gt api --spec > openapi.json
 npx gt api --list
 
 # Print one operation by operation ID or concrete request path
-npx gt api --spec getProjectInfo
-npx gt api --spec /v2/project/info/PROJECT_ID
+npx gt api --spec getProject
+npx gt api --spec /v2/projects/PROJECT_ID
 
-# Read project information using saved login or an explicit key
-npx gt api /v2/project/info/PROJECT_ID
+# Read the project using saved login or an explicit key
+npx gt api /v2/projects/PROJECT_ID
 
 # Send a JSON request body and include response metadata
-npx gt api /v2/project/info/PROJECT_ID \
+npx gt api /v2/projects/PROJECT_ID/jobs/query \
   --method POST \
   --header "Content-Type: application/json" \
-  --input update.json \
+  --input jobs.json \
   --include
 
 # Read a body from standard input
 printf '{"defaultLocale":"fr"}' |
-  npx gt api /v2/project/info/PROJECT_ID \
-    --method POST \
+  npx gt api /v2/projects/PROJECT_ID \
+    --method PATCH \
     --header "Content-Type: application/json" \
     --input -
 ```

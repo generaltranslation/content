@@ -1,0 +1,140 @@
+---
+
+title: awaitJobs
+description: Poll queued translation and context generation jobs until they finish or time out. API reference for awaitJobs.
+
+---
+
+Waits until every job is `completed`, `failed`, or `not_found`, or the timeout is reached. It works for translation jobs from [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files) and context generation jobs from [`generateProjectContext`](/docs/platform/core/reference/gt-class-methods/translation/generate-project-context).
+
+## Overview [#overview]
+
+Pass job IDs to `awaitJobs`, optionally with polling settings. It resolves with the final status of each job.
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { jobs } = await gt.translateFiles(uploadedFiles, {
+  targetLocales: ['es', 'fr'],
+});
+
+const result = await gt.awaitJobs(jobs.map((job) => job.id));
+
+if (result.complete) {
+  console.log('All jobs finished');
+} else {
+  console.log('Timed out — some jobs still in progress');
+}
+```
+
+Signature:
+
+```typescript
+awaitJobs(
+  jobIds: string[],
+  options?: AwaitJobsOptions
+): Promise<AwaitJobsResult>
+```
+
+*Note: `awaitJobs` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:read` permission.*
+
+*Warning: `complete: true` means all jobs reached a terminal state — it does **not** mean all jobs succeeded. Check each `job.status` to confirm success.*
+
+## How it works [#how-it-works]
+
+- **Automatic polling.** The method reads the pending jobs with [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs) on each poll, so you do not need a polling loop.
+- **Terminal states.** A job stops being polled once it is `completed` or `failed`, or `not_found` when the project has no job with that ID.
+- **Deadline.** Each status request has a timeout of at most 60 seconds, shortened to the remaining overall time. At timeout, the last known statuses return with `complete: false`; they can still be `queued` or `processing`, or `unknown` for a job not polled before the timeout. Custom fetch implementations must honor cancellation to stop promptly.
+- **Errors.** Status errors before the deadline reject. Errors after the deadline return incomplete results instead. Stopping polling does not cancel remote jobs.
+- **Empty input.** After validating credentials and project ID, empty input resolves with `{ complete: true, jobs: [] }`.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`jobIds`](#job-ids) | IDs of the jobs to wait for. | `string[]` | No | — |
+| [`options`](#options) | Polling configuration. | `AwaitJobsOptions` | Yes | — |
+
+### `jobIds` [#job-ids]
+
+**Type** `string[]` · **Required**
+
+Job IDs returned by [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files) or [`generateProjectContext`](/docs/platform/core/reference/gt-class-methods/translation/generate-project-context).
+
+### `options`
+
+**Type** `AwaitJobsOptions` · **Optional**
+
+Polling configuration, the same `AwaitJobsOptions` as the [API client](/docs/platform/core/reference/api-client#job-polling). There is no option for a caller signal:
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `pollingIntervalSeconds` | How often to poll for status updates. | `number` | Yes | `5` |
+| `timeoutSeconds` | Maximum time to wait before resolving with the current statuses. | `number` | Yes | `600` (10 min) |
+| `onPoll` | Receives each poll's job results. | `(statuses: JobResult[]) => void` | Yes | — |
+
+## Returns [#returns]
+
+**Type** `Promise<AwaitJobsResult>`
+
+```typescript
+type AwaitJobsResult = {
+  /** Whether all jobs reached a terminal state (not necessarily success). */
+  complete: boolean;
+  jobs: Array<JobResult | UnpolledJobResult>;
+};
+
+type JobResult = {
+  id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'not_found';
+  subject?: JobSubject; // absent when not_found
+  error?: string | null; // absent when not_found
+};
+
+// A job not polled before the timeout
+type UnpolledJobResult = { id: string; status: 'unknown' };
+```
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `complete` | `true` if no jobs are still in progress; `false` if the timeout was reached. | `boolean` |
+| `jobs` | Final status of each job, in request order. | `Array<JobResult \| UnpolledJobResult>` |
+| `jobs[].id` | The job ID. | `string` |
+| `jobs[].status` | Latest status. `not_found` means the project has no such job; `unknown` means the job was not polled before the timeout. | `string` |
+| `jobs[].subject` | What the job works on, as returned by [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs). Absent when `status` is `not_found` or `unknown`. | `JobSubject` |
+| `jobs[].error` | Failure reason when `status` is `failed`. | `string \| null` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const { jobs } = await gt.translateFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: ['es', 'fr', 'de'],
+});
+
+// Wait for all jobs to finish (polls every 10s, times out after 5 min)
+const result = await gt.awaitJobs(
+  jobs.map((job) => job.id),
+  { pollingIntervalSeconds: 10, timeoutSeconds: 300 }
+);
+
+if (!result.complete) {
+  console.warn('Some jobs did not finish in time');
+}
+
+// Check individual results
+for (const job of result.jobs) {
+  if (job.status === 'completed') {
+    console.log(`Job ${job.id} succeeded`);
+  } else if (job.status === 'failed') {
+    console.error(`Job ${job.id} failed: ${job.error}`);
+  }
+}
+```

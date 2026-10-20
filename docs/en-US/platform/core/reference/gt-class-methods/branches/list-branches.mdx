@@ -1,0 +1,103 @@
+---
+
+title: listBranches
+description: List one page of a project's branches, optionally filtered by name or default status. API reference for listBranches.
+
+---
+
+Lists the branches of the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance, ordered by ID. Each branch says whether it is the project's default branch.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { items } = await gt.listBranches({ name: ['main'] });
+```
+
+Signature:
+
+```typescript
+listBranches(
+  query?: ListBranchesQuery,
+  options?: { timeout?: number }
+): Promise<ListBranchesResponse>
+```
+
+*Note: `listBranches` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:read` permission.*
+
+## How it works [#how-it-works]
+
+- **One page per call.** The method returns one page and a `nextCursor`. Pass `nextCursor` as `cursor` to read the next page; it is `null` on the last page.
+- **Filters.** `name` matches branch names exactly and is case-sensitive. `isDefault: 'true'` returns only the default branch; `'false'` returns every other branch. With both, a branch must match both.
+- **Independent pages.** Branches created or renamed between requests can be missed or repeated.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`query`](#query) | Filters and paging. | `ListBranchesQuery` | Yes | `{}` |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `query`
+
+**Type** `ListBranchesQuery` · **Optional** · **Default** `{}`
+
+```typescript
+type ListBranchesQuery = {
+  cursor?: string;
+  limit?: number;
+  name?: string[];
+  isDefault?: 'true' | 'false';
+};
+```
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `cursor` | The `nextCursor` from the previous page. Omit for the first page. | `string` | Yes | — |
+| `limit` | Branches per page, 1–100. | `number` | Yes | `50` |
+| `name` | Up to 20 exact branch names. Keep the encoded URL under 8 KB. | `string[]` | Yes | All branches |
+| `isDefault` | `'true'` for the default branch only; `'false'` for all other branches. | `'true' \| 'false'` | Yes | — |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<ListBranchesResponse>`
+
+```typescript
+type ListBranchesResponse = {
+  items: { id: string; name: string; isDefault: boolean }[];
+  nextCursor: string | null;
+};
+```
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+// Find the default branch.
+const {
+  items: [primaryBranch],
+} = await gt.listBranches({ isDefault: 'true' });
+
+// Read every branch, one page at a time.
+let cursor: string | undefined;
+do {
+  const page = await gt.listBranches({ cursor, limit: 100 });
+  page.items.forEach((branch) => console.log(branch.name, branch.isDefault));
+  cursor = page.nextCursor ?? undefined;
+} while (cursor);
+```
+
+Create branches with [`createBranch`](/docs/platform/core/reference/gt-class-methods/branches/create-branch) and rename them with [`updateBranch`](/docs/platform/core/reference/gt-class-methods/branches/update-branch). (See the [List branches](/docs/platform/openapi/reference/branches/list-branches) endpoint for the HTTP contract).

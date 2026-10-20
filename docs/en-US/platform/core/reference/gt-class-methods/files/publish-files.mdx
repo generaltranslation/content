@@ -1,0 +1,100 @@
+---
+
+title: publishFiles
+description: Publish or unpublish the translations of file versions on the CDN. API reference for publishFiles.
+
+---
+
+Publishes or unpublishes the completed translations of file versions in the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance. Published translations are served from the CDN.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { summary, results } = await gt.publishFiles([
+  { fileId: 'file-123', versionId: 'version-1', publish: true },
+]);
+```
+
+Signature:
+
+```typescript
+publishFiles(files: PublishFileEntry[]): Promise<PublishFilesResult>
+```
+
+*Note: `publishFiles` requires `apiKey` and `projectId` on the GT instance, an API key with the `project:files:write` permission, and CDN delivery enabled for the project. (See [`updateProject`](/docs/platform/core/reference/gt-class-methods/projects/update-project)).*
+
+## How it works [#how-it-works]
+
+- **Per-version results.** A file version fails when it does not exist or any of its translations fails, while the other versions are published. The method resolves with a result for every version instead of throwing; check `summary.failed`, each result's `status`, and its `translations`.
+- **Unique entries.** Each branch, file, and version may appear once per request.
+- **Batches.** The method sends at most 100 file versions per request and combines the summaries and results in request order.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | File versions and publish flags. | `PublishFileEntry[]` | No | — |
+
+### `files`
+
+**Type** `PublishFileEntry[]` · **Required**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `fileId` | Source file ID. | `string` | No |
+| `versionId` | Source version ID. | `string` | No |
+| `branchId` | Branch of the file. Uses the default branch when omitted. | `string` | Yes |
+| `publish` | `true` to publish, `false` to unpublish. | `boolean` | No |
+
+## Returns [#returns]
+
+**Type** `Promise<PublishFilesResult>`
+
+```typescript
+type PublishFilesResult = {
+  summary: { total: number; succeeded: number; failed: number };
+  results: {
+    branchId: string;
+    fileId: string;
+    versionId: string;
+    status: 'succeeded' | 'failed';
+    error?: string; // why the version failed
+    translations: {
+      locale: string;
+      status: 'succeeded' | 'failed';
+      error?: string;
+    }[]; // one result per completed translation of the version
+  }[];
+};
+```
+
+`results` has one entry per file version, in request order. Returned locales follow the [constructor rules](/docs/platform/core/reference/gt-class/constructor#how-it-works).
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const { results } = await gt.publishFiles([
+  { fileId: 'file-123', versionId: 'version-2', publish: true },
+  { fileId: 'file-123', versionId: 'version-1', publish: false },
+]);
+
+for (const version of results) {
+  if (version.status === 'failed') {
+    const locales = version.translations
+      .filter((t) => t.status === 'failed')
+      .map((t) => t.locale);
+    console.error(`${version.versionId}: ${version.error ?? locales.join(', ')}`);
+  }
+}
+```
+
+(See the [Publish files](/docs/platform/openapi/reference/files/publish-files) endpoint for the HTTP contract).

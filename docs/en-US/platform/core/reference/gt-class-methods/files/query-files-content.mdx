@@ -1,0 +1,114 @@
+---
+
+title: queryFilesContent
+description: Download the content of several source files and translations in one call. API reference for queryFilesContent.
+
+---
+
+Downloads source files and translations from the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance. Each result reports whether its file is ready, still pending, or not found, so one missing translation does not fail the whole call.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { results } = await gt.queryFilesContent([
+  { fileId: 'file-123', locale: 'es' },
+  { fileId: 'file-123', locale: 'fr' },
+]);
+```
+
+Signature:
+
+```typescript
+queryFilesContent(
+  files: FileSelector[],
+  options?: { timeout?: number }
+): Promise<QueryFilesContentResponse>
+```
+
+*Note: `queryFilesContent` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:read` permission.*
+
+## How it works [#how-it-works]
+
+- **Selectors.** A selector without `locale` downloads the source file; with `locale`, one translation. `branchId` defaults to the project's default branch. `versionId` defaults to the branch head for a source file and to the newest completed version for a translation.
+- **Positional results.** The method returns one result per selector, in selector order: `ready` with the content, `pending` when the translation is stored but not completed yet (for example during a layout pass; request it again later), or `not_found`.
+- **Wait for the job first.** A translation is `not_found` until its translation job stores it. Wait for the job with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs), [`getJob`](/docs/platform/core/reference/gt-class-methods/jobs/get-job), or [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs) before reading it.
+- **Version.** Without `versionId`, a translation is the newest completed version on the branch, and `pending` only while none is completed. To wait for a specific version, pass its `versionId`.
+- **Decoded content.** `data` is the decoded file content. Binary formats such as `LOTTIE` stay base64-encoded.
+- **Repeated selectors.** Selectors that resolve to the same file, version, and locale, such as a custom-mapped alias and its canonical locale, are sent once; each selector gets the shared result under the locale it requested.
+- **Batches.** The method sends at most 100 selectors per request.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Files to download. | `FileSelector[]` | No | — |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `files`
+
+**Type** `FileSelector[]` · **Required**
+
+```typescript
+type FileSelector = {
+  fileId: string;
+  branchId?: string; // defaults to the project's default branch
+  versionId?: string; // defaults to the branch head (source) or the newest completed version (translation)
+  locale?: string; // omit to download the source file
+};
+```
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<QueryFilesContentResponse>`
+
+```typescript
+type QueryFilesContentResponse = {
+  results: {
+    status: 'ready' | 'pending' | 'not_found';
+    fileId: string;
+    branchId?: string; // absent only when not_found and no branch resolves
+    versionId?: string; // ready or pending
+    locale?: string; // the requested locale, for translations
+    fileName?: string; // ready; for a translation, its source file's name
+    data?: string | null; // content when ready; null when pending; absent when not_found
+    metadata?: JsonObject;
+    fileFormat?: FileFormat;
+  }[];
+};
+```
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import fs from 'node:fs';
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const locales = ['es', 'fr', 'de'];
+const { results } = await gt.queryFilesContent(
+  locales.map((locale) => ({ fileId: 'file-123', versionId: 'version-1', locale }))
+);
+
+// results[i] answers locales[i]
+results.forEach((file, i) => {
+  if (file.status === 'ready' && typeof file.data === 'string') {
+    fs.writeFileSync(`./locales/${locales[i]}.json`, file.data);
+  } else {
+    console.warn(`${locales[i]}: ${file.status}`);
+  }
+});
+```
+
+(See the [Get content of several files](/docs/platform/openapi/reference/files/query-files-content) endpoint for the HTTP contract).

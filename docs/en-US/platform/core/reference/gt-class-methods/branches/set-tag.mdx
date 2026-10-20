@@ -1,0 +1,101 @@
+---
+
+title: setTag
+description: Create a tag for a set of source file versions, or replace an existing tag. API reference for setTag.
+
+---
+
+Points a named tag at an exact set of source file versions in the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance. Use tags to mark the file versions of a release or deployment.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { created, tag } = await gt.setTag('v1.2.0', {
+  files: [{ fileId: 'file-123', versionId: 'version-1', branchId: 'branch-1' }],
+  message: 'Release 1.2.0',
+});
+```
+
+Signature:
+
+```typescript
+setTag(
+  tagId: string,
+  body: {
+    files: { fileId: string; versionId: string; branchId: string }[];
+    message?: string;
+  }
+): Promise<SetTagResponse>
+```
+
+*Note: `setTag` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:write` permission.*
+
+## How it works [#how-it-works]
+
+- **Whole replacement.** Setting an existing tag replaces every file it pointed to and its message. Omitting `message` clears the message.
+- **Idempotent.** Repeating the call writes the same files and message again and advances `updatedAt`; `created` tells you whether this call created the tag.
+- **Errors.** A file reference that names no existing source file version fails with `404`, and nothing is written. Failures throw an [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`tagId`](#tag-id) | Tag name, unique within the project. | `string` | No | — |
+| [`body`](#body) | Tagged file versions and message. | `{ files: { fileId: string; versionId: string; branchId: string }[]; message?: string }` | No | — |
+
+### `tagId` [#tag-id]
+
+**Type** `string` · **Required**
+
+Tag name, unique within the project.
+
+### `body`
+
+**Type** `{ files: { fileId: string; versionId: string; branchId: string }[]; message?: string }` · **Required**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `files` | The 1–5000 source file versions the tag points to, each named once. | `{ fileId: string; versionId: string; branchId: string }[]` | No |
+| `message` | Tag message. Omit to clear it. | `string` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<SetTagResponse>`
+
+```typescript
+type SetTagResponse = {
+  created: boolean; // whether this call created the tag
+  tag: {
+    id: string;
+    tagId: string;
+    message: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+```
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+});
+
+const { results } = await gt.uploadSourceFiles(files, { sourceLocale: 'en' });
+
+// Tag the uploaded versions of this release.
+const { tag } = await gt.setTag(`release-${process.env.GIT_SHA}`, {
+  files: results
+    .filter((file) => file.status === 'succeeded')
+    .map(({ fileId, versionId, branchId }) => ({ fileId, versionId, branchId })),
+  message: 'Production deploy',
+});
+```
+
+(See the [Set a tag](/docs/platform/openapi/reference/branches/set-tag) endpoint for the HTTP contract).
