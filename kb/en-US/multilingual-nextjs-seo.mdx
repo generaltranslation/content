@@ -1,7 +1,7 @@
 ---
 title: How do I set up SEO for a multilingual Next.js app?
 summary: Give each published language version a stable URL, set html lang for accessibility, use consistent canonical and hreflang annotations, translate titles and descriptions, and list indexable language URLs in your sitemap. Next.js metadata and gt-next routing handle different parts of this setup.
-description: Configure multilingual Next.js routing, language declarations, canonicals, hreflang, translated metadata, and sitemaps for your published language pages.
+description: Give each language its own URL in Next.js, then add canonical and hreflang tags, html lang, translated metadata, and a multilingual sitemap with gt-next.
 date: 2026-02-17
 category: multilingual-seo
 redirectFrom: [multilingual-nextjs-seo]
@@ -26,12 +26,12 @@ Use a stable URL for each language. Cookies and `Accept-Language` can remember o
 The [URL structure comparison](/kb/multilingual-url-structure) covers domains and paths. The [locale routing guide](/kb/locale-routing-seo) explains how a requested URL should take precedence over a saved preference or browser header.
 
 ```text
-✅ generaltranslation.com/en/about
-✅ generaltranslation.com/fr/about
-✅ generaltranslation.com/es/about
+✅ example.com/about      (English, the default locale)
+✅ example.com/fr/about
+✅ example.com/es/about
 
-Discouraged by Google: generaltranslation.com/about?lang=fr
-❌ generaltranslation.com/about (with locale in a cookie)
+Discouraged by Google: example.com/about?lang=fr
+❌ example.com/about (French chosen only by a cookie)
 ```
 
 ### Setting up locale routing with gt-next
@@ -106,33 +106,13 @@ Canonical tags indicate the preferred URL among duplicate or very similar pages.
 A canonical is a signal, not a guarantee, and translation does not require a canonical tag to become distinct. Avoid pointing all translated pages at English. When several regional pages in the same language are duplicates, choose a preferred canonical in that language and keep the hreflang annotations consistent. (See [hreflang and canonical tags](/kb/what-is-hreflang#hreflang-and-canonical-tags)).
 
 In Next.js, you set canonicals through the [metadata API](https://nextjs.org/docs/app/api-reference/functions/generate-metadata).
-Combine it with gt-next's [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) to generate the correct canonical for each locale:
+Combine it with gt-next's [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) to generate the correct canonical for each locale. By default the middleware serves the default locale without a prefix and redirects `/en/about` to `/about`, so leave the prefix off the default locale's canonical:
 
 ```tsx title="app/[locale]/about/page.tsx"
+import { getDefaultLocale } from 'gt-next';
 import { getLocale } from 'gt-next/server';
 
 const BASE_URL = 'https://example.com';
-
-export async function generateMetadata() {
-  const locale = await getLocale();
-
-  return {
-    alternates: {
-      canonical: `${BASE_URL}/${locale}/about`,
-    },
-  };
-}
-
-export default function AboutPage() {
-  return <h1>About Us</h1>;
-}
-```
-
-For the default locale without a prefix, adjust accordingly:
-
-```tsx
-import { getDefaultLocale } from 'gt-next';
-import { getLocale } from 'gt-next/server';
 
 export async function generateMetadata() {
   const locale = await getLocale();
@@ -147,7 +127,13 @@ export async function generateMetadata() {
     },
   };
 }
+
+export default function AboutPage() {
+  return <h1>About Us</h1>;
+}
 ```
+
+If you set `prefixDefaultLocale: true` in [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware), every locale has a prefix and the canonical is always `${BASE_URL}/${locale}${path}`.
 
 ---
 
@@ -162,7 +148,7 @@ Hreflang annotations identify equivalent language or regional versions of a page
 <link rel="alternate" hreflang="x-default" href="https://example.com/about" />
 ```
 
-The optional `x-default` annotation identifies a fallback for unmatched languages. Here it points to the default-language version of the same page; a language selector is another option.
+The optional `x-default` annotation identifies a fallback for unmatched languages. Here it points to the unprefixed URL. With gt-next's default settings that URL is locale-adaptive: the middleware sends a visitor whose locale cookie or `Accept-Language` header prefers French from `/about` to `/fr/about`, while Googlebot, which sends neither, gets English. If you want every content URL fixed to one language, set `prefixDefaultLocale: true` so English moves to `/en/about`, and point `x-default` at a language selector or at `/en/about`. (See [locale routing and SEO](/kb/locale-routing-seo)).
 
 In Next.js, you can add hreflang through the metadata API's `alternates.languages` property.
 Here's a reusable helper that works with gt-next:
