@@ -1,6 +1,6 @@
 ---
 title: How do I translate SRT subtitles without breaking timing?
-summary: For a fixed-timing workflow, translate each cue's text while preserving cue numbers, timecodes, separators, and formatting tags. Then check line length and reading speed for the target language and watch the result against the video. If the translation needs different timing or cue boundaries, handle that as a separate subtitle-editing step.
+summary: "Translate only the cue text in an SRT file; keep cue numbers, timecodes, blank-line separators, and formatting tags exactly as in the source. Then check line length and reading speed: Netflix's English guide allows 42 characters per line and 20 characters per second for adult programs (17 for children's)."
 description: Translate only the cue text in an SRT file, keep cue numbers and timecodes unchanged, then check line length and reading speed against Netflix limits.
 date: 2026-10-20
 category: translation
@@ -60,42 +60,7 @@ Dialogue often runs across two or three cues. Translating each cue on its own ke
 
 A few details behind the table. In YouTube Studio, you open **Subtitles**, select the video, click **Add language**, choose the language, and upload the file under **Subtitles** ([add subtitles and captions](https://support.google.com/youtube/answer/2734796)). [Subtitle Edit](https://github.com/SubtitleEdit/subtitleedit) (MIT-licensed, for Windows, macOS, and Linux) has a **Translate > Auto-translate** dialog with engines including Google Translate, DeepL, ChatGPT, Claude, Gemini, and local models through Ollama, plus a **Tools > Check and fix Netflix errors** checker. DeepL's [document API](https://developers.deepl.com/api-reference/document) lists `srt` among its supported formats. Google's [document translation](https://docs.cloud.google.com/translate/docs/advanced/translate-documents) takes Office files and PDFs, and the [consumer site](https://support.google.com/translate/answer/2534559?co=GENIE.Platform%3DDesktop) takes only `.docx`, `.pdf`, `.pptx`, and `.xlsx`.
 
-Use YouTube Studio when the video lives only on YouTube. Use Subtitle Edit when one person translates and polishes a file by hand, because it pairs machine translation with timing and reading speed checks. Use DeepL's document translation for a quick first draft of a single file. Use the General Translation CLI when subtitle files sit in a repository next to the rest of your product and need translating into several languages every time they change.
-
-## How to translate SRT files with General Translation
-
-General Translation's CLI, `gt`, translates `.srt` files from version 2.22.2. After you install it and sign in (see the [CLI Quickstart](/docs/cli/quickstart)), add an `srt` entry under `files` in `gt.config.json`, with a `[locale]` placeholder in the path:
-
-```json title="gt.config.json"
-{
-  "defaultLocale": "en",
-  "locales": ["es", "de"],
-  "files": {
-    "srt": {
-      "include": ["subtitles/[locale]/**/*.srt"]
-    }
-  }
-}
-```
-
-Then run the translation. The CLI reads the source subtitles from `subtitles/en/` and writes translations to `subtitles/es/` and `subtitles/de/`:
-
-```bash
-npx gt translate
-```
-
-To translate subtitles into English from another language, set `defaultLocale` to the source language (for example, `"es"`) and list `"en"` in `locales`.
-
-According to the [SRT format reference](/docs/cli/reference/formats/srt-files), only cue text is translated. These stay unchanged:
-
-- Cue numbers
-- Timing lines, including any position data after the timestamps
-- Blank-line separators and anything outside a valid cue
-- Markup such as `<i>`, `<b>`, `<u>`, and `<font>`, and leading `{\an1}` to `{\an9}` position tags
-
-Translated lines keep the cue's original line endings. Files without a byte order mark are read as UTF-8, files with one can be UTF-8, UTF-16, or UTF-32, and downloads use the source file's encoding. An empty file is skipped and reported, and a block without a valid timing line is left untranslated. On later runs, translations for unchanged cues can be reused, and the Context Groups assigned to your project (Glossary and Custom Prompts) apply to subtitles as they do to your other files. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)).
-
-The timing lines stay exactly as in the source, so check reading speed on the translated files, especially for languages that run longer than your source.
+Use YouTube Studio when the video lives only on YouTube. Use Subtitle Edit when one person translates and polishes a file by hand, because it pairs machine translation with timing and reading speed checks. Use DeepL's document translation for a quick first draft of a single file.
 
 ## Check the translated file
 
@@ -153,6 +118,28 @@ cue 2: invalid timing line "00:00:03,600 --> 00:00:06.200"
 ```
 
 The script exits with code 1 on any problem, so it can run in CI after translation. It checks structure and speed, not wording, so a person who speaks the language still watches the result.
+
+## How to translate SRT files with General Translation
+
+When subtitle files sit in a repository and need translating into several languages every time they change, General Translation's CLI, `gt`, translates `.srt` files from version 2.22.2. After you install it and sign in (see the [CLI Quickstart](/docs/cli/quickstart)), add an `srt` entry under `files` in `gt.config.json`, with a `[locale]` placeholder in the path:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "de"],
+  "files": {
+    "srt": {
+      "include": ["subtitles/[locale]/**/*.srt"]
+    }
+  }
+}
+```
+
+Then run [`npx gt translate`](/docs/cli/reference/commands/translate). The CLI reads the source subtitles from `subtitles/en/` and writes translations to `subtitles/es/` and `subtitles/de/`. To translate into English, set `defaultLocale` to the source language and list `"en"` in `locales`.
+
+Only cue text is translated. Cue numbers, timing lines (including position data after the timestamps), blank-line separators, markup such as `<i>` and `<font>`, and leading `{\an1}` to `{\an9}` position tags stay unchanged, and so does any block without a valid timing line. Translated lines keep the cue's line endings, and downloads use the source file's encoding. Unchanged cues can reuse earlier translations, and your project's Glossary and Custom Prompts apply to subtitles too. (See the [SRT format reference](/docs/cli/reference/formats/srt-files) and [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations)).
+
+The timing lines stay exactly as in the source, so run the check script above on each translated file, especially for languages that run longer than your source.
 
 ## Key takeaways
 

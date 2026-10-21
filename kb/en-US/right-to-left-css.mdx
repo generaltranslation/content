@@ -1,6 +1,6 @@
 ---
 title: How do I support RTL (right-to-left) languages in CSS?
-summary: Set dir="rtl" and the matching lang attribute on the html element, then write layout with CSS logical properties such as margin-inline-start and text-align start, so spacing, alignment, and positioning follow the text direction. Then fix what doesn't flip on its own, mirror directional icons, and isolate mixed-direction text.
+summary: Put dir="rtl" and lang on the html element, because lang alone doesn't change direction, then replace physical CSS such as margin-left with logical properties such as margin-inline-start. Flex rows, grid columns, and default text alignment flip on their own; translateX(), left, and right don't.
 description: Set dir="rtl" and lang on the html element, use logical properties like margin-inline-start instead of margin-left, and mirror only directional icons.
 date: 2026-10-20
 category: locale-formatting
@@ -19,6 +19,8 @@ Put the direction and the language on the root element:
 ```
 
 The W3C's [guidance on text direction](https://www.w3.org/International/questions/qa-html-dir) is to declare base direction in markup, not with the CSS `direction` property, so it survives when styles don't load; MDN's [`direction` reference](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) agrees. The `lang` attribute doesn't set direction, even with a script subtag such as `ar-Arab`, so you need both. Add `dir` deeper in the page only when a block changes direction, such as an English quote inside an Arabic article.
+
+To derive `dir` from a locale code in JavaScript, [`Intl.Locale`'s `getTextInfo()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Locale/getTextInfo) returns the direction: `new Intl.Locale('ar').getTextInfo().direction` is `'rtl'`. Chrome 130, Safari 17, and Firefox 153 support it, and Chrome 99 to 129 exposes the same data as a `textInfo` property, so keep a fallback for older browsers.
 
 ## Which approach should you use to flip the layout?
 
@@ -172,9 +174,11 @@ When RTL and LTR text share a line, neutral characters such as spaces, hyphens, 
 
 **Cause:** a global `letter-spacing` meant for Latin headings. **Fix:** reset `letter-spacing` to 0 for `:lang(ar)` and other cursive scripts.
 
+To find these bugs before translations exist, click through the app in a right-to-left [pseudo-locale](/kb/pseudo-localization), and run the right-to-left check in the [multilingual app launch checklist](/kb/multilingual-app-launch-checklist) before launch.
+
 ## Set dir from the active locale with General Translation
 
-In a Next.js App Router app, `gt-next` exposes [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) from `gt-next/server`. Set `lang` and `dir` in the root layout. The example below uses `app/[locale]/layout.tsx` as the root, with no layout above it; Next.js [requires both `<html>` and `<body>` there](https://nextjs.org/docs/app/api-reference/file-conventions/layout#root-layout). A nested layout must not add another `<html>` element.
+In a Next.js App Router app, `gt-next` exposes [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) from `gt-next/server`, so the root layout can set `lang` and `dir` on the server. This example assumes `app/[locale]/layout.tsx` is the root layout, which Next.js [requires to render both `<html>` and `<body>`](https://nextjs.org/docs/app/api-reference/file-conventions/layout#root-layout):
 
 ```tsx title="app/[locale]/layout.tsx"
 import { getLocale, getLocaleDirection } from 'gt-next/server';
@@ -193,28 +197,7 @@ export default async function LocaleLayout({ children }: { children: ReactNode }
 }
 ```
 
-In `gt-react`, `gt-next`, and `gt-react-native`, the [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) hook returns `'ltr'` or `'rtl'` for the active locale. A React app renders below `<html>`, so copy the value to the root element from a component in your tree. A single-page app set up with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) needs no provider; in a server-rendered `gt-react` app, render the component inside [`<GTProvider>`](/docs/react/reference/components/gt-provider):
-
-```tsx
-import { useEffect } from 'react';
-import { useLocale, useLocaleDirection } from 'gt-react';
-
-export function DocumentDirection() {
-  const locale = useLocale();
-  const dir = useLocaleDirection();
-  useEffect(() => {
-    document.documentElement.lang = locale;
-    document.documentElement.dir = dir;
-  }, [locale, dir]);
-  return null;
-}
-```
-
-For other stacks, including Vue, `gt-tanstack-start`, and server templates, the Core library's [`getLocaleDirection`](/docs/platform/core/reference/utility-functions/locales/get-locale-direction) from `generaltranslation` runs locally with no API key: `getLocaleDirection('ar-SA')` returns `'rtl'`, `'he-IL'` and `'fa'` do too, and an invalid code falls back to `'ltr'`.
-
-The SDK sets up translation and exposes direction; your CSS still needs the logical properties and icon rules above. Test shorter labels as well as longer ones: rendered width depends on the wording, font, size, and weight, not just the language. Arabic also uses 6 cardinal plural categories where English uses 2; [`<Plural>`](/docs/react/reference/components/plural) selects them by locale (see [handling plurals in React](/kb/how-to-handle-plurals-in-react)).
-
-Before launch, run the right-to-left check in the [multilingual app launch checklist](/kb/multilingual-app-launch-checklist), and use [pseudo-localization](/kb/pseudo-localization) to catch overflow and unwrapped strings before translations exist.
+In `gt-react`, `gt-next`, and `gt-react-native` components, the [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) hook returns `'ltr'` or `'rtl'` for the active locale; copy it to `document.documentElement.dir` from a component in your tree. For other stacks, including Vue, `gt-tanstack-start`, and server templates, the Core library's [`getLocaleDirection`](/docs/platform/core/reference/utility-functions/locales/get-locale-direction) from `generaltranslation` runs locally with no API key and returns `'rtl'` for codes such as `ar-SA`, `he-IL`, and `fa`. Either way, your CSS still needs the logical properties and icon rules above.
 
 ## Key takeaways
 

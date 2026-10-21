@@ -1,6 +1,6 @@
 ---
 title: How do I translate Markdown and MDX without breaking syntax?
-summary: Translate prose and selected display-text fields, including alt text, frontmatter titles and descriptions, and relevant component props. Preserve code, identifiers, structural keys, and technical URLs unless your localization setup deliberately rewrites them. Keep complete sentences together during translation, then validate the files with your actual site build.
+summary: "Translate prose, image alt text, frontmatter titles and descriptions, and display-text component props. Keep code blocks, inline code, link URLs, imports, JSX component names, frontmatter keys, and admonition keywords unchanged. Quote translated YAML values, since French puts a space before colons, then run your site's build."
 description: Translate Markdown and MDX prose, alt text, and frontmatter titles while keeping code, link URLs, imports, and JSX intact, then check that the site builds.
 date: 2026-10-20
 category: translation
@@ -64,7 +64,7 @@ The second file has a translated frontmatter key, invalid YAML, a changed slug, 
 
 ### a) Document translation from Google or DeepL
 
-[Google Cloud Translation](https://docs.cloud.google.com/translate/docs/supported-formats) document translation (Advanced edition) accepts Word, PDF, PowerPoint, and Excel files, not Markdown; its text translation takes plain text or HTML. The [DeepL API](https://developers.deepl.com/docs/api-reference/document) lists Markdown (`.md`) document translation as beta, and doesn't list MDX. Either way, test the output on your own files before trusting it with code blocks and frontmatter. (See [Why use General Translation instead of Google Translate?](/kb/general-translation-vs-google-translate) for the wider tradeoff.)
+[Google Cloud Translation](https://docs.cloud.google.com/translate/docs/supported-formats) document translation (Advanced edition) accepts Word, PDF, PowerPoint, and Excel files, not Markdown; its text translation takes plain text or HTML. The [DeepL API](https://developers.deepl.com/docs/api-reference/document) lists Markdown (`.md`) document translation as beta, and doesn't list MDX. Either way, test the output on your own files before trusting it with code blocks and frontmatter.
 
 ### b) Use an AST to separate prose from syntax
 
@@ -132,7 +132,7 @@ The uppercase replacement shows which text the parser selects; it does not measu
 
 ### c) A translation management system
 
-A translation management system (TMS) parses the file for you. Crowdin supports [Markdown](https://store.crowdin.com/md) and [MDX](https://store.crowdin.com/mdx) natively, and its [parser configuration](https://support.crowdin.com/parsers-configuration/) can exclude code blocks and chosen frontmatter elements; MDX files upload as MDX v1 by default, and v2 is selected with the `mdx_v2` type. You still map source and output paths, sync files in CI, and work around JSX the parser misreads. (See [General Translation vs. Crowdin](/kb/general-translation-vs-crowdin).)
+A translation management system (TMS) parses the file for you. Crowdin supports [Markdown](https://store.crowdin.com/md) and [MDX](https://store.crowdin.com/mdx) natively, and its [parser configuration](https://support.crowdin.com/parsers-configuration/) can exclude code blocks and chosen frontmatter elements; MDX files upload as MDX v1 by default, and v2 is selected with the `mdx_v2` type. You still map source and output paths, sync files in CI, and work around JSX the parser misreads.
 
 ### d) Prompt an LLM with rules
 
@@ -147,13 +147,13 @@ A model given the whole file can retain paragraph context. Specify the display-t
 | TMS (Crowdin) | Yes | Native, with documented JSX caveats | Exclude chosen keys | CLI sync in CI | Medium |
 | LLM with rules | By instruction only | By instruction only | By instruction only | You script it | Medium, plus checking |
 
-Use DeepL's beta Markdown support for a one-off `.md` file you'll review by hand. Write a remark script when you need full control over a small, stable set of files. Use a TMS when translators work in its editor. Use an LLM prompt for quick drafts you'll diff. Use General Translation when Markdown and MDX are part of a codebase that changes often and every change should ship translated.
+Use DeepL's beta Markdown support for a one-off `.md` file you'll review by hand. Write a remark script when you need full control over a small, stable set of files. Use a TMS when translators work in its editor. Use an LLM prompt for quick drafts you'll diff.
 
 ## How to translate Markdown and MDX with General Translation
 
-General Translation's CLI, `gt`, translates [MDX and Markdown files](/docs/cli/reference/formats/mdx-md-files) and preserves their syntax and formatting while it translates the human-readable content. Install it with `npm install gt --save-dev` and run [`npx gt init`](/docs/cli/reference/commands/init) to create `gt.config.json` and connect a project, as in the [CLI Quickstart](/docs/cli/quickstart). Then add an `mdx` or `md` entry under `files`:
+When Markdown and MDX live in a repository that changes often, General Translation's CLI, `gt`, can translate them on every run. It translates [MDX and Markdown files](/docs/cli/reference/formats/mdx-md-files) and preserves their syntax and formatting. After you run [`npx gt init`](/docs/cli/reference/commands/init) from the [CLI Quickstart](/docs/cli/quickstart), add an `mdx` or `md` entry under `files` in `gt.config.json`:
 
-```json
+```json title="gt.config.json"
 {
   "defaultLocale": "en",
   "locales": ["fr", "ja"],
@@ -164,19 +164,15 @@ General Translation's CLI, `gt`, translates [MDX and Markdown files](/docs/cli/r
 }
 ```
 
-```bash
-npx gt translate
-```
+Then run [`npx gt translate`](/docs/cli/reference/commands/translate). The CLI reads sources from `docs/en/` and writes translations to `docs/fr/` and `docs/ja/`; add `"transform": "*.[locale].mdx"` to write `intro.fr.mdx` instead. A few behaviors matter for docs:
 
-The CLI replaces `[locale]` with `en` to find sources under `docs/en/` and writes translations to `docs/fr/` and `docs/ja/`. If your framework puts the locale in the file name, add `"transform": "*.[locale].mdx"` to write `intro.fr.mdx`. A few behaviors matter for docs:
-
-- **Heading IDs.** Mintlify-style `{#id}` suffixes stay attached to their headings (`gt` 2.17.3 or later), so anchor links keep working.
-- **Frontmatter.** For Mintlify sites, frontmatter titles and descriptions are translated so navigation and SEO metadata work in every language.
-- **Incremental runs.** Matching translations from earlier versions are reused, and new or changed content is translated and charged. For static data exports in MDX, unchanged strings are reused too. `--force` re-translates everything and overwrites local edits.
+- **Heading IDs.** Mintlify-style `{#id}` suffixes stay attached to their headings (`gt` 2.17.3 or later).
+- **Frontmatter.** For Mintlify sites, frontmatter titles and descriptions are translated.
+- **Incremental runs.** Matching translations from earlier runs are reused, and new or changed content is translated and charged. `--force` re-translates everything and overwrites local edits.
 - **Manual edits.** Syncing edits back is opt-in, with [`npx gt translate --save-local`](/docs/cli/reference/commands/translate) or [`npx gt save-local`](/docs/cli/reference/commands/save-local).
-- **Links and imports.** Rewriting URLs, static imports, and relative asset paths per locale is experimental, behind flags such as `--experimental-localize-static-urls`.
+- **Links and imports.** Rewriting URLs, imports, and asset paths per locale is experimental, behind flags such as `--experimental-localize-static-urls`.
 
-Run [`npx gt translate`](/docs/cli/reference/commands/translate) [in CI](/docs/cli/guides/generating-translations) before your build. Use a [Glossary](/docs/platform/dashboard/guides/defining-context-for-translations) for product terms, then run the framework's build and link checks on every translated locale.
+Run it [in CI](/docs/cli/guides/generating-translations) before your build, keep product terms in a [Glossary](/docs/platform/dashboard/guides/defining-context-for-translations), and run your build and link checks on every locale. (See [General Translation vs. Google Translate](/kb/general-translation-vs-google-translate) and [General Translation vs. Crowdin](/kb/general-translation-vs-crowdin) for the wider tradeoffs.)
 
 ## Key takeaways
 
@@ -184,4 +180,4 @@ Run [`npx gt translate`](/docs/cli/reference/commands/translate) [in CI](/docs/c
 - French `" : "` punctuation can break unquoted YAML frontmatter, and `{#id}` heading suffixes fail a plain MDX parser.
 - Google's document translation doesn't take Markdown; DeepL lists `.md` as beta and doesn't list MDX.
 - The remark demonstration exposes text nodes, but a complete pipeline must retain sentence context and handle display text outside those nodes.
-- General Translation's CLI translates `md` and `mdx` files with syntax preserved and reuses unchanged translations on each run.
+- General Translation's CLI translates `md` and `mdx` files with syntax preserved and reuses matching translations on later runs.

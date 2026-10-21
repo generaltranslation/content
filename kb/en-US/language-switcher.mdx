@@ -1,6 +1,6 @@
 ---
 title: "Language switcher best practices: UX, SEO, and accessibility"
-summary: Label each language in its own name, skip flags, place the switcher in the header with a recognizable trigger, send users to the same page in the new language, use crawlable links with hreflang and lang attributes, remember the choice, don't auto-switch on every visit, and keep it keyboard and screen-reader accessible.
+summary: Name each language in its own language, such as Deutsch or 日本語, and don't use flags, which represent countries. Link each option to the same page in that language with a crawlable link, remember the choice in a cookie, and never auto-redirect a localized URL.
 description: Label languages in their own names, skip flags, keep users on the same page, use crawlable links with hreflang, and remember the choice.
 date: 2026-10-20
 category: internationalization
@@ -66,7 +66,7 @@ Once a user picks a language, store it in a cookie or their account and use it o
 
 ### 7. Don't auto-switch on every visit
 
-Redirecting by browser language on each request traps travelers, people on shared computers, and anyone who opened a link in a specific language. Google asks sites to [avoid automatic redirects](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) between language versions because they can stop users and search engines from reaching every version. Use the browser's preference only to pick a destination from a neutral root such as `/`, or to show a dismissible suggestion ("Diese Seite gibt es auch auf Deutsch") and let the user decide. [Detecting a user's language](/kb/detect-user-language) covers the detection itself, and [locale routing and SEO](/kb/locale-routing-seo) covers which signal should win.
+Redirecting by browser language on each request traps travelers, people on shared computers, and anyone who opened a link in a specific language. Use the browser's preference only to show a dismissible suggestion ("Diese Seite gibt es auch auf Deutsch") and let the user decide. [Locale routing and SEO](/kb/locale-routing-seo) covers which signal should win and the one place a redirect is safe.
 
 ### 8. Keep it keyboard and screen-reader accessible
 
@@ -167,7 +167,7 @@ With `currentHref="/fr/pricing/?plan=pro#faq"`, `currentLocale="fr"`, and `label
 
 ### With General Translation
 
-[`<LocaleSelector>`](/docs/react/reference/components/locale-selector), available in `gt-react`, `gt-next`, and the experimental `gt-tanstack-start`, renders a native `<select>` of your configured locales, labels each one in its own language, and saves the choice in a cookie. It refreshes, reloads, or navigates depending on the framework. Its props are `locales` (a subset to show) and `customMapping` (custom labels), and standard `<select>` attributes are forwarded, so you can pass an `aria-label` translated with [`useGT`](/docs/react/reference/hooks/use-gt):
+[`<LocaleSelector>`](/docs/react/reference/components/locale-selector), available in `gt-react`, `gt-next`, and the experimental `gt-tanstack-start`, renders a native `<select>` of your configured locales, labels each one in its own language, and saves the choice in a cookie. Standard `<select>` attributes are forwarded, so you can pass an `aria-label` translated with [`useGT`](/docs/react/reference/hooks/use-gt):
 
 ```tsx
 'use client';
@@ -179,45 +179,7 @@ export function Header() {
 }
 ```
 
-For a custom design, [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) returns `locale` (the active locale), `locales` (sorted by native name unless you pass your own list), `setLocale`, and a locale-properties helper, whose `nativeNameWithRegionCode` gives a label such as "español (MX)." It is also exported by the experimental `gt-react-native`, which has no [`<LocaleSelector>`](/docs/react/reference/components/locale-selector).
-
-```tsx
-'use client';
-import { useLocaleSelector } from 'gt-next';
-
-export function LanguageMenu() {
-  const { locale, locales, setLocale, getLocaleProperties } = useLocaleSelector();
-
-  return (
-    <ul>
-      {locales.map((code) => (
-        <li key={code}>
-          <button
-            type="button"
-            lang={code}
-            aria-current={code === locale ? 'true' : undefined}
-            onClick={() => setLocale(code)}
-          >
-            {getLocaleProperties(code).nativeNameWithRegionCode}
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
-
-Both are client-side controls: they handle native labels, persistence, and switching, but they don't give crawlers links. With `gt-next`, switching keeps the visitor on the same route (switching from `/fr/about` to an unprefixed default locale lands on `/about`), and the [middleware](/docs/react/nextjs/reference/functions/create-next-middleware) reads the saved cookie before `Accept-Language`, so the explicit choice wins. For crawlable links, `gt-next`'s [`<Link>`](/docs/react/nextjs/link) takes a `locale` prop that adds the right prefix, and like `next/link` it passes `<a>` attributes through:
-
-```tsx
-import Link from 'gt-next/link';
-
-<Link href="/pricing" locale="fr" hrefLang="fr" lang="fr">Français</Link>;
-```
-
-Declare the matching hreflang alternates in the page head as well; [multilingual Next.js SEO](/kb/multilingual-nextjs-seo) shows how.
-
-In Vue, `gt-vue` has no prebuilt selector. Build one with [`useLocale`](/docs/vue/reference/composables/use-locale), which returns the active locale as a readonly ref, and [`useSetLocale`](/docs/vue/reference/composables/use-set-locale), whose async setter saves the locale cookie and then updates the page in place or reloads it, depending on how the plugin was created; the [Vue locale guide](/docs/vue/guides/managing-locales#switcher) has a complete switcher component.
+Because it's a `<select>`, it gives crawlers no links to follow. Pair it with plain links to each version, such as `gt-next`'s [`<Link>`](/docs/react/nextjs/link) with a `locale` prop, and declare hreflang alternates in the page head, as [multilingual Next.js SEO](/kb/multilingual-nextjs-seo) shows. For a custom design, [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) returns the active locale, the locale list, and `setLocale`. In Vue, build a switcher with [`useLocale`](/docs/vue/reference/composables/use-locale) and [`useSetLocale`](/docs/vue/reference/composables/use-set-locale), following the [Vue locale guide](/docs/vue/guides/managing-locales#switcher).
 
 ## Key takeaways
 
@@ -225,4 +187,4 @@ In Vue, `gt-vue` has no prebuilt selector. Build one with [`useLocale`](/docs/vu
 - Use a globe icon, not flags: the W3C says "Do not use flag icons to indicate languages."
 - Link to the same page in each language with plain `<a href>` links carrying `hreflang` and `lang`, so crawlers can follow them and screen readers pronounce each name correctly.
 - Store the explicit choice, and never redirect away from a localized URL by browser language.
-- General Translation's [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) and [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) handle labels and persistence in React frameworks; pair them with `gt-next`'s `<Link locale>` or hreflang alternates for search.
+- General Translation's [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) renders a native `<select>` with native-language labels and saves the choice in a cookie; add plain links for crawlers.

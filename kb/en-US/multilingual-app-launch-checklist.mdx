@@ -1,6 +1,6 @@
 ---
 title: Localization testing checklist for multilingual apps
-summary: "Before launching a multilingual app, test nine things in every supported locale: complete user journeys including errors, language detection and switching, variables and plurals, currency and time zones, text expansion, right-to-left layout, accessibility, production translation delivery, and crawlable language URLs for SEO. Each check needs an explicit pass condition."
+summary: "Test nine things in every supported locale on a production build: whole journeys including error states and emails, language switching, plurals, currency and time zones, text expansion, right-to-left layout, accessibility, translation delivery, and crawlable language URLs. Give each check an explicit pass condition."
 description: "Before launch, test in every locale: full journeys, language switching, plurals, currency and time zones, text expansion, RTL, accessibility, and SEO."
 date: 2026-10-16
 category: internationalization
@@ -32,8 +32,6 @@ Choose a critical journey such as creating an account or completing a purchase. 
 
 **Pass condition:** Each surface uses reviewed target-language content, apart from intentional exceptions such as a product name. No raw keys, missing-message markers, or unexplained source-language fallbacks appear.
 
-**With General Translation:** Confirm that the output of [`gt translate`](/docs/cli/reference/commands/translate) is the version included in the release. ([`gt generate`](/docs/cli/reference/commands/generate) only writes source templates, which still need translated text.) Reviewers correct wording in the [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations); if your team edits the generated files in the repository instead, run [`gt save-local`](/docs/cli/reference/commands/save-local) so later runs keep those edits. To keep product terms consistent across your app, docs, and notifications, assign shared Glossary terms and Custom Prompts with [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations) before generating translations. Context changes apply to new translations; they don't rewrite existing ones.
-
 ### 2. Verify first visits, switching, and return visits
 
 Test a fresh browser, an explicit language choice, a reload, a deep link, and an unsupported browser language. If the app stores a language preference on the account, also test sign-in and sign-out. Write down which setting wins when the URL, saved preference, and browser disagree. The [language-detection guide](/kb/detect-user-language) covers matching preferences; the [language-switcher guide](/kb/language-switcher) covers explicit choices and accessible navigation.
@@ -42,15 +40,11 @@ Test a fresh browser, an explicit language choice, a reload, a deep link, and an
 
 Locale identifiers follow BCP 47: `es-MX` and `es-AR` can be separate targets for Mexican and Argentine Spanish. Test each regional target you ship. A cookie-based switcher and locale-prefixed routes serve different needs; check the app's actual URL behavior.
 
-**With General Translation:** Define supported languages, including regional targets, in your [locale configuration](/docs/react/guides/managing-locales).
-
 ### 3. Exercise variables and plural categories
 
 Test counts including 0, 1, 2, and larger values, then add cases for your target languages' plural categories. Include names with punctuation, long account names, and sentences whose variables can appear in a different order after translation. Avoid building a sentence by concatenating independently translated fragments.
 
-**Pass condition:** Values remain intact, the sentence reads correctly, and every required plural form has usable content. Unicode's [plural rules](https://cldr.unicode.org/index/cldr-spec/plural-rules) describe why one English singular/plural test pair is insufficient. For catalog-based messages, test the branches in your [ICU messages](/kb/icu-message-format) as well.
-
-**With General Translation:** [`<Plural>`](/docs/react/reference/components/plural) follows the locale's plural rules: English has two cardinal categories, while Arabic has six. Use [`<Branch>`](/docs/react/reference/components/branch) when wording depends on an explicit value such as a person's grammatical gender, and [`<Var>`](/docs/react/reference/components/var) for dynamic text such as a name. Values inside that variable wrapper are not sent to the translation API. The [React pluralization article](/kb/how-to-handle-plurals-in-react) covers the implementation pattern.
+**Pass condition:** Values remain intact, the sentence reads correctly, and every required plural form has usable content. Unicode's [plural rules](https://cldr.unicode.org/index/cldr-spec/plural-rules) describe why one English singular/plural test pair is insufficient. For catalog-based messages, test the branches in your [ICU messages](/kb/icu-message-format) as well. (See [How do I handle plurals in React?](/kb/how-to-handle-plurals-in-react) for a component-based pattern).
 
 ## Check formatting, layout, and accessibility
 
@@ -77,9 +71,7 @@ new Intl.DateTimeFormat('en-GB', {
 }).format(new Date('2026-01-15T12:00:00Z'));
 ```
 
-**Pass condition:** Separators, currency identity, calendar date, and displayed time match the product's intended meaning. Include a daylight-saving transition when your supported time zones observe one. The [number](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) and [date](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) APIs expose these choices separately.
-
-**With General Translation:** [`<Currency>`](/docs/react/reference/components/currency), [`<DateTime>`](/docs/react/reference/components/datetime), and [`<Num>`](/docs/react/reference/components/num) format values using the active locale. Set the currency and time zone for the business meaning you intend; changing the UI language should not change the amount owed or the instant an event occurs.
+**Pass condition:** Separators, currency identity, calendar date, and displayed time match the product's intended meaning. Include a daylight-saving transition when your supported time zones observe one. The [number](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) and [date](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) APIs expose these choices separately. Changing the UI language should not change the amount owed or the instant an event occurs.
 
 ### 5. Test text expansion across screen sizes
 
@@ -107,11 +99,7 @@ Verify the page's `lang` attribute, language changes within content where applic
 
 Build from a clean checkout using the release process, then run that build with each supported locale. Confirm that translation assets are present and load successfully. Change a source message in a test branch and verify that the translation pipeline notices it before the next release.
 
-**Pass condition:** The app serves the intended translations without relying on files left over from development. Missing assets or failed generation cause a visible failure or an explicitly accepted fallback, rather than a silent partial release.
-
-**With General Translation:** Run [`gt validate`](/docs/cli/reference/commands/validate) to catch supported inline-translation errors before an API call, then put the [incremental translation step before the build](/docs/cli/guides/generating-translations). It reuses earlier translations and translates changed content, so new copy can ship translated in the release that adds it. [Branch tracking](/docs/cli/guides/branching) keeps parallel development branches separate. [Locadex automations](/docs/platform/locadex/guides/configuring-automations) can handle translation updates through pull requests. Test the configured trigger with a source-copy change as part of this release check.
-
-With the [local storage workflow](/docs/react/guides/storing-translations), the app serves bundled translations without runtime calls to General Translation; updates ship in a new build. With CDN delivery, published edits can reach the app without a redeploy, subject to its translation version and cache settings. Test that update path. Keep private translation tooling credentials in the build environment, outside browser bundles.
+**Pass condition:** The app serves the intended translations without relying on files left over from development. Missing assets or failed generation cause a visible failure or an explicitly accepted fallback, rather than a silent partial release. Keep translation tooling credentials in the build environment, outside browser bundles.
 
 ### 9. Verify discovery for public language versions
 
@@ -119,13 +107,17 @@ For pages intended for search, check that each language version has a crawlable 
 
 **Pass condition:** Each public language URL loads the expected content, is indexable when intended, and points to real alternate versions. Google's [localized-page guidance](https://developers.google.com/search/docs/specialty/international/localized-versions) describes the supported annotation methods. For a Next.js implementation, use the [multilingual SEO guide](/kb/multilingual-nextjs-seo).
 
-Path prefixes, language subdomains, and country domains can provide separate language URLs. An `Accept-Language` header or cookie can select a visitor's language, but does not by itself create a crawlable URL for each version. Google's [multilingual-site guidance](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) recommends separate URLs. An authenticated dashboard may not need indexed language URLs; choose the routing policy for the product's audience.
+Path prefixes, language subdomains, and country domains can provide separate language URLs; [the URL structure guide](/kb/multilingual-url-structure) compares them. An `Accept-Language` header or cookie can select a visitor's language, but does not by itself create a crawlable URL for each version. (See [language redirects and SEO](/kb/locale-routing-seo)). Google's [multilingual-site guidance](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) recommends separate URLs. An authenticated dashboard may not need indexed language URLs; choose the routing policy for the product's audience.
 
 ## Keep a release record
 
 Record the build, locale, journey, browser or device, expected result, actual result, and reviewer. Assign an owner to failures. Treat a missing checkout translation or unreadable primary action differently from a minor wording preference, and make any accepted fallback explicit.
 
-For a quick first pass on a public site, General Translation's free [Report Card](https://generaltranslation.com/report-card) scores its localization. It can't see authenticated flows or failure states, so pair it with the journey checks above.
+## Run these checks with General Translation
+
+Before the build, run [`gt validate`](/docs/cli/reference/commands/validate) to catch inline-translation errors without an API call, then the [incremental translation step](/docs/cli/guides/generating-translations), which reuses earlier translations so new copy ships translated in the release that adds it. Confirm the release includes the output of [`gt translate`](/docs/cli/reference/commands/translate); [`gt generate`](/docs/cli/reference/commands/generate) only writes source templates. Reviewers correct wording in the [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations), and if your team edits generated files in the repository instead, run [`gt save-local`](/docs/cli/reference/commands/save-local) so later runs keep those edits. [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations) keep Glossary terms and Custom Prompts consistent, but apply only to new translations.
+
+In React code, [`<Plural>`](/docs/react/reference/components/plural) follows each locale's plural rules, [`<Var>`](/docs/react/reference/components/var) keeps dynamic values out of the translation API, and [`<Currency>`](/docs/react/reference/components/currency), [`<DateTime>`](/docs/react/reference/components/datetime), and [`<Num>`](/docs/react/reference/components/num) format values in the active locale while you set the currency and time zone. With [local storage](/docs/react/guides/storing-translations), translations ship in the build; with CDN delivery, published edits can reach the app without a redeploy, subject to version and cache settings, so test that update path too. For a quick first pass on a public site, the free [Report Card](https://generaltranslation.com/report-card) scores its localization, though it can't see authenticated flows or failure states.
 
 ## Common questions
 
@@ -136,11 +128,3 @@ Run complete user journeys in every supported locale on a production build, incl
 ### Which localization bugs should I test beyond the main screens?
 
 Untranslated failure states. Error messages, form validation, empty states, and transactional emails are often still in the source language after the main screens are translated. Test them deliberately in check 1.
-
-### What is pseudolocalization?
-
-Pseudolocalization replaces source text with longer, accented placeholder text so you can find layout overflow and unmarked strings before real translations exist. It doesn't replace testing real languages. (See [what pseudo-localization tests](/kb/pseudo-localization) and [Lingui's implementation](https://lingui.dev/guides/pseudolocalization)).
-
-### Do multilingual pages need separate URLs for SEO?
-
-Yes, for pages you want indexed. Google recommends a [separate URL for each language version](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites), linked with `hreflang`. A cookie or `Accept-Language` header alone doesn't create crawlable versions. For Next.js, see [multilingual Next.js SEO](/kb/multilingual-nextjs-seo).

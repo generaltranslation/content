@@ -1,6 +1,6 @@
 ---
 title: How should I name i18n translation keys?
-summary: Name keys by where text appears and what it means, such as checkout.summary.title, not by its English wording, and give each distinct use its own key even when the English matches. Keep one structure, follow your library's plural suffixes, and run a tool that reports unused and missing keys.
+summary: "Name keys by where text appears and what it means, such as checkout.summary.title, not by its English wording. Give each distinct use its own key, even when the English matches: German translates the button Open as Öffnen and the status Open as Offen."
 description: Name i18n keys by feature and meaning (checkout.summary.title), not English text. Conventions for namespaces, nesting, plural suffixes, and unused keys.
 date: 2026-10-20
 category: internationalization
@@ -73,12 +73,12 @@ i18next selects plural forms by suffix and requires the variable to be called `c
 }
 ```
 
-`t('cart.itemCount', { count: 0 })` returns "Your cart is empty," 1 returns "1 item," and 5 returns "5 items." A language with more forms adds keys such as `itemCount_few` and `itemCount_many`. (See the [i18next plurals docs](https://www.i18next.com/translation-function/plurals).)
+`t('cart.itemCount', { count: 0 })` returns "Your cart is empty," 1 returns "1 item," and 5 returns "5 items." A language with more plural categories adds keys such as `itemCount_few` and `itemCount_many`. (See the [i18next plurals docs](https://www.i18next.com/translation-function/plurals), and [What is ICU message format?](/kb/icu-message-format) for each language's categories.)
 
 - ✅ `itemCount_one`, `itemCount_other`, and for gendered text, [context](https://www.i18next.com/translation-function/context) keys like `friend_male` and `friend_female`
 - ❌ invented suffixes such as `itemCount_singular` and `itemCount_plural`, which the library won't select
 
-Libraries built on ICU message format (react-intl, next-intl, Lingui) keep every plural form inside one message under one key instead. (See [What is ICU message format?](/kb/icu-message-format).)
+Libraries built on ICU message format (react-intl, next-intl, Lingui) keep every plural form inside one message under one key instead.
 
 ## 6. Never build a sentence from several keys
 
@@ -114,9 +114,9 @@ Catalogs drift: keys stay after their component is deleted, and new keys ship un
 - **i18next**: [`i18next-cli`](https://github.com/i18next/i18next-cli) replaces the deprecated `i18next-parser`. On a small test project, `npx i18next-cli status --unused` reported an orphaned `oldPromoBanner` key without changing any files; `npx i18next-cli extract` then removed it (its `removeUnusedKeys` option defaults to `true`) and wrote empty German entries for every key, including `itemCount_one` and `itemCount_other`. `npx i18next-cli status` exits with an error while translations are missing, and `rename-key` renames a key across source and locale files. Static analysis can't see keys built at run time, such as ``t(`status.${code}`)``, so `extract` treats them as unused and deletes them. List those prefixes in the `preservePatterns` option (for example, `'status.*'`), or spell each key out in code.
 - **Rails**: i18n-tasks reports missing and unused keys from your Ruby and ERB code. (See [General Translation vs. i18n-tasks](/kb/general-translation-vs-i18n-tasks).)
 
-## The alternative: no keys at all
+## How General Translation handles keys
 
-With General Translation's [`<T>`](/docs/react/reference/components/t) component in `gt-react` or `gt-next`, the English stays in the component and there's no key to name:
+With the [`<T>`](/docs/react/reference/components/t) component in `gt-react` or `gt-next`, the English stays in the component and there's no key to name:
 
 ```tsx title="CheckoutSummary.tsx"
 import { T } from 'gt-react';
@@ -133,22 +133,7 @@ export function CheckoutSummary() {
 
 [`npx gt translate`](/docs/cli/reference/commands/translate) extracts the content still present in your source, so removing a component removes the need to maintain its keys by hand. Distinct uses of "Open" still need context: `<T context="Ticket status">Open</T>` or `gt('Open', { $context: 'Ticket status' })` with [`useGT`](/docs/react/reference/hooks/use-gt). An optional [`$id`](/docs/react/reference/components/t#id) gives an entry a stable identifier for the translation editor. (See [Can I do i18n without translation files?](/kb/i18n-without-translation-files).)
 
-## Dictionary mode for teams that want keys
-
-Teams that prefer centralized copy can keep keys in General Translation. Write one source dictionary, such as `dictionary.json`, and read it with [`useTranslations`](/docs/react/reference/hooks/use-translations):
-
-```tsx title="Greeting.tsx"
-import { useTranslations } from 'gt-react';
-
-export function Greeting() {
-  const t = useTranslations('home'); // prefixes every lookup with "home."
-  return <h1>{t('title')}</h1>; // resolves home.title
-}
-```
-
-You write only the source language; [`npx gt translate`](/docs/cli/reference/commands/translate) translates the dictionary along with the rest of the project. Looking up an id that isn't in the dictionary throws, so a typo fails loudly instead of rendering a raw key. (See [Translating with dictionaries](/docs/react/guides/translating-with-dictionaries).)
-
-If your keys already live in i18next or next-intl JSON, the CLI translates those files as they are. A companion [`.metadata.json` file](/docs/cli/reference/keyed-metadata) mirrors your key structure and adds per-key context or a character limit, which is the keyed equivalent of convention 3.
+Teams that want keys can keep them. Write one source dictionary, such as `dictionary.json`, and read it with [`useTranslations`](/docs/react/reference/hooks/use-translations); the same command translates it, and looking up an id that isn't in the dictionary throws instead of rendering a raw key. (See [Translating with dictionaries](/docs/react/guides/translating-with-dictionaries).) Existing i18next or next-intl JSON files are translated as they are, and a companion [`.metadata.json` file](/docs/cli/reference/keyed-metadata) adds per-key context or a character limit, the keyed equivalent of convention 3.
 
 ## Key takeaways
 
@@ -156,4 +141,4 @@ If your keys already live in i18next or next-intl JSON, the CLI translates those
 - Give "Open" the verb and "Open" the status separate keys; share keys only for identical meanings.
 - Follow the library's plural suffixes exactly: i18next uses `_one`, `_other`, and `_zero`, and ICU libraries keep plurals in one message.
 - Run `i18next-cli status --unused` or i18n-tasks in CI so dead and missing keys don't pile up.
-- General Translation's [`<T>`](/docs/react/reference/components/t) removes keys entirely, and dictionary mode with `useTranslations` keeps them for teams that want them.
+- General Translation's [`<T>`](/docs/react/reference/components/t) needs no keys, and its dictionary mode with [`useTranslations`](/docs/react/reference/hooks/use-translations) keeps them for teams that want them.

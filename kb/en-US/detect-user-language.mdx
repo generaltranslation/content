@@ -1,11 +1,11 @@
 ---
 title: How do I detect a user's browser language?
-summary: Read the browser's ordered language list (navigator.languages in JavaScript, the Accept-Language header on the server), match it against the locales you support with a fallback, and let an explicit choice override it. Don't use IP geolocation; it tells you where someone is, not which language they read.
+summary: Read the browser's ordered language list, navigator.languages in JavaScript or the Accept-Language header on the server, sorted by q-value, and match it to your supported locales with a fallback. Safari and Chrome incognito report only one language, and IP geolocation reveals location, not language.
 description: Read navigator.languages in the browser or Accept-Language on the server, match it to your supported locales with a fallback, and let a user's choice win.
 date: 2026-10-20
 category: internationalization
 authors: [kevin-wu, jackie]
-related: [locale-routing-seo, language-switcher, locale-codes, make-website-multilingual]
+related: [locale-routing-seo, language-switcher, what-is-hreflang, make-website-multilingual]
 ---
 
 The browser already holds the answer: an ordered list of languages the user set in the browser or operating system. The work is reading that list correctly, matching it to the locales you have translations for, and knowing when a stronger signal should win.
@@ -179,36 +179,25 @@ Check a saved choice before calling `preferredLocale`, and use the result as a s
 
 Detection is only the first-visit guess. When signals disagree, use this order:
 
-1. **The choice the user just made** in your language switcher, which should take them to that language's URL.
-2. **The locale in the URL**, on pages that have one. Someone who opens a shared `/de/` link expects German, and crawlers depend on each URL showing the language it names.
-3. **A saved preference**, from a cookie or an account setting, for URLs without a locale, such as `/` or an app that doesn't put locales in its URLs.
-4. **`Accept-Language` or `navigator.languages`**, matched with a fallback.
-5. **Your default locale.**
+1. **The URL.** A shared `/de/` link shows German, and a language picked in the switcher navigates to that language's URL.
+2. **The saved choice.** A cookie or account setting. It picks where a neutral root sends someone or what to suggest, but never rewrites a localized URL.
+3. **The `Accept-Language` header**, or `navigator.languages` on the client. Used only when there's no saved choice, and only at the root or as a suggestion.
+4. **The default locale.** The fallback when nothing matches.
 
-The W3C recommends using the header as a [starting point](https://www.w3.org/International/questions/qa-accept-lang-locales), letting users change the language, and storing the result "in a database or a cookie for later visits." When a detected preference disagrees with the URL, suggest the other version instead of redirecting; Google asks sites to [avoid automatic redirects](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) between language versions. The SEO side of this order is covered in [locale routing and SEO](/kb/locale-routing-seo), and the switcher itself in [building a language switcher](/kb/language-switcher).
+The W3C recommends using the header as a [starting point](https://www.w3.org/International/questions/qa-accept-lang-locales), letting users change the language, and storing the result "in a database or a cookie for later visits." Redirects, caching, and SEO for this order are covered in [locale routing and SEO](/kb/locale-routing-seo), and the switcher itself in [building a language switcher](/kb/language-switcher).
 
 ## How gt-next, gt-react, and gt-node resolve the locale
 
-General Translation's libraries implement this order for you. In `gt-next`, [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) resolves each request's locale in this order: a locale the visitor has just selected (tracked by a reset cookie), the URL locale (such as `/es/about`), the saved locale cookie, a referrer locale cookie from the previous client route, the `Accept-Language` header, and finally your `defaultLocale`. It sets the locale cookie (`generaltranslation.locale` by default, renamable through [`headersAndCookies`](/docs/react/nextjs/config#headers-and-cookies)) and, with locale routing on, redirects or rewrites to the localized path. Set [`ignoreBrowserLocales`](/docs/react/nextjs/config#ignore-browser-locales) to skip the header entirely.
+In General Translation's `gt-next`, [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) resolves each request's locale in this order: a locale the visitor has just selected (tracked by a reset cookie), the URL locale (such as `/es/about`), the saved locale cookie, a referrer locale cookie from the previous client route, the `Accept-Language` header, and finally your `defaultLocale`. It saves the result in the `generaltranslation.locale` cookie by default, renamable through [`headersAndCookies`](/docs/react/nextjs/config#headers-and-cookies). Set [`ignoreBrowserLocales`](/docs/react/nextjs/config#ignore-browser-locales) to skip the header entirely.
 
-```ts title="proxy.ts"
-import { createNextMiddleware } from 'gt-next/middleware';
+When a requested locale isn't supported, the libraries pick the best supported match from the browser's preferences, then a locale that shares the language (`en-GB` for `en-US`), then the default. Read the result with [`useLocale`](/docs/react/reference/hooks/use-locale), or with [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) from `gt-next/server` in async code.
 
-export default createNextMiddleware();
-
-export const config = {
-  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
-};
-```
-
-To read the result, call [`useLocale`](/docs/react/reference/hooks/use-locale) in client components and synchronous server components, or [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) from `gt-next/server` in async code. When a requested locale isn't supported, the libraries pick the best supported match from the browser's preferences, then a locale that shares the language (`en-GB` for `en-US`), then the default. A choice made with [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) or [`useSetLocale`](/docs/react/reference/hooks/use-set-locale) is stored in the cookie, so it wins on the next request.
-
-In a React single-page app, `gt-react`'s [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) resolves the locale from cookies and the browser before the first render, and a selection is saved to the `generaltranslation.locale` cookie. On a Node.js server, `gt-node`'s [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) negotiates `Accept-Language` against the locales passed to [`initializeGT`](/docs/node/reference/functions/initialize-gt). With `en`, `fr`, `de`, and `pt-BR` configured, it returned `fr` for `fr-CH, fr;q=0.9, en;q=0.8`, `pt-BR` for `pt-PT,pt;q=0.9`, and `en` for `ja`. Put a cookie or path check in front of it, as the [gt-node locale guide](/docs/node/guides/detecting-locale) shows. The experimental Python SDKs, `gt-flask` and `gt-fastapi`, read `Accept-Language` by default and accept a custom [`get_locale`](/docs/python/guides/detecting-locale) callback.
+In a React single-page app, `gt-react`'s [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) resolves the locale from cookies and the browser before the first render. On a Node.js server, `gt-node`'s [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) negotiates `Accept-Language` against the locales passed to [`initializeGT`](/docs/node/reference/functions/initialize-gt). With `en`, `fr`, `de`, and `pt-BR` configured, it returned `fr` for `fr-CH, fr;q=0.9, en;q=0.8` and `pt-BR` for `pt-PT,pt;q=0.9`. Put a cookie or path check in front of it, as the [gt-node locale guide](/docs/node/guides/detecting-locale) shows.
 
 ## Key takeaways
 
 - `navigator.languages` and `Accept-Language` carry the same ordered preferences; Safari and Chrome incognito expose only one language.
 - Parse q-values (0 to 1, default 1), sort by them, and drop `*` and malformed tags before matching; `@formatjs/intl-localematcher` throws on `*`.
 - Lookup maps `pt-PT` to your default when you only have `pt-BR`; best fit maps it to `pt-BR`. Choose deliberately.
-- A choice made in the switcher wins, then the locale in the URL, then a saved preference, then the header, then your default. IP geolocation is never a language signal.
-- After a locale the visitor has just selected, `gt-next` middleware checks the URL, then the locale cookie, then `Accept-Language`, then `defaultLocale`, and `gt-node`'s [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) handles header negotiation on any Node.js server.
+- Resolve the language as URL, then saved choice, then `Accept-Language`, then the default. IP geolocation is never a language signal.
+- After a just-selected locale, `gt-next` checks the URL, the `generaltranslation.locale` cookie, `Accept-Language`, and then `defaultLocale`.
