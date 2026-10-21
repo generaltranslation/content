@@ -23,7 +23,14 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
   vue: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
-  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
+  integrations: [
+    'Google Drive',
+    'Mintlify',
+    'Payload CMS',
+    'Sanity',
+    'Storyblok',
+    'rrweb',
+  ],
 };
 
 const EXPECTED_OVERVIEW_PAGES = [
@@ -39,6 +46,7 @@ const EXPECTED_OVERVIEW_PAGES = [
   '---Integrations---',
   '[Google Drive](/docs/integrations/google-drive/quickstart)',
   '[Mintlify](/docs/integrations/mintlify/quickstart)',
+  '[Payload CMS](/docs/integrations/payload/quickstart)',
   '[Sanity](/docs/integrations/sanity/quickstart)',
   '[Storyblok](/docs/integrations/storyblok/quickstart)',
   '[rrweb](/docs/integrations/rrweb/quickstart)',
@@ -65,7 +73,14 @@ const EXPECTED_OVERVIEW_GROUP_PAGES: Readonly<
 
 const EXPECTED_LANDING_CARDS: Readonly<Record<string, readonly string[]>> = {
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
-  integrations: ['Google Drive', 'Mintlify', 'Sanity', 'Storyblok', 'rrweb'],
+  integrations: [
+    'Google Drive',
+    'Mintlify',
+    'Payload CMS',
+    'Sanity',
+    'Storyblok',
+    'rrweb',
+  ],
 };
 
 const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
@@ -81,6 +96,12 @@ const CANONICAL_FOLDER_TITLES: Readonly<Record<string, string>> = {
   rrweb: 'rrweb',
   types: 'Types',
 };
+
+// Folders deliberately absent from their parent's `pages`: older OpenAPI
+// reference versions are reached only through the docs version picker.
+const UNLISTED_FOLDERS: ReadonlySet<string> = new Set([
+  'platform/openapi/reference/versions',
+]);
 
 const ALLOWED_META_KEYS = new Set([
   'defaultOpen',
@@ -302,7 +323,10 @@ export function validateDocsStructure(
 
     for (const child of findImmediateNavigableChildren(files, metaPath)) {
       const entry = `./${child}`;
-      if (!seenPages.has(entry)) {
+      if (
+        !seenPages.has(entry) &&
+        !UNLISTED_FOLDERS.has(resolveEntryBase(metaPath, entry))
+      ) {
         addFinding(metaPath, `Navigable child "${entry}" is missing from pages.`);
       }
     }

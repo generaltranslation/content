@@ -1,0 +1,120 @@
+---
+title: "General Translation vs. Paraglide JS: which should you use?"
+summary: Choose General Translation to keep copy inline and generate translations with the structure of your React components, shared terminology, and Dashboard review. Choose Paraglide JS for compiled, typed message functions and per-message tree-shaking. Paraglide renders your catalogs; General Translation connects source copy to translation generation and ongoing updates.
+description: Choose Paraglide JS for compiled, typed, tree-shakable message functions. Choose General Translation to keep copy inline and generate translations with code context and review.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-intlayer, i18n-without-translation-files, how-to-handle-plurals-in-react, general-translation-vs-tms]
+---
+
+Paraglide JS is a compiler-first i18n library from inlang. You keep messages in JSON files such as `messages/en.json`, and its compiler turns each message into a typed function that you call as `m.greeting({ name })`, so your bundler can drop the messages a page never uses. What Paraglide leaves to you is the translating: every message in every language comes from you, a translator, or a machine translation command you run against the files. General Translation's libraries render translations too, and General Translation also generates them, from copy you write once, inline, in your components.
+
+## What Paraglide JS does well
+
+- **Type safety.** Message keys and parameters are generated types. With version 2.29.0, a misspelled `m.greting()` and a call to `m.greeting({})` without its `name` parameter are both TypeScript errors.
+- **Bundle size.** Messages compile to ES modules, so unused ones are tree-shaken. In Paraglide's [published benchmark](https://paraglidejs.com/benchmark), a page using 100 of 200 messages across five locales transferred 47 KB with Paraglide and 205 KB with i18next.
+- **Plurals and variants.** The default message format [declares a plural selector](https://paraglidejs.com/variants) and matches on CLDR categories such as `one`, `few`, and `many`. [Plugins](https://paraglidejs.com/file-formats) add ICU MessageFormat 1 and i18next files, and formatters cover numbers, dates, and relative time through `Intl`.
+- **Locale strategies.** An ordered [`strategy` list](https://paraglidejs.com/strategy) resolves the locale from the URL, a cookie, `localStorage`, the browser's preferred language, a global variable, custom strategies, or the `baseLocale`. In 2.29.0 the [default](https://github.com/opral/paraglide-js/blob/main/src/compiler/compiler-options.ts) is `cookie`, `globalVariable`, then `baseLocale`. [Server middleware](https://paraglidejs.com/middleware) and `localizeUrl` handle localized routes.
+- **Framework reach.** Paraglide [works with any Vite app](https://paraglidejs.com/vite) and has guides for React, Vue, Solid, SvelteKit, TanStack Start, React Router, Astro, and Next.js. It's the [add-on behind `npx sv add paraglide`](https://paraglidejs.com/sveltekit) in the Svelte CLI. Its [Next.js guide](https://paraglidejs.com/next-js) covers the App Router through a webpack plugin, run with the `--webpack` flag.
+- **Free, open tooling.** The library is [MIT-licensed](https://github.com/opral/paraglide-js/blob/main/LICENSE). The [inlang CLI](https://inlang.com/m/2qj2w8pu/app-inlang-cli) checks projects in CI, [Sherlock](https://inlang.com/m/r7kp499g/app-inlang-ideExtension) shows translations inline in VS Code, and [Fink](https://fink.inlang.com/) is a free browser editor that commits translators' changes to a GitHub repository.
+
+## What Paraglide JS leaves to you
+
+An inlang project is a `project.inlang` folder whose `settings.json` lists your locales, plugins, and the path to your message files. Here's an inbox with a plain message, a parameter, and a plural:
+
+```json title="messages/en.json"
+{
+  "inbox_title": "Inbox",
+  "greeting": "Hello {name}!",
+  "unread_messages": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "You have {count} unread message.",
+        "countPlural=*": "You have {count} unread messages."
+      }
+    }
+  ]
+}
+```
+
+```tsx title="Inbox.tsx"
+import { m } from './paraglide/messages.js';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <section>
+      <h1>{m.inbox_title()}</h1>
+      <p>{m.greeting({ name })}</p>
+      <p>{m.unread_messages({ count })}</p>
+    </section>
+  );
+}
+```
+
+Every other locale needs its own file with the same keys, and the variants that language needs: Polish matches `one`, `few`, `many`, and `*`. When a key is missing from `messages/pl.json`, the compiled function falls back to the base locale without a warning. Here's the component rendered with a Polish file that lacks `greeting`:
+
+```text title="Output"
+pl  <h1>Skrzynka odbiorcza</h1><p>Hello Ada!</p><p>Masz 2 nieprzeczytane wiadomości.</p>
+```
+
+`npx @inlang/cli check` caught it, reporting `greeting` with no Polish translation and exiting with code 1, so CI can block the gap. Filling it is still your job. `inlang machine translate` translates missing messages with a free community-run service by default, or with your own Google Cloud Translation or DeepL key, one message at a time without the component it appears in. The inlang CLI's own docs suggest that coding agents with product and code context can produce better drafts than generic machine translation.
+
+## General Translation writes the translations
+
+General Translation's libraries do the same rendering job. The difference is where copy lives and who translates it. Here's the same inbox with `gt-react`:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num, Var } from 'gt-react';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <p>Hello <Var>{name}</Var>!</p>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+There's no message file to keep in step: the English is the component. [`npx gt translate`](/docs/cli/reference/commands/translate) sends each [`<T>`](/docs/react/reference/components/t) block, with its element structure, to the General Translation API and writes a translation for every target locale, so a new sentence is translated before your build instead of falling back to English. A value in [`<Var>`](/docs/react/reference/components/var) is never sent to the API, and [`<Plural>`](/docs/react/reference/components/plural) picks a branch with the reader's locale's plural rules. [`npx gt validate`](/docs/cli/reference/commands/validate) checks the project without calling the API, and [`gt generate`](/docs/cli/reference/commands/generate) writes template files for teams that translate by hand.
+
+The heading, greeting, and plural branches inside this block travel together for translation. General Translation also applies the [Glossary and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations) assigned to the project, and reviewers edit the results in the Dashboard. Add the CLI to CI, or configure [Locadex](/docs/platform/locadex/quickstart) to open translation pull requests when your code changes.
+
+General Translation's JavaScript libraries are MIT-licensed and work with supplied translations without an account. Bundling translations with your app keeps rendering independent of the hosted service; CDN delivery lets you publish translation edits separately from application releases. See [storing translations](/docs/react/guides/storing-translations) for the setup.
+
+Sierra ships 7+ locales across its web and go-to-market content with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
+
+## Paraglide JS vs. General Translation at a glance
+
+| Feature | Paraglide JS | General Translation |
+| --- | --- | --- |
+| How you write copy | Keys in a JSON file per locale, called as `m.key()` | JSX inside [`<T>`](/docs/react/reference/components/t), strings through [`useGT`](/docs/react/reference/hooks/use-gt), or keyed dictionaries |
+| Translates your content | No; `inlang machine translate` uses a community service, Google, or DeepL | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| What the translator sees | Message content supplied to the chosen translation tool | The marked JSX block, developer notes, and assigned Glossary and Custom Prompts |
+| Type safety | Generated types for every key and parameter | Inline JSX, with no message key to mistype |
+| Bundle | Per-message tree-shaking | Translations load per locale |
+| Missing translation | Falls back to the base locale; `inlang check` reports it | Generated by [`npx gt translate`](/docs/cli/reference/commands/translate); untranslated content renders in the source language |
+| Frameworks | Vite apps, React, Vue, Solid, SvelteKit, Astro, TanStack Start, React Router, Next.js (webpack) | React, Next.js, Vue, Node.js, and [additional SDKs](/docs/overview/get-started) |
+| Cost | Free and open source | JavaScript libraries free; [translation billed by usage](https://generaltranslation.com/pricing) |
+
+Keep Paraglide JS when you build with SvelteKit, Astro, or Solid, when per-message tree-shaking and typed message functions matter most, or when your team already writes or buys its translations. Use General Translation when you want copy readable in your components and every language generated with the context of your code on each build.
+
+## Moving to General Translation one component at a time
+
+Moving one component at a time works. Paraglide's messages are plain functions and need no provider, so an `m.*` call and a [`<T>`](/docs/react/reference/components/t) block can render side by side while you convert routes. [Migrating i18n libraries](/docs/react/guides/migrating-i18n-libraries) covers the steps, starting from the [React Quickstart](/docs/react/react-quickstart) or the [Next.js Quickstart](/docs/react/nextjs-quickstart).
+
+## Key takeaways
+
+- Paraglide JS compiles catalogs into typed, tree-shakable functions. Separate inlang tooling can generate translations for those catalogs.
+- General Translation keeps copy inline in [`<T>`](/docs/react/reference/components/t) and generates translations with context from your code, your Glossary, and Custom Prompts, with review in the Dashboard.
+- Keep Paraglide's existing messages running while you move components to General Translation. Each migrated component carries its source text and translation context in the JSX.

@@ -260,13 +260,13 @@ The docs have these top-level sections, in this order:
 5. **Vue** — the Vue 3 SDK (`gt-vue`).
 6. **Node**
 7. **Python**
-8. **Integrations** — plugins and add-ons that attach General Translation to a third-party platform or tool (for example, Sanity, Storyblok, Google Drive, and rrweb).
+8. **Integrations** — plugins and add-ons that attach General Translation to a third-party platform or tool (for example, Payload CMS, Sanity, Storyblok, Google Drive, and rrweb).
 
 ### When something gets its own top-level section
 
 Reserve a top-level section for a **framework**: a first-party SDK that developers install into their own application and build on directly — the React ecosystem, Vue, Node, and Python — plus the CLI and the Platform itself. A framework earns a tab because readers arrive already thinking in that framework's terms and need a whole spine (Quickstart → Guides → Reference) shaped around it.
 
-Everything else lives under **Integrations**, as one plugin folder with its own Quickstart → Guides → Reference: content platforms and CMSs (Sanity, Storyblok), storage and docs tools (Google Drive, Mintlify), and libraries that attach to another tool rather than host an app (`gt-rrweb` for rrweb recordings). **When in doubt, put it in Integrations.** Promote a plugin to its own section only when it has grown into a framework SDK in the sense above; that is an information-architecture change, so the top-level list is pinned by CI (`scripts/validate-docs-structure.ts`) and the Overview hub must be updated with it.
+Everything else lives under **Integrations**, as one plugin folder with its own Quickstart → Guides → Reference: content platforms and CMSs (Payload CMS, Sanity, Storyblok), storage and docs tools (Google Drive, Mintlify), and libraries that attach to another tool rather than host an app (`gt-rrweb` for rrweb recordings). **When in doubt, put it in Integrations.** Promote a plugin to its own section only when it has grown into a framework SDK in the sense above; that is an information-architecture change, so the top-level list is pinned by CI (`scripts/validate-docs-structure.ts`) and the Overview hub must be updated with it.
 
 Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Vue, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
 
@@ -326,7 +326,7 @@ The **overview** section doubles as a **landing hub**: its `meta.json` lists the
 
 - **Frameworks:** React, React SPA, Next.js App Router, Next.js Pages Router, TanStack Start, React Native, Vue, Node.js, Python, CLI, JSON
 - **Platform:** Dashboard, Locadex, Core, OpenAPI
-- **Integrations:** Google Drive, Mintlify, Sanity, Storyblok, rrweb
+- **Integrations:** Google Drive, Mintlify, Payload CMS, Sanity, Storyblok, rrweb
 
 Treat the Overview sidebar hub, each section's `meta.json`, and the corresponding landing-page card grid as one synchronized navigation surface. Whenever a framework, Platform capability, or integration is added, removed, renamed, or reordered, update all applicable surfaces in the same change and verify every route. Keep the Integrations sidebar and landing page in the order above, with Google Drive first. The structure validator enforces route coverage.
 
