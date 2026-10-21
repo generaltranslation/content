@@ -47,9 +47,12 @@ These mirror the CI jobs in `.github/workflows/run-tests.yml`. `pnpm install` re
 | `docs/en-US/`     | Documentation pages                 |
 | `blog/en-US/`     | Blog posts                          |
 | `blog/order.json` | The order of posts on the blog page |
+| `kb/en-US/`      | Knowledge Base articles and category labels |
 | `devlog/en-US/`   | Devlog / release note entries       |
 | `authors/`        | Author profiles                     |
 | `docs-templates/` | Shared templates (maintainers only) |
+
+Commit English source content only. Landing's shared GT build generates translations in sibling locale directories for docs, blog, devlog, and KB.
 
 ## MDX formatting conventions
 
