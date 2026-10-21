@@ -1,0 +1,79 @@
+---
+title: Perché usare General Translation invece di Google Translate?
+summary: Google Translate è un modo rapido per tradurre testi occasionali. Ma per distribuire un prodotto in un'altra lingua serve molto di più. Ogni stringa va tradotta nel suo contesto, con terminologia coerente e con variabili e plurali corretti, e servono anche una revisione e un processo di rilascio. General Translation comprende il contesto di ogni stringa nel tuo codice e automatizza l'intero flusso di lavoro di localizzazione, dal codice alla revisione fino a ogni rilascio.
+description: Google Translate gestisce testi occasionali. Per distribuire un prodotto servono anche contesto, terminologia coerente, variabili e plurali corretti, revisione e rilasci, tutti aspetti che General Translation automatizza.
+date: 2026-10-16
+category: translation
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, translate-conditional-jsx, how-to-handle-plurals-in-react, multilingual-nextjs-seo]
+---
+
+Google Translate è un modo veloce per leggere una pagina in un&#39;altra lingua o per tradurre al volo un paragrafo. Le parti più difficili della localizzazione di un prodotto sono altre. Bisogna tradurre ogni stringa con il significato che ha nella tua UI e mantenere la terminologia coerente da un rilascio all&#39;altro. Poi le traduzioni devono arrivare nel punto da cui la tua app le carica. Qualunque sia il modo in cui usi Google Translate per un&#39;app, una parte di questo lavoro resta comunque a tuo carico.
+
+## Tre modi per usare Google Translate in un&#39;app
+
+### Lasciare che sia il browser dei visitatori a tradurre la pagina
+
+Chrome propone di tradurre le pagine scritte in lingue che l&#39;utente non conosce. La traduzione avviene nel browser del visitatore dopo il caricamento della pagina: lo script di traduzione di Google sostituisce il testo della pagina con il testo tradotto racchiuso in elementi `<font>`. Non puoi vedere né revisionare il risultato e non esiste un URL tradotto che i motori di ricerca possano scansionare, mentre le linee guida di Google per i siti multilingue raccomandano di pubblicare ogni lingua su un URL dedicato ([Managing multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)).
+
+Questa riscrittura può anche mandare in errore le app React. React mantiene i riferimenti ai nodi di testo che ha renderizzato, quindi, una volta che la traduzione li ha sostituiti, l&#39;aggiornamento successivo può fallire con `NotFoundError: Failed to execute 'removeChild' on 'Node'`. I maintainer di React hanno chiuso la relativa issue ([react#11538](https://github.com/react/react/issues/11538)) nel 2018, spiegando che React non può aggirare il problema senza mascherare altri bug o rallentare i casi più comuni. Gli elementi contrassegnati con `translate="no"` restano invariati.
+
+### Aggiungere il widget Website Translator
+
+Il Website Translator incorporabile di Google è riservato ai siti accademici, governativi, non profit e non commerciali: un&#39;azienda, quindi, non può integrarlo nel proprio prodotto ([Google Translate Help](https://support.google.com/translate/answer/2534559?co=GENIE.Platform%3DDesktop)).
+
+### Chiamare la Cloud Translation API
+
+La Cloud Translation API è l&#39;opzione pensata per gli sviluppatori. Lascia intatti i tag HTML. Con input HTML, l&#39;edizione Advanced ignora il testo contrassegnato con `translate="no"` o `class="notranslate"` e offre in più i glossari, la traduzione adattiva basata su coppie di frasi di esempio e un Translation LLM basato su Gemini. Una richiesta include il testo, le lingue e, facoltativamente, un modello e un glossario:
+
+```json title="translateText request body"
+{
+  "contents": ["Save"],
+  "mimeType": "text/plain",
+  "sourceLanguageCode": "en",
+  "targetLanguageCode": "de"
+}
+```
+
+Non esiste un campo per indicare il contesto in cui compare una stringa. In tedesco, &quot;Save&quot; si traduce con *speichern* (salvare un file) o *sparen* (risparmiare), e una richiesta composta da una sola parola non offre al modello alcun criterio per scegliere. Il resto della pipeline devi costruirlo tu: estrarre le stringhe dai file i18n, proteggere i segnaposto come `{{count}}`, generare le forme plurali di ciascuna lingua, riscrivere i risultati nei file, rieseguire il processo a ogni modifica e offrire ai revisori uno spazio in cui correggere l&#39;output senza che l&#39;esecuzione successiva lo sovrascriva. Se mostri l&#39;output agli utenti, Google richiede anche l&#39;attribuzione: un badge &quot;powered by Google Translate&quot; accanto ai risultati, un disclaimer per l&#39;output non modificato e un markup che segnali la traduzione automatica nelle pagine indicizzate dai motori di ricerca ([requisiti di attribuzione](https://docs.cloud.google.com/translate/attribution)).
+
+## Confronto tra le opzioni
+
+| Approccio              | Contesto per ogni stringa                                                            | Variabili e plurali                                                                                                                                                                               | Motori di ricerca                                                                            | Revisione e aggiornamenti                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Traduzione del browser | Il testo visibile della pagina                                                       | Tradotti come testo semplice                                                                                                                                                                      | Nessun nuovo contenuto da indicizzare                                                        | Nessuna revisione; viene ripetuta nel browser di ogni visitatore                                            |
+| Cloud Translation API  | Il testo, più un glossario facoltativo o coppie di esempio                           | Devi proteggere tu i segnaposto e creare le forme plurali di ogni lingua                                                                                                                          | Indicizzato dopo aver pubblicato ogni lingua al proprio URL                                  | Devi rieseguire lo script e implementare da solo il processo di revisione                                   |
+| General Translation    | Il JSX circostante, una nota di contesto, il tuo Glossario e i prompt personalizzati | I valori di [`<Var>`](/docs/react/reference/components/var) restano esclusi dalla traduzione e i rami di [`<Plural>`](/docs/react/reference/components/plural) vengono tradotti come frasi intere | Indicizzato con il routing delle impostazioni regionali di `gt-next`, ad esempio `/es/about` | Ogni build o pull request di Locadex traduce le modifiche e i revisori apportano correzioni nella dashboard |
+
+Usa Google Translate per leggere contenuti in lingua straniera o tradurre una tantum testi interni. Usa la Cloud Translation API quando ti serve una traduzione automatica grezza e intendi gestire da solo contesto, segnaposto, plurali, revisione e attribuzione. Usa General Translation quando le traduzioni vengono distribuite nel tuo prodotto, come l&#39;interfaccia di un&#39;app, la documentazione o un sito di marketing che deve risultare corretto in ogni lingua e restare aggiornato a ogni rilascio.
+
+## Cosa fa di diverso General Translation
+
+General Translation è pensato per gli aspetti della localizzazione che Google Translate lascia a te. Due caratteristiche lo distinguono:
+
+* **Comprende l&#39;intero contesto.** Una richiesta a Cloud Translation contiene il testo e le lingue, più un glossario facoltativo. General Translation traduce ogni stringa tenendo conto della sua posizione nel tuo prodotto: il componente e gli elementi che la circondano, le variabili e le forme plurali nella frase, eventuali note di contesto che aggiungi, oltre al tuo Glossario e ai tuoi prompt personalizzati. Un gruppo di contesto applica gli stessi termini e lo stesso tono a ogni progetto a cui lo assegni, così la tua app, la documentazione e il sito di marketing usano la stessa terminologia.
+* **Automatizza l&#39;intero flusso di lavoro di localizzazione.** Le librerie open source internazionalizzano il tuo codice in React, Next.js, Vue e Node.js e, per le app Next.js e React, [Locadex](/docs/platform/locadex/quickstart), l&#39;agente IA di General Translation, può scrivere quel codice al posto tuo. [`npx gt translate`](/docs/cli/reference/commands/translate) viene eseguito durante la build o nella CI e scrive le traduzioni nel tuo repository o nella CDN di General Translation; i revisori le modificano nella pagina **Traduzioni** della dashboard e ogni rilascio viene distribuito in tutte le lingue.
+
+Ecco come appare il contesto nel codice. Il badge di questo selettore di fatturazione riporta &quot;Save 20%&quot;:
+
+```tsx title="BillingToggle.tsx"
+import { T, Var } from 'gt-react';
+
+export function BillingToggle({ discount }: { discount: string }) {
+  return (
+    <T context="Pricing page billing toggle. Save means pay less, not store data.">
+      <button>Yearly</button>
+      <span className="badge">Save <Var>{discount}</Var></span>
+    </T>
+  );
+}
+```
+
+[`<T>`](/docs/react/reference/components/t) invia il blocco come un&#39;unica unità, insieme ai suoi elementi (un pulsante e un badge) e alla nota [`context`](/docs/react/reference/components/t#context), così la traduzione può risolvere il significato di &quot;Save&quot; e posizionare lo sconto dove lo richiede ciascuna lingua. [`<Var>`](/docs/react/reference/components/var) contiene un segnaposto per lo sconto, il cui valore non viene mai inviato all&#39;API di General Translation. Il Glossario fissa in ogni lingua termini come i nomi dei prodotti, mentre i prompt personalizzati definiscono regole come l&#39;uso del &quot;Sie&quot; formale in tedesco. (Consulta [Definire il contesto per le traduzioni](/docs/platform/dashboard/guides/defining-context-for-translations) e [Revisionare e modificare le traduzioni](/docs/platform/dashboard/guides/reviewing-translations).) Per i contenuti disponibili solo a runtime, come i testi generati dagli utenti o provenienti da un CMS, [`tx`](/docs/node/reference/functions/tx) di `gt-node` li traduce su richiesta.
+
+General Translation supporta oltre 120 impostazioni regionali. Inizia con l&#39;[Avvio rapido per Next.js](/docs/react/nextjs-quickstart) o con la [Guida rapida a React](/docs/react/react-quickstart).
+
+## Punti chiave
+
+* Google Translate traduce bene il testo. La traduzione del browser, però, non prevede alcuna revisione, non genera pagine indicizzabili e può mandare in errore le app React, mentre il widget Website Translator è limitato ai siti non commerciali.
+* Una richiesta alla Cloud Translation API non ha alcun campo per indicare dove compare una stringa, e segnaposto, plurali, revisione, distribuzione e attribuzione devi implementarli tu.
+* General Translation comprende il contesto di ogni stringa nel tuo codice e automatizza l&#39;intero flusso di lavoro della traduzione: dall&#39;internazionalizzazione del codice alla revisione, fino alla pubblicazione di ogni rilascio in tutte le lingue.

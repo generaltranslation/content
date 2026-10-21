@@ -1,0 +1,99 @@
+---
+title: 如何在 JSX 中翻译条件文本？
+summary: 与其分别翻译三元表达式的两个分支，不如将整个句子包裹在 <T> 组件中，并用 <Branch> 表达条件。这样译者能看到完整的上下文，并可根据每种语言的习惯调整语序。
+description: 将整个句子包裹在 <T> 组件中，并用 <Branch> 表达条件。这样译者能看到完整的上下文，并可根据每种语言的习惯调整语序。
+date: 2025-09-26
+category: internationalization
+authors: [ernest]
+redirectFrom: [branch_vs_ternary]
+related: [how-to-handle-plurals-in-react, i18n-without-translation-files]
+---
+
+## 简介
+
+在国际化中，我见过最常见的错误之一，就是习惯把
+简单的三元表达式拆分成多个翻译调用。
+代码通常是这样的：
+
+```jsx
+'use client'
+
+import { T, useGT } from 'gt-react'
+
+export default function ThemeSetting({ enabled }) {
+  const gt = useGT()
+
+  return (
+    <>
+      <span>
+        <T>Dark Mode:</T>
+      </span>
+      <button>{enabled ? gt('On') : gt('Off')}</button>
+    </>
+  )
+}
+```
+
+在大多数情况下，这样写确实能按预期工作。在实现 i18n 之前，这段代码很可能就是 `{ enabled ? 'On' : 'Off' }` 这样的形式。
+为了支持 i18n 而加上 `gt()` 函数，大概也只是顺着现有代码结构自然而然的改动。
+
+每次看到这种写法，我都会忍不住皱一下眉。这个库的设计初衷根本不是这样用的。
+之所以说这是个错误，有两方面的理由，尤其是在使用机器翻译的场景下：(1) 上下文；(2) 灵活性。
+
+### 上下文
+
+含义不仅蕴含在文字本身之中，也体现在文字的呈现方式上。
+同样是“back”一词，出现在返回箭头上时，其含义很可能与脊椎按摩师简历上的“back” (背部) 截然不同。
+此外，如果缺少更完整的上下文，译者 (即便是人工译者) 也可能难以准确翻译某个词。
+有一个广为流传的故事：WhatsApp 的 i18n 部门曾把图片编辑工具中的“crop” (裁剪) 译成了德语中表示“农作物”的那个“crop”。
+
+为了解决上下文缺失的问题，我们可以通过 [`<T>`](/docs/react/reference/components/t) 和 [`<Branch>`](/docs/react/reference/components/branch) 组件传递内容呈现方式的相关信息。
+在我们的示例中，这能让“译者”更全面地理解“on”和“off”的含义。
+
+```jsx
+<T>
+  <span>Dark Mode:</span>
+  <button>
+    <Branch branch={enabled.toString()} true="On" false="Off" />
+  </button>
+</T>
+```
+
+### 灵活性
+
+除了上下文，LLM 翻译还有另一个很酷的用法：利用它对代码的理解能力。
+来看一个示例，其中组件的顺序可能因语言而异：
+
+```jsx
+<T>
+  I eat lunch at <Branch branch={atHome.toString()} true="home" false="work" />.
+</T>
+```
+
+因此，我们有两种可能的句子：
+
+* &quot;I eat lunch **at home**&quot;
+* &quot;I eat lunch **at work**&quot;
+
+在中文里则是：
+
+* &quot;我**在家**吃午餐&quot;
+* &quot;我**在公司**吃午餐&quot;
+
+[`<T>`](/docs/react/reference/components/t) 组件能够识别出此处语序需要调整，并据此重新排列其子元素——
+而在字符串翻译中借助三元运算符则很难做到这一点。
+
+```jsx
+<T>
+  我在
+  <Branch branch={atHome.toString()} true="家" false="公司" />
+  吃午餐。
+</T>
+```
+
+### 总结
+
+如果说本文只有一点值得记住，那就是：要时刻思考如何在代码中充分利用上下文，提升灵活性。
+使用 [`<Branch />`](/docs/react/reference/components/branch) 组件可能是实现这一点最简单的方式之一。
+
+如需了解更多详情，请查阅 [`<Branch />` 组件](/docs/react/reference/components/branch)文档。

@@ -1,0 +1,113 @@
+---
+title: "General Translation 与 Weblate 对比：该选择哪一个？"
+summary: Weblate 是一个可自托管、基于 Git 的本地化平台，专为社区或团队协作翻译代码仓库中的文件而打造。General Translation 将译文生成融入开发和发布流程，依托已标记的 JSX 和共享的产品上下文。你既可以保留现有的 gettext 文件，也可以改用内联编写方式，连源文本目录的维护工作也一并省去。
+description: Weblate 是一个可自托管、基于 Git 的平台，适合社区和团队协作翻译。General Translation 则在每次发布时根据已标记的 JSX 和产品上下文生成译文。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-gettext, general-translation-vs-tolgee, general-translation-vs-django-i18n, best-localization-software]
+---
+
+Weblate 是一个围绕 Git 构建的开源 Web 翻译平台。连接代码仓库后，Weblate 会读取其中的翻译文件，交由人工或已配置的翻译服务填充内容，再提交结果或创建拉取请求。许多拥有社区译者的开源项目都选择在 Weblate 上进行翻译。General Translation 则把译文生成纳入构建流程：新文案及其译文可以随同一次发布上线，你的团队还可以在仪表板中审阅译文。
+
+## Weblate 的优势
+
+* **Copyleft 开源。** Weblate [采用 GPL-3.0-or-later 许可证](https://github.com/WeblateOrg/weblate)，你可以免费下载并运行整个平台；如需安装和维护方面的帮助，也可以购买付费支持计划。
+* **为自由项目提供免费托管。** 托管版 Weblate 运行在欧盟基础设施上，公开的自由项目可免费使用其 Libre 计划，额度与 16 万字符串套餐相同。
+* **基于 Git 的持续本地化。** 当代码托管平台发送 Webhook 时 (或每日定时拉取时) ，Weblate 会拉取变更，通过按作者分组的延迟提交来提交译文，并推送到你的分支，或在 GitHub、GitLab、Gitea、Bitbucket、Azure DevOps 和 Pagure 上[创建拉取请求](https://docs.weblate.org/en/latest/vcs.html)。托管版 Weblate 还支持通过 GitHub App 连接。
+* **文件格式支持极为广泛。** Weblate 文档列出了[约 50 种格式](https://docs.weblate.org/en/latest/formats.html)，包括 gettext PO、XLIFF 1.2 和 2.0、Android 和 Apple 字符串、ARB、i18next JSON、Fluent、Java properties、.NET RESX、Ruby YAML、PHP 和 Laravel 字符串、Qt Linguist、CSV、Excel 以及 Markdown。
+* **附加组件处理文件琐事。** [内置附加组件](https://docs.weblate.org/en/latest/admin/addons.html)可以根据 POT 模板更新 PO 文件、生成 MO 文件、压缩提交以及运行自动翻译。
+* **机器翻译与大语言模型。** [集成](https://docs.weblate.org/en/latest/admin/machine.html)涵盖 DeepL、Google、Azure、Amazon 和 LibreTranslate，以及 OpenAI、Azure OpenAI、Anthropic、Mistral 和 Ollama，后者的提示词会包含匹配的词汇表术语和你的风格设置；此外还可结合 Weblate 自带的翻译记忆库使用。
+* **质量检查。** [数十项检查](https://docs.weblate.org/en/latest/user/checks.html)涵盖占位符、缺失的复数形式、最大长度、ICU MessageFormat 语法以及未改动的译文，自动修正功能还会修复空白字符和省略号问题。
+* **社区翻译。** 志愿者可以提交翻译建议并发表评论，由审校者批准，项目还可以设置为[仅提交已批准的字符串](https://docs.weblate.org/en/latest/workflows.html)。截图、词汇表和源引用可为译者提供上下文。
+
+## Weblate 仍需工程师自行处理的工作
+
+下面是一个使用 gettext 的 Python 应用，其西班牙语翻译目录是在添加最后一行代码之前完成翻译的：
+
+```python title="app.py"
+import gettext
+t = gettext.translation("messages", localedir="locale", languages=["es"])
+_ = t.gettext
+print(_("Inbox"))
+print(_("No messages yet."))  # 新增文案，在上一轮翻译完成后添加
+```
+
+提取 POT 模板后，仅在 `locale/es/LC_MESSAGES/messages.po` 中翻译 &quot;Inbox&quot;，再用 Babel 2.17.0 编译，西班牙语读者看到的新增内容仍然是英文：
+
+```text title="Output"
+Bandeja de entrada
+No messages yet.
+```
+
+这行文本要等一整轮流程走完，才会显示为译文，在此之前一直是英文：
+
+1. 用 `_()` 包裹该字符串，再用 `xgettext` 或 `pybabel extract` 重新生成 POT 模板并提交。
+2. Weblate 通过 Webhook 或下一次拉取获取该变更，其 `msgmerge` 附加组件会将新条目添加到各个 PO 文件中。
+3. 由志愿者、译者或已配置的机器翻译完成翻译；如果需要审批，还要审校翻译结果。
+4. Weblate 提交更改，然后直接推送或创建拉取请求。再由你的发布流程合并这些更改、编译 MO 文件并完成部署。
+
+如果在 Weblate 之外编辑同一批文件，可能会引发合并冲突。为避免冲突，[Weblate 的文档建议](https://docs.weblate.org/en/latest/admin/continuous.html#avoiding-merge-conflicts-by-locking-weblate-while-doing-outside-changes)在修改文件期间锁定相应组件。此外，译者看到的只是每个字符串及其源引用和截图，而看不到渲染该字符串的代码。
+
+自托管免费。托管版 Weblate 按托管字符串计费，托管字符串数 = 源字符串数 × (语言数 + 1) ，所有套餐均不限语言、项目和译者数量。 (参见 [Weblate hosting](https://weblate.org/en/hosting/)，查阅于 2026 年 10 月。)
+
+## Weblate 与 General Translation 概览对比
+
+| 功能       | Weblate                                      | General Translation                                                                                                         |
+| -------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 字符串存放位置  | 代码仓库中的翻译文件，并镜像到 Weblate 组件中                  | 代码中的 [`<T>`](/docs/react/reference/components/t) 内，或你现有的资源文件中                                                               |
+| 与代码的对接方式 | Weblate 从 Git 拉取内容，再推送提交或创建拉取请求              | 在构建流程中运行 [`npx gt translate`](/docs/cli/reference/commands/translate)，或通过 [Locadex](/docs/platform/locadex/quickstart) 拉取请求 |
+| 翻译执行者    | 志愿者、你的译员、机器翻译或大语言模型                          | AI 结合代码、词汇表和自定义提示词提供的上下文进行翻译，再由你的团队在仪表板中审核                                                                                  |
+| 字符串上下文   | 源引用、截图、词汇表和翻译记忆库                             | 使用内联库时提供带标记的 JSX 结构；受支持的目录提供源上下文；共享词汇表和自定义提示词                                                                               |
+| 文件格式     | 约 50 种，包括 XLIFF、ARB、Fluent 和 Java properties | JSON、YAML、PO、Markdown 和 MDX、iOS 和 Android 字符串 等                                                                         |
+| 托管方式     | 免费自托管，或使用 Hosted Weblate                     | 托管平台；库和 CLI 开源                                                                                                              |
+| 定价       | 自托管免费；托管方案按托管字符串数量计费；公开的自由项目可使用免费的 Libre 方案  | [按用量计费](https://generaltranslation.com/pricing)                                                                             |
+| 许可证      | GPL-3.0-or-later                             | JavaScript 库和 CLI 采用 MIT 许可证                                                                                                |
+
+## 为什么团队选择 General Translation 而非 Weblate
+
+借助 General Translation，翻译可以随新文案在同一次发布中完成。你可以继续使用 gettext，在构建时生成 PO 文件；也可以使用内联库，将源文案直接写在组件内的 [`<T>`](/docs/react/reference/components/t) 中。
+
+* **更快。** [`npx gt translate`](/docs/cli/reference/commands/translate) 会在部署前生成译文。对于 React 和 Next.js 项目，[Locadex](/docs/platform/locadex/quickstart) 可以将更改整理成拉取请求。只需在 `gt.config.json` 中添加一个区域设置，下一次运行时就会开始生成该语言的译文。
+* **运行成本更低。** 翻译服务由 General Translation 负责运行，你的团队无需安装、升级或备份翻译服务器。采用内联编写后，工程师也不必再维护单独的源文案目录。
+* **质量更高。** 内联翻译会将所标记 JSX 中的元素和复数分支随句子一并传递。使用 gettext 时，源注释和 `msgctxt` 会为每个条目补充语义信息。共享的[上下文组](/docs/platform/dashboard/guides/defining-context-for-translations)会应用你的词汇表和自定义提示词，你的团队还可以在[仪表板翻译编辑器](/docs/platform/dashboard/guides/reviewing-translations)中进一步打磨译文。
+* **风险更低。** 翻译后的文件存放在你的代码仓库中，何时上线由你的发布流程决定。你可以继续使用 gettext 和标准 PO 文件，也可以使用 General Translation 采用 MIT 许可的 JavaScript 库，将译文打包进应用包；无论哪种投递方式，都无需在运行时调用 General Translation。
+
+Profound 的平台和文档借助 General Translation 支持 47 种以上的区域设置。 (参见[生产环境部署案例](https://generaltranslation.com/enterprise)。)
+
+## 何时更适合选择 Weblate
+
+如果你需要社区协作翻译、完全自托管的平台，或是 Weblate 对众多目录格式的广泛支持，请选择 Weblate。如果你希望新的产品文案在每次发布时同步完成翻译，在内联编写时借助代码上下文，并通过 CLI 直接处理现有的 JSON、YAML、PO 或 Markdown 文件，请选择 General Translation。
+
+## 在 gettext 文件上同时使用两者
+
+General Translation 的 CLI 翻译的正是 Weblate 所读取的那些 gettext 文件。只需将 `pot` 条目指向你的模板，并将每个输出映射到 Weblate 所用的文件夹结构即可：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "pl"],
+  "files": {
+    "pot": {
+      "include": ["locale/messages.pot"],
+      "transformationFormat": "PO",
+      "transform": {
+        "match": "locale/messages\\.pot",
+        "replace": "locale/{locale}/LC_MESSAGES/messages.po"
+      }
+    }
+  }
+}
+```
+
+在 `gt` 2.26.5 中，此配置会将 `locale/messages.pot` 映射到 `locale/es/LC_MESSAGES/messages.po`，其他区域设置依此类推。对于复数条目，General Translation 会写入目标语言的 `Plural-Forms` 文件头字段，并填充每个 `msgstr[n]` 形式。请为每种语言只指定一个负责方，例如由 General Translation 负责社区未覆盖的语言，其余语言交给 Weblate 的志愿者，以免两者编辑同一个文件。如果 gettext 文件夹名称带有下划线 (例如 `pt_BR`) ，请添加一个 [`customMapping`](/docs/cli/reference/config#custom-mapping) 条目，将其映射到标准的 `pt-BR`。 (参见 [PO / POT](/docs/cli/reference/formats/po-pot-files)。)
+
+## General Translation 能否替代 Weblate？
+
+可以。General Translation 将译文生成、共享产品术语和仪表板审校整合到您的发布流程中。您可以继续使用上文所示的 gettext 文件，只需改变其译文的生成方式，无需替换应用程序中的 gettext 调用。
+
+## 要点总结
+
+* Weblate 是一个采用强 Copyleft 许可的平台，适合开源和社区翻译，支持基于 Git 的持续本地化和免费自托管，并兼容约 50 种文件格式。
+* 其翻译工作流围绕代码仓库中的目录文件、贡献者和 Git 同步展开。
+* General Translation 在部署前生成译文。你可以继续使用 gettext 和标准 PO 文件，也可以改用内联编写方式，直接在代码中提供上下文，无需单独维护源文案目录。

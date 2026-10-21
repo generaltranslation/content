@@ -1,0 +1,120 @@
+---
+title: "General Translation と Paraglide JS：どちらを使うべきか？"
+summary: コピーをインラインのまま管理し、React コンポーネントの構造、共通の用語、ダッシュボード でのレビューを活かして翻訳を生成したいなら General Translation を選びましょう。コンパイル済みで型付けされたメッセージ関数と、メッセージ単位の ツリーシェイキング を求めるなら Paraglide JS が適しています。Paraglide はカタログをレンダリングするのに対し、General Translation は翻訳元のコピーを翻訳の生成や継続的な更新へとつなげます。
+description: コンパイル済みで型付けされ、ツリーシェイキング 可能なメッセージ関数を求めるなら Paraglide JS を選びましょう。コピーをインラインのまま管理し、コードの文脈とレビューを活かして翻訳を生成したいなら General Translation が適しています。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-intlayer, i18n-without-translation-files, how-to-handle-plurals-in-react, general-translation-vs-tms]
+---
+
+Paraglide JS は、inlang が提供するコンパイラファーストの i18nライブラリです。メッセージは `messages/en.json` などの JSON ファイルで管理し、コンパイラが各メッセージを型付き関数に変換します。この関数は `m.greeting({ name })` のように呼び出す形になるため、バンドラーはページで使われないメッセージを除外できます。ただし、翻訳作業そのものは利用者に任されています。すべての言語のすべてのメッセージを、自分で書くか、翻訳者に依頼するか、ファイルに対して機械翻訳コマンドを実行して用意しなければなりません。General Translation のライブラリも翻訳をレンダリングしますが、それに加えて、コンポーネント内にインラインで一度書いたコピーから翻訳を生成することもできます。
+
+## Paraglide JS の強み
+
+* **型安全性。** メッセージのキーとパラメータは型として生成されます。バージョン 2.29.0 では、`m.greting()` のようなスペルミスも、`name` パラメータを渡さずに `m.greeting({})` を呼び出すことも、どちらも TypeScript エラーになります。
+* **バンドルサイズ。** メッセージは ES モジュールにコンパイルされるため、未使用のメッセージはツリーシェイキングで除去されます。Paraglide の[公開ベンチマーク](https://paraglidejs.com/benchmark)によると、5 つのロケールにわたって 200 件中 100 件のメッセージを使用するページの転送量は、Paraglide が 47 KB、i18next が 205 KB でした。
+* **複数形とバリアント。** デフォルトのメッセージ形式では[複数形セレクターを宣言](https://paraglidejs.com/variants)し、`one`、`few`、`many` などの CLDR カテゴリでマッチングします。[プラグイン](https://paraglidejs.com/file-formats)を使えば ICU MessageFormat 1 や i18next のファイルにも対応でき、数値、日付、相対時間は `Intl` ベースのフォーマッターで扱えます。
+* **ロケール戦略。** 順序付きの [`strategy` リスト](https://paraglidejs.com/strategy)に従い、URL、クッキー、`localStorage`、ブラウザの優先言語、グローバル変数、カスタム戦略、または `baseLocale` からロケールを解決します。2.29.0 の[デフォルト](https://github.com/opral/paraglide-js/blob/main/src/compiler/compiler-options.ts)は `cookie`、`globalVariable`、`baseLocale` の順です。ローカライズされたルートは、[サーバーミドルウェア](https://paraglidejs.com/middleware)と `localizeUrl` で処理します。
+* **幅広いフレームワーク対応。** Paraglide は[あらゆる Vite アプリで動作](https://paraglidejs.com/vite)し、React、Vue、Solid、SvelteKit、TanStack Start、React Router、Astro、Next.js 向けのガイドも用意されています。Svelte CLI の [`npx sv add paraglide` で導入されるアドオン](https://paraglidejs.com/sveltekit)も Paraglide です。[Next.js ガイド](https://paraglidejs.com/next-js)では、webpack プラグインを使って App Router に対応する方法を説明しており、`--webpack` フラグを付けて実行します。
+* **無料のオープンなツール群。** ライブラリは [MIT ライセンス](https://github.com/opral/paraglide-js/blob/main/LICENSE)です。[inlang CLI](https://inlang.com/m/2qj2w8pu/app-inlang-cli) は CI でプロジェクトをチェックでき、[Sherlock](https://inlang.com/m/r7kp499g/app-inlang-ideExtension) は VS Code 内で翻訳をインライン表示します。さらに [Fink](https://fink.inlang.com/) は、翻訳者による変更を GitHub リポジトリにコミットできる無料のブラウザエディタです。
+
+## Paraglide JS が開発者に委ねていること
+
+inlang プロジェクトの実体は `project.inlang` フォルダで、その中の `settings.json` にロケール、プラグイン、メッセージファイルへのパスを記述します。以下は、通常のメッセージ、パラメータ、複数形を含む受信トレイの例です。
+
+```json title="messages/en.json"
+{
+  "inbox_title": "Inbox",
+  "greeting": "Hello {name}!",
+  "unread_messages": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "You have {count} unread message.",
+        "countPlural=*": "You have {count} unread messages."
+      }
+    }
+  ]
+}
+```
+
+```tsx title="Inbox.tsx"
+import { m } from './paraglide/messages.js';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <section>
+      <h1>{m.inbox_title()}</h1>
+      <p>{m.greeting({ name })}</p>
+      <p>{m.unread_messages({ count })}</p>
+    </section>
+  );
+}
+```
+
+ほかのロケールにはそれぞれ専用のファイルが必要で、同じキーと、その言語に必要なバリアントを含める必要があります。たとえばポーランド語では `one`、`few`、`many`、`*` にマッチさせます。`messages/pl.json` にキーが存在しない場合、コンパイルされた関数は警告を出さずにベースロケールへフォールバックします。以下は、`greeting` が欠けたポーランド語ファイルでコンポーネントをレンダリングした例です：
+
+```text title="Output"
+pl  <h1>Skrzynka odbiorcza</h1><p>Hello Ada!</p><p>Masz 2 nieprzeczytane wiadomości.</p>
+```
+
+`npx @inlang/cli check` はこれを検出し、`greeting` にポーランド語の翻訳がないことを報告して終了コード 1 で終了するため、CI でこの欠落をブロックできます。とはいえ、欠落を埋めるのは依然として開発者自身の仕事です。`inlang machine translate` は、不足しているメッセージを、デフォルトではコミュニティが運営する無料サービスで、または独自の Google Cloud Translation や DeepL のキーを使って翻訳します。ただし、メッセージは 1 件ずつ処理され、そのメッセージが使われているコンポーネントの情報は考慮されません。inlang CLI 自身のドキュメントでも、プロダクトやコードの文脈を把握しているコーディングエージェントのほうが、汎用的な機械翻訳よりも質の高い下訳を作成できるとされています。
+
+## 翻訳は General Translation が作成する
+
+General Translation のライブラリも、レンダリング部分の役割は同じです。違うのは、テキストをどこで管理し、誰が翻訳するかという点です。同じ受信トレイを `gt-react` で実装すると、次のようになります。
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num, Var } from 'gt-react';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <p>Hello <Var>{name}</Var>!</p>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+同期を保つ必要のあるメッセージファイルはありません。英語のテキストがそのままコンポーネントになります。[`npx gt translate`](/docs/cli/reference/commands/translate) は各 [`<T>`](/docs/react/reference/components/t) ブロックを要素構造ごと General Translation API に送信し、すべての対象ロケールの翻訳を書き出します。そのため、新しく追加した文もビルド前に翻訳され、英語にフォールバックすることはありません。[`<Var>`](/docs/react/reference/components/var) 内の値が API に送信されることはなく、[`<Plural>`](/docs/react/reference/components/plural) は読者のロケールの複数形規則に基づいて分岐を選択します。[`npx gt validate`](/docs/cli/reference/commands/validate) は API を呼び出さずにプロジェクトを検証し、[`gt generate`](/docs/cli/reference/commands/generate) は手作業で翻訳するチーム向けにテンプレートファイルを書き出します。
+
+このブロック内の見出し、挨拶文、複数形の分岐は、ひとまとめにして翻訳されます。General Translation はプロジェクトに割り当てられた[用語集とカスタムプロンプト](/docs/platform/dashboard/guides/defining-context-for-translations)も適用し、レビュー担当者はダッシュボードで翻訳結果を編集できます。CLI を CI に組み込むか、[Locadex](/docs/platform/locadex/quickstart) を設定して、コードが変更されるたびに翻訳のプルリクエストが自動で作成されるようにしましょう。
+
+General Translation の JavaScript ライブラリは MIT ライセンスで提供されており、翻訳を自前で用意すればアカウントなしでも動作します。翻訳をアプリにバンドルすれば、レンダリングがホスト型サービスに依存しなくなります。CDN 配信を使えば、翻訳の修正をアプリケーションのリリースとは切り離して公開できます。セットアップ方法については[翻訳の保存](/docs/react/guides/storing-translations)を参照してください。
+
+Sierra は General Translation を活用し、Web コンテンツや市場開拓向けコンテンツを 7 つ以上のロケールで展開しています。 ([本番環境での導入事例](https://generaltranslation.com/enterprise)を参照してください。)
+
+## Paraglide JS と General Translation の比較一覧
+
+| 機能          | Paraglide JS                                                                            | General Translation                                                                                                        |
+| ----------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 文言の書き方      | ロケールごとの JSON ファイルにキーを記述し、`m.key()` として呼び出す                                              | [`<T>`](/docs/react/reference/components/t) 内に JSX を記述、[`useGT`](/docs/react/reference/hooks/use-gt) で文字列を扱う、またはキー付きの辞書を使用 |
+| コンテンツの翻訳    | なし。`inlang machine translate` はコミュニティサービス、Google、または DeepL を利用                          | あり。[`npx gt translate`](/docs/cli/reference/commands/translate) で翻訳                                                        |
+| 翻訳者が参照できる情報 | 選択した翻訳ツールに渡されるメッセージ内容                                                                   | マークされた JSX ブロック、開発者によるメモ、割り当てられた用語集とカスタムプロンプト                                                                              |
+| 型安全性        | すべてのキーとパラメータに対して型を生成                                                                    | インライン JSX のため、メッセージキーの入力ミスが起こり得ない                                                                                          |
+| バンドル        | メッセージ単位のツリーシェイキング                                                                       | 翻訳はロケールごとに読み込まれる                                                                                                           |
+| 翻訳が欠落している場合 | ベースロケールにフォールバックし、`inlang check` で報告される                                                  | [`npx gt translate`](/docs/cli/reference/commands/translate) で生成。未翻訳のコンテンツは翻訳元の言語でレンダリングされる                                |
+| 対応フレームワーク   | Vite アプリ、React、Vue、Solid、SvelteKit、Astro、TanStack Start、React Router、Next.js (webpack)  | React、Next.js、Vue、Node.js、および[その他の SDK](/docs/overview/get-started)                                                        |
+| 費用          | 無料のオープンソース                                                                              | JavaScript ライブラリは無料、[翻訳は従量課金](https://generaltranslation.com/pricing)                                                      |
+
+SvelteKit、Astro、Solid で開発している場合、メッセージ単位のツリーシェイキングや型付きメッセージ関数を最優先する場合、あるいはチームですでに翻訳を自前で作成・調達している場合は、Paraglide JS を引き続き使うのがよいでしょう。コンポーネント内の文言を読みやすいまま保ち、ビルドのたびにコードの文脈を踏まえてすべての言語を生成したい場合は、General Translation をお使いください。
+
+## コンポーネント単位でGeneral Translationへ移行する
+
+コンポーネントを1つずつ段階的に移行できます。Paraglideのメッセージは単なる関数でプロバイダーを必要としないため、ルートを移行している間も `m.*` の呼び出しと [`<T>`](/docs/react/reference/components/t) ブロックを同じ画面内でレンダリングできます。具体的な手順は[i18nライブラリの移行](/docs/react/guides/migrating-i18n-libraries)で解説しています。まずは[Reactクイックスタート](/docs/react/react-quickstart)または[Next.jsクイックスタート](/docs/react/nextjs-quickstart)から始めてください。
+
+## 要点
+
+* Paraglide JS はカタログを、型付きでツリーシェイキング可能な関数にコンパイルします。これらのカタログの翻訳は、別途 inlang のツールで生成できます。
+* General Translation では、テキストを [`<T>`](/docs/react/reference/components/t) 内にインラインで記述し、コード、用語集、カスタムプロンプトから得た文脈をもとに翻訳を生成します。レビューはダッシュボードで行えます。
+* コンポーネントを General Translation に移行する間も、Paraglide の既存のメッセージはそのまま動かし続けられます。移行済みの各コンポーネントは、原文と翻訳用の文脈を JSX 内に保持します。

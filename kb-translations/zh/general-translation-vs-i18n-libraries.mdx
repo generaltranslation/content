@@ -1,0 +1,122 @@
+---
+title: "General Translation 对比 i18next、react-intl 和 next-intl：应该选择哪个国际化库？"
+summary: i18next、react-intl 和 next-intl 等开源库本身并不翻译任何内容。它们只负责显示你在各语言消息目录文件中提供的译文，这些译文由你、你的译者或其他服务编写。General Translation 的库同样开源，承担相同的工作；不仅如此，General Translation 还会以你的代码作为上下文完成翻译。
+description: i18next、react-intl 和 next-intl 只显示译文，并不负责翻译。General Translation 既能根据你的代码生成译文，也能显示译文。
+date: 2026-10-16
+category: internationalization
+related: [general-translation-vs-tms, general-translation-vs-google-translate, general-translation-vs-i18next, general-translation-vs-react-intl, general-translation-vs-vue-i18n]
+---
+
+国际化 (i18n) 库在应用运行时承担两项工作：根据用户的区域设置选取对应的消息，并按该区域设置格式化复数形式、日期和数字。i18next、react-intl、next-intl、Lingui 和 vue-i18n 等开源库都能完成这两项工作，但都不会翻译你的内容。翻译工作需要你在应用运行前自行完成：通过键或提取内联消息，把每个字符串放进消息目录文件；将所有消息目录翻译完毕；并在 UI 变化时让所有消息目录保持同步。General Translation 的库承担同样的运行时工作，同时 General Translation 还负责翻译：文案始终以内联方式保留在组件中，译文则在构建步骤中自动生成。
+
+## 主流库的优势所在
+
+这些库都很成熟、免费且被广泛使用，并且各有所长：
+
+* **i18next** 下载量最高。它可在任何 JavaScript 环境中运行，官方的 `i18next-cli` 能从代码中提取键，并为其生成 TypeScript 类型。
+* **react-intl** (FormatJS) 基于 ICU MessageFormat 构建，这是处理复数形式和选择分支的标准语法。其文档建议以内联方式编写每条 `defaultMessage`，并附上供译者参考的 `description`，再通过 `formatjs extract` 将它们汇总到消息目录中。
+* **next-intl** 专为 Next.js App Router 打造。其翻译可在服务端组件中使用，仅由服务端组件使用的消息可以不下发到客户端，消息键也支持类型检查。其内联消息 API 于 4.5 版本加入，目前仍标记为实验性功能。
+* **Lingui** 借助 `<Trans>` 等宏将源文本以内联方式写在代码中，自动生成消息 ID，并将消息提取到 PO 消息目录中。
+* **vue-i18n** 是 Vue 3 的 i18n 插件，消息可存放在 JSON、YAML 或单文件组件内的 `<i18n>` 块中。
+
+它们都以 JSON、PO 等消息目录格式保存译文，而这些格式正是译者和翻译管理系统 (TMS) 早已熟悉的。
+
+## 留给你的工作
+
+这些库本身都不负责翻译。译文要由你自己、你的译者或独立的服务来提供，例如 i18next 团队推出的 Locize，或 Crowdin 这类 TMS。下面是一个用 react-i18next 实现的小型收件箱组件：
+
+```json title="locales/en/translation.json"
+{
+  "inbox": {
+    "title": "Inbox",
+    "unread_one": "You have {{count}} unread message.",
+    "unread_other": "You have {{count}} unread messages."
+  }
+}
+```
+
+```tsx title="Inbox.tsx"
+import { useTranslation } from 'react-i18next';
+
+export function Inbox({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <section>
+      <h1>{t('inbox.title')}</h1>
+      <p>{t('inbox.unread', { count })}</p>
+    </section>
+  );
+}
+```
+
+其他每种语言都需要各自的文件，例如 `locales/es/translation.json`，要么手动编写，要么外包翻译。每个文件还得按该语言的复数形式拆分出单独的键：日语只有一种，波兰语有四种，阿拉伯语则有六种 (`_zero`、`_one`、`_two`、`_few`、`_many` 和 `_other`) 。组件中新增的字符串，在有人补上之前，其他所有文件里都不会有；而负责翻译消息目录的人看到的只是 `inbox.unread_other` 和一句话，看不到它实际出现的界面。
+
+## General Translation 同样能做到这些，还能生成译文
+
+General Translation 的库与 i18next、react-intl 和 next-intl 的作用相同。它们会为每个区域设置选取正确的消息，应用对应的复数规则，并通过 [`<Num>`](/docs/react/reference/components/num)、[`<Currency>`](/docs/react/reference/components/currency) 和 [`<DateTime>`](/docs/react/reference/components/datetime) 格式化数字、货币和日期。它们支持 [`useGT`](/docs/react/reference/hooks/use-gt) 字符串中的 ICU 风格变量；对于偏好使用键的团队，还可以通过 [`useTranslations`](/docs/react/reference/hooks/use-translations) 使用基于键的字典；在 `gt-next` 中，每个区域设置还有各自的 URL。不仅如此，General Translation 还能做到其他库做不到的事：生成译文。
+
+下面用 `gt-react` 实现同一个收件箱。文案直接保留在组件中，[`<T>`](/docs/react/reference/components/t) 标记需要翻译的 JSX，[`<Plural>`](/docs/react/reference/components/plural) 则存放英文的各个复数形式：
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          one={<p>You have <Num>{count}</Num> unread message.</p>}
+          other={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+在构建前运行 [`npx gt translate`](/docs/cli/reference/commands/translate)，会将每个 [`<T>`](/docs/react/reference/components/t) 块连同其元素结构发送到 General Translation API，并为每个目标区域设置生成一份译文。你只需编写英语用到的复数形式，翻译时会自动生成各目标语言所需的形式，例如波兰语的 `few` 和 `many`。随后，[`<Plural>`](/docs/react/reference/components/plural) 会根据读者所在区域设置的复数规则选出对应的已翻译分支。[`<Num>`](/docs/react/reference/components/num) 会在渲染时按读者的区域设置格式化数量，而用 [`<Var>`](/docs/react/reference/components/var) 包裹的值永远不会发送到 API。修改句子后，下一次运行会重新翻译；删除组件后，其译文也会一并移除。
+
+General Translation 的库支持 Next.js (`gt-next`) 、React (`gt-react`) 、Vue 3 (`gt-vue`) 和 Node.js (`gt-node`) ，另有面向 React Native、TanStack Start 以及 Python 的 Flask 和 FastAPI 的实验性库。这些库采用 MIT 许可证，无需 General Translation 账户即可使用：它们可以从任意来源加载译文，而 [`gt generate`](/docs/cli/reference/commands/generate) 可为手动翻译的团队生成模板文件。`gt-react` 和 `gt-next` 底层不依赖任何其他国际化库，因为 ICU 消息解析和格式化均由 General Translation 自研的包实现。默认情况下，译文以文件形式随构建产物一起发布，也可以改为从 General Translation 的 CDN 加载。
+
+## 各库对比
+
+| 库                                                                | 文案编写方式                                                                                                          | 是否翻译你的内容? | 译文来源                                                                              | 复数形式                                                                         |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [i18next](/kb/general-translation-vs-i18next) 搭配 `react-i18next` | 每个区域设置一个 JSON 文件,文件中存放键                                                                                         | 否         | 你自己、译者或 Locize 等服务                                                                | 每种复数形式对应一个键                                                                  |
+| [`react-intl`](/kb/general-translation-vs-react-intl) (FormatJS) | 内联 `defaultMessage` 文本,提取到 JSON 消息目录                                                                            | 否         | 你自己、译者或 TMS                                                                       | ICU MessageFormat                                                            |
+| `next-intl`                                                      | 每个区域设置一个 JSON 文件,文件中存放键                                                                                         | 否         | 你自己、译者或 Crowdin 等 TMS                                                             | ICU MessageFormat                                                            |
+| [Lingui](/kb/general-translation-vs-lingui)                      | 内联宏,提取到 PO 消息目录                                                                                                 | 否         | 你自己、译者或 Crowdin 等 TMS                                                             | ICU MessageFormat                                                            |
+| [`vue-i18n`](/kb/general-translation-vs-vue-i18n)                | 每个区域设置一个消息对象,对象中存放键                                                                                             | 否         | 你自己、译者或 TMS                                                                       | 各形式用竖线分隔;版本 11 需要为波兰语等语言编写自定义规则                                              |
+| General Translation(`gt-react`、`gt-next`、`gt-vue`)               | 将 JSX 包裹在 [`<T>`](/docs/react/reference/components/t) 中,或通过 [`useGT`](/docs/react/reference/hooks/use-gt) 处理字符串 | 是         | 由 [`npx gt translate`](/docs/cli/reference/commands/translate) 结合代码上下文生成,或由你的团队编写 | [`<Plural>`](/docs/react/reference/components/plural) 分支;翻译时会自动生成每种目标语言所需的形式 |
+
+如果你现有的消息目录和翻译流程运转良好、译者或 TMS 依赖消息目录文件,或者你使用的框架不在 General Translation 库的支持范围内,请继续使用 i18next、react-intl、next-intl、Lingui 或 vue-i18n。如果你希望文案在组件中保持可读、译文能结合代码上下文生成,并且每次构建后所有语言即保持最新,无需等待一轮翻译完成,请选择 General Translation 的库。
+
+## 保留现有库，或逐个路由迁移
+
+切换库并非必需。`gt` CLI 会根据 `package.json` 检测项目使用的是 `next-intl` 还是 `i18next`，并在翻译其 JSON 文件时保留原有的消息语法。只要 `i18next` 是直接依赖，`react-i18next` 和 `next-i18next` 项目同样适用。在 `gt.config.json` 中指定你的消息目录：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "json": {
+      "include": ["locales/[locale]/*.json"]
+    }
+  }
+}
+```
+
+如果某个键的文本本身无法承载所需的上下文，可以添加一个配套文件 (例如 `locales/en/translation.metadata.json`) ，并为该键添加 `context` 或 `maxChars` 条目。 (参见[键级元数据](/docs/cli/reference/keyed-metadata)和[生成翻译](/docs/cli/guides/generating-translations)。) 
+
+如需迁移到 [`<T>`](/docs/react/reference/components/t)，请参阅[迁移国际化库](/docs/react/guides/migrating-i18n-libraries)。该指南介绍了三种迁移方式：将键查找替换为内联文案；保留现有字典并调用 [`useTranslations`](/docs/react/reference/hooks/use-translations)；或者让两个库并存，逐个路由完成迁移。
+
+General Translation 深受全球顶尖开发团队的信赖，其中包括 Cursor、Ramp、Profound、Cognition、Sierra 和 ClickHouse 的团队。想在你的应用中试用，可以从 [Next.js 快速入门](/docs/react/nextjs-quickstart)、[React 快速入门](/docs/react/react-quickstart)或 [Vue 快速入门](/docs/vue/quickstart)开始。
+
+## 要点总结
+
+* i18next、react-intl、next-intl 以及其他开源国际化库本身并不做任何翻译。它们只负责渲染和格式化译文，而这些译文需要你自己产出并持续更新。
+* General Translation 的库同样承担渲染和格式化工作，也同样开源、采用 MIT 许可证；不仅如此，General Translation 还会直接翻译你在 [`<T>`](/docs/react/reference/components/t) 中内联编写的文案，因此无需维护任何键或消息目录，也就无需保持它们同步。
+* 你可以继续使用 i18next 或 next-intl，并借助 `gt` CLI 翻译它们的 JSON 文件；也可以按路由逐个迁移。

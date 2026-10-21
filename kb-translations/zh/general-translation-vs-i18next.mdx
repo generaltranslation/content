@@ -1,0 +1,134 @@
+---
+title: "General Translation 与 i18next：该选哪一个？"
+summary: 如果希望将文案内联在 React 组件中，并借助 JSX 结构和产品上下文生成译文，请选择 General Translation。你也可以继续使用 i18next，再用 General Translation 翻译现有的消息目录。i18next 负责消息渲染和复数形式选择，译文则需要由单独的服务生成。
+description: i18next 负责渲染消息和选择复数形式，但译文要由单独的服务提供。General Translation 则能直接生成译文，来源既可以是 React 组件中的内联文案，也可以是你的 i18next 消息目录。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-react-intl, general-translation-vs-lingui, general-translation-vs-vue-i18n, how-to-handle-plurals-in-react]
+---
+
+i18next 负责加载翻译文件、根据用户的语言选取对应消息、解析复数形式、插值变量，并使用 `Intl` 格式化数字和日期。它自 2012 年起就已在 npm 上发布，搭配 `react-i18next` 和 `next-i18next`，是 React 和 Next.js 应用的常见选择。但 i18next 本身并不负责翻译：每种语言的每条消息都要由你、你的译者，或 Locize 等服务提供 (Locize 正是[由 i18next 的创建者运营](https://www.i18next.com/)的) 。General Translation 的库同样承担渲染工作，而且 General Translation 还能根据组件中的文案直接生成译文。
+
+## i18next 的优势
+
+* **采用度高。** 它是使用最广泛的 JavaScript i18n 框架之一。
+* **覆盖面广。** [绑定库支持 React、Vue、Angular、Svelte 等框架](https://www.i18next.com/overview/supported-frameworks)；插件可以通过 HTTP 加载文件、检测用户语言，还能借助 `i18next-icu` 将消息格式切换为 ICU MessageFormat。
+* **完整支持复数形式与上下文。** 键可以带有 [CLDR 复数后缀](https://www.i18next.com/translation-function/plurals) (如 `_one`、`_few` 和 `_many`) ，并通过 `Intl.PluralRules` 解析；也可以带有上下文变体 (如 `friend_male`) 。
+* **工具链完善。** 官方的 [`i18next-cli`](https://github.com/i18next/i18next-cli) 可以提取键、生成 TypeScript 类型，并为每个区域设置写入相应的复数键；当某个区域设置存在未翻译的键时，其 `status` 命令会报错退出，方便 CI 及时发现遗漏。
+* **支持服务端组件。** [`next-i18next` 16](https://github.com/i18next/next-i18next) 为 Next.js App Router 新增了服务器端翻译函数。
+* **不绑定特定服务。** 消息目录是完全由你掌控的纯 JSON 文件，i18next 可以搭配任意翻译服务使用，也可以完全不用。
+
+## i18next 留给你自己处理的事
+
+下面是一个用 react-i18next 实现的小型收件箱示例。每个字符串都要对应一个键，每种复数形式也各自需要一个独立的键：
+
+```json title="locales/en/translation.json"
+{
+  "inbox": {
+    "title": "Inbox",
+    "unread_one": "You have {{count}} unread message.",
+    "unread_other": "You have {{count}} unread messages."
+  }
+}
+```
+
+```tsx title="Inbox.tsx"
+import { useTranslation } from 'react-i18next';
+
+export function Inbox({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <section>
+      <h1>{t('inbox.title')}</h1>
+      <p>{t('inbox.unread', { count })}</p>
+    </section>
+  );
+}
+```
+
+其他每种语言都需要相同的消息键，并提供该语言所用的复数形式：波兰语需要 `unread_one`、`unread_few`、`unread_many` 和 `unread_other`。如果波兰语文件只照搬英语的结构，仅包含 `_one` 和 `_other` 两种形式，而你的[后备语言](https://www.i18next.com/principles/fallback)又是英语，那么 2、5 这样的数量就会回退到英语：
+
+```text title="Output"
+pl, count 1:  Masz 1 nieprzeczytaną wiadomość.
+pl, count 2:  You have 2 unread messages.
+pl, count 5:  You have 5 unread messages.
+pl, count 22: You have 22 unread messages.
+```
+
+在 CI 中运行 `i18next-cli status`，即可发现缺失的复数形式。翻译服务可以生成消息目录内容，但你的应用仍然引用 `inbox.unread` 这类键，而提取与翻译工作流负责让这些消息目录保持最新。
+
+## General Translation 将文案内联在代码中，并自动生成译文
+
+General Translation 的库能完成 i18next 的同类工作：为每个区域设置选取对应的消息、应用相应的复数规则、对变量进行插值，并通过 [`<Num>`](/docs/react/reference/components/num)、[`<Currency>`](/docs/react/reference/components/currency) 和 [`<DateTime>`](/docs/react/reference/components/datetime) 格式化数字、货币和日期；偏好使用键的团队也可以通过 [`useTranslations`](/docs/react/reference/hooks/use-translations) 继续使用字典。不仅如此，General Translation 还能做到 i18next 做不到的事：自动生成译文。下面是用 `gt-react` 实现的同一个收件箱：
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) 会在构建之前，将每个 [`<T>`](/docs/react/reference/components/t) 块连同其元素结构一并发送到 General Translation API，并为每个目标区域设置生成译文。通用的 `singular` 和 `plural` 源分支为各目标语言所需的不同形式提供措辞。随后，[`<Plural>`](/docs/react/reference/components/plural) 会按照该区域设置的规则选出相应的已翻译分支。用 [`<Var>`](/docs/react/reference/components/var) 包裹的值永远不会发送到 API。
+
+当你修改 [`<T>`](/docs/react/reference/components/t) 中的某个句子后，下一次翻译运行会更新该句在各语言中的译文，未改动的内容则直接复用已有译文。审校人员在[仪表板翻译编辑器](/docs/platform/dashboard/guides/reviewing-translations)中工作，因此修改译文无需改动组件。
+
+这些 JavaScript 库采用 MIT 许可证；如果你自行提供译文，无需注册账户即可使用。若应用配置为从应用包加载全部译文，则在运行时不会调用 General Translation。`gt-react` 和 `gt-next` 底层不依赖任何其他国际化库。
+
+Cursor 借助 General Translation，在网站和文档中提供 14 种以上的区域设置。 (参见[生产环境部署案例](https://generaltranslation.com/enterprise)。)
+
+## i18next 与 General Translation 速览
+
+| 功能       | i18next                                    | General Translation                                                                                                |
+| -------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| 文案编写方式   | 按语言和命名空间存放在 JSON 文件中的键                     | [`<T>`](/docs/react/reference/components/t) 中的 JSX、通过 [`useGT`](/docs/react/reference/hooks/use-gt) 处理的字符串，或基于键的字典 |
+| 是否翻译你的内容 | 否                                          | 是，使用 [`npx gt translate`](/docs/cli/reference/commands/translate)                                                  |
+| 译文来源     | 你自己、译员，或 Locize 等服务                        | 结合代码上下文自动生成，或由你的团队编写                                                                                               |
+| 复数形式     | 每种 CLDR 形式对应一个键，需为每种语言分别编写                 | [`<Plural>`](/docs/react/reference/components/plural) 分支，与所在代码块的其余内容一同翻译                                           |
+| 翻译上下文    | 由你的翻译工作流提供的源消息和上下文                         | 已标记 JSX 代码块的内部结构、上下文备注，以及共享的词汇表和自定义提示词                                                                             |
+| 框架       | React、Next.js，以及 Vue、Angular、Svelte 等框架的绑定 | React、Next.js、Vue、Node.js 以及[更多 SDK](/docs/overview/get-started)                                                   |
+| 是否需要账户   | 否                                          | 使用库无需账户；翻译需通过 General Translation 项目运行                                                                             |
+
+如果你现有的消息目录和翻译流程已经运转良好，或者你使用的框架不受 General Translation 的库支持，又或者你希望键在文案变化时保持稳定，请继续使用 i18next。如果你希望将文案直接内联在组件中、结合代码上下文生成译文，并让所有语言在每次构建时都保持最新，请选择 General Translation。
+
+## 保留 i18next，交给 General Translation 来翻译
+
+你无需更换库。`gt` CLI 会检测到 `package.json` 中的 `i18next`，并保留其插值语法。下面的配置会将上述收件箱消息目录翻译为德语：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["de"],
+  "files": {
+    "json": {
+      "include": ["locales/[locale]/translation.json"]
+    }
+  }
+}
+```
+
+英语和德语使用相同的 `_one` 和 `_other` 复数键结构。此配置会根据 `locales/en/translation.json` 生成 `locales/de/translation.json`。你可以通过[键级元数据](/docs/cli/reference/keyed-metadata)为每个键添加上下文，例如字符串出现的位置。先运行 [`npx gt upload`](/docs/cli/reference/commands/upload) 导入源内容和现有译文，再运行 [`npx gt translate`](/docs/cli/reference/commands/translate) 翻译新增文案。
+
+如果想改用 [`<T>`](/docs/react/reference/components/t)，请参阅[迁移国际化库](/docs/react/guides/migrating-i18n-libraries)。该指南介绍了如何将键查找替换为内联文案、如何通过 [`useTranslations`](/docs/react/reference/hooks/use-translations) 继续使用现有字典，以及如何在逐个路由迁移的过程中让两个库并行运行。 (i18next 与其他库的对比，请参阅 [General Translation 与 i18next、react-intl 和 next-intl 对比](/kb/general-translation-vs-i18n-libraries)。)
+
+## 如何在 i18next 中处理波兰语等复数形式繁多的语言？
+
+每种语言都需要为其用到的每个 CLDR 复数形式提供对应的键，例如波兰语需要 `_one`、`_few`、`_many` 和 `_other`。在 CI 中运行 `i18next-cli status`，即可检查出缺失的形式。如果使用 General Translation 的内联编写方式，只需编写上文所示的 `singular` 和 `plural` 分支，翻译服务就会生成目标语言所需的各种形式。[`<Plural>`](/docs/react/reference/components/plural) 会在运行时选择正确的形式。
+
+## 要点总结
+
+* i18next 负责渲染基于键的消息目录并处理复数选择，译文则需要由人工或接入的服务提供。
+* General Translation 的库同样负责渲染译文，但 General Translation 还会直接根据 [`<T>`](/docs/react/reference/components/t) 中内联编写的文案完成翻译。
+* 你可以继续使用 i18next，让 `gt` CLI 翻译其 JSON 文件；也可以逐个路由迁移到 [`<T>`](/docs/react/reference/components/t)。

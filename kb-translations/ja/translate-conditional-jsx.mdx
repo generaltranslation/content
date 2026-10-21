@@ -1,0 +1,99 @@
+---
+title: JSX で条件付きテキストを翻訳するには？
+summary: 三項演算子の各分岐を個別に翻訳するのではなく、文全体を <T> コンポーネントでラップし、条件を <Branch> で表現しましょう。こうすれば翻訳者は文脈全体を把握でき、言語ごとに語順を自由に組み替えられます。
+description: 文全体を <T> コンポーネントでラップし、条件を <Branch> で表現しましょう。こうすれば翻訳者は文脈全体を把握でき、言語ごとに語順を自由に組み替えられます。
+date: 2025-09-26
+category: internationalization
+authors: [ernest]
+redirectFrom: [branch_vs_ternary]
+related: [how-to-handle-plurals-in-react, i18n-without-translation-files]
+---
+
+## はじめに
+
+国際化で最もよく見かける間違いの一つが、単純な三項演算子を
+複数の翻訳呼び出しに分割してしまうことです。
+たとえば、次のようなコードをよく目にします：
+
+```jsx
+'use client'
+
+import { T, useGT } from 'gt-react'
+
+export default function ThemeSetting({ enabled }) {
+  const gt = useGT()
+
+  return (
+    <>
+      <span>
+        <T>Dark Mode:</T>
+      </span>
+      <button>{enabled ? gt('On') : gt('Off')}</button>
+    </>
+  )
+}
+```
+
+ほとんどの場合、これは意図どおりに動作します。i18n を導入する前のコードは、おそらく `{ enabled ? 'On' : 'Off' }` のようなものだったのでしょう。
+i18n 対応のために `gt()` 関数を追加したのも、既存のコード構造をそのまま自然に拡張した結果にすぎないのだと思います。
+
+これを目にするたびに、思わず顔をしかめてしまいます。このライブラリは、そのような使い方をまったく想定して設計されていないからです。
+これが誤りである理由は、特に機械翻訳を使う場合において 2 つあります。(1) 文脈、そして (2) 柔軟性です。
+
+### 文脈
+
+意味は言葉そのものだけでなく、言葉がどのように提示されるかにも宿っています。
+戻る矢印に添えられた &quot;back&quot; という単語は、カイロプラクターの履歴書に書かれた &quot;back&quot; (背中) とはまったく異なる意味を持つはずです。
+さらに、より広い文脈がなければ、翻訳者は (たとえ人間であっても) 単語を正しく訳すのに苦労するかもしれません。
+WhatsApp の i18n 部門が、画像編集ツールの &quot;crop&quot; (切り抜き) を、ドイツ語で農作物を意味する &quot;crop&quot; と訳してしまったという有名な話があります。
+
+こうした文脈の問題を回避するには、[`<T>`](/docs/react/reference/components/t) コンポーネントと [`<Branch>`](/docs/react/reference/components/branch) コンポーネントを使って、コンテンツの提示方法に関する情報を渡します。
+今回の例では、これにより「翻訳者」は &quot;on&quot; と &quot;off&quot; が何を意味するのかを、より広い視点で把握できるようになります。
+
+```jsx
+<T>
+  <span>Dark Mode:</span>
+  <button>
+    <Branch branch={enabled.toString()} true="On" false="Off" />
+  </button>
+</T>
+```
+
+### 柔軟性
+
+文脈の活用に加えて、LLM 翻訳のもう一つの面白い使い方として、コードを理解できるという強みを活かす方法があります。
+言語によってコンポーネントの順序が変わる例を見てみましょう。
+
+```jsx
+<T>
+  I eat lunch at <Branch branch={atHome.toString()} true="home" false="work" />.
+</T>
+```
+
+つまり、次の2つの文が考えられます。
+
+* &quot;I eat lunch **at home**&quot;
+* &quot;I eat lunch **at work**&quot;
+
+中国語 (普通話) では次のようになります。
+
+* &quot;我**在家**吃午餐&quot;
+* &quot;我**在公司**吃午餐&quot;
+
+[`<T>`](/docs/react/reference/components/t) コンポーネントは、このように語順を変える必要があるケースを認識し、子要素を適切に並べ替えます。
+これは、文字列翻訳で三項演算子を使う方法では簡単には実現できません。
+
+```jsx
+<T>
+  我在
+  <Branch branch={atHome.toString()} true="家" false="公司" />
+  吃午餐。
+</T>
+```
+
+### まとめ
+
+この記事から一つだけ覚えておいてほしいのは、コードの中で文脈と柔軟性を活かす方法を常に模索すべきだということです。
+[`<Branch />`](/docs/react/reference/components/branch) コンポーネントは、それを実現する最も手軽な方法の一つでしょう。
+
+詳しくは [`<Branch />` コンポーネント](/docs/react/reference/components/branch)のドキュメントをご覧ください。

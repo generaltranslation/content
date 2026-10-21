@@ -1,0 +1,113 @@
+---
+title: "General Translation или react-intl: что выбрать?"
+summary: General Translation позволяет React-командам сохранить синтаксис сообщений ICU и при этом получить генерацию переводов, общую терминологию и проверку в панели управления. react-intl обеспечивает форматирование и инструменты FormatJS для работы с каталогами; General Translation, помимо этого, создаёт сами переводы, а gt-next поддерживает встроенный переводимый JSX в серверных компонентах.
+description: General Translation сохраняет синтаксис сообщений ICU и добавляет генерацию переводов, общую терминологию и проверку в панели управления. react-intl переводы не создаёт.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-i18next, general-translation-vs-lingui, general-translation-vs-vue-i18n, how-to-handle-plurals-in-react]
+---
+
+react-intl — это [React-библиотека от FormatJS](https://formatjs.github.io/docs/react-intl). Каждое сообщение вы пишете прямо в коде как `defaultMessage` в формате ICU MessageFormat, добавляете `description` для переводчиков, собираете все сообщения в JSON-каталог командой `formatjs extract` и рендерите переведённые каталоги через `IntlProvider`. Сама библиотека ничего не переводит: извлечённый каталог достаётся вам, вашим переводчикам или системе управления переводами (TMS), а переведённые файлы возвращаются обратно для компиляции. Библиотеки General Translation тоже рендерят сообщения ICU, но General Translation вдобавок создаёт и сами переводы.
+
+## Сильные стороны react-intl
+
+* **ICU MessageFormat везде.** [Формы множественного числа с `#` и точными совпадениями вроде `=0`, а также `select` и `selectordinal`](https://formatjs.github.io/docs/core-concepts/icu-syntax) — всё построено на браузерных API `Intl`.
+* **Встроенный исходный текст.** FormatJS [рекомендует писать `defaultMessage` и `description` прямо в коде](https://formatjs.github.io/docs/getting-started/message-declaration), а генерацию ID сообщений поручать `babel-plugin-formatjs` или `@swc/plugin-formatjs` — так никому не приходится придумывать ключи.
+* **Инструменты для рабочего процесса с TMS.** [`formatjs extract`](https://formatjs.github.io/docs/tooling/cli) формирует каталог, встроенные форматтеры создают файлы для Crowdin, Lokalise, Smartling и Transifex, `formatjs compile` заранее разбирает сообщения, а `formatjs verify` проверяет каталоги на отсутствующие или лишние ключи.
+* **TypeScript.** [Версия 12 умеет типизировать ICU-аргументы каждого сообщения](https://formatjs.github.io/docs/react-intl/upgrade-guide-12.x).
+* **Активная поддержка.** [Версия 12 вышла в сентябре 2026 года](https://github.com/formatjs/formatjs/blob/main/packages/react-intl/CHANGELOG.md), лицензия — BSD-3-Clause.
+
+## Что react-intl оставляет на ваше усмотрение
+
+Вот небольшой почтовый ящик на react-intl. Английский текст остаётся в компоненте в виде `defaultMessage`:
+
+```jsx title="Inbox.jsx"
+import { FormattedMessage } from 'react-intl';
+
+export function Inbox({ count }) {
+  return (
+    <section>
+      <h1>
+        <FormattedMessage defaultMessage="Inbox" description="Heading of the inbox page" />
+      </h1>
+      <p>
+        <FormattedMessage
+          defaultMessage="You have {count, plural, one {# unread message} other {# unread messages}}."
+          description="Number of unread messages in the inbox"
+          values={{ count }}
+        />
+      </p>
+    </section>
+  );
+}
+```
+
+`formatjs extract` преобразует эти сообщения в каталог, ключами в котором служат сгенерированные ID:
+
+```json title="lang/en.json"
+{
+  "U5vJOY": {
+    "defaultMessage": "You have {count, plural, one {# unread message} other {# unread messages}}.",
+    "description": "Number of unread messages in the inbox"
+  },
+  "gBGgGs": {
+    "defaultMessage": "Inbox",
+    "description": "Heading of the inbox page"
+  }
+}
+```
+
+Для каждого целевого языка нужны переведённые сообщения с сохранённым синтаксисом ICU. `IntlProvider` принимает как строки сообщений, так и предварительно скомпилированные сообщения; последние готовит `formatjs compile`. Извлечённые дескрипторы содержат каждое сообщение вместе с его описанием. Чтобы ID генерировались, как в этом примере, подключите в сборке плагин Babel или SWC. В [Next.js App Router](https://formatjs.github.io/docs/guides/nextjs-app-router) компоненты react-intl выполняются в клиентских компонентах, а серверный код форматирует сообщения с помощью `createIntl` из `react-intl/server`.
+
+## Сохраните сообщения ICU и сгенерируйте переводы
+
+Библиотеки General Translation решают те же задачи, что и react-intl: выполняют рендеринг сообщений ICU, применяют правила множественного числа для каждой локали и форматируют числа, валюты и даты. Ваши строки ICU переносятся практически без изменений, поскольку [`useGT`](/docs/react/reference/hooks/use-gt) поддерживает тот же синтаксис:
+
+```tsx title="Inbox.tsx"
+import { useGT } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  const gt = useGT();
+  return (
+    <section>
+      <h1>{gt('Inbox', { $context: 'Heading of the inbox page' })}</h1>
+      <p>
+        {gt('You have {count, plural, one {# unread message} other {# unread messages}}.', {
+          count,
+          $context: 'Number of unread messages in the inbox',
+        })}
+      </p>
+    </section>
+  );
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) извлекает эти строки, генерирует переводы с учётом их контекстных заметок и записывает целевые каталоги — и всё это одной командой. В примере оба описания FormatJS сохраняются как `$context`. Общие [термины Glossary и пользовательские промпты](/docs/platform/dashboard/guides/defining-context-for-translations) задают терминологию и тон, а рецензенты правят результаты в [панели управления](/docs/platform/dashboard/guides/reviewing-translations).
+
+`#` форматируется с учётом локали, поэтому число 12345 отображается как &quot;12,345&quot; на английском и как &quot;12.345&quot; на испанском. Для JSX с разметкой [`<T>`](/docs/react/reference/components/t) переводит весь размеченный блок целиком, включая элементы. В `gt-next` он работает непосредственно в серверных компонентах.
+
+Панель управления, лендинг и iOS-приложение Ramp доступны более чем на 11 локалях благодаря General Translation. (См. [развёртывания в рабочей среде](https://generaltranslation.com/enterprise).)
+
+## react-intl и General Translation: краткое сравнение
+
+| Возможность           | react-intl                                                                                                                          | General Translation                                                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Как пишутся тексты    | Встроенный `defaultMessage` в формате ICU, извлекаемый в JSON-каталог                                                               | Встроенный JSX в [`<T>`](/docs/react/reference/components/t) или строки ICU в [`useGT`](/docs/react/reference/hooks/use-gt) |
+| Переводит ваш контент | Нет                                                                                                                                 | Да, с помощью [`npx gt translate`](/docs/cli/reference/commands/translate)                                                  |
+| Работа с каталогами   | Извлечение сообщений, перевод в выбранном вами рабочем процессе, при необходимости предварительная компиляция; ID генерирует плагин | [`npx gt translate`](/docs/cli/reference/commands/translate) извлекает и переводит контент перед сборкой                    |
+| Контекст перевода     | Сообщение и его описание                                                                                                            | Строки ICU с `$context`; размеченная структура JSX со встроенными компонентами; общие Glossary и пользовательские промпты   |
+| Next.js App Router    | Компоненты в клиентских компонентах; `createIntl` на сервере                                                                        | [`<T>`](/docs/react/reference/components/t) в серверных и клиентских компонентах                                            |
+| Лицензия              | [BSD-3-Clause](https://github.com/formatjs/formatjs/blob/main/packages/react-intl/LICENSE.md)                                       | JavaScript-библиотеки и CLI под лицензией MIT                                                                               |
+
+Оставайтесь на react-intl, если ваши каталоги ICU и форматтеры TMS уже работают, если вы полагаетесь на типизированные аргументы сообщений или `formatjs verify` либо используете FormatJS за пределами React. Выбирайте General Translation, если хотите и дальше писать тексты в ICU, но при этом сделать генерацию и проверку переводов частью рабочего процесса разработки.
+
+## Переход с react-intl
+
+Переводите по одному компоненту или маршруту за раз. Замените каждый `<FormattedMessage>` вызовом [`useGT`](/docs/react/reference/hooks/use-gt), который сохраняет исходную строку ICU и передаёт описание сообщения в `$context`, как показано выше. Для JSX с разметкой используйте [`<T context="…">`](/docs/react/reference/components/t#context). Для компонентов, которые ещё не перенесены, продолжайте загружать существующие каталоги react-intl. Когда будет перенесён последний компонент, удалите плагин FormatJS, а также скрипты извлечения и компиляции. (См. [Миграция с других i18n-библиотек](/docs/react/guides/migrating-i18n-libraries).)
+
+## Ключевые выводы
+
+* react-intl форматирует сообщения ICU и предоставляет инструменты для работы с каталогами, а сами переводы создаются в отдельном рабочем процессе.
+* General Translation извлекает и переводит строки одной командой CLI, сохраняя контекст из описаний и предоставляя рецензентам редактор в панели управления.
+* Ваши строки ICU переносятся в [`useGT`](/docs/react/reference/hooks/use-gt) практически без изменений — постепенно, компонент за компонентом.

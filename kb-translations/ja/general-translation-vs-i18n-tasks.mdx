@@ -1,0 +1,92 @@
+---
+title: "General Translation と i18n-tasks：どちらを使うべきか？"
+summary: i18n-tasks は、Rails I18n の不足キーや未使用キーを検出し、ロケールファイルを整理するとともに、Google Translate、DeepL、OpenAI、Yandex、watsonx を使って不足キーを補完できる Ruby gem です。General Translation は、用語集やカスタムプロンプトを適用し、ダッシュボードでのレビューを経てロケールファイル全体を翻訳します。両者は役割が異なるため、多くのチームでは併用が可能です。
+description: i18n-tasks は Rails I18n の不足キーや未使用キーを検出し、機械翻訳で不足分を補完できます。General Translation はレビューを経てロケールファイル全体を翻訳します。多くのチームが両方を併用しています。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-rails-i18n, general-translation-vs-mobility, general-translation-vs-google-translate, general-translation-vs-tms, best-localization-software]
+---
+
+i18n-tasks は、i18n gem を使用する Ruby アプリ (すべての Rails アプリが該当します) 向けのコマンドラインツールです。コード内の `t(".title")` などの呼び出しをスキャンしてロケールファイルと照合し、不足しているキーや使われていないキーを報告します。また、`translate-missing` コマンドを使えば、自前の API キーで利用する機械翻訳サービスによって不足分を補完できます。翻訳のチェックや不足キーの機械翻訳はできるものの、英語の原文が変更されたときに翻訳を最新の状態に保つ機能はありません。一方、General Translation は翻訳そのものを担います。その CLI は、用語集とカスタムプロンプトを適用しながら、英語の翻訳元からすべてのロケールファイルを生成します。つまり、この 2 つのツールは競合するというより、互いに補完し合う関係にあります。
+
+## i18n-tasks が得意なこと
+
+* **コードから欠落キーや未使用キーを検出。** [AST スキャナーが `.rb` および `.html.erb` ファイルを解析し](https://github.com/glebm/i18n-tasks#features--limitations) (HAML などの形式は正規表現スキャナーで対応) 、`t(".title")` のような相対キーを解決したうえで、コードでは使われているのにロケールに存在しないキーや、定義されているのに一度も使われていないキーを報告します。
+* **複数形を考慮したチェック。** rails-i18n の複数形規則と組み合わせると、[`missing` は CLDR の複数形が欠けているロケールを報告します](https://github.com/glebm/i18n-tasks/blob/main/CHANGES.md) (ポーランド語の `few` や `many` など) 。
+* **CI に組み込みやすい。** `missing`、`unused` などのチェックは問題を検出するとステータス 1 で終了します。さらに、欠落キーや未使用キーがあればテストスイートを失敗させる [RSpec および Minitest 用のテンプレート](https://github.com/glebm/i18n-tasks/tree/main/templates)も gem に同梱されています。
+* **ファイルの整理。** [`normalize` はキーを並べ替え](https://github.com/glebm/i18n-tasks#normalize) (`-p` を付けると、設定で割り当てたファイルへキーを移動) 、`mv` と `rm` は全ロケールにわたってキーの名前変更や削除を行います。`find` はキーの使用箇所を表示し、`check-consistent-interpolations` は翻訳時に名前が変わったり抜け落ちたりした `%{count}` を検出します。
+* **5 つの翻訳バックエンド。** [`translate-missing` は Google Translate、DeepL、Yandex、OpenAI、IBM watsonx に対応しています](https://github.com/glebm/i18n-tasks#translation-backends)。[DeepL の用語集 ID やオプション](https://github.com/glebm/i18n-tasks/blob/main/templates/config/i18n-tasks.yml)、OpenAI のモデル (デフォルトは `gpt-4o-mini`) 、システムプロンプト、ロケールごとのプロンプトを設定できます。`%{...}` プレースホルダーは送信前にトークンへ置き換えられ、受信後に元に戻されます。
+* **無料。** [MIT ライセンス (バージョン 1.1.2) ](https://rubygems.org/gems/i18n-tasks)で公開されています。費用は各翻訳プロバイダーに直接支払う形で、通常は文字数またはトークン数に応じた従量課金です。
+
+## i18n-tasks では対応しきれないこと
+
+英語・ポーランド語・スペイン語のファイルを持つ小規模な Rails アプリで、`missing` と `unused` を実行してみます。このアプリでは、inbox ビューが未定義のキーを呼び出しています：
+
+```text title="bundle exec i18n-tasks missing (excerpt)"
+| Locale | Key                 | Value in other locales or source  |
+|  all   | inbox.show.empty    | app/views/inbox/show.html.erb:3   |
+|   es   | inbox.show.title    | en Inbox                          |
+|   es   | inbox.show.unread   | en {"one" => "You have %{count} unread message.", ...} |
+|   pl   | flash.saved         | en Saved.                         |
+|   pl   | inbox.show.unread   | few, many                         |
+```
+
+```text title="bundle exec i18n-tasks unused"
+| Locale | Key                 | Value    |
+|   en   | inbox.show.archived | Archived |
+```
+
+このレポートは正確で役に立ちます。ただし、抜けを埋める作業は依然として自分で行う必要があります。
+
+* **Google バックエンドには文字列の値が送信されます。** このバックエンドのネットワーク呼び出しをスタブ化して実行したところ、`translate-missing es` はプレースホルダーをマスクした状態で以下の値を送信しました。キー、ファイル、ビューは送信されませんでした。
+
+  ```text
+  ["Inbox", "You have X__0 unread message.", "You have X__0 unread messages.", "Archived"]
+  ```
+
+* **複数形は英語の形式のままです。** ポーランド語でまったく存在しなかったキーには `one` と `other` が書き込まれ、次に `missing` を実行すると `few, many` が不足として報告されました。
+
+* **英語を変更しても再翻訳されません。** [`translate-missing` が埋めるのは、ロケールに存在しないキーです](https://github.com/glebm/i18n-tasks#translate-missing-keys)。英語の文字列を編集しても、既存の翻訳は元のまま残ります。
+
+* **Google へのリクエストが失敗しても、ファイルが書き込まれることがあります。** Google のAPIキーを設定せずに `translate-missing --backend=google pl` を実行すると、スライスの失敗を警告しつつ、2 つのキーを翻訳済みと報告し、英語の値を `pl.yml` にコピーして、終了コード 0 で終了しました。以降、これらのキーは `missing` に表示されなくなり、`eq-base` (翻訳元と同一の翻訳を検出) でしか確認できませんでした。
+
+## General Translation の役割
+
+General Translation が翻訳の生成を担い、i18n-tasks が Rails のカタログをチェックするという分担になります。`gt` CLI に英語のファイルを指定し、CI で [`npx gt translate`](/docs/cli/reference/commands/translate) を実行してください。すべての対象ロケールのファイルが出力されます。2 回目以降の実行では、変更のないエントリは既存の翻訳が再利用され、英語が変更されたエントリのみ再翻訳されます。各実行ではプロジェクトの[用語集とカスタムプロンプト](/docs/platform/dashboard/guides/defining-context-for-translations)が適用されるため、すべてのファイルで用語とトーンが統一されます。また、チームはダッシュボードで[翻訳をレビュー・編集](/docs/platform/dashboard/guides/reviewing-translations)できます。
+
+Ruby ソースのスキャンとカタログの検証には、引き続き i18n-tasks を使用してください。翻訳の生成には General Translation の Node.js CLI を使い、生成された YAML は [General Translation vs. Rails I18n](/kb/general-translation-vs-rails-i18n) で説明しているとおり、ロケールをルートとする Rails の形式に変換します。このワークフローは、翻訳元と翻訳先でキー構造が一致するカタログを対象としています。
+
+## i18n-tasks と General Translation の比較
+
+| 機能         | i18n-tasks                                      | General Translation                                          |
+| ---------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| 役割         | Ruby コードをスキャンし、カタログ内の不足キーや未使用キーをチェック            | 翻訳を生成し、翻訳元の文言が変わるたびに最新の状態に保つ                                 |
+| 複数形の検証     | ロケールごとに必要なカテゴリをチェック                             | 翻訳生成と i18n-tasks のチェックを併用                                    |
+| 機械翻訳       | 任意のプロバイダー経由で `translate-missing` を実行            | [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| 翻訳の文脈      | バックエンドによって異なる。DeepL は用語集 ID、OpenAI はプロンプトを受け付ける | ファイルの内容とメタデータに加え、割り当てられた用語集とカスタムプロンプト                        |
+| 英語が変更されたとき | 既存の翻訳はそのまま                                      | 変更されたエントリが再翻訳される                                             |
+| レビュー       | Git diff                                        | ダッシュボードと Git diff                                            |
+| コスト        | gem は無料。プロバイダーが文字数またはトークン数に応じて課金                | [従量課金制の翻訳](https://generaltranslation.com/pricing)           |
+
+翻訳者がロケールファイルを作成しており、不足キーや未使用キーを CI で検出したい場合や、少数の文字列について機械翻訳の下書きを手早く用意したいだけの場合は、i18n-tasks 単体で十分です。英語の変更に合わせて翻訳を更新し、用語の一貫性を保ちながらダッシュボードでレビューしたい場合は、General Translation を使用してください。その場合も、Rails の翻訳元スキャンとカタログのチェックには引き続き i18n-tasks を使用します。
+
+## CIで両方を使用する
+
+[Railsインテグレーション](/kb/general-translation-vs-rails-i18n)で紹介した、英語からスペイン語へのカタログのセットアップを使用します。まず翻訳とロケールマッピングを実行し、次にi18n-tasksでキーの欠落、複数形カテゴリ、プレースホルダーを検証します。
+
+```bash
+npx gt translate
+ruby script/export_rails_locales.rb                     # Rails向けにカタログをエクスポート
+bundle exec i18n-tasks missing                           # コードで使用されるキーと複数形をチェック
+bundle exec i18n-tasks unused
+bundle exec i18n-tasks check-consistent-interpolations   # %{name} が翻訳元と一致するかをチェック
+```
+
+`i18n-tasks` の各コマンドは問題を検出するとステータス1で終了するため、壊れたファイルがマージされる前にジョブが失敗します。CLIには、プロジェクトIDと、**Files &gt; Write** および **Translation queue &gt; Enabled** の権限を持つAPIキーが必要です。これらはそれぞれ `GT_PROJECT_ID` と `GT_API_KEY` として設定してください。 ([CLIの設定](/docs/cli/guides/configuring#credentials)を参照してください。)
+
+## 重要なポイント
+
+* i18n-tasks は、Rails アプリの欠落キー、未使用キー、不完全な複数形キーをチェックします。
+* `translate-missing` は欠落しているキーを補完しますが、英語の翻訳元を編集しても既存の翻訳は更新されません。
+* General Translation は、用語集とカスタムプロンプトを適用してロケールファイル全体を翻訳し、英語の変更に合わせて常に最新の状態に保ちます。同じ CI ジョブ内で、i18n-tasks のチェックより前に実行してください。

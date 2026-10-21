@@ -1,0 +1,128 @@
+---
+title: "General Translation vs. Tolgee: which should you use?"
+summary: Tolgee combines keyed messages, in-context editing and AI translation in a self-hostable platform. General Translation keeps readable copy directly in your components and generates translations from the marked JSX, so you can ship new copy in every language without maintaining message keys.
+description: Tolgee combines keyed messages, in-context editing and AI translation in a self-hostable platform. General Translation generates translations from copy in your components, without keys.
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-weblate, general-translation-vs-locize, best-localization-software, i18n-without-translation-files]
+---
+
+Tolgee is an open-source localisation platform: you give each string a key, sync the keys to a Tolgee project with its CLI or SDK, translate them there using machine translation, AI and your team, then load the results back into the app as files or from Tolgee&#39;s CDN. You can host it yourself from a Docker image or use Tolgee Cloud. Its standout feature is in-context editing: hold ALT and click any text in your running app to translate it. What Tolgee leaves to engineers is the key-based loop around that editor. General Translation starts from the code instead: content stays in your components, and translation runs as part of the build.
+
+## What Tolgee does well
+
+* **Open source you can self-host.** The platform&#39;s core is [Apache 2.0](https://tolgee.io/licencing), and features in its `ee` directory (such as SSO, granular permissions, glossaries, tasks, branching and webhooks) are under the Tolgee EE License and need a licence key. The [free self-hosted version](https://tolgee.io/pricing/self-hosted) includes the core features, unlimited keys, up to 10 seats, and machine translation with your own provider keys.
+* **In-context editing.** In development, hold ALT (Option on a Mac) and click a string in your running app to edit its translation. The [Tolgee Tools extension](https://docs.tolgee.io/js-sdk/in-context) for Chrome and Firefox adds screenshot capture from the same dialogue and enables in-context editing in production.
+* **SDKs for many stacks.** The [JavaScript SDK](https://docs.tolgee.io/js-sdk) covers React, Vue, Angular, Svelte and plain JavaScript, plus an integration that works with i18next. [iOS](https://docs.tolgee.io/ios-sdk) and Android SDKs update strings from Tolgee&#39;s CDN without an app release.
+* **A CLI that reads your code.** `@tolgee/cli` [extracts keys and their default values](https://docs.tolgee.io/tolgee-cli/extraction/parsers) from React, Vue, Svelte and Angular code, and its `push`, `pull`, `sync` and `compare` commands keep the Tolgee project and your repository in step. It imports and exports many formats, including XLIFF, ARB and Java properties.
+* **AI with context.** [Machine translation](https://docs.tolgee.io/platform/translation_process/machine_translation) comes from DeepL, Google, Amazon or Azure, and the AI Translator uses Claude or OpenAI models on Tolgee Cloud, or your own OpenAI, Azure OpenAI, Anthropic, Gemini or OpenAI-compatible provider. It draws on screenshots, key and project descriptions, translation memory and [key relationships recorded by the SDK](https://docs.tolgee.io/platform/translation_process/ai_translator).
+* **Delivery options.** [Content Delivery](https://docs.tolgee.io/platform/projects_and_organizations/content_delivery) publishes translations to Tolgee&#39;s CDN or your own S3 or Azure storage, so a web app can pick up changes without a rebuild.
+
+## What Tolgee still leaves to your engineers
+
+With Tolgee, every string in the UI is a key with a default value:
+
+```tsx title="src/Inbox.tsx"
+import { T, useTranslate } from '@tolgee/react';
+
+export function Inbox({ count }: { count: number }) {
+  const { t } = useTranslate();
+  return (
+    <section>
+      <h1>
+        <T keyName="inbox_title" defaultValue="Inbox" />
+      </h1>
+      <p>
+        {t('inbox_unread', '{count, plural, one {# unread message} other {# unread messages}}', { count })}
+      </p>
+    </section>
+  );
+}
+```
+
+Running `npx @tolgee/cli extract print` on this file (CLI 2.21.0) finds the two keys and their English defaults:
+
+```text title="Output"
+2 keys found in src/Inbox.tsx:
+	line 8: inbox_title
+		default: Inbox
+	line 11: inbox_unread
+		default: {count, plural, one {# unread message} other {# unread messages}}
+```
+
+Extraction finds the keys, but getting new copy into every language is still a loop:
+
+1. Name a key for each string and write the English as its default value.
+2. Create the keys in the Tolgee project with `tolgee push` or [`tolgee sync`](https://docs.tolgee.io/tolgee-cli/extraction/syncing-strings).
+3. Translate with machine translation, the AI Translator or your translators, and review the results.
+4. Run [`tolgee pull`](https://docs.tolgee.io/tolgee-cli/push-pull-strings) and commit the files, or set up Content Delivery and point the SDK at it, then add each new language to the app.
+
+Until a key is translated, readers see the fallback language or the English default. And the AI Translator works from screenshots and descriptions that someone has attached, and from which keys appear together on screen, not from the component that renders the string.
+
+Tolgee Cloud is priced mainly by hosted words, which count the base language and each translation separately, with machine translation credits included per plan and unlimited seats on current plans. Self-hosted licences are priced by keys and seats. (See [Tolgee pricing](https://tolgee.io/pricing), checked October 2026.)
+
+## Tolgee vs. General Translation at a glance
+
+| Feature                 | Tolgee                                                                               | General Translation                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Where strings live      | Keys with default values in your code, synced to a Tolgee project                    | In your code inside [`<T>`](/docs/react/reference/components/t), or in the resource files you already have                                |
+| How code connects       | `@tolgee/cli` `push`, `pull` and `sync`, or the SDK in development                   | [`npx gt translate`](/docs/cli/reference/commands/translate) in your build, or [Locadex](/docs/platform/locadex/quickstart) pull requests |
+| Who translates          | Machine translation, the AI Translator, or your translators                          | AI with context from your code, Glossary and Custom Prompts, reviewed by your team in the Dashboard                                       |
+| Context for each string | Key and project descriptions, screenshots, translation memory and key relationships  | The structure inside marked JSX blocks, context notes, and shared Glossary and Custom Prompts                                             |
+| In-app editing          | ALT+click editing in the running app, including production with a browser extension  | Review and edit in the Dashboard&#39;s Translation Editor                                                                                 |
+| Hosting                 | Self-hosted with Docker, or Tolgee Cloud                                             | Hosted platform; open-source libraries and CLI                                                                                            |
+| Pricing                 | Free plan; Cloud plans by hosted words; self-hosted licences by keys and seats       | [Usage-based translation](https://generaltranslation.com/pricing)                                                                         |
+| Native mobile apps      | iOS and [Android SDKs](https://docs.tolgee.io/android-sdk) with over-the-air updates | The CLI translates iOS and Android string files for inclusion in app releases                                                             |
+
+## Why teams choose General Translation over Tolgee
+
+General Translation starts from the code, so there are no keys to name or sync. Its [`<T>`](/docs/react/reference/components/t) wraps the content itself. Here is the same inbox with `gt-react`, after [setting up its provider](/docs/react/react-quickstart):
+
+```tsx title="src/Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <p>
+          <Plural
+            n={count}
+            singular={<><Num>{count}</Num> unread message</>}
+            plural={<><Num>{count}</Num> unread messages</>}
+          />
+        </p>
+      </section>
+    </T>
+  );
+}
+```
+
+The heading and message stay together in the source. [`npx gt translate`](/docs/cli/reference/commands/translate) generates the translated block, including the plural forms each target language needs.
+
+* **Faster.** [`npx gt translate`](/docs/cli/reference/commands/translate) runs in your build, or Locadex opens a pull request when code changes, so new copy ships translated with the release that adds it. Adding a language takes one line in `gt.config.json`, and the next build translates the whole project into it.
+* **Cheaper to run.** Engineers edit readable JSX without naming a key for every sentence or maintaining a separate source dictionary. Copy changes and the components that use them stay in the same code review.
+* **Higher quality.** The inbox example sends its heading, message structure and plural branches together, which gives translation more meaning than an isolated sentence would. Your Glossary and Custom Prompts add product terminology and tone through [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations).
+* **Lower risk.** Review generated text in the [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations) and keep translations in your own build. The MIT-licensed JavaScript libraries can render those files without a General Translation account or runtime service calls.
+
+Ramp localises its dashboard, landing page and iOS app into 11+ locales with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
+
+## When Tolgee is the better fit
+
+Choose Tolgee when you need to self-host the whole platform, when translators or product managers want to edit text by clicking on it in the running app, when your frontend is Angular or Svelte, when you exchange [XLIFF, ARB or CSV files](https://docs.tolgee.io/platform/supported_formats), or when native iOS and Android apps need over-the-air string updates. Choose General Translation when most of your product&#39;s text lives in React, Next.js or Vue code and you want each release to ship in every language without a key-sync step.
+
+## Moving from Tolgee to General Translation
+
+Move one feature at a time. Replace each `<T keyName="…" defaultValue="…" />` with General Translation&#39;s [`<T>`](/docs/react/reference/components/t) around the English content, and each `t('key', 'default')` with [`useGT`](/docs/react/reference/hooks/use-gt). If your team wants to keep keys, put the English values in a dictionary and read them with [`useTranslations`](/docs/react/reference/hooks/use-translations). Keep loading Tolgee&#39;s translations until each feature has been migrated. (See [Migrating i18n libraries](/docs/react/guides/migrating-i18n-libraries).) Bring your glossary across as well: Context Group imports accept CSV, TSV, JSON and text files. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations).)
+
+## Is General Translation an alternative to Tolgee?
+
+Yes, when most of your product&#39;s text lives in React, Next.js or Vue code. General Translation translates that content in your build, with no keys to create or sync. Tolgee remains the better fit when you need to self-host the platform or want translators to edit text in the running app.
+
+## Key takeaways
+
+* Tolgee is an open-source, self-hostable localisation platform with in-context editing, SDKs for many stacks, and AI that draws on screenshots and descriptions.
+* Its SDK and CLI connect keyed source messages to translation, review and delivery.
+* General Translation&#39;s inline authoring removes the need to maintain message keys: keep the source readable in JSX, generate translations in the build and review them in the Dashboard.

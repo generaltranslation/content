@@ -1,0 +1,116 @@
+---
+title: "General Translation vs. Mobility: ¿cuál deberías usar?"
+summary: Mobility almacena los atributos traducidos de los modelos en tu base de datos. General Translation genera esas traducciones a través de su API, usando tu glosario y tus prompts personalizados. Usa ambos para traducir fichas de productos, publicaciones y otro contenido de la base de datos sin renunciar a tus modelos de Rails.
+description: Mobility almacena los atributos traducidos de los modelos en tu base de datos. General Translation genera esas traducciones a través de su API con tu glosario y tus prompts personalizados. Usa ambos.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-rails-i18n, general-translation-vs-i18n-tasks, general-translation-vs-google-translate, general-translation-vs-i18n-libraries, general-translation-vs-tms]
+---
+
+Mobility es una gema de Ruby para traducir los datos de tu base de datos: declaras `translates :title` en un modelo y `post.title` devuelve el título en la configuración regional actual, leído desde el backend de almacenamiento que elijas. Se encarga de almacenar y recuperar traducciones, pero redactarlas les corresponde a tus editores, a tus traductores o a un servicio. General Translation las proporciona a través de su API HTTP, y Mobility guarda los atributos traducidos en tu base de datos actual, listos para las mismas consultas y métodos de modelo que ya utilizas.
+
+## Lo que Mobility hace bien
+
+* **Varias opciones de almacenamiento.** El backend predeterminado `key_value` [guarda todas las traducciones en dos tablas compartidas](https://github.com/shioyama/mobility/wiki/KeyValue-Backend) (una para cadenas y otra para texto). El backend `table` usa una tabla de traducciones por modelo (el enfoque de Globalize), `column` usa columnas con sufijo como `title_en` y `title_es`, `serialized` las guarda en una sola columna de texto y, en PostgreSQL, `json`, `jsonb`, `hstore` y `container` (una columna jsonb por modelo) las almacenan de forma nativa. También puedes escribir tu propio backend.
+* **Una sola API para todos los backends.** Las lecturas y escrituras se rigen por `I18n.locale`, y los plugins (alternativas de respaldo, accesores por configuración regional como `post.title_es`, seguimiento de cambios, caché y comprobaciones de presencia) [funcionan igual sea cual sea el backend que elijas](https://github.com/shioyama/mobility#backends).
+* **Consultas.** [`Post.i18n.where(title: "...")`](https://github.com/shioyama/mobility#querying) genera los joins para la configuración regional actual, así que puedes buscar en atributos traducidos sin saber cómo se almacenan.
+* **Compatibilidad con ORM.** [Funciona con Active Record 7.0 o posterior y con Sequel](https://github.com/shioyama/mobility#installation), y su wiki incluye una guía para migrar desde Globalize.
+* **Gratuito.** Tiene licencia MIT; la [versión actual es la 1.3.2](https://rubygems.org/gems/mobility).
+
+## Lo que Mobility deja en tus manos
+
+Aquí tienes una publicación con título y cuerpo en inglés, que usa el backend `key_value` sobre SQLite y recurre al inglés como contenido alternativo del español solo para el título:
+
+```ruby title="app/models/post.rb"
+class Post < ApplicationRecord
+  extend Mobility
+  translates :title, type: :string, fallbacks: { es: :en }
+  translates :body,  type: :text
+end
+```
+
+```ruby
+post = Post.create!(title: "Spring sale", body: "Everything is 20% off this week.")
+
+I18n.with_locale(:es) { post.title } # => "Spring sale" (en inglés, por el fallback)
+I18n.with_locale(:es) { post.body }  # => nil
+I18n.with_locale(:ja) { post.title } # => nil
+```
+
+Ese es el comportamiento correcto para una capa de almacenamiento: Mobility guardó los valores en inglés, y las demás configuraciones regionales quedan vacías hasta que alguien las rellene. Con un contenido alternativo, los lectores en español ven el texto en inglés; sin él, no ven nada. Para contenido que cambia a diario, como fichas de productos, artículos o páginas de ayuda, alguien tiene que traducir cada registro nuevo o editado a cada idioma y guardarlo en la configuración regional que corresponda.
+
+## Cómo completar los atributos de Mobility con General Translation
+
+El endpoint de traducción en tiempo de ejecución de General Translation, `POST https://api.gtx.dev/v2/translate`, traduce cadenas bajo demanda. Recibe como bearer token una clave de API de proyecto con el permiso **Runtime translation** y un cuerpo con un objeto `requests` cuyas claves son tus propios IDs. Cada entrada incluye una cadena `source` y, opcionalmente, `metadata`, como una nota de `context`. El cuerpo también incluye `sourceLocale`, `targetLocale` y un objeto `metadata` de nivel superior (que puede estar vacío). La respuesta usa esos mismos IDs como claves. Basta con un pequeño método de Ruby:
+
+```ruby title="app/services/gt_translate.rb"
+require "net/http"
+require "json"
+
+# Traduce un hash de { field => text } con la API de tiempo de ejecución de General Translation.
+# Devuelve todas las traducciones solicitadas o lanza una excepción antes de cualquier escritura en la base de datos.
+def gt_translate(fields, from:, to:, context: nil)
+  uri = URI("https://api.gtx.dev/v2/translate")
+  requests = fields.to_h do |field, text|
+    [field.to_s, { source: text, metadata: { dataFormat: "STRING", context: context }.compact }]
+  end
+
+  request = Net::HTTP::Post.new(uri)
+  request["Authorization"] = "Bearer #{ENV.fetch("GT_API_KEY")}" # clave de proyecto con el permiso Runtime translation
+  request["Content-Type"] = "application/json"
+  request["gt-api-version"] = "2026-03-06.v1"
+  request.body = { requests:, sourceLocale: from.to_s, targetLocale: to.to_s, metadata: {} }.to_json
+
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true,
+                            open_timeout: 5, read_timeout: 30) { |http| http.request(request) }
+  raise "Translation request failed (#{response.code})" unless response.is_a?(Net::HTTPSuccess)
+
+  results = JSON.parse(response.body)
+  requests.keys.to_h do |field|
+    result = results.fetch(field)
+    unless result["success"] == true && result["translation"].is_a?(String)
+      raise "Translation incomplete for #{field}"
+    end
+    [field, result.fetch("translation")]
+  end
+end
+```
+
+Para traducir puntualmente la publicación anterior, lee sus atributos en inglés y guarda el resultado completo en español:
+
+```ruby
+source = Mobility.with_locale(:en) do
+  { title: post.title(fallback: false), body: post.body(fallback: false) }
+end
+translated = gt_translate(source,
+                          from: :en, to: :es, context: "Blog post for an online shoe store")
+Mobility.with_locale(:es) { post.update!(translated) }
+```
+
+La función auxiliar comprueba que cada campo solicitado tenga una traducción antes de actualizar la publicación. Las validaciones habituales de tu modelo se siguen aplicando. (Consulta la [referencia del endpoint](/docs/platform/openapi/reference/translation/translate-runtime) para ver los campos de la solicitud y de la respuesta).
+
+Aquí General Translation va más allá de una simple llamada de traducción automática: el endpoint traduce con el [glosario y los prompts personalizados](/docs/platform/dashboard/guides/defining-context-for-translations) de tu proyecto, de modo que los nombres de productos y el tono sean coherentes con el resto de tu producto. La nota de contexto le indica que el texto es para una zapatería, y la terminología compartida mantiene esas descripciones de productos alineadas con tu aplicación y tu sitio de marketing. Mantén la clave de API en el servidor. Para automatizar el proceso de forma continua, integra la traducción en tu flujo de trabajo de publicación de contenido actual y respeta los [límites de solicitudes](/docs/platform/openapi/overview#api-basics) de la API.
+
+El ejemplo guarda los datos directamente en el modelo. Si tus editores aprueban el contenido antes de publicarlo, guarda el resultado mediante el mismo proceso de borrador y publicación que el artículo de origen.
+
+## Mobility vs. General Translation de un vistazo
+
+| Característica                            | Mobility                                                   | General Translation                                                                                             |
+| ----------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Qué es                                    | Gema de Ruby para almacenar atributos de modelo traducidos | Plataforma de traducción con una API HTTP, una CLI, bibliotecas para JavaScript y Python, y un panel de control |
+| Almacena traducciones en tu base de datos | Sí, con ocho backends de almacenamiento                    | Proporciona las traducciones para esos mismos atributos de modelo                                               |
+| Genera traducciones                       | No                                                         | Sí, mediante `POST /v2/translate`                                                                               |
+| Integración con Ruby                      | Atributos de modelo y accesores por configuración regional | API HTTP invocada desde Ruby                                                                                    |
+| Terminología y tono coherentes            | Depende de tus traductores                                 | Glosario y prompts personalizados aplicados a cada solicitud                                                    |
+| Costo                                     | Gratuito, licencia MIT                                     | [Según el uso](https://generaltranslation.com/pricing)                                                          |
+
+## Cuándo basta con Mobility
+
+Usa solo Mobility cuando tus traducciones ya las escriben personas: editores que introducen cada idioma en un formulario de administración, una agencia de traducción o contenido que debe traducirse a mano, como los textos legales. También es suficiente si admites dos o tres idiomas y los registros cambian rara vez. Añade General Translation cuando el contenido llegue más rápido de lo que se puede traducir manualmente (por ejemplo, anuncios de usuarios, artículos de soporte o un catálogo con miles de productos) y quieras tener cada nuevo registro en todos los idiomas en cuanto se guarde.
+
+## Conclusiones clave
+
+* Mobility almacena y recupera atributos traducidos de los modelos en ocho backends, con alternativas de respaldo y consultas. No genera traducciones.
+* Una aplicación Rails llama al endpoint `POST /v2/translate` de General Translation y guarda los atributos traducidos mediante Mobility.
+* General Translation aplica tu glosario, tus prompts personalizados y el contexto específico de cada contenido, sin alterar tus modelos ni tu flujo de trabajo de publicación actuales.

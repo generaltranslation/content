@@ -1,0 +1,107 @@
+---
+title: "General Translation или Lingui: что выбрать?"
+summary: Выбирайте General Translation, если хотите, как и в Lingui, хранить тексты прямо в коде, но при этом получать переводы, сгенерированные с учётом структуры JSX как контекста. Lingui извлекает встроенные сообщения в каталоги, которые затем переводят ваши переводчики или подключённый сервис. CLI General Translation обновляет переводы по мере изменения кода, а ваша команда проверяет их в панели управления.
+description: Lingui извлекает каталоги, которые заполняют переводчики или подключённый сервис. General Translation хранит тексты прямо в коде и автоматически генерирует переводы, используя JSX как контекст.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-i18next, general-translation-vs-react-intl, general-translation-vs-vue-i18n, i18n-without-translation-files]
+---
+
+На этапе написания кода подход Lingui близок к подходу General Translation. Вы пишете `<Trans>Inbox</Trans>` в компоненте, макросы Lingui компилируют его в ICU-сообщение со сгенерированным ID, `lingui extract` записывает каталоги PO, а `lingui compile` превращает переведённые каталоги в компактные JavaScript-модули. А вот сам перевод Lingui не выполняет: в документации предлагается [редактировать каталоги вручную или синхронизировать их с Crowdin или Translation.io](https://lingui.dev/tools/introduction). General Translation тоже хранит тексты прямо в коде, но переводы генерирует сам.
+
+## Сильные стороны Lingui
+
+* **Встроенный исходный текст с макросами.** Макрос `<Trans>` и [макросы Lingui](https://lingui.dev/ref/macro) для форм множественного числа и обычных строк оставляют английский текст прямо в компоненте и компилируются в ICU MessageFormat, так что писать ключи никому не нужно.
+* **Компактная среда выполнения.** Сообщения компилируются заранее, а среда выполнения Lingui, по собственным замерам проекта, весит [около 2 kB](https://lingui.dev/introduction).
+* **Каталоги, совместимые с Gettext.** [PO — формат по умолчанию](https://lingui.dev/ref/catalog-formats), `lingui extract` добавляет новые сообщения в каталог каждой локали и помечает удалённые как устаревшие, а поля `context` и `comment` доходят до переводчиков.
+* **Серверные компоненты.** [Начиная с версии 4.10](https://lingui.dev/tutorials/react-rsc) `<Trans>` и `useLingui` работают на сервере при условии, что каждая страница или макет вызывает `setI18n`.
+* **Активная разработка.** [Версия 6 вышла в апреле 2026 года](https://lingui.dev/blog/2026/04/22/announcing-lingui-6.0) (только ESM, Node.js 22.19 или новее), лицензия — MIT.
+
+## Что Lingui оставляет на вас
+
+Вот небольшой пример почтового ящика на React-макросах Lingui:
+
+```jsx title="Inbox.jsx"
+import { Trans, Plural } from '@lingui/react/macro';
+
+export function Inbox({ count }) {
+  return (
+    <section>
+      <h1>
+        <Trans>Inbox</Trans>
+      </h1>
+      <p>
+        <Trans>
+          You have <Plural value={count} one="# unread message" other="# unread messages" />.
+        </Trans>
+      </p>
+    </section>
+  );
+}
+```
+
+`lingui extract` добавляет новые сообщения в PO-каталоги целевых языков с пустыми переводами. Переводчики или подключённый сервис заполняют эти записи, сохраняя синтаксис ICU. Вот как выглядит испанский каталог после этого:
+
+```text title="locales/es/messages.po"
+#: src/Inbox.jsx:7
+msgid "Inbox"
+msgstr "Bandeja de entrada"
+
+#: src/Inbox.jsx:10
+msgid "You have {count, plural, one {# unread message} other {# unread messages}}."
+msgstr "Tienes {count, plural, one {# mensaje sin leer} other {# mensajes sin leer}}."
+```
+
+Затем [`lingui compile`](https://lingui.dev/ref/cli) превращает каталог в модуль, который загружает приложение. Цикл «извлечение — перевод — компиляция» повторяется при каждом изменении; макросам требуется [преобразование на этапе сборки](https://lingui.dev/installation) (Babel-плагин Lingui, его плагин для Vite или экспериментальный плагин для SWC), а переводчик работает с записью в PO-файле и комментариями к ней, а не с самим компонентом.
+
+## Оставьте встроенный текст, а каталоги пусть создаёт General Translation
+
+Библиотеки General Translation сохраняют тот же подход со встроенным текстом: текст остаётся в [`<T>`](/docs/react/reference/components/t), формы множественного числа задаются в [`<Plural>`](/docs/react/reference/components/plural), а [`<Num>`](/docs/react/reference/components/num) форматирует значения для каждой локали. Но дальше General Translation делает то, чего не умеет Lingui: генерирует переводы. Вот тот же почтовый ящик на `gt-react`:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) отправляет на перевод каждый блок [`<T>`](/docs/react/reference/components/t) вместе со структурой его элементов и генерирует целевые каталоги ещё до сборки. Исходные ветви `singular` и `plural` дают формулировки для тех форм, которые нужны каждому целевому языку. [`<Plural>`](/docs/react/reference/components/plural) выбирает переведённую ветвь во время выполнения. Строки вне JSX обрабатываются через [`useGT`](/docs/react/reference/hooks/use-gt) — аналог строкового макроса Lingui.
+
+В этом примере заголовок раздела «Входящие» и ветви сообщения отправляются на перевод вместе. Чтобы пояснить значение, специфичное для продукта, можно также добавить [заметку `context`](/docs/react/reference/components/t#context). Рецензенты правят сгенерированный текст в [Редакторе переводов на панели управления](/docs/platform/dashboard/guides/reviewing-translations); при следующем запуске CLI неизменённые переводы используются повторно, а новый текст генерируется без отдельной команды компиляции каталогов.
+
+Платформа и документация Profound доступны более чем в 47 локалях благодаря General Translation. (См. [развёртывания в рабочей среде](https://generaltranslation.com/enterprise).)
+
+## Lingui и General Translation: краткое сравнение
+
+| Возможность               | Lingui                                                                                       | General Translation                                                                                                   |
+| ------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Как пишется текст         | Встроенные макросы, например `<Trans>`                                                       | Встроенный JSX в [`<T>`](/docs/react/reference/components/t) и строки в [`useGT`](/docs/react/reference/hooks/use-gt) |
+| Переводит ваш контент     | Нет                                                                                          | Да, с помощью [`npx gt translate`](/docs/cli/reference/commands/translate)                                            |
+| Шаги при каждом изменении | Извлечение, перевод каждого PO-каталога, компиляция, плюс преобразование макросов при сборке | [`npx gt translate`](/docs/cli/reference/commands/translate) перед сборкой                                            |
+| Каталоги                  | PO-файлы для каждой локали, компилируемые в JavaScript-модули                                | Генерируются для каждой локали и хранятся в вашем репозитории или в CDN General Translation                           |
+| Что видит переводчик      | Сообщение и поля `context` и `comment`                                                       | Структуру внутри размеченных JSX-блоков, заметки с контекстом, а также общие Glossary и пользовательские промпты      |
+
+Оставайтесь на Lingui, если ваши переводчики работают с PO-каталогами gettext, если для размера бандла важна компактная скомпилированная среда выполнения или если ваш процесс перевода уже налажен. Выбирайте General Translation, если хотите писать текст прямо в коде так же, как раньше, но без цикла извлечения, перевода и компиляции, и получать переводы с учётом контекста вашего кода.
+
+## Переход с Lingui
+
+Переносите по одному компоненту или маршруту за раз. Компоненту `<Trans>` из Lingui соответствует [`<T>`](/docs/react/reference/components/t). Вместо `<Plural value={count} one="…" other="…" />` из Lingui используйте [`<Plural>`](/docs/react/reference/components/plural) с `n={count}` и ветвями `singular` и `plural`, а для числа — [`<Num>`](/docs/react/reference/components/num). Строковому макросу Lingui соответствует [`useGT`](/docs/react/reference/hooks/use-gt). Для компонентов, которые ещё не перенесены, продолжайте загружать существующие переводы Lingui. Когда будет перенесён последний компонент, удалите преобразование макросов, а также скрипты извлечения и компиляции. (См. [Миграция с других i18n-библиотек](/docs/react/guides/migrating-i18n-libraries).)
+
+## Основные выводы
+
+* Lingui хранит тексты прямо в коде и компилирует компактную среду выполнения; каталоги для каждого целевого языка предоставляют переводчики или подключённый сервис.
+* Библиотеки General Translation сохраняют тот же подход со встроенными текстами, но при этом General Translation сам выполняет перевод — с учётом контекста вашего кода и без циклической работы с каталогами.
+* Макросы Lingui почти напрямую соответствуют [`<T>`](/docs/react/reference/components/t), [`<Plural>`](/docs/react/reference/components/plural) и [`useGT`](/docs/react/reference/hooks/use-gt), поэтому мигрировать можно постепенно, по одному компоненту за раз.

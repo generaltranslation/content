@@ -1,0 +1,139 @@
+---
+title: "General Translation 与 Locize 对比：该选哪个？"
+summary: Locize 是由 i18next 开发团队打造的翻译管理系统，通过 CDN 分发译文，从运行中的应用收集新键，还提供 AI 翻译和上下文编辑器。但国际化库及其键仍需你自行维护。General Translation 既可以充当你的国际化库并负责翻译，也可以直接翻译你现有的 i18next 文件。
+description: Locize 是由 i18next 开发团队打造的 TMS，支持 CDN 分发和 AI 翻译，但键仍需你自行维护。General Translation 可以充当你的国际化库，也能翻译你的 i18next 文件。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, general-translation-vs-tolgee, general-translation-vs-weblate, i18n-without-translation-files]
+---
+
+Locize 是由 i18next 开发团队打造的翻译管理系统 (TMS) 。你的应用继续使用 i18next (或其他国际化库) ，Locize 负责存储键及其译文，由 AI 或你的译员补全各语言内容，应用再从 Locize 的 CDN 加载结果，因此修正后的译文无需重新部署即可上线。Locize 是配合国际化库使用的，并不能取代它，所以库的初始化设置、键的管理以及接入工作仍需由你的工程师负责。General Translation 则可以两者兼顾：既提供自有的开源国际化库并负责翻译，也可以只为你现有的 i18next 文件提供翻译。
+
+## Locize 的优势
+
+* **专为 i18next 打造。** [`i18next-locize-backend`](https://github.com/locize/i18next-locize-backend) 从 Locize 的 CDN 加载译文；配合 i18next 的 `saveMissing` 选项，它会在你开发时将新键自动发送到 Locize。[`i18next-cli`](https://github.com/i18next/i18next-cli) 内置 Locize 的同步、下载和迁移命令，其 `localize` 命令可一次性完成以下操作：用 `t()` 包裹硬编码字符串、提取键、连接 Locize 项目并请求 AI 翻译。
+* **无需重新部署即可更新。** 译文发布到 CDN (所有套餐均提供 Standard CDN，Growth 及以上套餐提供 Pro CDN) ，你可以[按版本设置缓存时长](https://www.locize.com/docs/integration/cdn-types-standard-vs-pro)，也可以选择私有发布，仅允许通过 API 密钥访问。
+* **版本。** 每个项目都有一个 `latest` 工作版本、一个 `production` 版本，以及任意数量的自定义版本 (例如 `staging`，或为每次移动应用发布单独创建的版本) ，因此你可以独立于代码推广或回滚译文。 (参见 [Locize 版本管理](https://www.locize.com/docs/versioning)。) 
+* **上下文内编辑。** 当 URL 包含 `?incontext=true` 时，[`locize` 包](https://github.com/locize/locize)会在你的网站上显示一个编辑器弹窗，并通过文字识别将截图与对应的键关联起来。
+* **AI 与机器翻译。** 可使用 [Locize 自有的 AI 服务](https://www.locize.com/ai)，或你自己的 OpenAI、Gemini、Mistral 或 DeepL 密钥，结合你的风格指南、词汇表和翻译记忆进行翻译，并提供质量评估、AI 审核和人工审核工作流。
+* **按语言生成复数键。** 对于 i18next JSON，Locize 会[生成每种目标语言所需的复数键](https://www.locize.com/docs/integration/i18n-formats/pluralization) (例如波兰语的 `_few` 和 `_many`) ，并在编辑器中展示所有复数形式。
+* **不止于 i18next。** [`locize-cli`](https://github.com/locize/locize-cli) 支持导入和导出多种格式，包括 XLIFF、Android XML、Apple `.strings`、PO、RESX、Fluent 和 Java properties；Locize 还提供了 react-intl、vue-i18n 和 Lingui 的示例。此外还有 GitHub Action、MCP 服务器和 Figma 插件可供使用。
+
+## Locize 仍需工程师自行处理的部分
+
+下面以 `i18next` 26.4.7 和 `i18next-locize-backend` 10.0.3 为例，演示如何使用 `saveMissing` 为一个 Locize 尚未收录的键渲染西班牙语内容。示例中的请求函数用于模拟 Locize 的服务器，并记录每一次调用：
+
+```js title="test.mjs"
+import i18next from 'i18next';
+import Backend from 'i18next-locize-backend';
+
+// 模拟 CDN：目前英语和西班牙语各只有一个键。
+const cdn = {
+  en: { inbox: { title: 'Inbox' } },
+  es: { inbox: { title: 'Bandeja de entrada' } },
+};
+
+await i18next.use(Backend).init({
+  lng: 'es',
+  fallbackLng: 'en',
+  saveMissing: true,
+  backend: {
+    projectId: 'demo-project',
+    apiKey: 'demo-write-key', // 写入密钥：仅限开发环境
+    referenceLng: 'en',
+    allowedAddOrUpdateHosts: () => true,
+    reloadInterval: false,
+    request: async ({ url, method, body }) => {
+      console.log(method, url, body ? JSON.stringify(body) : '');
+      const lng = url.match(/latest\/(\w+)\//)?.[1];
+      return { status: 200, data: JSON.stringify(method === 'GET' ? cdn[lng] ?? {} : {}) };
+    },
+  },
+});
+
+// 代码中新增的文案，附带英语默认值
+console.log(i18next.t('inbox.title'));
+console.log(i18next.t('inbox.empty', 'No messages yet.'));
+await new Promise((r) => setTimeout(r, 6000)); // saveMissing 有防抖处理
+```
+
+```text title="Output"
+GET https://api.lite.locize.app/demo-project/latest/es/translation
+GET https://api.lite.locize.app/demo-project/latest/en/translation
+Bandeja de entrada
+No messages yet.
+POST https://api.lite.locize.app/missing/demo-project/latest/en/translation {"inbox.empty":"No messages yet."}
+```
+
+这个示例展示了 `saveMissing` 所注册的内容：英文键和值。翻译和发布都在注册之后进行。Locize 集成将这些步骤串联起来：
+
+1. 设置 i18next，为每个字符串命名一个键，并以该键调用 `t()`。
+2. 在开发环境中通过 `saveMissing` 将新键发送到 Locize (默认仅限 `localhost`，且[写入密钥绝不能随应用发布](https://www.locize.com/docs/guides/going-to-production)) ，或在 CI 中通过同步命令发送。
+3. 借助 AI 或你的译者完成翻译，审核结果，再将其发布到应用读取的版本。
+4. 在运行时从 CDN 加载译文，或将译文下载到构建产物中，并在应用中注册每种新语言。
+
+译者或 AI 能拿到的上下文只有键、对应的英文值、上下文备注 (如有) 以及[与之匹配的截图](https://www.locize.com/docs/context)，而不是渲染该字符串的组件。
+
+Locize 套餐按月收取基础费用，包含一定的字数、CDN 下载量、语言数、命名空间数和版本数；更高级的套餐可额外购买字数和下载量，AI 翻译和机器翻译则按 token 或字符计费。 (参见 [Locize 定价](https://www.locize.com/pricing)，查阅于 2026 年 10 月。)
+
+## 面向 i18next 团队的 General Translation
+
+无需重写任何代码，即可试用 General Translation。CLI 会检测到 `package.json` 中的 `i18next`，在翻译 JSON 文件时保留 i18next 的插值语法 (如果你使用 `i18next-icu`，则保留 ICU 语法) ：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "locales/[locale]/*.json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) 会找到 `locales/en/translation.json`，[`npx gt translate`](/docs/cli/reference/commands/translate) 则会写入 `locales/es/translation.json`。如果源消息与目标消息的键结构一致，就可以使用这种基于文件的工作流。借助配套元数据文件，你可以为任意键附加 `context` 备注或 `maxChars` 限制。详见[键级元数据](/docs/cli/reference/keyed-metadata)。
+
+你也可以更进一步，直接用 General Translation 作为 i18n 库。[`<T>`](/docs/react/reference/components/t) 包裹 JSX 并原地翻译，[`useGT`](/docs/react/reference/hooks/use-gt) 负责处理字符串，完全无需为键命名。如果团队仍需要基于键的字典，也可以使用 [`useTranslations`](/docs/react/reference/hooks/use-translations)。`gt-next`、`gt-react` 和 `gt-vue` 均采用 MIT 许可证，底层不依赖 i18next，无需 General Translation 账户即可使用。
+
+## Locize 与 General Translation 速览
+
+| 功能        | Locize                                  | General Translation                                                                                                            |
+| --------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 产品定位      | 一款与 i18next 或其他国际化库搭配使用的 TMS            | 开源国际化库 + AI 翻译，也可直接翻译你现有的文件                                                                                                    |
+| 字符串存放位置   | 键在代码中，值在 Locize 中                       | 位于代码中的 [`<T>`](/docs/react/reference/components/t) 内，或你已有的资源文件中                                                                |
+| 新文案如何导入   | 开发环境中使用 `saveMissing`，或在 CI 中运行同步命令     | 在构建流程中运行 [`npx gt translate`](/docs/cli/reference/commands/translate)，或通过 [Locadex](/docs/platform/locadex/quickstart) 提交的拉取请求 |
+| 由谁翻译      | Locize 的 AI、你自己的 AI 或机器翻译密钥，或你的译员       | AI 结合代码上下文、词汇表和自定义提示词进行翻译，并由你的团队在仪表板中审核                                                                                        |
+| 每个字符串的上下文 | 键、英文值、上下文备注、截图、词汇表和风格指南                 | 使用内联库时为标记的 JSX 结构；目录使用键级元数据；共享词汇表和自定义提示词                                                                                       |
+| 投递方式      | 默认通过 CDN 投递，支持版本管理；或下载到构建产物中            | 打包进应用包，或通过 General Translation 的 CDN 发布更新，无需重新部署应用                                                                             |
+| 定价        | 按字数、CDN 下载量、语言数和版本数划分套餐等级；AI 和机器翻译需额外充值 | [按用量计费](https://generaltranslation.com/pricing)                                                                                |
+
+## 为什么团队选择 General Translation 而非 Locize
+
+借助 General Translation，i18next 团队可以先采用翻译生成和仪表板审校，等到希望彻底摆脱键维护工作时，再迁移到内联文案。
+
+* **更快。** 在构建前运行翻译，新文案即可以你支持的所有语言随版本发布。CLI 会复用已有译文，只翻译新增或变更的内容；添加一种语言只需在 `gt.config.json` 中加一行。
+* **运行成本更低。** 直接从你已在维护的 i18next 文件起步。将某个功能迁移到 [`<T>`](/docs/react/reference/components/t) 后，就无需再为键命名，也不必让源字典与对应组件保持同步。
+* **质量更高。** 为目录中的键添加上下文备注，或使用内联 [`<T>`](/docs/react/reference/components/t) 块，将句子的 JSX 结构和复数分支一并交给翻译。共享的[上下文分组](/docs/platform/dashboard/guides/defining-context-for-translations)可让应用与文档项目的产品术语保持一致，审校人员则可在仪表板中编辑翻译结果。
+* **风险更低。** 评估 General Translation 期间，你可以继续保留 i18next 及已审校的译文。打包进应用的翻译文件在运行时不会调用 General Translation；只要你自行提供译文，其采用 MIT 许可的 JavaScript 库无需账户也能使用。
+
+借助 General Translation，Cursor 的网站和文档已支持 14 种以上的区域设置。 (参见[生产环境部署案例](https://generaltranslation.com/enterprise)。)
+
+## 何时更适合选择 Locize
+
+如果译者希望直接在线上站点编辑、你需要为每个移动应用发布版本分别维护翻译版本，或者需要交换 XLIFF、Fluent 或 Java properties 文件，请选择 Locize。如果你希望组件中保留可读的源文案，并在翻译时一并纳入已标记的 JSX 结构，请选择 General Translation 的内联库。如果你想在更换库之前先评估翻译效果和仪表板审阅流程，可以先用其 CLI 搭配现有的翻译目录进行试用。
+
+## 从 Locize 迁移到 General Translation
+
+先用 `locize-cli` 下载现有译文并保存到代码仓库中，然后将 `gt.config.json` 指向英文文件，再运行 [`npx gt upload`](/docs/cli/reference/commands/upload)，把源内容和现有译文上传到平台。之后，你既可以继续使用 i18next，由 CLI 翻译新增的键；也可以按功能逐步迁移到 [`<T>`](/docs/react/reference/components/t)。 (参见[迁移国际化库](/docs/react/guides/migrating-i18n-libraries)。) 词汇表术语同样可以一并迁移：上下文分组支持导入 CSV、TSV、JSON 和文本文件。
+
+## 要点总结
+
+* Locize 出自 i18next 的创建者之手，是面向 i18next 应用的优秀 TMS，提供 CDN 分发、`saveMissing`、版本管理、上下文内编辑和 AI 翻译等功能。
+* 它需要与你的国际化库及其基于键的目录配合使用，翻译、审校和发布都围绕这些目录来配置。
+* General Translation 既能翻译你现有的 i18next 文件，也能同时充当你的国际化库和翻译方案：它结合代码上下文进行翻译，并在每次发布时一并交付所有语言。

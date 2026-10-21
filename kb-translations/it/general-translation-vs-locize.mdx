@@ -1,0 +1,139 @@
+---
+title: "General Translation e Locize a confronto: quale scegliere?"
+summary: Locize è un sistema di gestione delle traduzioni creato dagli autori di i18next che distribuisce le traduzioni tramite CDN, raccoglie le nuove chiavi dall'app in esecuzione e aggiunge la traduzione con AI e un editor contestuale. La libreria i18n e le sue chiavi, però, restano a tuo carico. General Translation può fare da libreria i18n e occuparsi anche della traduzione, oppure tradurre i file i18next che hai già.
+description: Locize è un TMS creato dagli autori di i18next con distribuzione tramite CDN e traduzione con AI, ma le chiavi restano a tuo carico. General Translation può fare da libreria i18n e può tradurre i tuoi file i18next.
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, general-translation-vs-tolgee, general-translation-vs-weblate, i18n-without-translation-files]
+---
+
+Locize è un sistema di gestione delle traduzioni (TMS) sviluppato dal team di i18next. La tua app continua a usare i18next (o un&#39;altra libreria i18n), Locize archivia le chiavi e le relative traduzioni, l&#39;AI o i tuoi traduttori completano ogni lingua e l&#39;app carica i risultati dalla CDN di Locize: così una traduzione corretta va online senza bisogno di un nuovo deploy. Locize affianca la tua libreria i18n senza sostituirla, quindi la configurazione della libreria, le chiavi e l&#39;integrazione restano a carico dei tuoi sviluppatori. General Translation può offrire entrambe le cose: le proprie librerie i18n open source insieme alla traduzione, oppure solo la traduzione dei file i18next che hai già.
+
+## Cosa fa bene Locize
+
+* **Progettato per i18next.** [`i18next-locize-backend`](https://github.com/locize/i18next-locize-backend) carica le traduzioni dalla CDN di Locize e, con l&#39;opzione `saveMissing` di i18next, invia le nuove chiavi a Locize mentre sviluppi. [`i18next-cli`](https://github.com/i18next/i18next-cli) include comandi di sincronizzazione, download e migrazione per Locize, e il suo comando `localize` racchiude le stringhe hardcoded in `t()`, estrae le chiavi, collega un progetto Locize e richiede la traduzione con IA in un&#39;unica esecuzione.
+* **Aggiornamenti senza ridistribuire.** Le traduzioni vengono pubblicate su una CDN (una Standard CDN con tutti i piani, una Pro CDN dal piano Growth in su), con una [durata della cache impostabile per ogni versione](https://www.locize.com/docs/integration/cdn-types-standard-vs-pro) e la possibilità di una pubblicazione privata, accessibile solo tramite chiave API.
+* **Versioni.** Un progetto ha una versione di lavoro `latest`, una versione `production` ed eventuali versioni personalizzate, come `staging` o una per ogni rilascio di un&#39;app mobile, così puoi promuovere o ripristinare le traduzioni indipendentemente dal codice. (Vedi [versionamento di Locize](https://www.locize.com/docs/versioning).)
+* **Modifica nel contesto.** Il [pacchetto `locize`](https://github.com/locize/locize) aggiunge al tuo sito un popup di modifica quando l&#39;URL contiene `?incontext=true`, e gli screenshot vengono associati alle chiavi tramite riconoscimento del testo.
+* **Traduzione con IA e automatica.** Il [servizio di IA di Locize](https://www.locize.com/ai), oppure la tua chiave OpenAI, Gemini, Mistral o DeepL, traduce seguendo la tua guida di stile, il glossario e la memoria di traduzione, con stima della qualità, revisione con IA e un flusso di lavoro di revisione umana.
+* **Chiavi plurali per lingua.** Per i JSON di i18next, Locize [genera le chiavi plurali](https://www.locize.com/docs/integration/i18n-formats/pluralization) richieste da ogni lingua di destinazione (come `_few` e `_many` per il polacco) e mostra tutte le forme nel proprio editor.
+* **Oltre i18next.** [`locize-cli`](https://github.com/locize/locize-cli) importa ed esporta diversi formati, tra cui XLIFF, Android XML, Apple `.strings`, PO, RESX, Fluent e Java properties, e Locize pubblica esempi per react-intl, vue-i18n e Lingui. Sono disponibili anche una GitHub Action, un server MCP e un plugin per Figma.
+
+## Cosa Locize lascia ancora sulle spalle dei tuoi ingegneri
+
+Ecco `saveMissing` in azione con `i18next` 26.4.7 e `i18next-locize-backend` 10.0.3, durante il rendering in spagnolo di una chiave che Locize non ha ancora mai visto. La funzione di richiesta simula i server di Locize e registra ogni chiamata:
+
+```js title="test.mjs"
+import i18next from 'i18next';
+import Backend from 'i18next-locize-backend';
+
+// CDN simulata: per ora inglese e spagnolo hanno entrambi una sola chiave.
+const cdn = {
+  en: { inbox: { title: 'Inbox' } },
+  es: { inbox: { title: 'Bandeja de entrada' } },
+};
+
+await i18next.use(Backend).init({
+  lng: 'es',
+  fallbackLng: 'en',
+  saveMissing: true,
+  backend: {
+    projectId: 'demo-project',
+    apiKey: 'demo-write-key', // chiave di scrittura: solo in sviluppo
+    referenceLng: 'en',
+    allowedAddOrUpdateHosts: () => true,
+    reloadInterval: false,
+    request: async ({ url, method, body }) => {
+      console.log(method, url, body ? JSON.stringify(body) : '');
+      const lng = url.match(/latest\/(\w+)\//)?.[1];
+      return { status: 200, data: JSON.stringify(method === 'GET' ? cdn[lng] ?? {} : {}) };
+    },
+  },
+});
+
+// Nuovo testo aggiunto nel codice, con un valore predefinito in inglese
+console.log(i18next.t('inbox.title'));
+console.log(i18next.t('inbox.empty', 'No messages yet.'));
+await new Promise((r) => setTimeout(r, 6000)); // saveMissing applica il debounce
+```
+
+```text title="Output"
+GET https://api.lite.locize.app/demo-project/latest/es/translation
+GET https://api.lite.locize.app/demo-project/latest/en/translation
+Bandeja de entrada
+No messages yet.
+POST https://api.lite.locize.app/missing/demo-project/latest/en/translation {"inbox.empty":"No messages yet."}
+```
+
+Questo esempio mostra cosa registra `saveMissing`: la chiave e il valore in inglese. La traduzione e la pubblicazione avvengono dopo la registrazione. Un&#39;integrazione con Locize collega questi passaggi:
+
+1. Configura i18next, assegna una chiave a ogni stringa e passala a `t()`.
+2. Invia le nuove chiavi a Locize con `saveMissing` in fase di sviluppo (per impostazione predefinita è limitato a `localhost` e [la chiave di scrittura non deve mai finire in produzione](https://www.locize.com/docs/guides/going-to-production)) oppure con un comando di sincronizzazione nella CI.
+3. Traduci con l&#39;AI o con i tuoi traduttori, rivedi i risultati e pubblicali nella versione letta dalla tua app.
+4. Carica le traduzioni dalla CDN a runtime, oppure scaricale nella build, e registra ogni nuova lingua nell&#39;app.
+
+Il contesto che arriva a un traduttore o all&#39;AI è costituito dalla chiave, dal suo valore in inglese, da eventuali note di contesto e dagli [screenshot associati](https://www.locize.com/docs/context), non dal componente che renderizza la stringa.
+
+I piani di Locize prevedono un prezzo base mensile che include parole, download dalla CDN, lingue, namespace e versioni; i piani più grandi offrono blocchi aggiuntivi di parole e download, mentre l&#39;AI e la traduzione automatica sono tariffate per token o per carattere. (Vedi [prezzi di Locize](https://www.locize.com/pricing), verificati a ottobre 2026.)
+
+## General Translation per i team che usano i18next
+
+Per provare General Translation non devi riscrivere nulla. La CLI rileva `i18next` nel tuo `package.json` e traduce i tuoi file JSON preservando la sintassi di interpolazione di i18next (o la sintassi ICU, se usi `i18next-icu`):
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "locales/[locale]/*.json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) individua `locales/en/translation.json` e [`npx gt translate`](/docs/cli/reference/commands/translate) scrive `locales/es/translation.json`. Usa questo flusso di lavoro basato su file per i messaggi in cui sorgente e destinazione hanno la stessa struttura di chiavi. Un file di metadati associato può aggiungere a qualsiasi chiave una nota `context` o un limite `maxChars`. Consulta [Metadati associati alle chiavi](/docs/cli/reference/keyed-metadata).
+
+Oppure fai un passo in più e usa General Translation anche come libreria. [`<T>`](/docs/react/reference/components/t) racchiude il JSX e lo traduce in-place, mentre [`useGT`](/docs/react/reference/hooks/use-gt) gestisce le stringhe, così non devi assegnare nomi alle chiavi. [`useTranslations`](/docs/react/reference/hooks/use-translations) offre un dizionario basato su chiavi per i team che lo preferiscono. `gt-next`, `gt-react` e `gt-vue` sono distribuiti con licenza MIT, non si basano su i18next e funzionano anche senza un account General Translation.
+
+## Locize e General Translation a confronto
+
+| Funzionalità                        | Locize                                                                                                                        | General Translation                                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Che cos&#39;è                       | Un TMS da abbinare a i18next o a un&#39;altra libreria i18n                                                                   | Librerie i18n open source con traduzione basata sull&#39;IA, oppure traduzione dei file che hai già                                                |
+| Dove si trovano le stringhe         | Chiavi nel codice; valori in Locize                                                                                           | Nel codice all&#39;interno di [`<T>`](/docs/react/reference/components/t), oppure nei file di risorse che hai già                                  |
+| Come vengono aggiunti i nuovi testi | `saveMissing` in fase di sviluppo, oppure comandi di sincronizzazione nella CI                                                | [`npx gt translate`](/docs/cli/reference/commands/translate) durante la build, oppure pull request di [Locadex](/docs/platform/locadex/quickstart) |
+| Chi traduce                         | L&#39;IA di Locize, la tua chiave per l&#39;IA o la traduzione automatica, oppure i tuoi traduttori                           | L&#39;IA, con il contesto ricavato dal codice, dal Glossario e dai prompt personalizzati, e la revisione del tuo team nella dashboard              |
+| Contesto per ogni stringa           | Chiave, valore in inglese, note di contesto, screenshot, glossario e guida di stile                                           | Struttura JSX marcata con le librerie inline; metadati associati alle chiavi per i cataloghi; Glossario e prompt personalizzati condivisi          |
+| Consegna                            | CDN per impostazione predefinita, con versioni; oppure download nella build                                                   | File inclusi nel bundle, oppure aggiornamenti pubblicati tramite la CDN di General Translation senza dover distribuire di nuovo l&#39;app          |
+| Prezzi                              | Piani a livelli in base a parole, download dalla CDN, lingue e versioni; IA e traduzione automatica come ricariche aggiuntive | [Traduzione a consumo](https://generaltranslation.com/pricing)                                                                                     |
+
+## Perché i team scelgono General Translation al posto di Locize
+
+General Translation permette a un team che usa i18next di adottare subito la generazione delle traduzioni e la revisione nella Dashboard, per poi passare ai testi inline quando vuole liberarsi anche della manutenzione delle chiavi.
+
+* **Più veloce.** Esegui la traduzione prima della build, così i nuovi testi vengono rilasciati in tutte le lingue che supporti. La CLI riutilizza le traduzioni esistenti e traduce solo i contenuti nuovi o modificati; per aggiungere una lingua basta una riga in `gt.config.json`.
+* **Costi di gestione inferiori.** Parti dai file i18next che già mantieni. Spostando poi una funzionalità su [`<T>`](/docs/react/reference/components/t) non dovrai più assegnare nomi alle chiavi né tenere un dizionario sorgente allineato ai relativi componenti.
+* **Qualità superiore.** Aggiungi una nota di contesto a una chiave del catalogo, oppure usa blocchi [`<T>`](/docs/react/reference/components/t) inline per includere nella traduzione la struttura JSX della frase e i rami del plurale. Un [gruppo di contesto](/docs/platform/dashboard/guides/defining-context-for-translations) condiviso mantiene coerente la terminologia del prodotto tra i progetti dell&#39;app e della documentazione, mentre i revisori modificano i risultati nella Dashboard.
+* **Rischio minore.** Continua a usare i18next e le traduzioni già revisionate mentre valuti General Translation. I file di traduzione inclusi nel bundle non effettuano chiamate a General Translation a runtime; inoltre, le sue librerie JavaScript con licenza MIT funzionano anche senza account, se fornisci tu le traduzioni.
+
+Con General Translation, Cursor offre oltre 14 impostazioni regionali tra web e documentazione. (Vedi le [distribuzioni in produzione](https://generaltranslation.com/enterprise).)
+
+## Quando Locize è la scelta migliore
+
+Scegli Locize se i traduttori vogliono modificare i contenuti direttamente sul sito live, se gestisci versioni di traduzione separate per ogni rilascio di un&#39;app mobile o se scambi file XLIFF, Fluent o Java properties. Scegli le librerie inline di General Translation se vuoi un testo sorgente leggibile all&#39;interno dei componenti e che la struttura JSX marcata venga inclusa nella traduzione. Prova la sua CLI con i cataloghi esistenti se vuoi valutare la traduzione e la revisione nella Dashboard prima di cambiare librerie.
+
+## Passare da Locize a General Translation
+
+Scarica le traduzioni attuali con `locize-cli` e conservale nel tuo repository, quindi configura `gt.config.json` in modo che punti ai file in inglese ed esegui [`npx gt upload`](/docs/cli/reference/commands/upload) per inviare alla piattaforma i testi sorgente e le traduzioni esistenti. A quel punto puoi continuare a usare i18next e lasciare che la CLI traduca le nuove chiavi, oppure migrare a [`<T>`](/docs/react/reference/components/t) una funzionalità alla volta. (Consulta [Migrare da altre librerie i18n](/docs/react/guides/migrating-i18n-libraries).) Puoi importare anche i termini del Glossario: i gruppi di contesto accettano l&#39;importazione di file CSV, TSV, JSON e di testo.
+
+## Punti chiave
+
+* Locize, sviluppato dai creatori di i18next, è un ottimo TMS per le app i18next, con distribuzione tramite CDN, `saveMissing`, gestione delle versioni, modifica in contesto e traduzione con IA.
+* Si affianca alla tua libreria i18n e ai suoi cataloghi basati su chiavi; traduzione, revisione e pubblicazione si configurano attorno a questi cataloghi.
+* General Translation può tradurre i file i18next che hai già, oppure fare da libreria i18n e da sistema di traduzione insieme, sfruttando il contesto del codice e distribuendo tutte le lingue a ogni rilascio.

@@ -1,0 +1,143 @@
+---
+title: React 应用最适合使用哪个国际化库？
+summary: 主流的 React 国际化库有四个：General Translation 的 gt-react、react-i18next、Lingui 和 React Intl。这四个库都能渲染和格式化译文，但只有 gt-react 还能根据 JSX 中内联编写的文案直接生成译文。如果想沿用 i18next 的翻译目录和插件，请选择 react-i18next；如果需要将文案提取为编译后的翻译目录，请选择 Lingui；如果需要使用 FormatJS 和 ICU MessageFormat，请选择 React Intl。
+description: 主流的 React 国际化库有 gt-react、react-i18next、Lingui 和 React Intl。它们都能渲染和格式化译文，但只有 gt-react 还能根据内联 JSX 生成译文。
+date: 2026-10-16
+category: workflow-tools
+authors: [jackie]
+related: [general-translation-vs-i18n-libraries, multilingual-app-launch-checklist, i18n-without-translation-files, how-to-handle-plurals-in-react]
+---
+
+哪个 React 国际化库最合适，取决于你希望文案放在哪里，以及由谁来产出译文。gt-react 将文案内联在 JSX 中，也是其中唯一还能生成译文的库。react-i18next、Lingui 和 React Intl 则负责渲染你在翻译目录文件中提供的译文，三者的编写方式和工具链各有不同。
+
+首先要明确你的渲染模型。纯浏览器端的 React 应用、服务端渲染的 React 应用和 Next.js App Router 应用，各自的初始化设置要求不同，每个库的文档也会分别加以说明。
+
+## 主流 React 国际化库有何异同？
+
+| 库                              | 文案编写方式                                                                                                                          | 是否负责翻译内容？                                                     | 复数形式                                                     | 服务端渲染                                                                                             | 适用场景                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------- |
+| gt-react (General Translation) | 在 [`<T>`](/docs/react/reference/components/t) 中编写内联 JSX，使用 [`useGT`](/docs/react/reference/hooks/use-gt) 处理字符串，可选自动包裹，或使用基于键的字典 | 是，通过 [`gt translate`](/docs/cli/reference/commands/translate) | [`<Plural>`](/docs/react/reference/components/plural) 分支 | [SSR 初始化设置](/docs/react/react-quickstart)；App Router 请使用 [gt-next](/docs/react/nextjs-quickstart) | 希望组件中的文案清晰易读，并在每次构建时自动生成译文    |
+| react-i18next                  | 在 JSON 资源中使用键，富文本使用 `Trans`                                                                                                     | 否。需由团队自行翻译或借助 Locize 等服务                                      | 每种复数形式对应一个键                                              | [SSR 指南](https://react.i18next.com/latest/ssr)                                                    | 已在使用 i18next，或需要其插件生态         |
+| Lingui                         | 内联宏或显式 ID，提取到 PO 目录                                                                                                             | 否。目录需交给译者或翻译服务处理                                              | ICU MessageFormat                                        | [RSC 集成](https://lingui.dev/tutorials/react-rsc)                                                  | 希望采用&quot;先提取、再编译&quot;的目录工作流 |
+| React Intl (FormatJS)          | 带 ID 和默认消息的消息描述符                                                                                                                | 否。需自行提供翻译好的目录                                                 | ICU MessageFormat                                        | 请参阅所用框架的集成方案                                                                                      | 团队已熟悉 FormatJS 和 ICU          |
+
+## 同一个按钮在 react-i18next 和 gt-react 中分别如何实现？
+
+使用 react-i18next 时，文案存放在资源文件中：
+
+```json title="locales/en/translation.json"
+{
+  "settings": {
+    "save": "Save changes"
+  }
+}
+```
+
+该组件通过键来查找对应的文本：
+
+```tsx
+import { useTranslation } from 'react-i18next';
+
+export function SaveButton() {
+  const { t } = useTranslation();
+  return <button type="submit">{t('settings.save')}</button>;
+}
+```
+
+其他每种语言都需要各自的资源文件，要么手动编写，要么送去翻译。
+
+而使用 gt-react，文案直接写在组件里：
+
+```tsx
+import { T } from 'gt-react';
+
+export function SaveButton() {
+  return (
+    <T>
+      <button type="submit">Save changes</button>
+    </T>
+  );
+}
+```
+
+在构建前运行 [`gt translate`](/docs/cli/reference/commands/translate)，会将每个 [`<T>`](/docs/react/reference/components/t) 块连同其元素结构一并发送给 General Translation，并为每个目标区域设置生成对应的翻译。文案修改会直接体现在组件的 差异 中，下次运行时会重新翻译。
+
+## 1. gt-react：文案写在 JSX 中，译文自动生成
+
+gt-react 将源文案保留在组件中。用 [`<T>`](/docs/react/reference/components/t) 包裹 JSX；在 API 需要字符串的地方 (例如输入框的 `placeholder`) ，使用 [`useGT`](/docs/react/reference/hooks/use-gt)。对于富文本，请将句子及其内联元素放在同一个 [`<T>`](/docs/react/reference/components/t) 块中，使其一并翻译；如果仅凭措辞无法消除歧义，可添加 [`context` 属性](/docs/react/reference/components/t#context)。
+
+如果应用中有大量未标记的 JSX，[自动 JSX 注入](/docs/cli/guides/using-auto-jsx)会在构建时自动为你添加翻译包裹组件。只需在 `gt.config.json` 的 `files.gt.parsingFlags` 下设置 `enableAutoJsxInjection`，并将 `@generaltranslation/compiler` 添加到打包工具中即可。该功能适用于 React SPA、服务端渲染的 React 应用以及 Next.js webpack 构建，且不会改动已有的 [`<T>`](/docs/react/reference/components/t) 块。在全应用范围内启用之前，建议先在几个页面上检查提取的文本、动态值和富文本分组是否正确。
+
+gt-react 采用 [MIT 许可证](https://github.com/generaltranslation/gt)，基于 General Translation 自研的 ICU 和格式化包构建，不依赖其他国际化库。它可以直接渲染[打包的译文](/docs/react/guides/storing-translations)，既不需要 General Translation 账户，也不会发起运行时请求。如果译文由 General Translation 生成，审校人员可以在[翻译编辑器](/docs/platform/dashboard/guides/reviewing-translations)中进行修正。
+
+初始化设置因渲染模型而异：纯浏览器端应用请参阅 [React SPA 快速入门](/docs/react/react-spa-quickstart)，服务端渲染应用请参阅 [React 快速入门](/docs/react/react-quickstart)，Next.js 应用请使用 [gt-next](/docs/react/nextjs-quickstart)。
+
+**适合选择 gt-react 的场景**：希望在组件差异中审阅文案、在构建过程中生成译文，或者借助自动包裹快速本地化现有应用。
+
+## 2. react-i18next：i18next 生态系统
+
+[react-i18next](https://react.i18next.com/) 将 React 与 i18next 连接起来，而 i18next 是使用最广泛的 JavaScript i18n 框架。它通过 hooks 渲染 JSON 资源中的消息，并通过 `Trans` 组件处理包含 React 元素的文本。
+
+[i18next 插件生态系统](https://www.i18next.com/overview/plugins-and-utils)涵盖翻译加载后端、语言检测器和提取工具，官方 CLI 则负责提取、区域设置同步以及 TypeScript 类型生成。i18next 还支持[将源文本用作键](https://www.i18next.com/principles/fallback)，但其文档也提醒，这样做会让文案变更更难与译文保持同步。
+
+react-i18next 本身不会翻译你的资源。译文需由你的团队或翻译服务提供；i18next 团队在文档中介绍了一套 [Locize 工作流](https://react.i18next.com/guides/multiple-translation-files)。此外，`gt` CLI 也可以直接[翻译 react-i18next JSON 文件](/docs/cli/guides/generating-translations)，无需迁移。
+
+**适合选择 react-i18next 的情况**：你已有 i18next 资源，或需要借助其插件实现资源加载和语言检测。
+
+## 3. Lingui：提取并编译目录
+
+[Lingui](https://lingui.dev/introduction) 支持通过宏以内联方式编写消息，再将其提取到目录中进行翻译，最后编译供应用使用。它既支持自动生成的消息 ID，也支持显式指定的消息 ID，默认目录格式为 PO。其 [React 教程](https://lingui.dev/tutorials/react)涵盖了完整流程，使用 服务端组件 的应用还有[专用集成](https://lingui.dev/tutorials/react-rsc)可用。
+
+Lingui 让文案紧贴 UI，但提取之后的每一步都要由你的团队自行负责：翻译、审校、编译和加载。提取只负责找出新消息，并不会翻译它们。
+
+如果你的译员或翻译服务使用 PO 目录，并且你希望使用 Lingui 的提取工具和编译器工具，**请选择 Lingui**。
+
+## 4. React Intl：FormatJS 与 ICU MessageFormat
+
+[React Intl](https://formatjs.github.io/docs/react-intl/) 是 FormatJS 推出的 React 库，用于处理消息、复数形式、日期和数字。[消息描述符](https://formatjs.github.io/docs/react-intl/api/)通过 ID 标识每条消息，还可附带可选的默认消息，以及供译者参考的说明。[FormatJS 提取工具](https://formatjs.github.io/docs/getting-started/message-extraction/)负责收集这些消息，并可自动生成 ID。
+
+消息采用 [ICU MessageFormat](https://formatjs.github.io/docs/core-concepts/icu-syntax/) 语法，因此审校人员需要看得懂其中的占位符和复数语法，翻译后的消息目录则由你的流水线提供。服务端渲染和客户端边界的处理方式因框架而异，采用之前请先确认你所用框架的集成方案。
+
+**适合选择 React Intl 的情况**：团队已在使用 FormatJS，或希望全面采用 ICU MessageFormat。
+
+## 选择 React 国际化库之前，应该如何测试？
+
+挑选一个功能，其中包含标题、具名变量、复数计数、无障碍输入框标签和格式化价格。用每个候选库分别将其本地化为两种语言，然后修改一句源文本并新增一条消息。从以下几个方面进行比较：
+
+1. **编写：** 审阅者能否在 差异 中看懂文案及其上下文？
+2. **翻译：** 新增或修改的文本如何交到译者手中？
+3. **验证：** 能否在发布前发现缺失的消息和失效的变量？
+4. **交付：** 生产环境应用渲染时，必须有哪些文件或服务可用？
+
+如果你当前使用的库胜出，那就继续用它。`gt` CLI 同样可以翻译 react-i18next 的目录，因此文案的编写方式并不会绑定其翻译方式。上线之前，请对照[多语言应用发布检查清单](/kb/multilingual-app-launch-checklist)逐项检查。
+
+Cursor、Ramp、Profound、Cognition、Sierra 和 ClickHouse 的开发团队都在使用 General Translation。如需试用，请从 [React 快速入门](/docs/react/react-quickstart)开始。
+
+## 常见问题
+
+### 哪个 React 国际化库能自动翻译我的应用？
+
+gt-react。react-i18next、Lingui 和 React Intl 只负责渲染你自行提供的译文。而使用 gt-react 时，[`gt translate`](/docs/cli/reference/commands/translate) 会以你的代码为上下文，为每个目标区域设置生成译文。
+
+### react-i18next 和 React Intl 哪个更好？
+
+总体而言，两者并无高下之分。react-i18next 适合希望使用 JSON 资源文件和 i18next 插件的团队；React Intl 则适合已标准化采用 FormatJS 和 ICU MessageFormat 的团队。无论选择哪个，翻译工作都需要由你的团队或单独的服务来完成。
+
+### 哪个 React 国际化库支持服务端组件？
+
+对于使用 Next.js App Router 的应用，推荐使用 [gt-next](/docs/react/nextjs-quickstart)，它同时支持服务端组件和客户端组件。此外，Lingui 提供了[专门的 RSC 集成](https://lingui.dev/tutorials/react-rsc)，next-intl 也是适用于 App Router 的可选方案。
+
+### 能否在继续使用 react-i18next 的同时使用 General Translation？
+
+可以。只要你的 `package.json` 中直接声明了 `i18next` 依赖，`gt` CLI 就会自动检测到它，并在翻译 react-i18next JSON 资源时保留其原有语法。请参阅[生成译文](/docs/cli/guides/generating-translations)。
+
+### 使用 gt-react 时还需要 JSON 翻译文件吗？
+
+不需要将其作为源文件。你可以直接内联编写文案，译文会在构建过程中生成为文件，或通过 General Translation 的 CDN 提供。请参阅[无需翻译文件的 i18n](/kb/i18n-without-translation-files)。
+
+## 要点总结
+
+* gt-react、react-i18next、Lingui 和 React Intl 都能在 React 中渲染和格式化译文，但只有 gt-react 还能生成译文。
+* gt-react 将文案以内联方式直接写在 JSX 中，并能在构建时自动包裹现有的 JSX。
+* react-i18next、Lingui 和 React Intl 则依赖消息目录，需要由你的团队或翻译服务来填充。
+* 你可以继续使用 react-i18next，同时借助 General Translation 翻译其资源文件。

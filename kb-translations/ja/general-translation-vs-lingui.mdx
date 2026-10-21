@@ -1,0 +1,107 @@
+---
+title: "General Translation と Lingui：どちらを使うべきか？"
+summary: Lingui と同じようにテキストをインラインで記述しつつ、JSX の構造を文脈として翻訳を生成したいなら General Translation を選びましょう。Lingui はインラインのメッセージをカタログに抽出し、その翻訳を翻訳者や連携サービスに任せます。General Translation の CLI はコードの変更に合わせて翻訳を更新し、チームはそれを ダッシュボード でレビューします。
+description: Lingui はカタログを抽出し、その中身は翻訳者や連携サービスが埋めます。General Translation はテキストをインラインのまま保持し、JSX を文脈として翻訳を自動生成します。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-i18next, general-translation-vs-react-intl, general-translation-vs-vue-i18n, i18n-without-translation-files]
+---
+
+コードを書く段階に限れば、Lingui のアプローチは General Translation とよく似ています。コンポーネント内に `<Trans>Inbox</Trans>` と書くと、Lingui のマクロがそれを ID 付きの ICU メッセージにコンパイルし、`lingui extract` が PO カタログを書き出し、`lingui compile` が翻訳済みカタログを軽量な JavaScript モジュールに変換します。ただし、Lingui は翻訳そのものは行いません。Lingui のドキュメントでは、[カタログを手作業で編集するか、Crowdin や Translation.io と同期する](https://lingui.dev/tools/introduction)方法が案内されています。General Translation もテキストをインラインで保持しますが、翻訳の生成まで General Translation が担います。
+
+## Lingui の優れている点
+
+* **マクロによるインラインの翻訳元。** `<Trans>` マクロと、複数形やプレーンな文字列向けの [Lingui のマクロ](https://lingui.dev/ref/macro) を使えば、英語をコンポーネント内に書いたまま ICU MessageFormat にコンパイルされるため、キーを書く必要は一切ありません。
+* **軽量なランタイム。** メッセージは事前にコンパイルされ、Lingui 自身の計測ではランタイムは[約 2 kB](https://lingui.dev/introduction) です。
+* **Gettext と相性の良いカタログ。** [デフォルトの形式は PO](https://lingui.dev/ref/catalog-formats) で、`lingui extract` は新しいメッセージをすべてのロケールにマージし、削除されたメッセージを obsolete としてマークします。また、`context` と `comment` フィールドは翻訳者にも共有されます。
+* **サーバーコンポーネント。** [バージョン 4.10 以降](https://lingui.dev/tutorials/react-rsc)では、各ページまたはレイアウトで `setI18n` を呼び出せば、`<Trans>` と `useLingui` がサーバー上で動作します。
+* **活発な開発。** [バージョン 6 は 2026 年 4 月にリリース](https://lingui.dev/blog/2026/04/22/announcing-lingui-6.0)されました (ESM のみ、Node.js 22.19 以降が必要) 。ライセンスは MIT です。
+
+## Lingui が開発者に任せている部分
+
+以下は、Lingui の React マクロを使って作成した小さな受信トレイです。
+
+```jsx title="Inbox.jsx"
+import { Trans, Plural } from '@lingui/react/macro';
+
+export function Inbox({ count }) {
+  return (
+    <section>
+      <h1>
+        <Trans>Inbox</Trans>
+      </h1>
+      <p>
+        <Trans>
+          You have <Plural value={count} one="# unread message" other="# unread messages" />.
+        </Trans>
+      </p>
+    </section>
+  );
+}
+```
+
+`lingui extract` は、翻訳先言語の新しいメッセージを翻訳が空の状態で PO カタログに追加します。これらのエントリは、翻訳者または連携サービスが ICU 構文を保ったまま埋めていきます。作業が完了したスペイン語カタログは次のようになります。
+
+```text title="locales/es/messages.po"
+#: src/Inbox.jsx:7
+msgid "Inbox"
+msgstr "Bandeja de entrada"
+
+#: src/Inbox.jsx:10
+msgid "You have {count, plural, one {# unread message} other {# unread messages}}."
+msgstr "Tienes {count, plural, one {# mensaje sin leer} other {# mensajes sin leer}}."
+```
+
+その後、[`lingui compile`](https://lingui.dev/ref/cli) がカタログを、アプリが読み込むモジュールに変換します。この抽出・翻訳・コンパイルのサイクルは変更のたびに繰り返す必要があります。また、マクロには[ビルド変換](https://lingui.dev/installation) (Lingui の Babel プラグイン、Vite プラグイン、または実験的な SWC プラグイン) が必要です。さらに、翻訳者が参照できるのはコンポーネントそのものではなく、PO のエントリとそのコメントだけです。
+
+## インラインのテキストはそのままに、カタログの生成は General Translation に任せる
+
+General Translation のライブラリでも、これまでと同じようにインラインで記述できます。テキストは [`<T>`](/docs/react/reference/components/t) で囲み、複数形は [`<Plural>`](/docs/react/reference/components/plural) に記述し、[`<Num>`](/docs/react/reference/components/num) が各ロケールに合わせて値をフォーマットします。さらに General Translation は、Lingui にはできない翻訳の生成まで行います。以下は、同じ受信トレイを `gt-react` で実装した例です。
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) は、各 [`<T>`](/docs/react/reference/components/t) ブロックを要素構造ごと送信し、ビルド前にターゲット言語のカタログを生成します。翻訳元の `singular` と `plural` の分岐が、各ターゲット言語で必要な形式の文言の元になります。[`<Plural>`](/docs/react/reference/components/plural) は、ランタイムに翻訳済みの分岐を選択します。JSX 外の文字列は、Lingui の文字列マクロに相当する [`useGT`](/docs/react/reference/hooks/use-gt) で扱います。
+
+この例では、受信トレイの見出しとメッセージの分岐がまとめて翻訳に送られます。製品固有の意味を補足したい場合は、[`context` メモ](/docs/react/reference/components/t#context) を追加することもできます。レビュアーは、生成されたテキストを [ダッシュボードの翻訳エディター](/docs/platform/dashboard/guides/reviewing-translations) で編集できます。次回の CLI 実行時には、変更のない翻訳はそのまま再利用され、新しい文言のみが生成されます。カタログをコンパイルするための別コマンドは必要ありません。
+
+Profound のプラットフォームとドキュメントは、General Translation によって 47 以上のロケールで提供されています。 ([本番環境でのデプロイ事例](https://generaltranslation.com/enterprise)を参照してください。)
+
+## Lingui と General Translation の比較早見表
+
+| 機能          | Lingui                                  | General Translation                                                                                            |
+| ----------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| テキストの書き方    | `<Trans>` などのインラインマクロ                   | [`<T>`](/docs/react/reference/components/t) 内のインライン JSX と、[`useGT`](/docs/react/reference/hooks/use-gt) による文字列 |
+| コンテンツの翻訳    | なし                                      | あり ([`npx gt translate`](/docs/cli/reference/commands/translate) を使用)                                          |
+| 変更ごとの手順     | 抽出、各 PO カタログの翻訳、コンパイル (ビルド時にマクロ変換が必要)   | ビルド前に [`npx gt translate`](/docs/cli/reference/commands/translate) を実行するだけ                                     |
+| カタログ        | ロケールごとの PO ファイルを JavaScript モジュールにコンパイル | ロケールごとに生成され、リポジトリまたは General Translation の CDN に保存                                                             |
+| 翻訳者が参照できる情報 | メッセージと、`context` および `comment` フィールド    | マークされた JSX ブロック内の構造、文脈メモ、共有の用語集とカスタムプロンプト                                                                      |
+
+翻訳者が gettext の PO カタログで作業している場合、コンパイル済みの軽量なランタイムがバンドルサイズの面で重要な場合、あるいは現在の翻訳プロセスがすでにうまく回っている場合は、Lingui を使い続けるのがよいでしょう。抽出・翻訳・コンパイルのサイクルを経ずに同じくインラインで記述したい場合や、コードの文脈を踏まえた翻訳を生成したい場合は、General Translation を選んでください。
+
+## Lingui からの移行
+
+コンポーネントまたはルート単位で1つずつ移行してください。Lingui の `<Trans>` は [`<T>`](/docs/react/reference/components/t) に対応します。`<Plural value={count} one="…" other="…" />` は、`n={count}` と `singular`・`plural` の分岐を指定した [`<Plural>`](/docs/react/reference/components/plural) に対応し、数値には [`<Num>`](/docs/react/reference/components/num) を使用します。文字列マクロは [`useGT`](/docs/react/reference/hooks/use-gt) に対応します。まだ移行していないコンポーネントについては、Lingui の既存の翻訳を引き続き読み込んでください。すべてのコンポーネントの移行が完了したら、マクロ変換と、extract および compile スクリプトを削除します。 ([i18n ライブラリの移行](/docs/react/guides/migrating-i18n-libraries)を参照してください。)
+
+## 重要なポイント
+
+* Lingui は文言をインラインで記述し、軽量なランタイムにコンパイルします。各ターゲット言語のカタログは、翻訳者または連携サービスが用意します。
+* General Translation のライブラリでも同じようにインラインで記述でき、翻訳そのものも General Translation が担います。コードの文脈を踏まえて翻訳するため、カタログをやり取りする必要はありません。
+* Lingui のマクロは [`<T>`](/docs/react/reference/components/t)、[`<Plural>`](/docs/react/reference/components/plural)、[`useGT`](/docs/react/reference/hooks/use-gt) とほぼ対応しているため、コンポーネント単位で段階的に移行できます。

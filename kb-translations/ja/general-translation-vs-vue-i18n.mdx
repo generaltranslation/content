@@ -1,0 +1,109 @@
+---
+title: "General Translation と vue-i18n：どちらを使うべきか"
+summary: General Translation を使うと、Vue チームはテンプレート内に翻訳元のテキストを直接記述し、CLI で翻訳を生成できます。gt-vue プラグインは、そのコンテンツをロケール対応の複数形と数値フォーマットでレンダリングします。キーベースの原文ファイルの保守から解放されたいなら General Translation がおすすめです。一方、Nuxt の i18n モジュールと確立されたカタログのワークフローを利用しているチームには、引き続き vue-i18n が適しています。
+description: General Translation なら、Vue の翻訳元テキストをテンプレート内に記述するだけで、キーベースの原文ファイルなしに翻訳を生成できます。Nuxt の i18n モジュールや確立されたカタログのワークフローには、引き続き vue-i18n が適しています。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-i18next, general-translation-vs-lingui, general-translation-vs-react-intl, i18n-without-translation-files]
+---
+
+vue-i18n は、Vue アプリでユーザーの言語に合わせてメッセージをレンダリングするライブラリです。ロケールごとにメッセージを定義し、テンプレート内でキーを使って参照すれば、複数形、日付、数値のフォーマットも行ってくれます。ただし、翻訳そのものは行いません。各言語のメッセージは、開発者自身や翻訳者、あるいは翻訳管理システム (TMS) で用意する必要があります。General Translation の `gt-vue` も同じように翻訳をレンダリングしますが、General Translation はそれに加えて、テンプレートにインラインで記述したテキストから翻訳を生成することもできます。
+
+## vue-i18n の強み
+
+* **成熟度。** vue-i18n は 2014 年から npm で公開されています。[現在メンテナンスされているのはバージョン 11 系](https://vue-i18n.intlify.dev/guide/maintenance)で、バージョン 12 はアルファ版です。
+* **Nuxt。** [`@nuxtjs/i18n` モジュールは vue-i18n 11 をベースにしており](https://i18n.nuxtjs.org/docs/getting-started)、ロケールプレフィックス付きのルート、ローカライズされたパス、ブラウザ言語検出、翻訳の遅延読み込みに加え、hreflang の代替リンクなどの SEO タグにも対応しています。
+* **フォーマットとリッチテキスト。** `datetimeFormats` と `numberFormats` には `Intl` のオプションを渡せます。また、[`<i18n-t>` コンポーネント](https://vue-i18n.intlify.dev/guide/advanced/component)を使えば、`v-html` を使わずに翻訳済みメッセージ内に要素を埋め込めます。
+* **コンポーネントと同じ場所にメッセージを置ける。** `@intlify/unplugin-vue-i18n` を使うと、[`<i18n>` ブロック](https://vue-i18n.intlify.dev/guide/advanced/sfc)でコンポーネントのメッセージをそのシングルファイルコンポーネント内にまとめて記述できます。
+* **ツール。** [公式 ESLint プラグイン](https://eslint-plugin-vue-i18n.intlify.dev/rules/)は、テンプレート内にハードコードされたテキストや、存在しないキー・未使用のキーを検出します。
+
+## vue-i18n が開発者に委ねていること
+
+以下は、vue-i18n の Composition API で作成したシンプルな受信トレイの例です。各文字列にはキーが割り当てられ、英語のテキストはメッセージファイルで管理されます。
+
+```json title="locales/en.json"
+{
+  "inbox": {
+    "heading": "Inbox",
+    "unread": "You have {n} unread message | You have {n} unread messages"
+  }
+}
+```
+
+```vue title="Inbox.vue"
+<script setup>
+import { useI18n } from 'vue-i18n'
+
+defineProps({ count: { type: Number, required: true } })
+const { t } = useI18n()
+</script>
+
+<template>
+  <section>
+    <h1>{{ t('inbox.heading') }}</h1>
+    <p>{{ t('inbox.unread', count) }}</p>
+  </section>
+</template>
+```
+
+対象となる各言語には、チームまたは翻訳サービスが用意した翻訳済みメッセージが必要です。この例では、実装上の次の 2 点が重要です。
+
+* **複数形規則。** vue-i18n 11 のデフォルトの規則は、位置に基づいて形を選択します。ポーランド語では `one`、`few`、`many`、`other` の各カテゴリを使用するため、[カスタムの `pluralRules` 関数](https://github.com/intlify/vue-i18n/blob/master/docs/guide/v11/essentials/pluralization.md)を設定し、数値を翻訳済みの各形に対応付けてください。現在アルファ版の vue-i18n 12 では、[`Intl.PluralRules` を使う方式に切り替わります](https://github.com/intlify/vue-i18n/releases/tag/v12.0.0-alpha.4)。
+* **メッセージ内の数値。** 複数形メッセージ内の `{n}` はロケールに応じたフォーマットが行われません。そのため、フォーマット済みの値を渡さない限り、スペイン語でも 12345 は &quot;12.345&quot; ではなく &quot;12345&quot; とレンダリングされます。
+
+## 翻訳を自動生成するインラインテンプレート
+
+`gt-vue` は vue-i18n と同じ役割を果たします。各ロケールのメッセージをレンダリングし、各ロケールの CLDR ルールに従って複数形を選択し、[`<Num>`](/docs/vue/reference/components/num)、[`<Currency>`](/docs/vue/reference/components/currency)、[`<DateTime>`](/docs/vue/reference/components/datetime) で数値、通貨、日付をフォーマットします。そのうえで General Translation は、vue-i18n にはできない「翻訳そのものの生成」まで行います。以下は、同じ受信トレイの例を、文言をインラインで記述して書き直したものです。
+
+```vue title="Inbox.vue"
+<script setup>
+import { Num, Plural, T } from 'gt-vue'
+
+defineProps({ count: { type: Number, required: true } })
+</script>
+
+<template>
+  <section>
+    <T><h1>Inbox</h1></T>
+    <p>
+      <T>
+        <Plural :n="count">
+          <template #singular>You have <Num :value="count" /> unread message</template>
+          <template #plural>You have <Num :value="count" /> unread messages</template>
+        </Plural>
+      </T>
+    </p>
+  </section>
+</template>
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) はテンプレートをスキャンし、各 [`<T>`](/docs/vue/reference/components/t) ブロックを構造ごと General Translation API に送信して、対象ロケールごとにカタログを書き出します。`singular` と `plural` のスロットは、対象言語の各形式の元となる翻訳元の文言を提供します。[`<Plural>`](/docs/vue/reference/components/plural) はロケールの規則に従ってそれらの形式を選択し、[`<Num>`](/docs/vue/reference/components/num) は数値をフォーマットします。たとえば英語では 12,345、スペイン語では 12.345、ポーランド語では 12 345 と表示されます。
+
+この例では、`gt-vue` 0.1.22 と Vue 3.3 以降を使用しています。プラグインとカタログローダーのセットアップについては、[Vue クイックスタート](/docs/vue/quickstart)を参照してください。生成されたテキストはチームで[ダッシュボード](/docs/platform/dashboard/guides/reviewing-translations)から改善でき、[共有の用語集とカスタムプロンプト](/docs/platform/dashboard/guides/defining-context-for-translations)を使えばプロジェクト全体で用語の一貫性を保てます。
+
+## vue-i18n と General Translation の比較早見表
+
+| 機能             | vue-i18n                                                     | General Translation (`gt-vue`)                                                       |
+| -------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| 文言の書き方         | ロケールごとのメッセージファイルまたは `<i18n>` ブロックにキーを記述                      | テンプレート内の [`<T>`](/docs/vue/reference/components/t) にインラインで記述                         |
+| コンテンツの翻訳       | 非対応                                                          | 対応 ([`npx gt translate`](/docs/cli/reference/commands/translate) を使用)                |
+| 複数形            | 各形を縦棒で区切って記述。バージョン 11 ではポーランド語などの言語にカスタムルールが必要               | [`<Plural>`](/docs/vue/reference/components/plural) のスロットを、すべてのロケールで CLDR ルールに基づいて選択 |
+| メッセージ内の数値      | フォーマット済みの値を渡した場合のみフォーマットされる                                  | [`<Num>`](/docs/vue/reference/components/num) がロケールごとにフォーマット                         |
+| アプリとのインテグレーション | Vue プラグイン。`@nuxtjs/i18n` を使うと Nuxt のルーティング、言語検出、SEO タグが追加される | リアクティブなロケール切り替えとカタログ読み込みに対応した Vue プラグイン                                              |
+
+Nuxt のルーティングや SEO を `@nuxtjs/i18n` に任せている場合や、既存のカタログのワークフローをそのまま維持したい場合は、vue-i18n を引き続き使用してください。Vue テンプレート内の文言を読みやすく保ちつつ、ビルド時に翻訳を生成し、レビュー担当者がダッシュボードで翻訳を編集できるようにしたい場合は、General Translation がおすすめです。
+
+## vue-i18n からの移行
+
+コンポーネントは1つずつ移行します。上の例のように、各キー参照を [`<T>`](/docs/vue/reference/components/t) で囲んだ英語の文言に置き換え、パイプ区切りの複数形メッセージを [`<Plural>`](/docs/vue/reference/components/plural) の `singular` スロットと `plural` スロットに書き換えます。まだ移行していないコンポーネントでは、vue-i18n とレビュー済みのカタログをそのまま使い続けてください。[Vue クイックスタート](/docs/vue/quickstart)に従って `gt-vue` をセットアップし、ビルド前に [`npx gt translate`](/docs/cli/reference/commands/translate) を実行します。
+
+## vue-i18n でポーランド語の複数形が正しく表示されないのはなぜですか？
+
+vue-i18n 11 で `pluralRules` 関数を設定し、ポーランド語の各カテゴリをメッセージ内の位置に対応付けてください。たとえば、1 では `one`、2 と 22 では `few`、5 では `many` が選択されます。General Translation では、インラインの例で翻訳元の文言を指定すると、サービスが各形の翻訳を生成し、[`<Plural>`](/docs/vue/reference/components/plural) が適切な形を選択します。
+
+## 重要なポイント
+
+* vue-i18n は Nuxt を強力にサポートする成熟した i18n プラグインですが、翻訳自体は一切行いません。また、バージョン 11 では、ポーランド語などの言語向けにカスタムの複数形規則を用意する必要があります。
+* General Translation の CLI は、インラインの [`<T>`](/docs/vue/reference/components/t) ブロックから翻訳を生成します。`gt-vue` は、ロケールに応じた複数形の選択と数値フォーマットを適用して翻訳をレンダリングします。
+* Nuxt やカタログベースのワークフローがすでに確立されている場合は、vue-i18n を引き続き使用しましょう。キー付きの原文ファイルを管理し続ける手間から解放されたい場合は、`gt-vue` を選びましょう。

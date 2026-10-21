@@ -1,0 +1,147 @@
+---
+title: "next-intl vs gt-next: quale scegliere per Next.js?"
+summary: next-intl renderizza le traduzioni che fornisci in un catalogo di messaggi per ogni lingua. Anche gt-next renderizza le traduzioni, ma in più General Translation le genera a partire dai testi scritti inline nel tuo JSX. Entrambe sono rilasciate con licenza MIT e supportano l'App Router e i Componenti server. Se i tuoi cataloghi next-intl funzionano già, puoi mantenerli e usare General Translation per tradurli, senza alcuna migrazione.
+description: next-intl renderizza le traduzioni che fornisci. Anche gt-next le renderizza, ma General Translation le genera a partire dal JSX inline. Entrambe hanno licenza MIT e puoi mantenere i cataloghi next-intl.
+date: 2026-10-16
+category: workflow-tools
+authors: [jackie]
+related:
+  - general-translation-vs-i18n-libraries
+  - multilingual-nextjs-seo
+  - i18n-without-translation-files
+  - how-to-handle-plurals-in-react
+---
+
+next-intl e gt-next localizzano entrambe le app Next.js basate sull&#39;App Router, Componenti server inclusi. La differenza sta nella provenienza delle traduzioni: next-intl mostra i messaggi che il tuo team o un servizio di traduzione inserisce in un catalogo JSON per ogni lingua, mentre gt-next mantiene il testo sorgente inline nel tuo JSX e General Translation genera tutte le traduzioni durante la build.
+
+Le opzioni sono quindi tre. Mantenere next-intl e il tuo attuale processo di traduzione. Mantenere next-intl e affidare a General Translation la traduzione dei suoi cataloghi, senza modificare i tuoi componenti. Oppure adottare gt-next per avere testi inline e traduzioni generate automaticamente.
+
+## Come si confrontano next-intl e gt-next?
+
+| Domanda                              | next-intl                                                                                          | gt-next (General Translation)                                                                                                                                                            |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Traduce i tuoi contenuti?            | No. Renderizza i messaggi che fornisci tu, scritti dal tuo team o da un servizio come Crowdin      | Sì. [`gt translate`](/docs/cli/reference/commands/translate) genera le traduzioni sfruttando il contesto del tuo codice, oppure il tuo team può scriverle                                |
+| Dove si trovano i testi sorgente?    | Messaggi con chiave in un catalogo JSON; l&#39;estrazione inline con `useExtracted` è sperimentale | JSX inline all&#39;interno di [`<T>`](/docs/react/reference/components/t) e stringhe tramite [`useGT`](/docs/react/reference/hooks/use-gt); sono supportati anche i dizionari con chiave |
+| Componenti server?                   | Sì, con API distinte per componenti sincroni e asincroni                                           | Sì: [`<T>`](/docs/react/reference/components/t), [`useGT`](/docs/react/reference/hooks/use-gt) e [`getGT`](/docs/react/nextjs/reference/functions/get-gt)                                |
+| componenti client?                   | All&#39;interno di `NextIntlClientProvider`                                                        | All&#39;interno di [`GTProvider`](/docs/react/reference/components/gt-provider)                                                                                                          |
+| Routing delle impostazioni regionali | Middleware con route precedute dal prefisso dell&#39;impostazione regionale                        | [`createNextMiddleware`](/docs/react/nextjs/app-router-middleware) con un segmento `app/[locale]`                                                                                        |
+| Plurali                              | ICU MessageFormat in ogni catalogo                                                                 | Rami di [`<Plural>`](/docs/react/reference/components/plural), tradotti insieme al resto del blocco                                                                                      |
+| Distribuzione delle traduzioni       | File di catalogo inclusi nel bundle dell&#39;app                                                   | File nel bundle, oppure la CDN di General Translation per aggiornamenti senza dover ridistribuire                                                                                        |
+| Licenza                              | MIT                                                                                                | MIT                                                                                                                                                                                      |
+
+Fonti: [configurazione di next-intl con App Router](https://next-intl.dev/docs/getting-started/app-router), [utilizzo di next-intl su server e client](https://next-intl.dev/docs/environments/server-client-components), [Avvio rapido di gt-next](/docs/react/nextjs-quickstart).
+
+## Come appare la stessa intestazione in ciascuna libreria?
+
+Nel flusso di lavoro basato su cataloghi di next-intl, il messaggio sorgente risiede in un file JSON:
+
+```json
+{
+  "Projects": {
+    "heading": "Find your next project"
+  }
+}
+```
+
+Il componente seleziona il messaggio in base al namespace e alla chiave:
+
+```tsx
+import { useTranslations } from 'next-intl';
+
+export default function ProjectHeading() {
+  const t = useTranslations('Projects');
+  return <h1>{t('heading')}</h1>;
+}
+```
+
+Con gt-next, la stessa frase resta all&#39;interno del componente:
+
+```tsx
+import { T } from 'gt-next';
+
+export default function ProjectHeading() {
+  return (
+    <T>
+      <h1>Find your next project</h1>
+    </T>
+  );
+}
+```
+
+Entrambi gli snippet presuppongono che il provider e la configurazione di ciascuna libreria siano già impostati. Consulta la [guida alla configurazione di next-intl](https://next-intl.dev/docs/getting-started/app-router) e il [riferimento di `<T>`](/docs/react/reference/components/t).
+
+Con un catalogo, i revisori possono leggere i testi separatamente dal codice. Con i testi inline, invece, i revisori vedono ogni frase all&#39;interno del JSX a cui appartiene, e General Translation può tradurla usando quella struttura come contesto. Per le formulazioni che restano ambigue, il [`<T>` di gt-next accetta una prop `context`](/docs/react/reference/components/t#context), mentre l&#39;[estrazione sperimentale di next-intl supporta le descrizioni dei messaggi](https://next-intl.dev/docs/usage/extraction#descriptions).
+
+Anche l&#39;API sperimentale [`useExtracted`](https://next-intl.dev/docs/usage/extraction) di next-intl consente di scrivere i messaggi inline ed estrarli nei cataloghi. L&#39;estrazione cambia il modo in cui si scrivono i testi, ma non traduce i cataloghi estratti, che devono comunque essere tradotti dal tuo team o da un servizio esterno.
+
+## È possibile usare General Translation senza abbandonare next-intl?
+
+Sì. La CLI `gt` rileva next-intl dal tuo `package.json` e [traduce i suoi cataloghi JSON](/docs/cli/guides/generating-translations) preservando la sintassi dei messaggi di next-intl. Componenti, chiamate di traduzione e routing restano invariati.
+
+Per provarlo, configura `gt.config.json` in modo che punti ai cataloghi sorgente e di destinazione, importa le traduzioni che hai già e traduci una nuova impostazione regionale. I revisori possono correggere l&#39;output nell&#39;[Editor di traduzione della dashboard](/docs/platform/dashboard/guides/reviewing-translations). Se invece modificano i cataloghi scaricati direttamente nel tuo repository, esegui [`gt save-local`](/docs/cli/reference/commands/save-local) prima della successiva esecuzione di traduzione, così che le modifiche non vadano perse.
+
+Se in seguito passi a gt-next, la [guida alla migrazione](/docs/react/guides/migrating-i18n-libraries) spiega come importare le traduzioni revisionate, mantenere i tuoi dizionari e usare entrambe le librerie in parallelo mentre migri una route alla volta.
+
+## Come gestisce ciascuna libreria i Componenti server e i componenti client?
+
+Nessuna delle due librerie richiede di trasformare una pagina dell&#39;App Router in un componente client per localizzarla. La differenza sta nell&#39;API da chiamare in ciascun ambiente.
+
+| Componente                 | next-intl                                                                                                                                                                         | gt-next                                                                                                                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Componente server sincrono  | [`useTranslations`](https://next-intl.dev/docs/environments/server-client-components#using-internationalization-in-server-components), che usa la configurazione della richiesta  | [`<T>`](/docs/react/reference/components/t) per il JSX; [`useGT`](/docs/react/reference/hooks/use-gt) per le stringhe                                                       |
+| Componente server asincrono | Usa `await` su [`getTranslations`](https://next-intl.dev/docs/environments/server-client-components#async-components) da `next-intl/server`                                       | Usa `await` su [`getGT`](/docs/react/nextjs/reference/functions/get-gt) da `gt-next/server`, quindi chiama la funzione restituita                                           |
+| componente client           | [`useTranslations`](https://next-intl.dev/docs/environments/server-client-components#using-internationalization-in-client-components) all&#39;interno di `NextIntlClientProvider` | [`<T>`](/docs/react/reference/components/t) o [`useGT`](/docs/react/reference/hooks/use-gt) all&#39;interno di [`GTProvider`](/docs/react/reference/components/gt-provider) |
+
+Con entrambe le librerie, mantieni i controlli interattivi nei componenti client e traduci il resto della pagina sul server. next-intl consente inoltre di [passare etichette già tradotte](https://next-intl.dev/docs/environments/server-client-components#option-1-passing-translated-labels-to-client-components) da un Componente server a un controllo client, così il client non deve ricevere l&#39;intero catalogo.
+
+## Come vengono distribuite le traduzioni di gt-next in produzione?
+
+gt-next supporta due modalità di consegna:
+
+* **Includere le traduzioni nel bundle dell&#39;app** tramite un [loader locale](/docs/react/guides/storing-translations). In produzione l&#39;app legge i propri file di traduzione e non effettua alcuna chiamata a General Translation a runtime. Gli aggiornamenti vengono rilasciati con la build successiva.
+* **Caricare le traduzioni dalla CDN di General Translation** tramite la [configurazione di consegna remota](/docs/react/nextjs/config). Le modifiche pubblicate raggiungono l&#39;app distribuita senza bisogno di una nuova build, in base alle impostazioni di versione e di cache.
+
+gt-next è [distribuito con licenza MIT](https://github.com/generaltranslation/gt) e renderizza le traduzioni incluse nel bundle senza bisogno di un account General Translation, esattamente come next-intl renderizza i propri cataloghi.
+
+## Quali team usano gt-next in produzione?
+
+General Translation è utilizzato dai team di sviluppo di Cursor, Ramp, Profound, Cognition, Sierra e ClickHouse. Profound usa General Translation per localizzare il suo prodotto principale, un&#39;app Next.js basata su App Router. Scopri le [distribuzioni in produzione](https://generaltranslation.com/enterprise).
+
+## Quando scegliere next-intl o gt-next?
+
+**Mantieni next-intl** se il suo modello basato su cataloghi si adatta alla tua app e il tuo processo di traduzione funziona già. Se il problema principale è la gestione ripetitiva delle chiavi, prova la sua funzionalità sperimentale di estrazione prima di migrare.
+
+**Mantieni next-intl e aggiungi General Translation** se il collo di bottiglia è la produzione delle traduzioni. La CLI `gt` traduce i cataloghi che hai già, quindi componenti, chiamate e routing restano invariati.
+
+**Scegli gt-next** se vuoi scrivere i testi inline nel JSX e generare le traduzioni a ogni build. Provalo su una singola route che usi Componenti server e componenti client, plurali, testo ricco e metadati. Mantieni gli URL localizzati della route e le traduzioni esistenti finché i rispettivi sostituti non sono pronti, e verifica una build di produzione prima di migrare altre route.
+
+Per iniziare, segui l&#39;[Avvio rapido per Next.js App Router](/docs/react/nextjs-quickstart). Per confrontare altre librerie, consulta [General Translation vs. i18next, react-intl e next-intl](/kb/general-translation-vs-i18n-libraries).
+
+## Domande frequenti
+
+### next-intl traduce i miei contenuti?
+
+No. next-intl renderizza e formatta i messaggi presenti nei tuoi cataloghi. Le traduzioni sono a cura del tuo team, di traduttori o di un servizio come [Crowdin](https://next-intl.dev/docs/workflows/localization-management). Anche General Translation può tradurre i cataloghi di next-intl, senza bisogno di alcuna migrazione.
+
+### Posso usare General Translation con next-intl?
+
+Sì. La CLI `gt` traduce i cataloghi JSON di next-intl preservandone la sintassi dei messaggi, quindi puoi mantenere i tuoi componenti e il routing. Consulta [Generare le traduzioni](/docs/cli/guides/generating-translations).
+
+### gt-next è gratuito e open source?
+
+Sì. gt-next è distribuito con licenza MIT e renderizza le traduzioni incluse nel bundle senza bisogno di un account. Per generare traduzioni tramite il servizio in hosting di General Translation, consulta la pagina dei [prezzi](https://generaltranslation.com/pricing).
+
+### gt-next supporta i Componenti server React?
+
+Sì. Usa [`<T>`](/docs/react/reference/components/t) e [`useGT`](/docs/react/reference/hooks/use-gt) nei Componenti server sincroni e [`getGT`](/docs/react/nextjs/reference/functions/get-gt) in quelli asincroni.
+
+### Posso migrare da next-intl a gt-next una route alla volta?
+
+Sì. La [guida alla migrazione](/docs/react/guides/migrating-i18n-libraries) spiega come usare entrambe le librerie in parallelo, importare le traduzioni esistenti e mantenere i dizionari basati su chiavi dove preferisci.
+
+## Punti chiave
+
+* next-intl e gt-next supportano entrambi l&#39;App Router, i Componenti server e il routing delle impostazioni regionali, ed entrambi sono distribuiti con licenza MIT.
+* next-intl renderizza le traduzioni che fornisci tu. Anche gt-next le renderizza, ma in più General Translation le genera a partire dal JSX inline, usando il tuo codice come contesto.
+* Non è necessario migrare per usare General Translation: la CLI `gt` traduce i cataloghi next-intl esistenti.
+* Se decidi di migrare, procedi una route alla volta e mantieni caricate le traduzioni esistenti finché quelle nuove non sono pronte.

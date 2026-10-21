@@ -1,0 +1,113 @@
+---
+title: "General Translation と Weblate の比較：どちらを使うべきか？"
+summary: Weblate は、コミュニティやチームでリポジトリ内のファイルを翻訳するために作られた、セルフホスト可能な Git ベースのローカライゼーションプラットフォームです。General Translation は、マークされた JSX と共有されたプロダクトの文脈を活用し、翻訳の生成を開発とリリースのプロセスに組み込みます。既存の gettext ファイルをそのまま使い続けることも、インラインでの記述に切り替えて翻訳元カタログの保守作業自体をなくすこともできます。
+description: Weblate は、コミュニティやチームによる翻訳のための、セルフホスト可能な Git ベースのプラットフォームです。General Translation は、マークされた JSX とプロダクトの文脈をもとに、リリースごとに翻訳を生成します。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-gettext, general-translation-vs-tolgee, general-translation-vs-django-i18n, best-localization-software]
+---
+
+Weblate は、Git を中心に構築されたオープンソースの Web ベース翻訳プラットフォームです。リポジトリを接続すると Weblate が翻訳ファイルを読み込み、翻訳者または設定済みの翻訳サービスが訳文を入力します。その結果を Weblate がコミットするか、プルリクエストとして作成します。コミュニティの翻訳者が参加するオープンソースプロジェクトで広く使われています。一方、General Translation は翻訳の生成をビルドに組み込みます。新しい文言とその翻訳を同じリリースで提供でき、チームはダッシュボードでレビューできます。
+
+## Weblate の強み
+
+* **コピーレフトのオープンソース。** Weblate は [GPL-3.0-or-later ライセンスで公開されており](https://github.com/WeblateOrg/weblate)、プラットフォーム全体を無料でダウンロードして運用できます。導入や保守の支援が必要な場合は、有料のサポートプランも用意されています。
+* **リブレプロジェクト向けの無料ホスティング。** Hosted Weblate は EU のインフラ上で稼働しており、公開されたリブレプロジェクトは Libre プランを無料で利用できます。制限は 16 万文字列プランと同じです。
+* **Git ベースの継続的ローカライゼーション。** Weblate は、フォージから Webhook を受け取ったとき (または毎日の定期取得時) に変更を取り込み、作成者ごとに変更をまとめる遅延コミットで翻訳をコミットします。そのうえで、ブランチにプッシュするか、GitHub、GitLab、Gitea、Bitbucket、Azure DevOps、Pagure 上で[プルリクエストを作成](https://docs.weblate.org/en/latest/vcs.html)します。Hosted Weblate は GitHub App 経由での接続にも対応しています。
+* **非常に幅広いファイル形式に対応。** Weblate のドキュメントには、gettext PO、XLIFF 1.2 および 2.0、Android および Apple の strings、ARB、i18next JSON、Fluent、Java properties、.NET RESX、Ruby YAML、PHP および Laravel の strings、Qt Linguist、CSV、Excel、Markdown など、[約 50 の形式](https://docs.weblate.org/en/latest/formats.html)が掲載されています。
+* **ファイル関連の作業を自動化するアドオン。** [組み込みアドオン](https://docs.weblate.org/en/latest/admin/addons.html)を使えば、POT テンプレートからの PO ファイルの更新、MO ファイルの生成、コミットのスカッシュ、自動翻訳の実行が行えます。
+* **機械翻訳と大規模言語モデル。** [外部連携](https://docs.weblate.org/en/latest/admin/machine.html)先には、DeepL、Google、Azure、Amazon、LibreTranslate に加え、OpenAI、Azure OpenAI、Anthropic、Mistral、Ollama があります。大規模言語モデルのプロンプトには、該当する用語集の用語とスタイル設定が含まれ、Weblate 独自の翻訳メモリも併用されます。
+* **品質チェック。** [数十種類のチェック](https://docs.weblate.org/en/latest/user/checks.html)で、プレースホルダー、複数形の欠落、最大長、ICU MessageFormat の構文、未変更の翻訳などを検査できます。さらに、自動修正機能が空白や省略記号を補正します。
+* **コミュニティ翻訳。** ボランティアが翻訳の提案やコメントを行い、レビュアーがそれを承認します。プロジェクトによっては、[承認済みの文字列のみをコミット](https://docs.weblate.org/en/latest/workflows.html)するよう設定することも可能です。スクリーンショット、用語集、ソース参照によって、翻訳者は文脈を把握できます。
+
+## Weblate を導入してもエンジニアに残る作業
+
+以下は gettext を使った Python アプリの例です。スペイン語のカタログは、最後の行が追加される前に翻訳されています:
+
+```python title="app.py"
+import gettext
+t = gettext.translation("messages", localedir="locale", languages=["es"])
+_ = t.gettext
+print(_("Inbox"))
+print(_("No messages yet."))  # 新しい文言（前回の翻訳作業の後に追加）
+```
+
+POT テンプレートを抽出し、`locale/es/LC_MESSAGES/messages.po` で &quot;Inbox&quot; だけを翻訳して Babel 2.17.0 でコンパイルすると、スペイン語のユーザーには新しい行が英語のまま表示されます：
+
+```text title="Output"
+Bandeja de entrada
+No messages yet.
+```
+
+その行は、次の一連の工程が一巡するまで英語のままです。
+
+1. 文字列を `_()` でラップし、`xgettext` または `pybabel extract` で POT テンプレートを再生成してコミットします。
+2. Weblate が Webhook または次回のフェッチで変更を取り込み、`msgmerge` アドオンが新しいエントリを各 PO ファイルに追加します。
+3. ボランティア、翻訳者、または設定済みの機械翻訳で翻訳し、承認が必要な場合は結果をレビューします。
+4. Weblate が変更をコミットし、プッシュするかプルリクエストを作成します。その後、リリースプロセスでマージし、MO ファイルをコンパイルしてデプロイします。
+
+Weblate の外部で同じファイルを編集すると、マージコンフリクトが発生することがあります。これを避けるため、[Weblate のドキュメントでは](https://docs.weblate.org/en/latest/admin/continuous.html#avoiding-merge-conflicts-by-locking-weblate-while-doing-outside-changes)、ファイルを変更している間はコンポーネントをロックすることを推奨しています。また、翻訳者に見えるのは各文字列とそのソース参照やスクリーンショットだけで、それをレンダリングするコードは見えません。
+
+セルフホスティングは無料です。Hosted Weblate はホストされる文字列数に応じた料金体系で、これは翻訳元文字列の数に「言語数 + 1」を掛けた値です。どのプランでも言語数、プロジェクト数、翻訳者数は無制限です ([Weblate hosting](https://weblate.org/en/hosting/) を参照、2026 年 10 月時点) 。
+
+## Weblate と General Translation の比較一覧
+
+| 機能        | Weblate                                                          | General Translation                                                                                                              |
+| --------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 文字列の保存場所  | リポジトリ内の翻訳ファイル (Weblate のコンポーネントにミラーリング)                          | コード内の [`<T>`](/docs/react/reference/components/t)、または既存のリソースファイル                                                                 |
+| コードとの連携方法 | Weblate が Git から取得し、コミットをプッシュするかプルリクエストを作成                       | ビルド時に [`npx gt translate`](/docs/cli/reference/commands/translate) を実行、または [Locadex](/docs/platform/locadex/quickstart) のプルリクエスト |
+| 翻訳の担い手    | ボランティア、自社の翻訳者、機械翻訳、または大規模言語モデル                                   | コード、用語集、カスタムプロンプトの文脈を踏まえて AI が翻訳し、チームがダッシュボードでレビュー                                                                               |
+| 各文字列の文脈   | ソース参照、スクリーンショット、用語集、翻訳メモリ                                        | インラインライブラリでマークアップされた JSX 構造、対応カタログでの翻訳元の文脈、共有の用語集とカスタムプロンプト                                                                      |
+| ファイル形式    | XLIFF、ARB、Fluent、Java properties など約 50 種類                       | JSON、YAML、PO、Markdown・MDX、iOS・Android の strings など                                                                               |
+| ホスティング    | 無料でセルフホスト、または Hosted Weblate                                     | ホスト型プラットフォーム。ライブラリと CLI はオープンソース                                                                                                 |
+| 料金        | セルフホストは無料。ホスト型プランはホストする文字列数に応じた料金。公開のリブレプロジェクト向けに無料の Libre プランあり | [使用量に応じた翻訳料金](https://generaltranslation.com/pricing)                                                                            |
+| ライセンス     | GPL-3.0-or-later                                                 | JavaScript ライブラリと CLI は MIT ライセンス                                                                                                |
+
+## チームが Weblate ではなく General Translation を選ぶ理由
+
+General Translation では、新しい文言を追加するリリースの中で翻訳まで完結します。gettext をそのまま使ってビルド時に PO ファイルを生成することも、インラインライブラリを使って翻訳元の文言を [`<T>`](/docs/react/reference/components/t) で囲み、コンポーネント内に直接記述することもできます。
+
+* **より速く。** [`npx gt translate`](/docs/cli/reference/commands/translate) はデプロイ前に翻訳を生成します。React および Next.js プロジェクトでは、[Locadex](/docs/platform/locadex/quickstart) が変更をプルリクエストとして作成できます。`gt.config.json` にロケールを追加すれば、次回の実行時にその言語の翻訳生成が始まります。
+* **運用コストを削減。** 翻訳サービスは General Translation が運用するため、翻訳サーバーのインストール、アップグレード、バックアップをチームで行う必要はありません。インラインで記述すれば、エンジニアが翻訳元カタログを別途管理する手間もなくなります。
+* **より高い品質。** インライン翻訳では、マークした JSX の要素や複数形の分岐が文とまとめて渡されます。gettext では、ソースコメントと `msgctxt` によって各エントリの意味が補足されます。共有の[コンテキストグループ](/docs/platform/dashboard/guides/defining-context-for-translations)で用語集とカスタムプロンプトが適用され、チームは[ダッシュボードの翻訳エディター](/docs/platform/dashboard/guides/reviewing-translations)で翻訳結果を仕上げられます。
+* **リスクを低減。** 翻訳済みファイルはリポジトリで管理され、公開のタイミングはリリースプロセスで制御できます。gettext と標準の PO ファイルを使い続けることも、翻訳をバンドルできる General Translation の MIT ライセンスの JavaScript ライブラリを使うこともできます。どちらの配信方法でも、General Translation へのランタイム呼び出しは発生しません。
+
+Profound のプラットフォームとドキュメントは、General Translation を使って 47 以上のロケールで提供されています。 ([本番環境での導入事例](https://generaltranslation.com/enterprise)をご覧ください。)
+
+## Weblateが適しているケース
+
+コミュニティ翻訳を活用したい場合、完全なセルフホスト型プラットフォームが必要な場合、または幅広いカタログ形式への対応を重視する場合は、Weblateを選びましょう。一方、新しいプロダクトの文言をリリースごとに翻訳したい場合は、General Translationが適しています。インラインで記述するテキストにはコードの文脈を活かした翻訳が可能で、既存のJSON、YAML、PO、MarkdownファイルもCLIから直接扱えます。
+
+## gettext ファイルで両方を併用する
+
+General Translation の CLI は、Weblate が読み込むのと同じ gettext ファイルを翻訳します。`pot` エントリでテンプレートを指定し、各出力先を Weblate のフォルダ構成に合わせてマッピングしてください。
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "pl"],
+  "files": {
+    "pot": {
+      "include": ["locale/messages.pot"],
+      "transformationFormat": "PO",
+      "transform": {
+        "match": "locale/messages\\.pot",
+        "replace": "locale/{locale}/LC_MESSAGES/messages.po"
+      }
+    }
+  }
+}
+```
+
+`gt` 2.26.5 では、この設定により `locale/messages.pot` が `locale/es/LC_MESSAGES/messages.po` にマッピングされ、他のロケールにも同じパスが適用されます。複数形のエントリについては、General Translation が対象言語の `Plural-Forms` ヘッダーを書き込み、`msgstr[n]` の各形式を埋めます。両者が同じファイルを編集しないよう、言語ごとに担当を 1 つに決めてください。たとえば、コミュニティでカバーしていない言語は General Translation に、それ以外は Weblate のボランティアに任せる、といった分担です。`pt_BR` のようにアンダースコアを含む gettext のフォルダ名には、標準の `pt-BR` にマッピングする [`customMapping`](/docs/cli/reference/config#custom-mapping) エントリを追加してください。 ([PO / POT](/docs/cli/reference/formats/po-pot-files) を参照)
+
+## General Translation は Weblate の代替になりますか？
+
+はい。General Translation は、翻訳の生成、製品用語の共有、ダッシュボードでのレビューをリリースプロセスに組み込みます。上記の gettext ファイルはそのまま使い続け、翻訳の生成方法だけを切り替えられます。アプリケーションの gettext 呼び出しを書き換える必要はありません。
+
+## 重要なポイント
+
+* Weblate は、オープンソースやコミュニティによる翻訳に適した強力なコピーレフトのプラットフォームです。Git ベースの継続的ローカライゼーション、無料のセルフホスティング、約 50 種類のファイル形式に対応しています。
+* 翻訳ワークフローは、リポジトリ内のカタログ、コントリビューター、Git による同期を軸に構成されています。
+* General Translation はデプロイ前に翻訳を生成します。gettext と標準の PO ファイルをそのまま使い続けることも、インライン記述を採用することもできます。インライン記述なら、翻訳元カタログを別途用意しなくても、コードの文脈を翻訳に活かせます。

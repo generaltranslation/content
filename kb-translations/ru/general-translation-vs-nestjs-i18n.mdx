@@ -1,0 +1,140 @@
+---
+title: "General Translation или nestjs-i18n: что выбрать?"
+summary: nestjs-i18n определяет язык каждого запроса в приложении NestJS и выполняет рендеринг сообщений из JSON- или YAML-каталогов, отдельных для каждого языка, но сам ничего не переводит. CLI General Translation переводит эти каталоги, а библиотека gt-node переводит контент, который появляется только во время выполнения, поэтому nestjs-i18n можно оставить и просто добавить General Translation.
+description: nestjs-i18n выбирает язык каждого запроса и выполняет рендеринг JSON- или YAML-каталогов, но сам ничего не переводит. CLI General Translation переводит каталоги, а gt-node берёт на себя контент, создаваемый во время выполнения.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, general-translation-vs-in-house-i18n, general-translation-vs-symfony-translation, i18n-without-translation-files]
+---
+
+nestjs-i18n — модуль i18n с открытым исходным кодом для NestJS: он определяет язык каждого запроса по строке запроса, заголовку, cookie-файлу или `Accept-Language`, а `I18nContext` или `I18nService` возвращает сообщение на этом языке из ваших каталогов. Модуль выполняет рендеринг переводов, но не создаёт их, поэтому каталоги для всех языков пишете и поддерживаете в актуальном состоянии вы сами, ваши переводчики или сторонний сервис. General Translation закрывает этот пробел двумя способами: CLI переводит каталоги nestjs-i18n, а библиотека `gt-node` переводит контент, который появляется только во время выполнения.
+
+## Сильные стороны nestjs-i18n
+
+* **Создан для Nest.** Один вызов `I18nModule.forRoot()`, [декоратор параметра `@I18n()` для `I18nContext` и `I18nContext.current()` в сервисах](https://nestjs-i18n.com/quick-start). Работает поверх HTTP, GraphQL, gRPC и WebSockets.
+* **Резолверы языка.** [`QueryResolver`, `HeaderResolver`, `CookieResolver` и `AcceptLanguageResolver`](https://nestjs-i18n.com/concepts/resolver) срабатывают в том порядке, в котором вы их укажете. Для GraphQL и gRPC есть отдельные резолверы, а при необходимости можно написать собственный.
+* **Простые каталоги.** По одной папке на язык (`src/i18n/en/`, `src/i18n/es/`) с [файлами JSON или YAML](https://nestjs-i18n.com/concepts/loader), где имя каждого файла становится пространством имён (`inbox.title`). В режиме разработки поддерживается горячая перезагрузка.
+* **Формы множественного числа и интерполяция.** Заполнители `{name}`, ссылки `$t()` на другие ключи и [объекты множественного числа с ключами `zero`, `one`, `two`, `few`, `many` и `other`](https://nestjs-i18n.com/guides/plurals), нужная форма из которых выбирается с помощью `Intl.PluralRules`. Настройка `useICU` (требует явного включения), [появившаяся в 10.8.0](https://github.com/toonvanstrijp/nestjs-i18n/releases/tag/v10.8.0), позволяет вместо этого форматировать сообщения с помощью ICU MessageFormat.
+* **Типобезопасность.** [`typesOutputPath` генерирует типы `I18nTranslations` и `I18nPath`](https://nestjs-i18n.com/guides/type-safety), поэтому ключ с опечаткой не пройдёт компиляцию, а команда `nestjs-i18n check` завершается с ошибкой, если для какого-либо языка не хватает ключей.
+* **Сообщения валидации.** `I18nValidationPipe`, `I18nValidationExceptionFilter` и `i18nValidationMessage()` [переводят ошибки class-validator для DTO](https://nestjs-i18n.com/guides/dto_validation/global-validation).
+
+Библиотека распространяется по лицензии MIT, а [версия 10.8.5 требует Node.js 22 или новее](https://github.com/toonvanstrijp/nestjs-i18n/blob/v10.8.5/package.json).
+
+## Что nestjs-i18n оставляет вам
+
+Вот английский каталог сообщений для раздела «Входящие» с формой множественного числа:
+
+```json title="src/i18n/en/inbox.json"
+{
+  "title": "Inbox",
+  "unread": {
+    "one": "You have {count} unread message.",
+    "other": "You have {count} unread messages."
+  }
+}
+```
+
+В папке для испанского лежит переведённая копия файла, а контроллер возвращает `i18n.t('inbox.unread', { args: { count } })`. Папки для немецкого нет. Запросы к минимальному приложению на Nest 11 с nestjs-i18n 10.8.5:
+
+```text title="Output"
+?lang=es&count=3  "Tienes 3 mensajes sin leer."
+?lang=de&count=3  "You have 3 unread messages."
+```
+
+Для немецкого языка отображается английский текст, потому что немецкий каталог ещё не переведён. Определение языка работает, но восполнить недостающий текст оно не может. Именно это nestjs-i18n оставляет на ваше усмотрение: создавать каталоги и поддерживать их в актуальном состоянии при каждом изменении английского текста.
+
+## Как General Translation встраивается в приложение NestJS
+
+CLI General Translation переводит каталоги nestjs-i18n прямо на месте. Укажите в записи `json` путь к папкам с языками:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es",
+    "de"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "src/i18n/[locale]/*.json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) читает `src/i18n/en/inbox.json` и записывает `src/i18n/es/inbox.json` и `src/i18n/de/inbox.json`, сохраняя все ключи. Запускайте его в CI: для записей, которые не изменились, повторно используются прежние переводы. nestjs-i18n загружает сгенерированные каталоги через уже настроенный загрузчик.
+
+В этом примере используются сообщения на английском, испанском и немецком языках с формами `one` и `other`. Проверьте сгенерированные сообщения со значениями счётчика 1 и 3, а перед релизом выполните `nestjs-i18n check -p src/i18n`, чтобы найти отсутствующие ключи.
+
+Для контента, который появляется только во время выполнения, например публикации коллеги или записи в базе данных, используйте [`gt-node`](/docs/node/quickstart) от General Translation. Инициализируйте его один раз, а затем при вызове [`tx`](/docs/node/reference/functions/tx) передавайте в [`withGT`](/docs/node/reference/functions/with-gt) язык, разрешённый nestjs-i18n:
+
+```ts title="src/main.ts"
+import { NestFactory } from '@nestjs/core';
+import { initializeGT } from 'gt-node';
+import { AppModule } from './app.module';
+
+// Считывает из окружения GT_PROJECT_ID и GT_API_KEY (ключ проекта с доступом к переводу во время выполнения).
+initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'de'] });
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+```ts title="src/posts.controller.ts"
+import { Controller, Get, Param } from '@nestjs/common';
+import { I18n, I18nContext } from 'nestjs-i18n';
+import { tx, withGT } from 'gt-node';
+import { PostsService } from './posts.service';
+
+@Controller('posts')
+export class PostsController {
+  constructor(private readonly posts: PostsService) {}
+
+  @Get(':id')
+  async findOne(@Param('id') id: string, @I18n() i18n: I18nContext) {
+    return withGT(i18n.lang, async () => {
+      const post = await this.posts.findOne(id);
+      return { ...post, body: await tx(post.body, { $context: 'A post written by a user' }) };
+    });
+  }
+}
+```
+
+Теперь оба инструмента используют язык, который определяют ваши существующие резолверы nestjs-i18n. Если `?lang=es` имеет приоритет над `Accept-Language: de`, то и сообщения из каталога, и переведённый пост будут на испанском. Используйте каталоги для статичных текстов интерфейса, а [`tx`](/docs/node/reference/functions/tx) — для контента, который создают ваши пользователи.
+
+Продолжайте использовать nestjs-i18n для типизированных ключей, поиска по ключу в каталогах и сообщений валидации. General Translation берёт на себя генерацию переводов, общий Glossary и пользовательские промпты, а также [проверку в панели управления](/docs/platform/dashboard/guides/reviewing-translations). Для статичных текстов используйте описанный выше рабочий процесс с каталогами, а для динамического содержимого — `tx`.
+
+## nestjs-i18n и General Translation: краткое сравнение
+
+| Возможность                | nestjs-i18n                                                                                             | General Translation                                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Роль                       | Определяет язык запроса и выполняет рендеринг сообщений из каталогов                                    | Переводит каталоги, а также динамическое содержимое во время выполнения                                                |
+| Переводит ваш контент      | Нет                                                                                                     | Да, с помощью [`npx gt translate`](/docs/cli/reference/commands/translate) и [`tx`](/docs/node/reference/functions/tx) |
+| Определение языка          | Параметр запроса, заголовок, cookie-файл, `Accept-Language`, GraphQL, gRPC и пользовательские резолверы | Использует тот же разрешённый язык через [`withGT`](/docs/node/reference/functions/with-gt)                            |
+| Формы множественного числа | Ключи категорий для каждого языка, выбор через `Intl.PluralRules`                                       | Переводит ключи форм множественного числа, имеющиеся в вашем исходном файле                                            |
+| Типобезопасность           | Сгенерированные типы ключей и проверка отсутствующих ключей                                             | Сохраняет ключи каталогов, поэтому сгенерированные типы остаются прежними                                              |
+| Сообщения валидации        | Интеграция с class-validator                                                                            | Переводит каталоги, из которых берутся эти сообщения                                                                   |
+| Стоимость                  | Бесплатно, лицензия MIT                                                                                 | [Оплата по факту использования](https://generaltranslation.com/pricing)                                                |
+
+## Что и когда использовать
+
+Оставьте nestjs-i18n ради его резолверов, типизированных ключей и интеграции с валидацией. Подключите General Translation, если хотите, чтобы каталоги переводились в CI при каждом изменении английского текста, или если ваш API возвращает пользовательский контент или данные из базы, которые нужно переводить на лету. Существующие контроллеры по-прежнему используют те же ключи, а General Translation следит за тем, чтобы текст за этими ключами оставался актуальным.
+
+## Совместное использование
+
+1. Оставьте nestjs-i18n и его папки без изменений.
+2. Добавьте `gt.config.json` с путём к вашему каталогу и задайте `GT_API_KEY` и `GT_PROJECT_ID`. (См. [Настройка CLI](/docs/cli/guides/configuring#credentials).)
+3. Загрузите уже имеющиеся переводы с помощью [`npx gt upload`](/docs/cli/reference/commands/upload), а затем запускайте [`npx gt translate`](/docs/cli/reference/commands/translate) в CI.
+4. Если в дальнейшем вы будете редактировать переводы локально, выполняйте [`npx gt save-local`](/docs/cli/reference/commands/save-local) перед повторной генерацией. Добавьте `gt-node` там, где нужен перевод во время выполнения.
+
+## Ключевые выводы
+
+* nestjs-i18n берёт на себя определение языка, типизированные ключи, формы множественного числа и сообщения валидации в NestJS, но все каталоги на всех языках вам придётся писать самостоятельно — включая формы множественного числа для каждого языка.
+* CLI от General Translation переводит JSON-каталоги nestjs-i18n на месте, а `gt-node` переводит динамическое содержимое на тот же язык, что определён для запроса.
+* Используйте их вместе: nestjs-i18n отвечает за рендеринг, General Translation — за перевод.

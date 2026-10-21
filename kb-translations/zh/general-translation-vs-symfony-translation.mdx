@@ -1,0 +1,125 @@
+---
+title: "General Translation 与 Symfony Translation：该选哪一个？"
+summary: Symfony Translation 负责在 PHP 和 Twig 中渲染消息。General Translation 则在 CI 中翻译其 YAML 目录，随源内容变更保持目录同步更新，并为审校人员提供可直接编辑的仪表板。你可以保留 Symfony 的渲染方式，同时在发布工作流中加入自动翻译。
+description: Symfony Translation 负责在 PHP 和 Twig 中渲染消息。General Translation 则在 CI 中翻译其 YAML 目录，使其始终保持最新，并为审校人员提供可直接编辑的仪表板。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, general-translation-vs-gettext, general-translation-vs-rails-i18n, general-translation-vs-django-i18n]
+---
+
+Symfony 应用通过 Translation 组件以读者的语言显示文本：PHP 中的 `trans()` 和 Twig 中的 `|trans` 过滤器会在当前区域设置对应的目录中查找键，并借助 ICU MessageFormat 处理复数形式和条件选择。它负责组织和渲染译文，却不负责生成译文：每种语言的目录都得由你、你的译者，或与 Symfony 同步的翻译管理系统 (TMS) 来编写。General Translation 补上的正是这一环。General Translation 的 CLI 负责翻译你的 Symfony YAML 目录，渲染工作仍交由 Symfony 完成。
+
+## Symfony Translation 的优势
+
+* **PHP 和 Twig 共用一套 API。** `$translator->trans()`、[模板中的 `|trans` 过滤器和 `{% trans %}` 标签](https://symfony.com/doc/current/translation.html#translations-in-templates)，以及搭配 `TranslatableMessage` 的 `t()` (适用于先创建、后翻译的消息，例如闪存消息 (flash message) ) 。
+* **域与多种文件格式。** 消息目录按 `domain.locale.format` 命名 (`messages.fr.yaml`、`validators.fr.yaml`) ，Symfony 可加载 YAML、XLIFF、PHP、JSON、PO 和 MO、CSV、INI、Qt 以及 ICU 资源包。[官方文档建议简单项目使用 YAML](https://symfony.com/doc/current/translation.html#translation-resource-file-names-and-locations)，若译文由专业工具或团队产出，则使用 XLIFF。
+* **ICU MessageFormat。** [在消息目录名称中加上 `+intl-icu`](https://symfony.com/doc/current/reference/formats/message_format.html) (`messages+intl-icu.en.yaml`) ，其中的消息即可使用 ICU 语法处理复数形式、选择以及数字和日期格式。此功能依赖 PHP 的 `intl` 扩展；Symfony 的 polyfill 仅支持英语。
+* **提取与检查。** [`translation:extract` 会从 Twig 模板、PHP 代码和验证约束中查找消息](https://symfony.com/doc/current/translation.html#extracting-translation-contents-and-updating-catalogs-automatically)并添加到消息目录中，默认格式为 XLIFF 1.2，可通过 `--format` 指定其他格式。`debug:translation` 会列出缺失、未使用和使用后备内容的消息，`lint:translations` 则用于检查消息目录内容。
+* **后备内容。** 若缺少 `es_AR` 消息，会[依次回退到 `es_419`、`es`，最后回退到你配置的回退区域设置](https://symfony.com/doc/current/translation.html#fallback-translation-locales)，同时将缺失情况记录到日志中。
+* **翻译提供者。** [`translation:push` 和 `translation:pull` 通过官方桥接包将消息目录与 Crowdin、Loco、Lokalise 和 Phrase 同步](https://symfony.com/doc/current/translation.html#translation-providers)，你也可以自行编写提供者。
+* **内置框架消息。** Validator 组件自带的内置约束消息已翻译成 50 多种语言。
+
+该组件[采用 MIT 许可证；8.1 版本要求 PHP 8.4.1 或更高版本](https://packagist.org/packages/symfony/translation)，7.4 为长期支持版本。
+
+## Symfony Translation 留给你处理的部分
+
+下面是英文消息目录中的一条 ICU 复数消息：
+
+```yaml title="translations/messages+intl-icu.en.yaml"
+inbox:
+  title: Inbox
+  unread: >-
+    {count, plural,
+      =0 {You have no unread messages.}
+      one {You have # unread message.}
+      other {You have # unread messages.}
+    }
+```
+
+另外，还有人手动编写了 `messages+intl-icu.es.yaml`，其中的键保持不变，复数形式则用西班牙语重写。使用独立组件 (`symfony/translation` 8.1.5) 渲染这两种语言以及德语：
+
+```php title="render.php"
+<?php
+require __DIR__.'/vendor/autoload.php';
+
+use Symfony\Component\Translation\Loader\YamlFileLoader;
+use Symfony\Component\Translation\Translator;
+
+$translator = new Translator('en');
+$translator->setFallbackLocales(['en']);
+$translator->addLoader('yaml', new YamlFileLoader());
+
+// +intl-icu 后缀会为 messages 域启用 ICU MessageFormat。
+foreach (['en', 'es'] as $locale) {
+    $file = __DIR__."/translations/messages+intl-icu.$locale.yaml";
+    $translator->addResource('yaml', $file, $locale, 'messages+intl-icu');
+}
+
+foreach (['en', 'es', 'de'] as $locale) {
+    echo $locale, ': ', $translator->trans('inbox.unread', ['count' => 3], 'messages', $locale), "\n";
+}
+```
+
+```text title="Output"
+en: You have 3 unread messages.
+es: Tienes 3 mensajes sin leer.
+de: You have 3 unread messages.
+```
+
+西班牙语之所以能用，是因为有人翻译了它。德语没有消息目录，于是 Symfony 会悄无声息地回退到英语：在完整的应用中，这次缺失会被记入日志，`debug:translation de` 也会把它列出来，但没有任何机制去生成德语译文。每新增一个键，每种语言都要把这个流程重走一遍。`translation:extract --force` 会把该键添加到每个目录中，并加上 `__` 前缀 (使用 `--no-fill` 时则留空) ，然后由人来翻译——要么手动翻译，要么在 TMS 中翻译，而 提供者 命令负责与 TMS 之间的推送和拉取。提供者 只负责搬运文件；翻译工作本身，以及它所依赖的 TMS 订阅套餐，仍需另行解决。
+
+## General Translation 如何融入 Symfony 应用
+
+渲染仍交由 Symfony 负责，翻译目录则由 General Translation 的 CLI 来填充。添加一个指向 translations 目录的 `yaml` 条目，并在每个文件名中用 `[locale]` 表示区域设置所在的位置：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "de"],
+  "files": {
+    "yaml": {
+      "include": ["translations/*.[locale].yaml"]
+    }
+  }
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) 会识别所有匹配的英文翻译目录 (例如 `messages+intl-icu.en.yaml` 和 `validators.en.yaml`) ，并为每个目标区域设置生成 `messages+intl-icu.es.yaml`、`validators.es.yaml` 等对应文件，同时完整保留你的键和域名称。在 `translation:extract` 向英文目录添加新键后，在 CI 中运行该命令即可。未发生变化的条目会复用之前的译文，因此每次运行只翻译新增或修改的文本。
+
+在 Symfony 中使用时，有几点需要注意：
+
+* **ICU 消息。** 在目录名称中保留 `+intl-icu`，以便 Symfony 使用 ICU 格式化翻译后的消息。生成后运行 `lint:translations`，并分别以 0、1、3 的数量预览收件箱消息。
+* **区域设置代码。** 沿用应用现有的区域设置名称。以 `pt_BR` 为例，将其添加到 `locales` 中，并在 `gt.config.json` 中设置 `"customMapping": { "pt_BR": { "code": "pt-BR" } }`。这样 CLI 会按巴西葡萄牙语进行翻译，并以 Symfony 的文件名 `messages.pt_BR.yaml` 写入。 (参见 [`customMapping`](/docs/cli/reference/config#custom-mapping)。) 
+* **CI 中的 Node.js。** CLI 是一个 npm 包，因此 CI 任务需要 Node.js 环境，并在密钥中配置 `GT_API_KEY` 和 `GT_PROJECT_ID`。 (参见[配置 CLI](/docs/cli/guides/configuring#credentials)。) 
+
+General Translation 不仅能填充目录，还能保持目录的一致性：上下文分组中的词汇表和自定义提示词会为其分配到的每个项目统一术语和语气，你的团队还可以[在仪表板中审阅和编辑译文](/docs/platform/dashboard/guides/reviewing-translations)。让 Symfony 应用、文档和营销网站共用同一个上下文分组，即可确保产品术语在三者之间保持一致。 (参见[为翻译定义上下文](/docs/platform/dashboard/guides/defining-context-for-translations)。)
+
+## Symfony Translation 与 General Translation 速览
+
+| 功能                | Symfony Translation                            | General Translation                                               |
+| ----------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| 作用                | 在 PHP 和 Twig 中查找并渲染消息                          | 生成 PHP 和 Twig 调用所用的消息目录                                           |
+| 是否翻译内容            | 否；通过提供者与 Crowdin、Loco、Lokalise 或 Phrase 同步目录   | 是，使用 [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| 目录格式              | YAML、XLIFF、PHP、JSON、PO 和 MO、CSV、INI、Qt、ICU 资源包 | 在此目录工作流中支持 YAML 和 JSON                                            |
+| 发现新字符串            | `translation:extract` 扫描 Twig、PHP 和约束          | 翻译英文目录中的全部内容                                                      |
+| ICU MessageFormat | 借助 `intl` 扩展使用 `+intl-icu` 目录                  | 翻译目录值，交由 Symfony 的 ICU 渲染器处理                                      |
+| 缺失的翻译             | 回退链、日志、`debug:translation`                     | 每次运行都会写入所有已配置的区域设置                                                |
+| 费用                | 免费，采用 MIT 许可；提供者另行计费                           | [按用量计费](https://generaltranslation.com/pricing)                   |
+
+## 如何选择
+
+就渲染而言，这并不是非此即彼的选择：Symfony 应用应继续使用 Symfony Translation。真正需要决定的是如何填充它的翻译目录。如果译员在 TMS 中处理 XLIFF、你需要采购专业人工翻译，或者现有流程已经运转良好，那就继续使用翻译提供者。 (参见[为什么使用 General Translation 而不是 TMS？](/kb/general-translation-vs-tms)) 如果你希望每次变更时都能在 CI 中自动翻译所有区域设置的 YAML 目录，在仪表板中统一术语并进行审校，而且无需外发文件、坐等返回，那就使用 General Translation。
+
+## 同时使用两者
+
+1. 先准备好 Symfony YAML 目录文件，然后按上文所述添加 `gt.config.json`。
+2. 如果你已有译文，请先使用 [`npx gt upload`](/docs/cli/reference/commands/upload) 将其上传，再生成新译文。
+3. Symfony 将新消息提取到英文目录文件后，在 CI 中运行 [`npx gt translate`](/docs/cli/reference/commands/translate)。
+4. 在仪表板中审阅译文。如果你在本地编辑了下载的 YAML 文件，请在下一次生成运行之前使用 [`npx gt save-local`](/docs/cli/reference/commands/save-local) 进行同步。
+
+## 要点总结
+
+* Symfony Translation 负责渲染消息、提取键，并与 TMS 提供商同步；生成译文则仍需单独完成。
+* General Translation 在 CI 中翻译 Symfony 的 YAML 目录，并保留原有的键和域，PHP 和 Twig 因此可以继续使用相同的消息。
+* 如果需要 XLIFF 和专业译员，请继续使用 TMS 提供商；如果希望每次变更后都自动翻译目录，请使用 General Translation。

@@ -1,0 +1,193 @@
+---
+title: 应该自建 i18n 还是使用 General Translation？
+summary: 手写的 i18n（每种语言一个字典，再加一个小巧的 t() 辅助函数）在只有一两种语言、文案不多时完全够用。但随着应用规模扩大，你得重新实现复数规则、后备内容和文件同步，而且译文仍需自己产出。General Translation 的开源库负责渲染，General Translation 则根据你的代码生成并更新译文。
+description: 一个字典加一个 t() 辅助函数足以应付一两种语言。随着应用规模扩大，你得重新实现复数形式、后备内容和文件同步，译文也仍需自己解决。General Translation 两者兼顾。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, how-to-handle-plurals-in-react, multilingual-nextjs-seo, i18n-without-translation-files, general-translation-vs-google-translate]
+---
+
+你可以自己实现国际化 (i18n) ：每种语言一个消息对象，一个按键查找并填入变量的 `t()` 辅助函数，一个区域设置切换器，再加上处理数字和日期的内置 `Intl` API。如果只有一两种语言、几十条字符串，这通常就够用了；让编程智能体添加一种语言时，它写出的往往也正是这样的代码。真正随应用增长而膨胀的，是辅助函数之外的一切：复数规则、缺失的键、让每个语言文件与代码保持同步，以及最根本的——产出每一条译文。General Translation 的开源库负责其中运行时的那部分工作，General Translation 则根据你的代码生成并更新译文。
+
+## 何时自行实现 i18n 就够用
+
+* **无第三方依赖。** 字典和辅助函数完全由你掌握，每一行代码都在你的控制之下。
+* **格式化交给平台。** `Intl.NumberFormat`、`Intl.DateTimeFormat`、`Intl.PluralRules` 和 `Intl.Locale` 已[内置于现代浏览器和 Node.js 中](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl)，能够按区域设置格式化货币、日期和复数类别。
+* **文案少且稳定。** 对于原型、内部工具，或者只额外支持一种语言、由团队成员自行撰写译文的网站，这样就已足够。
+* **复数规则与英语相同的语言。** 英语和德语都只使用 [`one` 和 `other`](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html) 两种类别。
+
+## 规模扩大后会出现哪些问题
+
+下面是一个典型的初版实现，其中加入了一个波兰语字典：
+
+```js title="i18n.mjs"
+const messages = {
+  en: {
+    greeting: 'Hello, {name}!',
+    files: { one: '{count} file', other: '{count} files' },
+    checkout: 'Checkout',
+  },
+  pl: {
+    greeting: 'Cześć, {name}!',
+    files: { one: '{count} plik', other: '{count} pliki' },
+    // “checkout” 尚未翻译
+  },
+};
+
+export function t(locale, key, vars = {}) {
+  let message = messages[locale][key];
+  if (typeof message === 'object') {
+    message = vars.count === 1 ? message.one : message.other;
+  }
+  return message.replace(/\{(\w+)\}/g, (_, name) => vars[name]);
+}
+
+console.log(t('pl', 'greeting', { name: 'Ania' }));
+console.log([1, 2, 5].map((count) => t('pl', 'files', { count })).join(', '));
+console.log(t('pl', 'checkout'));
+```
+
+使用 Node.js 24 运行：
+
+```text title="Output"
+Cześć, Ania!
+1 plik, 2 pliki, 5 pliki
+TypeError: Cannot read properties of undefined (reading 'replace')
+```
+
+这里同时出现了两个 bug。&quot;5 pliki&quot; 是错误的 (波兰语应为 &quot;5 plików&quot;) ，而未翻译的 `checkout` 键则会导致渲染崩溃。平台本身已经提供了修复这两个问题所需的能力：
+
+```js title="intl.mjs"
+// 各语言的复数类别
+for (const locale of ['en', 'ja', 'pl', 'ar']) {
+  console.log(locale, new Intl.PluralRules(locale).resolvedOptions().pluralCategories.join(' '));
+}
+const pl = new Intl.PluralRules('pl');
+console.log([1, 2, 5, 22].map((n) => `${n} → ${pl.select(n)}`).join(', '));
+
+// 货币和日期
+const date = new Date(Date.UTC(2026, 9, 16));
+for (const locale of ['en-US', 'de-DE', 'ja-JP']) {
+  const price = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(1234.5);
+  const day = new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+  console.log(locale, price, day);
+}
+
+// 文本方向
+console.log(new Intl.Locale('ar').getTextInfo().direction);
+```
+
+```text title="Output"
+en one other
+ja other
+pl one few many other
+ar zero one two few many other
+1 → one, 2 → few, 5 → many, 22 → few
+en-US €1,234.50 October 16, 2026
+de-DE 1.234,50 € 16. Oktober 2026
+ja-JP €1,234.50 2026年10月16日
+rtl
+```
+
+每处修复都不大，但积少成多：
+
+* **复数形式。** `n === 1` 无法处理波兰语 (四种类别) 和阿拉伯语 (六种类别) ，因此辅助函数需要借助 [`Intl.PluralRules`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules)，而且每个字典都要为每种类别各提供一个字符串。 (参见[如何在 React 中处理复数形式？](/kb/how-to-handle-plurals-in-react)) 
+* **词序。** 借助 `{name}` 这样的占位符，每种语言都可以自行调整值的位置，而字符串拼接做不到这一点：`t('by') + ' ' + author` 会把名字固定在末尾，但日语的写法是“Ana 著”。
+* **格式化。** `{count}` 插入的是原始数字，因此辅助函数还需要 [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat)，才能在波兰语中将 12,500 显示为“12 500”。
+* **缺失的键。** 辅助函数需要一条后备链 (先查目标语言，再查源语言，最后返回键本身) ，否则用户会看到 `undefined`，甚至遇到崩溃。
+* **保持文件同步。** `pl` 缺少 `checkout`，或者还停留在上个月的措辞——在用户亲眼看到之前，没有任何机制会提醒你。
+* **从右向左书写的语言。** 阿拉伯语和希伯来语需要在页面上设置 `lang` 和 `dir="rtl"`，并采用镜像布局。
+* **搜索引擎。** 如果语言切换器把用户的选择保存在 state 或 cookie 中，所有语言就会共用同一个 URL，而 Google 建议每种语言使用独立的 URL ([管理多语言网站](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)) 。 (参见[如何为多语言 Next.js 应用设置 SEO？](/kb/multilingual-nextjs-seo)) 
+* **译文本身。** 这项成本是任何辅助函数都省不掉的：总得有人写出“plików”以及每种语言中的其他所有字符串，而且英文每改动一次，就得再来一遍。
+
+等到辅助函数能处理复数类别、后备内容和数字格式化时，你实际上已经写出了一个国际化库的核心——而译文仍然要另外准备。
+
+## General Translation 的做法
+
+General Translation 保留了手动实现方式中行之有效的部分 (可读的文案和平台自带的格式化) ，并接管那些会随项目规模不断膨胀的部分。使用 `gt-react` (Next.js 项目则使用 `gt-next`) 时，文案直接写在组件中，用 [`<T>`](/docs/react/reference/components/t) 包裹即可，无需维护任何字典或辅助函数：
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num, Var } from 'gt-react';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <T>
+      <h1>Welcome back, <Var>{name}</Var></h1>
+      <Plural
+        n={count}
+        singular={<p>You have <Num>{count}</Num> unread message.</p>}
+        plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+      />
+    </T>
+  );
+}
+```
+
+[`<Plural>`](/docs/react/reference/components/plural) 依据各区域设置的 CLDR 复数规则来选择分支 (`Intl.PluralRules` 背后用的也是这套规则) ，因此根本不需要手写 `n === 1` 这类容易出错的判断。[`<Num>`](/docs/react/reference/components/num) 会按读者的区域设置格式化数量，而 [`<Var>`](/docs/react/reference/components/var) 中的值永远不会发送到 General Translation API。下面是使用 `gt-react` 11.4.12 在服务器端渲染该组件的结果，其中的西班牙语翻译是为演示而手动填入 [`gt generate`](/docs/cli/reference/commands/generate) 模板的 (已移除 React 的文本分隔符) ：
+
+```html title="Output"
+<!-- en, count = 12500 -->
+<h1>Welcome back, Ana</h1><p>You have 12,500 unread messages.</p>
+<!-- es, count = 12500 -->
+<h1>Hola de nuevo, Ana</h1><p>Tienes 12.500 mensajes sin leer.</p>
+```
+
+当某个区域设置缺少某个内容块的译文时，[`<T>`](/docs/react/reference/components/t) 会渲染源内容，而不是返回 `undefined` 或报错。
+
+更大的不同在于，译文由 General Translation 负责生成：
+
+* **结合上下文生成。** [`npx gt translate`](/docs/cli/reference/commands/translate) 会将每个 [`<T>`](/docs/react/reference/components/t) 块连同其元素、变量、复数分支以及 [`context`](/docs/react/reference/components/t#context) 备注 (如有) 一并发送，并为每个区域设置写入一个文件。在共享同一上下文分组的所有项目中，词汇表用于锁定术语，自定义提示词用于设定语气。 (参见[为翻译定义上下文](/docs/platform/dashboard/guides/defining-context-for-translations)。) 
+* **保持同步。** 每次运行只翻译新增和变更的内容，其余部分直接复用已有译文。你可以在 CI 中运行它，也可以让 General Translation 的 AI 智能体 [Locadex](/docs/platform/locadex/quickstart) 按你设定的触发条件自动发起拉取请求。对于 Next.js 和 React 应用，Locadex 还能用 [`<T>`](/docs/react/reference/components/t) 包裹现有文案。
+* **人工审校。** 你的团队可以在仪表板中编辑译文。 (参见[审校和编辑译文](/docs/platform/dashboard/guides/reviewing-translations)。) 
+* **文本方向与路由。** [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) 对阿拉伯语返回 `'rtl'`；`gt-next` 则可借助其[中间件](/docs/react/nextjs/app-router-middleware)为每个区域设置提供独立的 URL。
+
+这些 JavaScript 库均采用 MIT 许可证；只要自行提供译文，无需 General Translation 账户即可使用。如果应用配置为从应用包中加载全部译文，运行时便不会调用 General Translation。如需生成译文，可使用托管服务，[按用量计费](https://generaltranslation.com/pricing)。
+
+而在规模更大的场景中，Profound 借助 General Translation 以 47 种以上的区域设置发布其平台和文档。 (参见[生产环境部署案例](https://generaltranslation.com/enterprise)。)
+
+## 自行实现、开源库与 General Translation 对比一览
+
+|          | 自行实现的字典和辅助函数           | 开源库 (如 i18next)                                               | General Translation                                                                                                                                                   |
+| -------- | ---------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 依赖项      | 无                      | 库本身及框架绑定 (如 `react-i18next`)                                  | `gt-react` 或 `gt-next`，以及 `gt` CLI                                                                                                                                    |
+| 复数形式     | 自行编写选择逻辑，并在每个文件中提供每种形式 | 基于 CLDR 规则选择；各形式由人工或接入的翻译服务提供                                 | [`<Plural>`](/docs/react/reference/components/plural) 依据 CLDR 规则进行选择；翻译时会根据你编写的分支生成各目标语言所需的形式                                                                         |
+| 数字、日期、货币 | 自行调用 `Intl` API        | 基于 `Intl` 的内置格式化器                                             | [`<Num>`](/docs/react/reference/components/num)、[`<Currency>`](/docs/react/reference/components/currency) 和 [`<DateTime>`](/docs/react/reference/components/datetime) |
+| 缺失译文     | 取决于你的辅助函数如何处理          | [先回退到配置的语言，再显示键](https://www.i18next.com/principles/fallback) | 渲染源内容                                                                                                                                                                 |
+| 保持各语言同步  | 手动处理或使用自己编写的脚本         | 借助提取工具及你接入的翻译服务                                               | 每次运行 [`npx gt translate`](/docs/cli/reference/commands/translate) 都会翻译新增和变更的内容                                                                                        |
+| 由谁翻译     | 人工或你集成的服务              | 人工或接入的翻译服务                                                    | 由 AI 结合标记的 JSX 上下文、词汇表和自定义提示词进行翻译；你的团队可在仪表板中审核                                                                                                                        |
+| 成本       | 你投入的时间以及所集成服务的费用       | 库免费；翻译费用另计                                                    | JavaScript 库免费；[翻译按用量计费](https://generaltranslation.com/pricing)                                                                                                      |
+
+## 何时自行构建
+
+如果你只需支持一两种语言、文案量少且稳定、所用语言的复数规律与英语相同，并且由团队成员自己编写译文，或者项目只是原型，那么自行构建即可。如果你需要复数规则和后备内容，并且已经有译者或翻译管理系统，可以引入 i18next 等开源库。如果你要支持多种语言、每次发布都会改动文案，或者不该让团队成员去编写波兰语的复数形式，那就使用 General Translation：General Translation 会结合代码上下文生成译文，并在每次构建时让所有语言保持最新。 (参见 [General Translation 与 i18next、react-intl 和 next-intl 的对比](/kb/general-translation-vs-i18n-libraries)。)
+
+## 保留你的字典，让 CLI 来翻译
+
+不必重写辅助函数，也能告别手动翻译。把每种语言的消息分别移到各自的 JSON 文件中 (`locales/en.json`、`locales/es.json`) ，继续使用你的 `t()`，然后在 `gt.config.json` 中通过 `[locale]` 占位符指向这些文件：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "locales/[locale].json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) 会将 `locales/en.json` 列为源文件，完整运行后则会写入 `locales/es.json`。本示例使用英语和西班牙语消息，两者的键结构一致，并包含 `{name}` 等简单占位符。你可以添加配套文件 `locales/en.metadata.json`，为每个键补充上下文或字符数限制。请参阅 [JSON](/docs/cli/reference/formats/json-files) 和[键级元数据](/docs/cli/reference/keyed-metadata)。键查找和复数形式选择仍由你的辅助函数负责，请对照渲染出的西班牙语结果检查这两项是否正确。
+
+如需逐步弃用该辅助函数，可以每次将一个组件用 [`<T>`](/docs/react/reference/components/t) 包裹，或者借助 [`useTranslations`](/docs/react/guides/translating-with-dictionaries) 继续使用键。如果由编程智能体来完成迁移，请向其提供 General Translation 的[智能体使用说明](/docs/overview/for-coding-agents)，而不是让它编写 `t()` 辅助函数。可以从 [Next.js 快速入门](/docs/react/nextjs-quickstart)或 [React SPA 快速入门](/docs/react/react-spa-quickstart)开始。
+
+## 要点总结
+
+* 如果只需支持一两种语言、文案不多，且复数规则与英语类似，那么一个字典、一个 `t()` 辅助函数，再加上内置的 `Intl` API 就够用了。
+* 随着应用规模扩大，你需要自行维护复数选择、后备内容、格式化、文件同步、从右到左支持、按区域设置区分的 URL，以及生成译文的整套流程。
+* General Translation 的库负责处理运行时的工作，General Translation 会以你的代码为上下文生成译文；如果你想保留手写的 JSON 字典，CLI 也能直接翻译它。

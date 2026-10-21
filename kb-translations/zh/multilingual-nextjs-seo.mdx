@@ -1,0 +1,315 @@
+---
+title: 如何为多语言 Next.js 应用设置 SEO？
+summary: 为每种语言提供独立的 URL，设置 html lang 属性，让每个页面的规范网址指向页面自身，为每种语言添加 hreflang 替代项，翻译标题和描述，并在站点地图中列出所有语言版本。
+description: 为每种语言提供独立的 URL，设置 html lang，使用自引用的规范网址和 hreflang 替代项，翻译标题和描述，并在站点地图中列出所有语言版本。
+date: 2026-02-17
+category: multilingual-seo
+redirectFrom: [multilingual-nextjs-seo]
+related: [i18n-without-translation-files, best-localization-software]
+---
+
+## 为什么多语言 SEO 需要特别关注
+
+大多数开发者在为 Next.js 应用添加 i18n 时，只关注 UI 的翻译，做完便以为大功告成。
+但如果搜索引擎无法发现、索引并正确关联你的各个语言版本，
+那么所有翻译工作都将付诸东流。
+
+未正确配置 SEO 的多语言网站会面临以下问题：
+
+* Google 可能只索引其中一个语言版本，而忽略其余版本
+* 用西班牙语搜索的用户看到的却是英文页面
+* Google 将 `/en/about` 和 `/fr/about` 视为同一页面，导致网站因重复内容而受到惩罚
+* 搜索结果摘要中显示的语言不正确
+
+**好消息是：** 在 Next.js 中做好多语言 SEO 并不复杂。
+你只需要处理好六个方面，本指南将使用 [`gt-next`](/docs/react/nextjs-quickstart) 逐一讲解。
+
+***
+
+## 1. 基于区域设置的 URL 路由
+
+多语言 SEO 的基础，是为每种语言提供独立的 URL。
+搜索引擎需要独立且可抓取的 URL，才能分别索引每个语言版本。
+
+也就是说，要**把区域设置放进 URL**——而不是依赖 cookie 或查询参数，也不能只靠 `Accept-Language` 检测。
+
+```text
+✅ generaltranslation.com/en/about
+✅ generaltranslation.com/fr/about
+✅ generaltranslation.com/es/about
+
+❌ generaltranslation.com/about?lang=fr
+❌ generaltranslation.com/about （区域设置存储在 cookie 中）
+```
+
+### 使用 gt-next 配置区域设置路由
+
+首先，将页面嵌套在 `[locale]` 动态路由段下：
+
+```text
+app/
+└── [locale]/
+    ├── layout.tsx
+    ├── page.tsx
+    └── about/
+        └── page.tsx
+```
+
+然后在项目根目录下创建中间件 (Next.js 16+ 使用 `proxy.ts`，Next.js 15 及以下版本使用 `middleware.ts`) ：
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+
+export default createNextMiddleware();
+
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
+};
+```
+
+这样即可自动生成带区域设置前缀的 URL。
+默认情况下，默认区域设置 (例如英语) 不带前缀——`/about` 保持简洁，
+而西班牙语用户访问的是 `/es/about`，法语用户访问的是 `/fr/about`。
+
+***
+
+## 2. 设置 HTML `lang` 属性
+
+`<html>` 标签上的 `lang` 属性用于告诉浏览器和搜索引擎页面使用的是哪种语言。
+这是提升无障碍性和 SEO 最简单、也最见效的措施之一。
+
+如果缺少该属性，屏幕阅读器只能猜测页面语言 (而且经常猜错) ，搜索引擎对页面语言的判断也会更没把握。
+
+{/* useLocale 可用于客户端和服务端渲染的组件，但不支持异步组件 */}
+
+gt-next 提供了 [`useLocale`](/docs/react/reference/hooks/use-locale) 钩子，让你在根布局中轻松实现这一点：
+
+```tsx title="app/[locale]/layout.tsx"
+import { useLocale, GTProvider } from 'gt-next';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = useLocale();
+
+  return (
+    <html lang={locale}>
+      <body>
+        <GTProvider>
+          {children}
+        </GTProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+[`useLocale`](/docs/react/reference/hooks/use-locale) 返回 BCP 47 区域设置代码 (例如 `en-US`、`ar`、`zh-Hans`) 。
+
+***
+
+## 3. 规范网址
+
+规范网址标签 (canonical 标签) 用于告诉搜索引擎哪个 URL 是页面的&quot;主&quot;版本。
+对于多语言网站，每个语言版本都应将自身设为规范网址：
+
+```html
+<!-- 位于 /fr/about 页面 -->
+<link rel="canonical" href="https://example.com/fr/about" />
+```
+
+这样可以避免搜索引擎将你的法语页面视为英语页面的重复内容。
+
+在 Next.js 中，你可以通过[元数据 API](https://nextjs.org/docs/app/api-reference/functions/generate-metadata) 设置规范网址。
+将它与 gt-next 的 [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) 搭配使用，即可为每个区域设置生成正确的规范网址：
+
+```tsx title="app/[locale]/about/page.tsx"
+import { getLocale } from 'gt-next/server';
+
+const BASE_URL = 'https://example.com';
+
+export async function generateMetadata() {
+  const locale = await getLocale();
+
+  return {
+    alternates: {
+      canonical: `${BASE_URL}/${locale}/about`,
+    },
+  };
+}
+
+export default function AboutPage() {
+  return <h1>About Us</h1>;
+}
+```
+
+如果默认区域设置不带前缀，请相应调整：
+
+```tsx
+import { getDefaultLocale } from 'gt-next';
+import { getLocale } from 'gt-next/server';
+
+export async function generateMetadata() {
+  const locale = await getLocale();
+  const defaultLocale = getDefaultLocale();
+  const path = '/about';
+
+  const prefix = locale === defaultLocale ? '' : `/${locale}`;
+
+  return {
+    alternates: {
+      canonical: `${BASE_URL}${prefix}${path}`,
+    },
+  };
+}
+```
+
+***
+
+## 4. Hreflang 标签
+
+Hreflang 标签是多语言 SEO 中最重要的信号。
+它告诉搜索引擎：&quot;此页面还有以下语言版本，对应的 URL 如下。&quot;
+
+如果没有 hreflang，Google 只能自行猜测该在搜索结果中显示哪个语言版本——而且经常猜错。
+
+```html
+<link rel="alternate" hreflang="en" href="https://example.com/about" />
+<link rel="alternate" hreflang="fr" href="https://example.com/fr/about" />
+<link rel="alternate" hreflang="es" href="https://example.com/es/about" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/about" />
+```
+
+`x-default` 标签用于告诉搜索引擎：当用户与所有指定语言都不匹配时，应显示哪个 URL。
+
+在 Next.js 中，你可以通过元数据 API 的 `alternates.languages` 属性添加 hreflang。
+下面是一个可与 gt-next 配合使用的可复用辅助函数：
+
+```tsx title="lib/i18n-metadata.ts"
+import { getDefaultLocale } from 'gt-next';
+import { getLocale } from 'gt-next/server';
+
+const BASE_URL = 'https://example.com';
+const SUPPORTED_LOCALES = ['en', 'fr', 'es'];
+
+export async function getI18NMetadata(path: string) {
+  const locale = await getLocale();
+  const defaultLocale = getDefaultLocale();
+
+  const getUrl = (loc: string) => {
+    const prefix = loc === defaultLocale ? '' : `/${loc}`;
+    return `${BASE_URL}${prefix}${path}`;
+  };
+
+  const languages: Record<string, string> = {};
+  for (const loc of SUPPORTED_LOCALES) {
+    languages[loc] = getUrl(loc);
+  }
+  languages['x-default'] = getUrl(defaultLocale);
+
+  return {
+    alternates: {
+      canonical: getUrl(locale),
+      languages,
+    },
+  };
+}
+```
+
+然后在任意页面中使用它：
+
+```tsx title="app/[locale]/about/page.tsx"
+import { getI18NMetadata } from '@/lib/i18n-metadata';
+
+export async function generateMetadata() {
+  return await getI18NMetadata('/about');
+}
+```
+
+只需一次调用，即可同时生成规范网址标签和所有 hreflang 标签。
+
+***
+
+## 5. 已翻译的元数据
+
+搜索引擎会在搜索结果中展示页面的标题和描述。
+如果法语页面的标题和描述仍是英文，用户就不太愿意点击，Google 也可能会降低该结果的排名。
+
+使用 gt-next 的 [`getGT`](/docs/react/nextjs/reference/functions/get-gt) 函数翻译元数据字符串：
+
+```tsx title="app/[locale]/about/page.tsx"
+import { getGT } from 'gt-next/server';
+import { getI18NMetadata } from '@/lib/i18n-metadata';
+
+export async function generateMetadata() {
+  const t = await getGT();
+  const i18nMeta = await getI18NMetadata('/about');
+
+  return {
+    title: t('About Us'),
+    description: t('Learn about our mission and team.'),
+    ...i18nMeta,
+  };
+}
+```
+
+这样，搜索结果中就会显示本地化的标题和描述，
+从而显著提升非英语搜索的点击率。
+
+***
+
+## 6. 多语言站点地图
+
+站点地图可帮助搜索引擎发现你网站的所有页面，包括各个语言版本。
+对于多语言网站，你还应在站点地图中添加 hreflang 标注。
+
+Next.js 支持通过 `sitemap.ts` 文件以[编程方式生成站点地图](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap)：
+
+```ts title="app/sitemap.ts"
+import { MetadataRoute } from 'next';
+
+const BASE_URL = 'https://example.com';
+const LOCALES = ['en', 'fr', 'es'];
+const DEFAULT_LOCALE = 'en';
+const PAGES = ['/', '/about', '/blog', '/contact'];
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  return PAGES.flatMap((path) => {
+    const getUrl = (locale: string) => {
+      const prefix = locale === DEFAULT_LOCALE ? '' : `/${locale}`;
+      return `${BASE_URL}${prefix}${path === '/' ? '' : path}`;
+    };
+
+    const languages: Record<string, string> = {};
+    for (const locale of LOCALES) {
+      languages[locale] = getUrl(locale);
+    }
+
+    return LOCALES.map((locale) => ({
+      url: getUrl(locale),
+      lastModified: new Date(),
+      alternates: { languages },
+    }));
+  });
+}
+```
+
+这会生成一个站点地图，为每个页面的每个区域设置各生成一个条目，
+且每个条目都带有指向所有语言版本的 hreflang 标注。
+
+***
+
+## 检查清单
+
+以下是本文所涵盖内容的简要总结：
+
+| SEO 要求         | 实现方式                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------- |
+| URL 中包含区域设置    | [`createNextMiddleware()`](/docs/react/nextjs/reference/functions/create-next-middleware) 配合 `[locale]` 动态路由段 |
+| HTML `lang` 属性 | 在根布局中使用 [`useLocale()`](/docs/react/reference/hooks/use-locale)                                               |
+| 规范网址           | [`getLocale()`](/docs/react/nextjs/reference/functions/get-locale) + Next.js 元数据 API `alternates.canonical`   |
+| Hreflang 标签    | 在 Next.js 元数据 API 的 `alternates.languages` 中列出所有支持的语言区域                                                       |
+| 已翻译的元数据        | 使用 [`getGT()`](/docs/react/nextjs/reference/functions/get-gt) 翻译页面标题和描述                                       |
+| 多语言站点地图        | 在 `sitemap.ts` 中为每个区域设置生成条目及 hreflang 替代项                                                                     |
+
+***
+
+使用 [`gt-next` 快速入门](/docs/react/nextjs-quickstart)搭建完整的国际化技术栈，然后参考[中间件指南](/docs/react/nextjs/app-router-middleware)配置路由，借助[静态站点生成](/docs/react/nextjs/app-router-static-site-generation)生成多语言页面，并添加[从右到左支持](/docs/react/guides/managing-locales)。

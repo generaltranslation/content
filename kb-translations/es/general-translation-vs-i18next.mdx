@@ -1,0 +1,134 @@
+---
+title: "General Translation vs. i18next: ¿cuál deberías usar?"
+summary: Elige General Translation para mantener los textos inline en los componentes de React y generar traducciones a partir de su estructura JSX y del contexto del producto. También puedes conservar i18next y usar General Translation para traducir los catálogos que ya tienes. i18next se encarga de renderizar los mensajes y seleccionar los plurales; las traducciones las genera un servicio independiente.
+description: i18next renderiza mensajes y selecciona plurales, pero las traducciones provienen de un servicio independiente. General Translation las genera, ya sea a partir de textos inline en componentes de React o de tus catálogos de i18next.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-react-intl, general-translation-vs-lingui, general-translation-vs-vue-i18n, how-to-handle-plurals-in-react]
+---
+
+i18next carga archivos de traducción, elige el mensaje correspondiente al idioma del usuario, resuelve las formas plurales, interpola valores y formatea números y fechas con `Intl`. Está disponible en npm desde 2012 y, junto con `react-i18next` y `next-i18next`, es una opción habitual para aplicaciones de React y Next.js. Lo que i18next no hace es traducir: cada mensaje en cada idioma lo aportas tú, tus traductores o un servicio como Locize, que [gestionan los creadores de i18next](https://www.i18next.com/). Las bibliotecas de General Translation realizan el mismo trabajo de renderizado y, además, General Translation genera las traducciones a partir de los textos de tus componentes.
+
+## Lo que i18next hace bien
+
+* **Adopción.** Es uno de los frameworks de i18n para JavaScript más utilizados.
+* **Amplitud.** [Sus bindings cubren React, Vue, Angular, Svelte y más](https://www.i18next.com/overview/supported-frameworks), y sus plugins cargan archivos por HTTP, detectan el idioma del usuario y permiten pasar los mensajes al formato de mensajes ICU con `i18next-icu`.
+* **Compatibilidad completa con plurales y contexto.** Las claves llevan [sufijos de plural de CLDR](https://www.i18next.com/translation-function/plurals) como `_one`, `_few` y `_many`, que se resuelven con `Intl.PluralRules`, y variantes de contexto como `friend_male`.
+* **Herramientas.** La CLI oficial [`i18next-cli`](https://github.com/i18next/i18next-cli) extrae claves, genera tipos de TypeScript y escribe las claves de plural de cada configuración regional. Además, su comando `status` termina con un error cuando a una configuración regional le faltan claves por traducir, de modo que la CI puede detectar las carencias.
+* **Componentes de servidor.** [`next-i18next` 16](https://github.com/i18next/next-i18next) añade una función de traducción server-side para el App Router de Next.js.
+* **Sin servicio obligatorio.** Los catálogos son archivos JSON simples bajo tu control, e i18next funciona con cualquier servicio de traducción o sin ninguno.
+
+## Lo que i18next deja en tus manos
+
+Este es un pequeño buzón de entrada hecho con react-i18next. Cada cadena recibe una clave, y cada forma plural necesita su propia clave:
+
+```json title="locales/en/translation.json"
+{
+  "inbox": {
+    "title": "Inbox",
+    "unread_one": "You have {{count}} unread message.",
+    "unread_other": "You have {{count}} unread messages."
+  }
+}
+```
+
+```tsx title="Inbox.tsx"
+import { useTranslation } from 'react-i18next';
+
+export function Inbox({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <section>
+      <h1>{t('inbox.title')}</h1>
+      <p>{t('inbox.unread', { count })}</p>
+    </section>
+  );
+}
+```
+
+Todos los demás idiomas necesitan las mismas claves de mensaje, con las formas plurales propias de cada uno. Por ejemplo, el polaco necesita `unread_one`, `unread_few`, `unread_many` y `unread_other`. Si un archivo en polaco solo tiene las formas `_one` y `_other`, que siguen el modelo del inglés, y tu [idioma de respaldo](https://www.i18next.com/principles/fallback) es el inglés, cantidades como 2 y 5 se mostrarán en inglés:
+
+```text title="Output"
+pl, count 1:  Masz 1 nieprzeczytaną wiadomość.
+pl, count 2:  You have 2 unread messages.
+pl, count 5:  You have 5 unread messages.
+pl, count 22: You have 22 unread messages.
+```
+
+Al ejecutar `i18next-cli status` en CI se detectan las formas que faltan. Los servicios de traducción pueden generar el contenido de los catálogos; tu aplicación sigue haciendo referencia a claves como `inbox.unread`, y el flujo de trabajo de extracción y traducción mantiene esos catálogos al día.
+
+## General Translation mantiene el texto inline y genera las traducciones
+
+Las bibliotecas de General Translation hacen el mismo trabajo que i18next: seleccionan los mensajes de cada configuración regional, aplican sus reglas de plural, interpolan variables y dan formato a números, monedas y fechas con [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency) y [`<DateTime>`](/docs/react/reference/components/datetime). Además, los equipos que prefieren trabajar con claves pueden mantener diccionarios con [`useTranslations`](/docs/react/reference/hooks/use-translations). Pero General Translation va más allá de i18next: genera las traducciones. Esta es la misma bandeja de entrada con `gt-react`:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) envía cada bloque [`<T>`](/docs/react/reference/components/t), junto con su estructura de elementos, a la API de General Translation antes de la compilación y genera una traducción para cada configuración regional de destino. Las ramas de origen genéricas `singular` y `plural` aportan el texto para las formas que necesita cada idioma de destino. Después, [`<Plural>`](/docs/react/reference/components/plural) selecciona una rama traducida según las reglas de esa configuración regional. Los valores envueltos en [`<Var>`](/docs/react/reference/components/var) nunca se envían a la API.
+
+Cuando editas una oración dentro de [`<T>`](/docs/react/reference/components/t), la siguiente ejecución de traducción la actualiza en cada idioma y reutiliza las traducciones del contenido que no ha cambiado. Los revisores trabajan en el [Editor de Traducciones del panel de control](/docs/platform/dashboard/guides/reviewing-translations), así que editar traducciones no requiere modificar los componentes.
+
+Las bibliotecas de JavaScript tienen licencia MIT y funcionan sin cuenta si proporcionas tus propias traducciones. Una aplicación configurada para cargar todas las traducciones desde su paquete no hace ninguna llamada a General Translation en tiempo de ejecución. `gt-react` y `gt-next` no dependen de ninguna otra biblioteca de i18n.
+
+Cursor ofrece más de 14 configuraciones regionales en su web y su documentación gracias a General Translation. (Consulta los [despliegues en producción](https://generaltranslation.com/enterprise)).
+
+## i18next frente a General Translation de un vistazo
+
+| Característica                  | i18next                                                                    | General Translation                                                                                                                                 |
+| ------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cómo escribes el texto          | Claves en archivos JSON por idioma y espacio de nombres                    | JSX dentro de [`<T>`](/docs/react/reference/components/t), cadenas mediante [`useGT`](/docs/react/reference/hooks/use-gt) o diccionarios con claves |
+| Traduce tu contenido            | No                                                                         | Sí, con [`npx gt translate`](/docs/cli/reference/commands/translate)                                                                                |
+| De dónde salen las traducciones | De ti, de traductores o de un servicio como Locize                         | Se generan con el contexto de tu código o las escribe tu equipo                                                                                     |
+| Formas plurales                 | Una clave por cada forma de CLDR, escrita para cada idioma                 | Ramas de [`<Plural>`](/docs/react/reference/components/plural), traducidas junto con el resto del bloque                                            |
+| Contexto de traducción          | Mensajes de origen y contexto que aporta tu flujo de trabajo de traducción | La estructura de los bloques JSX marcados, notas de contexto, y el glosario y los prompts personalizados compartidos                                |
+| Frameworks                      | React, Next.js y bindings para Vue, Angular, Svelte y más                  | React, Next.js, Vue, Node.js y [otros SDK](/docs/overview/get-started)                                                                              |
+| Requiere cuenta                 | No                                                                         | No para las bibliotecas; la traducción se ejecuta a través de un proyecto de General Translation                                                    |
+
+Quédate con i18next si tus catálogos y tu proceso de traducción ya funcionan, si trabajas con un framework que las bibliotecas de General Translation no admiten o si prefieres claves que se mantengan estables aunque cambie el texto. Elige General Translation si quieres el texto inline en tus componentes, traducciones generadas con el contexto de tu código y todos los idiomas al día en cada compilación.
+
+## Mantén i18next y deja que General Translation lo traduzca
+
+No tienes que cambiar de biblioteca. La CLI de `gt` detecta `i18next` en tu `package.json` y conserva su sintaxis de interpolación. A continuación se muestra una configuración para traducir al alemán el catálogo de la bandeja de entrada anterior:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["de"],
+  "files": {
+    "json": {
+      "include": ["locales/[locale]/translation.json"]
+    }
+  }
+}
+```
+
+El inglés y el alemán usan la misma estructura de claves de plural `_one` y `_other`. Esta configuración genera `locales/de/translation.json` a partir de `locales/en/translation.json`. Puedes agregar contexto por clave, como dónde aparece una cadena, con [metadatos asociados a claves](/docs/cli/reference/keyed-metadata). Ejecuta [`npx gt upload`](/docs/cli/reference/commands/upload) para importar tus archivos de origen y las traducciones existentes antes de ejecutar [`npx gt translate`](/docs/cli/reference/commands/translate) para el contenido nuevo.
+
+Si prefieres pasarte a [`<T>`](/docs/react/reference/components/t), sigue la guía [Migrar desde bibliotecas de i18n](/docs/react/guides/migrating-i18n-libraries). En ella se explica cómo reemplazar las búsquedas por clave con texto inline, conservar tus diccionarios con [`useTranslations`](/docs/react/reference/hooks/use-translations) y usar ambas bibliotecas a la vez mientras migras ruta por ruta. (Consulta [General Translation frente a i18next, react-intl y next-intl](/kb/general-translation-vs-i18n-libraries) para ver cómo se compara i18next con las demás).
+
+## ¿Cómo gestiono el polaco y otros idiomas con muchas formas plurales en i18next?
+
+Cada idioma necesita una clave para cada forma plural de CLDR que utilice, como `_one`, `_few`, `_many` y `_other` en el caso del polaco. Ejecuta `i18next-cli status` en CI para detectar las formas que falten. Con la redacción inline de General Translation, escribe las ramas `singular` y `plural` que se muestran arriba y el servicio de traducción generará las formas del idioma de destino. [`<Plural>`](/docs/react/reference/components/plural) selecciona la adecuada en tiempo de ejecución.
+
+## Conclusiones clave
+
+* i18next renderiza catálogos basados en claves y gestiona la selección de plurales; las traducciones las generan personas o un servicio conectado.
+* Las bibliotecas de General Translation renderizan las traducciones de la misma manera, pero además General Translation se encarga de traducir, a partir del texto escrito inline en [`<T>`](/docs/react/reference/components/t).
+* Puedes conservar i18next y dejar que la CLI `gt` traduzca sus archivos JSON, o migrar a [`<T>`](/docs/react/reference/components/t) ruta por ruta.

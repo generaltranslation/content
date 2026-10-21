@@ -1,0 +1,116 @@
+---
+title: "General Translation или Mobility: что выбрать?"
+summary: Mobility хранит переведённые атрибуты моделей в вашей базе данных. General Translation создаёт эти переводы через свой API с учётом вашего Glossary и пользовательских промптов. Используйте оба инструмента, чтобы переводить карточки товаров, публикации и другой контент из базы данных, не отказываясь от своих моделей Rails.
+description: Mobility хранит переведённые атрибуты моделей в вашей базе данных. General Translation создаёт эти переводы через свой API с учётом вашего Glossary и пользовательских промптов. Используйте оба.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-rails-i18n, general-translation-vs-i18n-tasks, general-translation-vs-google-translate, general-translation-vs-i18n-libraries, general-translation-vs-tms]
+---
+
+Mobility — это Ruby-гем для перевода данных в вашей базе данных: вы объявляете `translates :title` в модели, и `post.title` возвращает заголовок в текущей локали, считывая его из выбранного вами бэкенда хранения. Mobility хранит и извлекает переводы, но создавать их должны ваши редакторы, переводчики или внешний сервис. General Translation предоставляет переводы через свой HTTP API. Mobility хранит переведённые атрибуты в вашей существующей базе данных, так что с ними работают те же запросы и методы моделей, что и сейчас.
+
+## Сильные стороны Mobility
+
+* **Выбор способа хранения.** Бэкенд `key_value`, используемый по умолчанию, [хранит все переводы в двух общих таблицах](https://github.com/shioyama/mobility/wiki/KeyValue-Backend) (одна для строк, другая для текста). Бэкенд `table` использует отдельную таблицу переводов для каждой модели (подход Globalize), `column` — столбцы с суффиксами, например `title_en` и `title_es`, `serialized` хранит переводы в одном текстовом столбце, а в PostgreSQL бэкенды `json`, `jsonb`, `hstore` и `container` (один столбец jsonb на модель) хранят их нативно. Можно также написать собственный бэкенд.
+* **Единый API для всех бэкендов.** Чтение и запись выполняются с учётом `I18n.locale`, а плагины (резервные варианты, методы доступа для отдельных локалей вроде `post.title_es`, отслеживание изменений, кэширование и проверка наличия значений) [работают одинаково, какой бы бэкенд вы ни выбрали](https://github.com/shioyama/mobility#backends).
+* **Запросы.** [`Post.i18n.where(title: "...")`](https://github.com/shioyama/mobility#querying) строит JOIN-ы для текущей локали, поэтому искать по переведённым атрибутам можно, не зная, как они хранятся.
+* **Поддержка ORM.** Mobility [работает с Active Record 7.0 и новее, а также с Sequel](https://github.com/shioyama/mobility#installation), а в её вики есть руководство по миграции с Globalize.
+* **Бесплатно.** Распространяется по лицензии MIT; [текущий релиз — 1.3.2](https://rubygems.org/gems/mobility).
+
+## Что Mobility оставляет на ваше усмотрение
+
+Вот запись с заголовком и телом на английском, которая использует бэкенд `key_value` на SQLite, с резервным переходом с испанского на английский только для заголовка:
+
+```ruby title="app/models/post.rb"
+class Post < ApplicationRecord
+  extend Mobility
+  translates :title, type: :string, fallbacks: { es: :en }
+  translates :body,  type: :text
+end
+```
+
+```ruby
+post = Post.create!(title: "Spring sale", body: "Everything is 20% off this week.")
+
+I18n.with_locale(:es) { post.title } # => "Spring sale" (на английском, благодаря резервной локали)
+I18n.with_locale(:es) { post.body }  # => nil
+I18n.with_locale(:ja) { post.title } # => nil
+```
+
+Для слоя хранения это правильное поведение: Mobility сохранил значения на английском, а все остальные локали остаются пустыми, пока кто-нибудь их не заполнит. С резервным языком испаноязычные читатели увидят английский текст, без него — ничего. Если контент меняется каждый день (карточки товаров, статьи, страницы справки), кому-то придётся переводить каждую новую или отредактированную запись на каждый язык и сохранять её в нужной локали.
+
+## Заполнение атрибутов Mobility с помощью General Translation
+
+Эндпоинт перевода во время выполнения General Translation, `POST https://api.gtx.dev/v2/translate`, переводит строки по запросу. В качестве bearer-токена он принимает ключ API проекта с разрешением **Runtime translation**, а в теле запроса — объект `requests`, ключами которого служат ваши собственные идентификаторы. Каждый элемент содержит строку `source` и необязательные `metadata`, например заметку `context`. Кроме того, в теле передаются `sourceLocale`, `targetLocale` и объект `metadata` верхнего уровня (он может быть пустым). Ключами ответа служат те же идентификаторы. Для всего этого достаточно небольшого метода на Ruby:
+
+```ruby title="app/services/gt_translate.rb"
+require "net/http"
+require "json"
+
+# Переводит хеш вида { field => text } через runtime API General Translation.
+# Возвращает все запрошенные переводы или выбрасывает исключение до записи в базу данных.
+def gt_translate(fields, from:, to:, context: nil)
+  uri = URI("https://api.gtx.dev/v2/translate")
+  requests = fields.to_h do |field, text|
+    [field.to_s, { source: text, metadata: { dataFormat: "STRING", context: context }.compact }]
+  end
+
+  request = Net::HTTP::Post.new(uri)
+  request["Authorization"] = "Bearer #{ENV.fetch("GT_API_KEY")}" # ключ проекта с разрешением Runtime translation (перевод во время выполнения)
+  request["Content-Type"] = "application/json"
+  request["gt-api-version"] = "2026-03-06.v1"
+  request.body = { requests:, sourceLocale: from.to_s, targetLocale: to.to_s, metadata: {} }.to_json
+
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true,
+                            open_timeout: 5, read_timeout: 30) { |http| http.request(request) }
+  raise "Translation request failed (#{response.code})" unless response.is_a?(Net::HTTPSuccess)
+
+  results = JSON.parse(response.body)
+  requests.keys.to_h do |field|
+    result = results.fetch(field)
+    unless result["success"] == true && result["translation"].is_a?(String)
+      raise "Translation incomplete for #{field}"
+    end
+    [field, result.fetch("translation")]
+  end
+end
+```
+
+Чтобы разово перевести приведённую выше запись, прочитайте её атрибуты на английском и сохраните полный результат на испанском:
+
+```ruby
+source = Mobility.with_locale(:en) do
+  { title: post.title(fallback: false), body: post.body(fallback: false) }
+end
+translated = gt_translate(source,
+                          from: :en, to: :es, context: "Blog post for an online shoe store")
+Mobility.with_locale(:es) { post.update!(translated) }
+```
+
+Прежде чем обновить запись, вспомогательная функция проверяет, что для каждого запрошенного поля есть перевод. Стандартные валидации вашей модели при этом продолжают действовать. (Поля запроса и ответа описаны в [справочнике по эндпоинту](/docs/platform/openapi/reference/translation/translate-runtime).)
+
+General Translation делает здесь больше, чем простой вызов машинного перевода: эндпоинт переводит с учётом [Glossary и пользовательских промптов](/docs/platform/dashboard/guides/defining-context-for-translations) вашего проекта, поэтому названия продуктов и тон согласуются с остальным продуктом. Заметка с контекстом сообщает, что текст предназначен для обувного магазина, а общая терминология делает описания товаров единообразными с вашим приложением и маркетинговым сайтом. Храните ключ API на сервере. Для постоянной автоматизации встройте перевод в существующий рабочий процесс публикации контента и соблюдайте [ограничения частоты запросов](/docs/platform/openapi/overview#api-basics) API.
+
+В примере результат сохраняется напрямую в модель. Если ваши редакторы утверждают контент перед публикацией, сохраняйте результат через тот же процесс черновиков и публикации, что и исходную статью.
+
+## Mobility и General Translation: краткое сравнение
+
+| Возможность                         | Mobility                                             | General Translation                                                                                       |
+| ----------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Что это                             | Ruby-гем для хранения переведённых атрибутов моделей | Платформа перевода с HTTP API, CLI, библиотеками для JavaScript и Python и панелью управления (Dashboard) |
+| Хранит переводы в вашей базе данных | Да, поддерживает восемь бэкендов хранения            | Поставляет переводы в те же атрибуты моделей                                                              |
+| Создаёт переводы                    | Нет                                                  | Да, через `POST /v2/translate`                                                                            |
+| Интеграция с Ruby                   | Атрибуты моделей и методы доступа для отдельных локалей             | HTTP API, вызываемый из Ruby                                                                              |
+| Единообразие терминологии и тона    | Зависит от ваших переводчиков                        | Glossary и пользовательские промпты применяются к каждому запросу                                         |
+| Стоимость                           | Бесплатно, лицензия MIT                              | [Оплата по факту использования](https://generaltranslation.com/pricing)                                   |
+
+## Когда достаточно одного Mobility
+
+Ограничьтесь Mobility, если переводами у вас уже занимаются люди: редакторы, которые заполняют каждую языковую версию через форму в админке, бюро переводов, или если речь идёт о контенте, который нужно переводить вручную, например о правовых текстах. Mobility также хватит, если вы поддерживаете два-три языка, а записи меняются редко. Подключайте General Translation, когда контент появляется быстрее, чем люди успевают его переводить (например, пользовательские объявления, статьи поддержки или каталог с тысячами товаров), и вы хотите, чтобы каждая новая запись становилась доступна на всех языках сразу после сохранения.
+
+## Основные выводы
+
+* Mobility хранит и извлекает переведённые атрибуты моделей с помощью восьми бэкендов и поддерживает резервные варианты и запросы. Сами переводы Mobility не создаёт.
+* Rails-приложение вызывает эндпоинт General Translation `POST /v2/translate` и сохраняет переведённые атрибуты через Mobility.
+* General Translation применяет ваш Glossary, пользовательские промпты и контекст конкретного контента, а ваши существующие модели и рабочий процесс публикации остаются на месте.

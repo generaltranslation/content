@@ -1,0 +1,128 @@
+---
+title: "General Translation と Tolgee：どちらを選ぶべきか？"
+summary: Tolgee は、キー付きメッセージ、インコンテキスト編集、AI 翻訳をセルフホスト可能なプラットフォームに統合しています。General Translation は読みやすい文言をコンポーネント内にそのまま記述し、マークされた JSX から翻訳を生成します。そのため、メッセージキーを管理しなくても、新しい文言をすべての言語でリリースできます。
+description: Tolgee は、キー付きメッセージ、インコンテキスト編集、AI 翻訳をセルフホスト可能なプラットフォームに統合しています。General Translation は、キーを使わずにコンポーネント内の文言から翻訳を生成します。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-weblate, general-translation-vs-locize, best-localization-software, i18n-without-translation-files]
+---
+
+Tolgee はオープンソースのローカライゼーションプラットフォームです。各文字列にキーを付け、CLI または SDK でキーを Tolgee プロジェクトに同期します。そこで機械翻訳や AI、チームのメンバーが翻訳し、その結果をファイルとして、または Tolgee の CDN 経由でアプリに読み込みます。Docker イメージを使ってセルフホストすることも、Tolgee Cloud を利用することもできます。最大の特長はインコンテキスト編集で、実行中のアプリで ALT キーを押しながら任意のテキストをクリックするだけで、その場で翻訳できます。ただし、このエディターを取り巻くキーベースのサイクルは、エンジニアが担うことになります。一方、General Translation はコードを起点とします。コンテンツはコンポーネント内に置いたまま、翻訳はビルドの一環として実行されます。
+
+## Tolgee の強み
+
+* **セルフホスト可能なオープンソース。** プラットフォームのコアは [Apache 2.0](https://tolgee.io/licencing) で提供されています。一方、`ee` ディレクトリ内の機能 (SSO、きめ細かな権限、用語集、タスク、ブランチ管理、Webhook など) は Tolgee EE License の対象で、利用にはライセンスキーが必要です。[無料のセルフホスト版](https://tolgee.io/pricing/self-hosted)には、コア機能、無制限のキー、最大 10 シート、自前のプロバイダーキーを使った機械翻訳が含まれます。
+* **インコンテキスト編集。** 開発環境では、ALT (Mac では Option) を押しながら実行中のアプリ内の文字列をクリックするだけで、その翻訳を編集できます。Chrome および Firefox 向けの [Tolgee Tools 拡張機能](https://docs.tolgee.io/js-sdk/in-context)を導入すると、同じダイアログからスクリーンショットを撮影できるほか、本番環境でもインコンテキスト編集が使えるようになります。
+* **多様なスタックに対応する SDK。** [JavaScript SDK](https://docs.tolgee.io/js-sdk) は React、Vue、Angular、Svelte、素の JavaScript に対応し、i18next と組み合わせて使えるインテグレーションも用意されています。[iOS](https://docs.tolgee.io/ios-sdk) および Android の SDK では、アプリを再リリースしなくても Tolgee の CDN から文字列を更新できます。
+* **コードを解析する CLI。** `@tolgee/cli` は React、Vue、Svelte、Angular のコードから[キーとそのデフォルト値を抽出](https://docs.tolgee.io/tolgee-cli/extraction/parsers)し、`push`、`pull`、`sync`、`compare` コマンドで Tolgee プロジェクトとリポジトリの同期を保ちます。XLIFF、ARB、Java properties など、多数の形式のインポート・エクスポートに対応しています。
+* **文脈を活用する AI。** [機械翻訳](https://docs.tolgee.io/platform/translation_process/machine_translation)には DeepL、Google、Amazon、Azure を利用できます。AI Translator は、Tolgee Cloud では Claude または OpenAI のモデルを使用するほか、自前の OpenAI、Azure OpenAI、Anthropic、Gemini、OpenAI 互換プロバイダーも利用できます。翻訳時には、スクリーンショット、キーやプロジェクトの説明、翻訳メモリ、[SDK が記録するキー同士の関係](https://docs.tolgee.io/platform/translation_process/ai_translator)を参照します。
+* **柔軟な配信方法。** [Content Delivery](https://docs.tolgee.io/platform/projects_and_organizations/content_delivery) を使うと、翻訳を Tolgee の CDN、または自前の S3 や Azure ストレージに公開できるため、Web アプリは再ビルドせずに変更を反映できます。
+
+## Tolgee を使ってもエンジニアの手に残る作業
+
+Tolgee では、UI 上のすべての文字列が、デフォルト値を持つキーとして管理されます。
+
+```tsx title="src/Inbox.tsx"
+import { T, useTranslate } from '@tolgee/react';
+
+export function Inbox({ count }: { count: number }) {
+  const { t } = useTranslate();
+  return (
+    <section>
+      <h1>
+        <T keyName="inbox_title" defaultValue="Inbox" />
+      </h1>
+      <p>
+        {t('inbox_unread', '{count, plural, one {# unread message} other {# unread messages}}', { count })}
+      </p>
+    </section>
+  );
+}
+```
+
+このファイルに対して `npx @tolgee/cli extract print` を実行すると (CLI 2.21.0) 、2 つのキーとそれぞれの英語のデフォルト値が検出されます：
+
+```text title="Output"
+2 keys found in src/Inbox.tsx:
+	line 8: inbox_title
+		default: Inbox
+	line 11: inbox_unread
+		default: {count, plural, one {# unread message} other {# unread messages}}
+```
+
+抽出によってキーは見つかりますが、新しい文言をすべての言語に反映させるには、依然として次のサイクルを回す必要があります。
+
+1. 文字列ごとにキー名を決め、デフォルト値として英語の文言を記述します。
+2. `tolgee push` または [`tolgee sync`](https://docs.tolgee.io/tolgee-cli/extraction/syncing-strings) で Tolgee プロジェクトにキーを作成します。
+3. 機械翻訳、AI Translator、または翻訳者に翻訳させ、結果をレビューします。
+4. [`tolgee pull`](https://docs.tolgee.io/tolgee-cli/push-pull-strings) を実行してファイルをコミットするか、Content Delivery を設定して SDK の参照先に指定します。そのうえで、新しい言語を一つずつアプリに追加します。
+
+キーが翻訳されるまでは、閲覧者にはフォールバック言語または英語のデフォルトが表示されます。また、AI Translator が手がかりにするのは、誰かが添付したスクリーンショットや説明、そして画面上で一緒に表示されるキーの組み合わせであり、その文字列をレンダリングするコンポーネントではありません。
+
+Tolgee Cloud の料金は主にホストされる単語数で決まり、基本言語と各翻訳はそれぞれ別にカウントされます。機械翻訳のクレジットはプランごとに付与され、現行プランではシート数は無制限です。セルフホスト版のライセンス料金は、キー数とシート数で決まります。 ([Tolgee の料金](https://tolgee.io/pricing)を参照。2026年10月時点の情報。)
+
+## Tolgee と General Translation の比較一覧
+
+| 機能           | Tolgee                                                                         | General Translation                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| 文字列の管理場所     | コード内のデフォルト値付きキーを Tolgee プロジェクトに同期                                              | コード内の [`<T>`](/docs/react/reference/components/t) の中、または既存のリソースファイル内                                                             |
+| コードとの連携方法    | `@tolgee/cli` の `push`、`pull`、`sync`、または開発時の SDK                               | ビルド時に実行する [`npx gt translate`](/docs/cli/reference/commands/translate)、または [Locadex](/docs/platform/locadex/quickstart) のプルリクエスト |
+| 翻訳の担い手       | 機械翻訳、AI Translator、または自社の翻訳者                                                   | コード、用語集、カスタムプロンプトの文脈を踏まえて AI が翻訳し、チームがダッシュボードでレビュー                                                                               |
+| 各文字列の文脈      | キーとプロジェクトの説明、スクリーンショット、翻訳メモリ、キー同士の関連付け                                         | マークされた JSX ブロック内の構造、文脈メモ、共有の用語集とカスタムプロンプト                                                                                        |
+| アプリ内編集       | 実行中のアプリ上で ALT+クリックにより編集可能 (ブラウザ拡張機能を使えば本番環境でも可)                                | ダッシュボードの翻訳エディターでレビュー・編集                                                                                                          |
+| ホスティング       | Docker によるセルフホスト、または Tolgee Cloud                                              | ホスト型プラットフォーム。ライブラリと CLI はオープンソース                                                                                                 |
+| 料金           | 無料プランあり。Cloud プランはホストする単語数、セルフホスト版のライセンスはキー数とシート数で課金                           | [従量課金制の翻訳](https://generaltranslation.com/pricing)                                                                               |
+| ネイティブモバイルアプリ | iOS および [Android SDK](https://docs.tolgee.io/android-sdk) で OTA (無線) アップデートに対応 | CLI が iOS と Android の文字列ファイルを翻訳し、アプリのリリースに組み込める                                                                                  |
+
+## チームが Tolgee ではなく General Translation を選ぶ理由
+
+General Translation はコードを起点としているため、キーの命名や同期は不要です。[`<T>`](/docs/react/reference/components/t) はコンテンツそのものをラップします。以下は、[プロバイダーをセットアップ](/docs/react/react-quickstart)したうえで、同じ受信トレイを `gt-react` で実装した例です：
+
+```tsx title="src/Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <p>
+          <Plural
+            n={count}
+            singular={<><Num>{count}</Num> unread message</>}
+            plural={<><Num>{count}</Num> unread messages</>}
+          />
+        </p>
+      </section>
+    </T>
+  );
+}
+```
+
+見出しとメッセージは翻訳元のコード内でまとまったまま保たれます。[`npx gt translate`](/docs/cli/reference/commands/translate) は、各ターゲット言語に必要な複数形も含めて、翻訳済みのブロックを生成します。
+
+* **より速く。** [`npx gt translate`](/docs/cli/reference/commands/translate) をビルドに組み込むか、コード変更時に Locadex がプルリクエストを作成するため、新しい文言はそれを追加したリリースで翻訳済みの状態で出荷されます。言語の追加は `gt.config.json` に 1 行加えるだけで、次のビルドでプロジェクト全体がその言語に翻訳されます。
+* **運用コストを削減。** エンジニアは、文ごとにキーを命名したり、翻訳元の辞書を別途管理したりする必要なく、読みやすい JSX をそのまま編集できます。文言の変更とそれを使うコンポーネントを、同じコードレビューで確認できます。
+* **より高い品質。** 受信トレイの例では、見出し、メッセージ構造、複数形の分岐がまとめて送信されます。そのため、単独の文よりも豊富な意味情報をもとに翻訳できます。さらに、用語集とカスタムプロンプトによって、[コンテキストグループ](/docs/platform/dashboard/guides/defining-context-for-translations)を通じて製品固有の用語やトーンを反映できます。
+* **リスクを低減。** 生成されたテキストは[ダッシュボードの翻訳エディター](/docs/platform/dashboard/guides/reviewing-translations)でレビューでき、翻訳は自社のビルド内に保持できます。MIT ライセンスの JavaScript ライブラリなら、General Translation のアカウントもランタイムでのサービス呼び出しも不要で、これらのファイルをレンダリングできます。
+
+Ramp は General Translation を使用して、ダッシュボード、ランディングページ、iOS アプリを 11 以上のロケールにローカライズしています。 ([本番環境での導入事例](https://generaltranslation.com/enterprise)をご覧ください。)
+
+## Tolgee が適しているケース
+
+プラットフォーム全体をセルフホストする必要がある場合、翻訳者やプロダクトマネージャーが実行中のアプリ上でテキストをクリックして直接編集したい場合、フロントエンドが Angular や Svelte の場合、[XLIFF、ARB、CSV ファイル](https://docs.tolgee.io/platform/supported_formats)をやり取りする場合、あるいはネイティブの iOS・Android アプリで文字列を OTA (Over-the-Air) で更新する必要がある場合は、Tolgee を選びましょう。一方、プロダクトのテキストの大半が React、Next.js、Vue のコード内にあり、キーを同期する手間なしで、リリースのたびにすべての言語で提供したい場合は、General Translation が適しています。
+
+## Tolgee から General Translation への移行
+
+移行は機能単位で 1 つずつ進めてください。各 `<T keyName="…" defaultValue="…" />` は、英語のコンテンツを General Translation の [`<T>`](/docs/react/reference/components/t) で囲む形に置き換え、各 `t('key', 'default')` は [`useGT`](/docs/react/reference/hooks/use-gt) に置き換えます。チームでキーを使い続けたい場合は、英語の値を辞書にまとめ、[`useTranslations`](/docs/react/reference/hooks/use-translations) で読み込んでください。各機能の移行が完了するまでは、Tolgee の翻訳も引き続き読み込んでおきます ([i18n ライブラリの移行](/docs/react/guides/migrating-i18n-libraries)を参照) 。用語集もあわせて移行しましょう。コンテキストグループのインポートは CSV、TSV、JSON、テキストファイルに対応しています ([翻訳の文脈を定義する](/docs/platform/dashboard/guides/defining-context-for-translations)を参照) 。
+
+## General Translation は Tolgee の代替になりますか？
+
+はい。製品のテキストの大部分が React、Next.js、Vue のコード内にある場合は代替になります。General Translation はそのコンテンツをビルド時に翻訳するため、キーを作成したり同期したりする必要はありません。一方、プラットフォームをセルフホストしたい場合や、翻訳者に実行中のアプリ上で直接テキストを編集してもらいたい場合は、Tolgee のほうが適しています。
+
+## 要点
+
+* Tolgee は、オープンソースでセルフホスト可能なローカライゼーションプラットフォームです。インコンテキスト編集、多様なスタックに対応した SDK、スクリーンショットや説明文を活用する AI を備えています。
+* SDK と CLI によって、キー付きの翻訳元メッセージを翻訳、レビュー、配信までつなげます。
+* General Translation のインライン記述なら、メッセージキーを管理する必要はありません。翻訳元は JSX 内で読みやすいまま保ち、翻訳はビルド時に生成して、ダッシュボードでレビューできます。

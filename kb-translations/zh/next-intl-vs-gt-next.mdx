@@ -1,0 +1,147 @@
+---
+title: "next-intl 与 gt-next：Next.js 项目该选哪个？"
+summary: next-intl 负责渲染你在各语言消息目录中提供的译文。gt-next 同样能渲染译文，此外，General Translation 还能根据你在 JSX 中内联编写的文案自动生成译文。两者均采用 MIT 许可证，并支持 App Router 和服务端组件。如果你现有的 next-intl 消息目录运行良好，可以继续沿用，并借助 General Translation 翻译这些目录，无需迁移。
+description: next-intl 渲染你提供的译文。gt-next 同样能渲染译文，而 General Translation 还能根据内联 JSX 自动生成译文。两者均采用 MIT 许可证，且你可以继续沿用 next-intl 消息目录。
+date: 2026-10-16
+category: workflow-tools
+authors: [jackie]
+related:
+  - general-translation-vs-i18n-libraries
+  - multilingual-nextjs-seo
+  - i18n-without-translation-files
+  - how-to-handle-plurals-in-react
+---
+
+next-intl 和 gt-next 都能为 Next.js App Router 应用 (包括服务端组件) 实现本地化。两者的区别在于译文从何而来：next-intl 显示的是由你的团队或翻译服务写入各语言 JSON 目录的消息；而 gt-next 将源文案直接内联在 JSX 中，由 General Translation 在构建阶段生成全部译文。
+
+因此，你有三种选择：一是继续使用 next-intl 和现有的翻译流程；二是继续使用 next-intl，同时让 General Translation 翻译其消息目录，组件无需任何改动；三是改用 gt-next，采用内联文案并自动生成译文。
+
+## next-intl 与 gt-next 有何区别？
+
+| 问题         | next-intl                                             | gt-next (General Translation)                                                                                                                          |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 是否会翻译你的内容？ | 否。它只负责渲染你提供的消息，这些消息由你的团队或 Crowdin 等服务提供               | 是。[`gt translate`](/docs/cli/reference/commands/translate) 会结合代码中的上下文生成译文，也可以由你的团队自行编写                                                                 |
+| 源文案存放在哪里？  | 以键索引的消息存放在 JSON 消息目录中；通过 `useExtracted` 进行内联提取仍处于实验阶段 | 内联 JSX 写在 [`<T>`](/docs/react/reference/components/t) 中，字符串通过 [`useGT`](/docs/react/reference/hooks/use-gt) 处理；同时也支持基于键的字典                             |
+| 是否支持服务端组件？ | 是，但同步组件和异步组件需使用不同的 API                                | 是：[`<T>`](/docs/react/reference/components/t)、[`useGT`](/docs/react/reference/hooks/use-gt) 和 [`getGT`](/docs/react/nextjs/reference/functions/get-gt) |
+| 是否支持客户端组件？ | 需包裹在 `NextIntlClientProvider` 中                       | 需包裹在 [`GTProvider`](/docs/react/reference/components/gt-provider) 中                                                                                    |
+| 区域设置路由     | 中间件配合带区域设置前缀的路由                                       | [`createNextMiddleware`](/docs/react/nextjs/app-router-middleware) 配合 `app/[locale]` 路由段                                                               |
+| 复数形式       | 在每个消息目录中使用 ICU MessageFormat                          | 使用 [`<Plural>`](/docs/react/reference/components/plural) 分支，与所在代码块的其余内容一同翻译                                                                            |
+| 译文交付       | 消息目录文件随应用打包                                           | 随应用打包，或通过 General Translation 的 CDN 交付，无需重新部署即可更新                                                                                                      |
+| 许可证        | MIT                                                   | MIT                                                                                                                                                    |
+
+来源：[next-intl App Router 初始化设置](https://next-intl.dev/docs/getting-started/app-router)、[next-intl 服务端与客户端用法](https://next-intl.dev/docs/environments/server-client-components)、[gt-next 快速入门](/docs/react/nextjs-quickstart)。
+
+## 同一个标题在各个库中分别如何实现？
+
+在 next-intl 基于消息目录的工作流中，源消息存放在 JSON 文件里：
+
+```json
+{
+  "Projects": {
+    "heading": "Find your next project"
+  }
+}
+```
+
+该组件根据命名空间和键选择消息：
+
+```tsx
+import { useTranslations } from 'next-intl';
+
+export default function ProjectHeading() {
+  const t = useTranslations('Projects');
+  return <h1>{t('heading')}</h1>;
+}
+```
+
+使用 gt-next 时，同样的句子可以直接保留在组件中：
+
+```tsx
+import { T } from 'gt-next';
+
+export default function ProjectHeading() {
+  return (
+    <T>
+      <h1>Find your next project</h1>
+    </T>
+  );
+}
+```
+
+以上两段代码片段都假定各个库的提供者和配置均已就绪。请参阅 [next-intl 初始化设置指南](https://next-intl.dev/docs/getting-started/app-router)和 [`<T>` 参考](/docs/react/reference/components/t)。
+
+使用消息目录时，审阅者可以脱离代码单独阅读文案。而使用内联文案时，审阅者可以在每个句子所在的 JSX 中直接查看它，General Translation 也能将这一结构作为上下文进行翻译。如果措辞仍有歧义，可以使用 gt-next 的 [`<T>` 所支持的 `context` 属性](/docs/react/reference/components/t#context)，而 next-intl 的[实验性提取功能则支持消息描述](https://next-intl.dev/docs/usage/extraction#descriptions)。
+
+next-intl 的实验性 [`useExtracted`](https://next-intl.dev/docs/usage/extraction) API 同样允许你内联编写消息，并将其提取到消息目录中。提取改变的只是文案的编写方式，并不会翻译提取出的消息目录，这些目录仍需由你的团队或翻译服务提供译文。
+
+## 能否在不放弃 next-intl 的情况下使用 General Translation？
+
+可以。`gt` CLI 会从你的 `package.json` 中检测到 next-intl，并在保留 next-intl 消息语法的前提下[翻译其 JSON 消息目录](/docs/cli/guides/generating-translations)。你的组件、翻译调用和路由都无需改动。
+
+如需试用，请在 `gt.config.json` 中指定源目录和目标目录，导入已有的译文，然后翻译一个新的区域设置。审校人员可以在[仪表板翻译编辑器](/docs/platform/dashboard/guides/reviewing-translations)中修正翻译结果。如果他们直接在代码仓库中编辑已下载的目录，请在下一次翻译运行前执行 [`gt save-local`](/docs/cli/reference/commands/save-local)，以保留这些修改。
+
+如果之后要迁移到 gt-next，[迁移指南](/docs/react/guides/migrating-i18n-libraries)介绍了如何导入已审校的译文、保留现有字典，以及在逐个路由迁移期间让两个库并行运行。
+
+## 两个库分别如何处理服务端组件和客户端组件？
+
+两个库都无需把 App Router 页面转换为客户端组件即可完成本地化，区别在于不同环境中调用的 API 不同。
+
+| 组件      | next-intl                                                                                                                                                            | gt-next                                                                                                                                                        |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 同步服务端组件 | [`useTranslations`](https://next-intl.dev/docs/environments/server-client-components#using-internationalization-in-server-components)，使用请求配置                         | JSX 使用 [`<T>`](/docs/react/reference/components/t)；字符串使用 [`useGT`](/docs/react/reference/hooks/use-gt)                                                         |
+| 异步服务端组件 | await 从 `next-intl/server` 导入的 [`getTranslations`](https://next-intl.dev/docs/environments/server-client-components#async-components)                                | await 从 `gt-next/server` 导入的 [`getGT`](/docs/react/nextjs/reference/functions/get-gt)，然后调用其返回的函数                                                               |
+| 客户端组件   | 在 `NextIntlClientProvider` 内使用 [`useTranslations`](https://next-intl.dev/docs/environments/server-client-components#using-internationalization-in-client-components) | 在 [`GTProvider`](/docs/react/reference/components/gt-provider) 内使用 [`<T>`](/docs/react/reference/components/t) 或 [`useGT`](/docs/react/reference/hooks/use-gt) |
+
+无论使用哪个库，都应将交互式控件放在客户端组件中，并在服务器端翻译页面的其余部分。next-intl 还支持从服务端组件向客户端控件[传递已翻译的标签](https://next-intl.dev/docs/environments/server-client-components#option-1-passing-translated-labels-to-client-components)，从而避免客户端接收完整的消息目录。
+
+## gt-next 的译文在生产环境中如何交付？
+
+gt-next 支持两种交付方式：
+
+* **将译文打包进应用包**：使用[本地加载器](/docs/react/guides/storing-translations)。生产环境中的应用直接读取自身的翻译文件，运行时不会调用 General Translation。更新将随下一次构建一并发布。
+* **从 General Translation 的 CDN 加载译文**：使用[远程交付配置](/docs/react/nextjs/config)。已发布的修改无需重新构建即可同步到已部署的应用，但具体生效情况取决于应用的版本和缓存设置。
+
+gt-next 基于 [MIT 许可证](https://github.com/generaltranslation/gt)开源，无需 General Translation 账户即可渲染打包的译文，这与 next-intl 渲染其消息目录的方式相同。
+
+## 哪些团队在生产环境中使用 gt-next？
+
+Cursor、Ramp、Profound、Cognition、Sierra 和 ClickHouse 的开发团队都在使用 General Translation。Profound 的核心产品是一个基于 Next.js App Router 的应用，正是借助 General Translation 完成本地化的。查看[生产环境部署案例](https://generaltranslation.com/enterprise)。
+
+## 何时选择 next-intl，何时选择 gt-next？
+
+**继续使用 next-intl**：如果它的目录模型适合你的应用，且现有翻译流程运转良好，就无需更换。如果主要痛点在于繁琐的键管理，不妨在迁移前先试试它的实验性提取功能。
+
+**继续使用 next-intl 并引入 General Translation**：适用于翻译产出成为瓶颈的情况。`gt` CLI 可直接翻译你现有的目录，组件、调用和路由都无需改动。
+
+**选择 gt-next**：适用于希望将文案内联写在 JSX 中、并在每次构建时生成译文的情况。可以先挑一个路由试用，该路由应同时涵盖服务端组件、客户端组件、复数形式、富文本和元数据。在替代方案就绪之前，保留该路由的区域设置 URL 和现有译文；在迁移更多路由之前，先验证一次生产环境构建。
+
+要开始使用，请参阅 [Next.js App Router 快速入门](/docs/react/nextjs-quickstart)。如需比较更多库，请参阅 [General Translation 与 i18next、react-intl 和 next-intl 的对比](/kb/general-translation-vs-i18n-libraries)。
+
+## 常见问题
+
+### next-intl 会翻译我的内容吗？
+
+不会。next-intl 只负责渲染和格式化消息目录中的消息。译文需由你的团队、译者或 [Crowdin](https://next-intl.dev/docs/workflows/localization-management) 等服务提供。此外，General Translation 也能直接翻译 next-intl 的消息目录，无需迁移。
+
+### General Translation 能与 next-intl 搭配使用吗？
+
+可以。`gt` CLI 会翻译 next-intl 的 JSON 消息目录，并保留 next-intl 的消息语法，因此现有的组件和路由都无需改动。详见[生成译文](/docs/cli/guides/generating-translations)。
+
+### gt-next 是免费开源的吗？
+
+是的。gt-next 采用 MIT 许可证，无需注册账户即可渲染应用包内的译文。如需使用 General Translation 的托管服务生成译文，请参阅[价格](https://generaltranslation.com/pricing)。
+
+### gt-next 是否支持 React 服务器组件？
+
+支持。在同步服务端组件中使用 [`<T>`](/docs/react/reference/components/t) 和 [`useGT`](/docs/react/reference/hooks/use-gt)，在异步服务端组件中则使用 [`getGT`](/docs/react/nextjs/reference/functions/get-gt)。
+
+### 可以按路由逐步从 next-intl 迁移到 gt-next 吗？
+
+可以。[迁移指南](/docs/react/guides/migrating-i18n-libraries)介绍了如何让两个库并行运行、导入现有译文，以及在你需要的地方继续使用基于键的字典。
+
+## 要点总结
+
+* next-intl 和 gt-next 都支持 App Router、服务端组件和区域设置路由，且均采用 MIT 许可证。
+* next-intl 负责渲染你提供的译文。gt-next 同样负责渲染，此外 General Translation 还能以你的代码为上下文，直接从内联 JSX 生成译文。
+* 无需迁移即可使用 General Translation：`gt` CLI 可以直接翻译现有的 next-intl 消息目录。
+* 如果决定迁移，请逐个路由推进，并在替代译文就绪之前继续加载现有译文。

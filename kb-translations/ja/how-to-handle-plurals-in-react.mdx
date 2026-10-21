@@ -1,0 +1,239 @@
+---
+title: React で複数形を扱うには？
+summary: n === 1 のような条件分岐で複数形のロジックをハードコードするのは避けましょう。英語のみのアプリなら小さなヘルパーで十分ですが、多言語アプリにはロケール対応の複数形規則が必要です。gt-react や gt-next の <Plural> のような i18n コンポーネントを使えば、あらゆる言語の複数形を処理できます。
+description: n === 1 のような条件分岐をハードコードするのは避けましょう。多言語アプリにはロケール対応の複数形規則が必要です。gt-react や gt-next の <Plural> のような i18n コンポーネントを使えば、あらゆる言語の複数形を処理できます。
+date: 2025-02-17
+category: locale-formatting
+authors: [archie]
+redirectFrom: [plurals]
+related: [translate-conditional-jsx, i18n-without-translation-files]
+---
+
+## React で複数形処理が重要な理由
+
+次のような不自然なメッセージを表示するアプリをよく見かけます。
+
+```text
+1件の新着メッセージ（複数可）があります
+```
+
+これは、ユーザー体験について十分に考えていない開発者にありがちな典型的な兆候です。
+
+React アプリでは、通知数やリストの件数、検索結果など、複数形処理が必要になる場面がよくあります。
+**とはいえ、複数形処理を正しく実装するのはそれほど難しくありません。アプリが英語だけに対応すればよいのであれば、なおさらです。**
+しかし、新人開発者が陥りがちなアンチパターンは数多くあり、多言語対応のインターフェースを構築する場合は特にその傾向が強まります。
+
+このガイドでは、英語の複数形をすっきりと扱う方法、ロケールごとに数値をフォーマットする方法、そして React と Next.js で完全に多言語対応した複数形システムを構築する方法を解説します。
+
+### 複数形のハードコードが抱える問題
+
+驚くほど大規模で重要なプロジェクトも含め、多くのプロジェクトが複数形のロジックをハードコードしています。
+
+```jsx
+export default function Example({ n }) {
+  return (
+    <p>
+      Displaying {n} item{n === 1 ? '' : 's'}
+    </p>
+  )
+}
+```
+
+しかし、複数形処理は単語の末尾に &quot;s&quot; を付けるだけで済むほど単純ではないことがよくあります。
+&quot;child&quot; と &quot;children&quot; のように、不規則な複数形を持つ名詞もあります。
+また、数に応じて &quot;is&quot; と &quot;are&quot; を使い分けるなど、名詞に合わせて文の他の部分も変える必要がある場合もあります。
+
+よくあるシナリオの例を以下の表に示します。
+
+| シナリオ    | 例                                                                                           | メモ                                                            |
+| ------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 視聴者数    | &quot;1 person is watching&quot; <br /> &quot;2 people are watching&quot;                   | 不規則名詞 (&quot;person&quot; → &quot;people&quot;) と動詞の変化が必要。    |
+| アイテムの削除 | &quot;Delete this message?&quot; <br /> &quot;Delete these 2 messages?&quot;                | 指示詞の変化 (&quot;this&quot; と &quot;these&quot;) に加え、名詞の複数形処理が必要。 |
+| 検索結果    | &quot;No results&quot; <br /> &quot;1 result found&quot; <br /> &quot;2 results found&quot; | 0件、1件、複数件でそれぞれ異なる表現を使用。                                       |
+
+条件式で対応しようとすると、すぐに手に負えなくなります。
+
+さらに、アプリを他の言語でも提供するとなると、まさに悪夢です。
+英語では問題なく動く方法も、数量の扱いにまったく異なる規則を持つポーランド語やアラビア語などでは、完全に破綻してしまうことがよくあります。
+**私たちが支援している企業の多くは、こうしたハードコードされた UI のリファクタリングが負担となり、国際化を先送りにしています。**
+
+***
+
+## 英語で複数形を扱う方法
+
+英語の場合、アプリで複数形を正しく使い分けるのはたいてい簡単です。
+
+名詞の単純な複数形処理であれば、次のようなユーティリティ関数を作成します:
+
+```jsx
+export function pluralize(
+  count: number,
+  singular: string,
+  plural: string = singular + 's'
+) {
+  return `${count === 1 ? singular : plural}`;
+}
+```
+
+これで、複数形に関するロジックをすべて1つの関数で処理できるようになりました。
+不規則な複数形にも対応しています。
+
+```js
+pluralize(2, 'user') // "users"
+pluralize(2, 'person', 'people') // "people"
+pluralize(2, 'child', 'children') // "children"
+```
+
+では、次のような、より複雑なロジックが必要な場合はどうすればよいでしょうか：
+
+```text
+"No one is watching"
+"1 person is watching"
+"2 people are watching"
+```
+
+この段階で、メンテナンスの手間が少ない国際化 (&quot;i18n&quot;) ライブラリの導入を真剣に検討すべきです。
+
+i18n ライブラリは多言語インターフェース専用だと考える開発者は多いものの、
+実は単一言語のアプリケーションでも、複数形や変数のフォーマットに大いに役立ちます。
+ほとんどの i18n ライブラリは、内部で JavaScript の組み込み API である `Intl.PluralRules` を使い、どの言語でも正しい複数形を判定しています。
+
+React 向けの i18n ライブラリは数多くあり、私たちが開発している [`gt-react`](/docs/react/overview) (Next.js を使用している場合は [`gt-next`](/docs/react/nextjs-quickstart)) もその一つです。
+gt-react を使えば、英語の複数形を簡単に表示できます。
+
+```jsx
+import { Plural } from 'gt-react'
+
+function Example({ count }) {
+  return (
+    <Plural n={count} zero={'No one is watching'} one={`${count} person is watching`}>
+      {count} people are watching
+    </Plural>
+  )
+}
+```
+
+UI は `n` の値に応じて条件付きでレンダリングされます。
+
+ほとんどのライブラリは、JavaScript の [`Intl.PluralRules`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules) API を使って、どの複数形を表示するかを決定します。
+つまり英語では、単数形には `"one"`、複数形には `"other"` という名前を使います。
+当社の [`<Plural>`](/docs/react/reference/components/plural) コンポーネントは、まず該当する複数形カテゴリを厳密に確認し、次に汎用的な `plural` と `other` の props を確認します。これらの props がいずれも指定されていない場合に限り、子要素にフォールバックします。
+
+英語のみのアプリケーションであっても、ここではライブラリを使うのがベストプラクティスです。将来の国際化対応もはるかに容易になります。
+
+***
+
+## 多言語Reactアプリ (i18n) における複数形処理
+
+英語圏のユーザーだけを対象とするアプリであれば、上記のアプローチで十分かもしれません。しかし、本番環境で運用されるアプリの多くは、いずれ複数の言語に対応する必要が出てきます。ここからが面白いところです。
+
+* アラビア語では、名詞の数がゼロ、1つ、2つ、3つ以上のいずれであるかによって、名詞の形が変わります
+* `de-DE`、`es-ES`、`it-IT` などのロケールでは、大きな数値の区切りにカンマではなくピリオドを使うため、1,000,000 は 1.000.000 になります
+* ヒンディー語では数字が2桁ずつ区切られるため、1,000,000 は 10,00,000 になります
+
+**国際化対応のアプリには、専用のi18nライブラリを使用してください。** 複数形や数値フォーマットの扱い方は、各ライブラリのドキュメントで説明されています。
+
+### ロケールに応じた数値のフォーマット
+
+`Intl` オブジェクトを使うと、任意のロケールに合わせて[数値をフォーマット](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat)できます。
+最も簡単なのは、組み込みの `toLocaleString()` メソッドを使う方法です。
+
+デフォルトでは、ランタイムの現在のロケールが使用されます:
+
+```javascript
+const n = 1000000
+n.toLocaleString() // ランタイムのロケールが "en-US"（アメリカ英語）の場合、1,000,000 と表示される
+n.toLocaleString('de') // ロケールに "de"（ドイツ語）が指定されているため、1.000.000 と表示される
+```
+
+gt-react には、内部で `Intl.NumberFormat` を使用する [`<Num>`](/docs/react/reference/components/num) コンポーネントも用意されています。
+
+```jsx
+import { Num } from 'gt-react'
+
+// 言語が "en-US" の場合は 1,000,000 と表示される
+// 言語が "de" の場合は 1.000.000 と表示される
+// 言語が "hi" の場合は 10,00,000 と表示される
+export default function Example() {
+  return <Num>1000000</Num>
+}
+```
+
+### 言語ごとの複数形を理解する
+
+JavaScript の `Intl.PluralRules` API がサポートする複数形は、`zero`、`one`、`two`、`few`、`many`、`other` の6つです。
+英語で使われるのは `one` (&quot;単数&quot;) と `other` (&quot;複数&quot;) の2つだけですが、
+アラビア語やポーランド語などには、これ以外の形も存在します。
+
+たとえば、英語圏のユーザーであれば、次のような表示を想定するでしょう。
+
+```text
+"No one is watching"
+"1 person is watching"
+"2 people are watching"
+```
+
+一方、アラビア語を話すユーザーは、単数形、
+双数形 (数がちょうど2の場合) 、さらに少数用と多数用の複数形で、それぞれ異なる表現を期待します：
+
+```text
+"لا أحد يشاهد"
+"1 شخص يشاهد"
+"2 شخصان يشاهدان"
+"3 أشخاص يشاهدون"
+"11 شخصاً يشاهدون"
+```
+
+ここで国際化ライブラリが欠かせなくなります。
+複数形をいつ、どのように表示するかのロジックは言語ごとに異なるため、
+正しく処理するには専用のライブラリに任せるのが得策です。
+
+優れたi18nライブラリは、次の2つを行います。
+
+1. ロケールに応じて、使用する複数形 (`one`、`many`、`other` など) を決定する
+2. その形に対応する、適切な言語の翻訳を取得する
+
+**すでに国際化ライブラリを使用している場合は、
+複数形のフォーマットについてそのライブラリのドキュメントを確認してください。**
+ほぼすべてのライブラリに、複数形のレンダリングに関する専用のドキュメントが用意されています。
+
+### 完全な例：多言語 React アプリにおける複数形
+
+まだ国際化ライブラリを導入していない場合は、ぜひ [`gt-react`](/docs/react/react-quickstart) をご検討ください！
+
+gt-react の [`<Plural>`](/docs/react/reference/components/plural) コンポーネントには、次の特長があります。
+
+* React で複数形を正しくレンダリングできる、シンプルで宣言的な手段です
+* フォーマット用の [`<Num>`](/docs/react/reference/components/num) コンポーネントとネイティブに連携します
+* 翻訳用の [`<T>`](/docs/react/reference/components/t) コンポーネントとネイティブに連携します。`<T>` は当社の[翻訳サービス](https://generaltranslation.com)と統合されており、複数形を自動で生成します
+
+これらの要素をすべて組み合わせると、多言語対応のコンポーネントは次のようになります。
+
+```jsx
+import { T, Plural, Num } from 'gt-react'
+
+// 追加設定なしで100以上の言語に対応
+function Example({ count }) {
+  return (
+    <T>
+      <Plural
+        n={count}
+        zero={'No one is watching'}
+        one={
+          <>
+            <Num>{count}</Num> person is watching
+          </>
+        }
+      >
+        <Num>{count}</Num> people are watching
+      </Plural>
+    </T>
+  )
+}
+```
+
+***
+
+複数形処理を設定するには、React アプリの場合は [`gt-react` クイックスタート](/docs/react/react-quickstart)、Next.js アプリの場合は [`gt-next` クイックスタート](/docs/react/nextjs-quickstart) を参照してください。コンポーネント API の詳細は [`<Plural>` API リファレンス](/docs/react/reference/components/plural) をご覧ください。
+
+複数形処理は、React の i18n で最もよく直面する課題の一つです。最初から正しく実装しておけば、後になって大規模なリファクタリングをせずに済みます。

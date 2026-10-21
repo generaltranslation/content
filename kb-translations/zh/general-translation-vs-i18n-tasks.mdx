@@ -1,0 +1,92 @@
+---
+title: "General Translation 与 i18n-tasks：应该选择哪一个？"
+summary: i18n-tasks 是一个 Ruby gem，可查找缺失和未使用的 Rails I18n 键、整理区域设置文件，还能通过 Google Translate、DeepL、OpenAI、Yandex 或 watsonx 补全缺失的键。General Translation 则结合你的词汇表、自定义提示词和仪表板审阅，翻译完整的区域设置文件。两者分工不同，许多团队可以同时使用。
+description: i18n-tasks 可查找缺失和未使用的 Rails I18n 键，并能用机器翻译补全缺漏。General Translation 翻译完整的区域设置文件并支持审阅。许多团队会同时使用两者。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-rails-i18n, general-translation-vs-mobility, general-translation-vs-google-translate, general-translation-vs-tms, best-localization-software]
+---
+
+i18n-tasks 是一款命令行工具，面向使用 i18n gem 的 Ruby 应用 (所有 Rails 应用都包括在内) 。它会扫描代码中诸如 `t(".title")` 的调用，与区域设置文件进行比对，并报告缺失或未使用的键；其 `translate-missing` 命令则可调用机器翻译服务 (需自备密钥) 来补全缺漏。它能检查译文，也能对缺失的键进行机器翻译，但英文内容变更后，它不会让译文随之同步更新。General Translation 负责的是翻译本身：其 CLI 会基于你的英文源内容，结合词汇表和自定义提示词，生成所有区域设置文件。因此，这两款工具与其说是竞争关系，不如说是相辅相成。
+
+## i18n-tasks 的优势
+
+* **从代码中查找缺失和未使用的键。** [AST 扫描器会读取 `.rb` 和 `.html.erb` 文件](https://github.com/glebm/i18n-tasks#features--limitations) (HAML 等格式则由正则表达式扫描器处理) ，能够解析 `t(".title")` 这类相对键，并报告两类问题：代码中用到但某个区域设置中缺失的键，以及已定义但从未使用的键。
+* **支持复数形式检查。** 借助 rails-i18n 的复数规则，[`missing` 会报告缺少某个 CLDR 复数形式的区域设置](https://github.com/glebm/i18n-tasks/blob/main/CHANGES.md)，例如波兰语的 `few` 和 `many`。
+* **便于集成 CI。** `missing`、`unused` 等检查在发现问题时会以状态码 1 退出；该 gem 还自带 [RSpec 和 Minitest 模板](https://github.com/glebm/i18n-tasks/tree/main/templates)，一旦存在缺失或未使用的键，测试套件就会失败。
+* **文件整理。** [`normalize` 会对键进行排序](https://github.com/glebm/i18n-tasks#normalize) (加上 `-p` 时，还会把键移到配置中指定的文件) ，`mv` 和 `rm` 可在所有区域设置中重命名或删除键，`find` 可查看某个键的使用位置，`check-consistent-interpolations` 则能发现翻译中被改名或漏掉的 `%{count}`。
+* **五种翻译后端。** [`translate-missing` 支持 Google Translate、DeepL、Yandex、OpenAI 和 IBM watsonx](https://github.com/glebm/i18n-tasks#translation-backends)。你可以[设置 DeepL 词汇表 ID 和选项](https://github.com/glebm/i18n-tasks/blob/main/templates/config/i18n-tasks.yml)，也可以设置 OpenAI 模型 (默认为 `gpt-4o-mini`) 、系统提示词以及各区域设置专用的提示词。`%{...}` 占位符会在发送前替换为标记，返回后再还原。
+* **免费。** 它[采用 MIT 许可证 (版本 1.1.2) ](https://rubygems.org/gems/i18n-tasks)；翻译费用直接支付给各翻译服务商，通常按字符数或 token 数计费。
+
+## i18n-tasks 留给你处理的部分
+
+下面是在一个小型 Rails 应用上运行 `missing` 和 `unused` 的结果。该应用包含英语、波兰语和西班牙语文件，其中收件箱视图调用了一个从未定义过的键：
+
+```text title="bundle exec i18n-tasks missing (excerpt)"
+| Locale | Key                 | Value in other locales or source  |
+|  all   | inbox.show.empty    | app/views/inbox/show.html.erb:3   |
+|   es   | inbox.show.title    | en Inbox                          |
+|   es   | inbox.show.unread   | en {"one" => "You have %{count} unread message.", ...} |
+|   pl   | flash.saved         | en Saved.                         |
+|   pl   | inbox.show.unread   | few, many                         |
+```
+
+```text title="bundle exec i18n-tasks unused"
+| Locale | Key                 | Value    |
+|   en   | inbox.show.archived | Archived |
+```
+
+这份报告准确且有用。但补齐这些缺口的工作仍需由你来完成：
+
+* **Google 后端只发送字符串值。** 在一次将该后端网络调用替换为桩的运行中，`translate-missing es` 发送了下面这些值，占位符已被遮蔽，但不包含键、文件或视图。
+
+  ```text
+  ["Inbox", "You have X__0 unread message.", "You have X__0 unread messages.", "Archived"]
+  ```
+
+* **复数形式沿用英语的结构。** 对于一个完全缺失的波兰语键，它只写入了 `one` 和 `other`，下一次 `missing` 运行随即报告缺少 `few, many`。
+
+* **修改过的英文不会被重新翻译。** [`translate-missing` 只填充某个区域设置中不存在的键](https://github.com/glebm/i18n-tasks#translate-missing-keys)。当你编辑某个英文字符串时，已有的译文会保持不变。
+
+* **Google 请求失败时仍可能写入文件。** 在未设置 Google API 密钥的情况下，`translate-missing --backend=google pl` 先是警告该分片失败，随后却报告有两个键已翻译，把英文值复制到 `pl.yml` 中，并以退出码 0 结束。此后这些键便不再出现在 `missing` 的结果中，只有 `eq-base` (与源相同的译文) 才能把它们找出来。
+
+## General Translation 的定位
+
+General Translation 负责生成译文，i18n-tasks 则负责检查 Rails 语言目录。将 `gt` CLI 指向你的英文文件，并在 CI 中运行 [`npx gt translate`](/docs/cli/reference/commands/translate)。它会为每个目标区域设置写入文件；后续运行时，未更改的条目会复用已有译文，英文内容有变动的条目则会重新翻译。每次运行都会应用项目的[词汇表和自定义提示词](/docs/platform/dashboard/guides/defining-context-for-translations)，让所有文件的术语和语气保持一致；团队还可以在仪表板中[审阅和编辑译文](/docs/platform/dashboard/guides/reviewing-translations)。
+
+Ruby 源代码扫描和语言目录校验仍交给 i18n-tasks。译文生成则使用 General Translation 的 Node.js CLI，并参照 [General Translation 与 Rails I18n 对比](/kb/general-translation-vs-rails-i18n)中的说明，将生成的 YAML 映射为 Rails 以区域设置为根节点的格式。该工作流适用于源和目标键结构一致的语言目录。
+
+## i18n-tasks 与 General Translation 速览
+
+| 功能    | i18n-tasks                        | General Translation                                          |
+| ----- | --------------------------------- | ------------------------------------------------------------ |
+| 定位    | 扫描 Ruby 代码，检查目录中缺失或未使用的键          | 生成译文，并在源文案变更时保持译文同步更新                                        |
+| 复数校验  | 检查区域设置所需的复数类别                     | 生成译文后配合 i18n-tasks 进行检查                                      |
+| 机器翻译  | `translate-missing`，使用你自选的服务商     | [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| 翻译上下文 | 取决于后端；DeepL 支持词汇表 ID，OpenAI 支持提示词 | 文件内容和元数据，以及已分配的词汇表和自定义提示词                                    |
+| 英文变更时 | 现有译文保持不变                          | 已变更的条目会被重新翻译                                                 |
+| 审校    | Git diff                          | 仪表板和 Git diff                                                |
+| 费用    | gem 免费；服务商按字符或 token 计费           | [按用量计费的翻译](https://generaltranslation.com/pricing)           |
+
+如果你的区域设置文件由译者编写，只需在 CI 中捕获缺失和未使用的键，或者只想为少量字符串快速生成机器翻译草稿，单独使用 i18n-tasks 即可。如果你希望译文随英文变更自动更新，同时保持术语一致并在仪表板中审校，请选择 General Translation。Rails 源代码扫描和目录检查仍可继续交给 i18n-tasks。
+
+## 在 CI 中同时使用两者
+
+沿用 [Rails 集成](/kb/general-translation-vs-rails-i18n)中英语到西班牙语的目录初始化设置。先运行翻译和区域设置映射，再使用 i18n-tasks 验证键的完整性、复数类别和占位符：
+
+```bash
+npx gt translate
+ruby script/export_rails_locales.rb                     # 导出供 Rails 使用的目录文件
+bundle exec i18n-tasks missing                           # 检查代码中使用的键及复数形式
+bundle exec i18n-tasks unused
+bundle exec i18n-tasks check-consistent-interpolations   # 检查 %{name} 是否与源一致
+```
+
+每个 `i18n-tasks` 命令在发现问题时都会以状态码 1 退出，因此任务会在损坏的文件被合并之前就失败。CLI 需要项目 ID 和一个具有 **Files &gt; Write** 与 **Translation queue &gt; Enabled** 权限的 API 密钥，二者分别通过 `GT_PROJECT_ID` 和 `GT_API_KEY` 设置。 (参见[配置 CLI](/docs/cli/guides/configuring#credentials)。)
+
+## 要点总结
+
+* i18n-tasks 可检查 Rails 应用中缺失、未使用以及复数形式不完整的键。
+* `translate-missing` 会补全缺失的键；但当你修改英文源文本时，它不会更新已有的译文。
+* General Translation 会结合你的词汇表和自定义提示词翻译整个区域设置文件，并随英文内容的变更保持同步；请在同一个 CI 任务中先运行它，再执行 i18n-tasks 检查。

@@ -1,0 +1,112 @@
+---
+title: "General Translation vs. Babel e Flask-Babel: quale scegliere?"
+summary: "Babel formatta date, numeri e valute per qualsiasi impostazione regionale e gestisce i cataloghi gettext, mentre Flask-Babel lo integra in Flask, ma nessuno dei due traduce le tue stringhe. La CLI di General Translation popola i file PO di Babel per ogni lingua, forme plurali incluse, così puoi continuare a usare Flask-Babel e smettere di tradurre i cataloghi a mano."
+description: "Babel e Flask-Babel formattano i dati delle impostazioni locali e gestiscono i cataloghi gettext, ma non traducono le tue stringhe. La CLI di General Translation popola i file PO di Babel, forme plurali incluse."
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-gettext, general-translation-vs-django-i18n, general-translation-vs-i18n-libraries, general-translation-vs-tms, i18n-without-translation-files]
+---
+
+Babel formatta date, numeri e valute utilizzando i dati Unicode CLDR, e il suo comando `pybabel` estrae, aggiorna e compila i cataloghi di messaggi gettext. Flask-Babel integra questi strumenti nella gestione delle richieste di Flask e nei modelli Jinja. General Translation popola i cataloghi tra la fase di estrazione e quella di compilazione: la tua app ottiene così la traduzione automatica senza modificare la configurazione di Flask-Babel esistente.
+
+## Cosa fanno bene Babel e Flask-Babel
+
+* **Formattazione per impostazione regionale basata su CLDR.** [Babel 2.18.0 include i dati di CLDR 47](https://babel.pocoo.org/en/latest/changelog.html#version-2-18-0) per oltre mille identificatori di impostazioni regionali. `format_currency(1234.5, "EUR")` restituisce &quot;1.234,50 €&quot; in spagnolo, mentre `format_date` restituisce &quot;16 października 2026&quot; in polacco.
+* **Strumenti per i cataloghi.** [`pybabel extract`](https://babel.pocoo.org/en/latest/cmdline.html) legge i file Python e i modelli Jinja tramite una mappatura definita in `babel.cfg`, `pybabel init` crea un file PO con la regola di plurale e gli slot corretti (tre per il polacco), `pybabel update` esegue il merge delle nuove stringhe e contrassegna come fuzzy quelle modificate, e `pybabel compile` genera i file `.mo`.
+* **Integrazione con Flask.** Un `locale_selector` e un `timezone_selector` [determinano l&#39;impostazione regionale e il fuso orario di ogni richiesta](https://python-babel.github.io/flask-babel/#configuration), `lazy_gettext` gestisce le stringhe definite in fase di import, i modelli Jinja dispongono di `_()`, `{% trans %}` e di filtri di formattazione, e `force_locale` cambia temporaneamente l&#39;impostazione regionale, ad esempio per inviare un&#39;email in un&#39;altra lingua.
+* **Stabili e gratuiti.** Entrambi sono distribuiti con licenza BSD (vedi [la licenza di Babel](https://babel.pocoo.org/en/latest/license.html)). Babel funziona in qualsiasi programma Python; il [rilascio attuale di Flask-Babel è la 4.0.0](https://github.com/python-babel/flask-babel/releases/tag/v4.0.0).
+
+## Cosa lasciano a te Babel e Flask-Babel
+
+Ecco una piccola app Flask-Babel:
+
+```python title="app.py"
+from datetime import date
+from flask import Flask, request
+from flask_babel import Babel, gettext, ngettext, format_currency, format_date
+
+
+def select_locale():
+    return request.accept_languages.best_match(["en", "es", "pl"])
+
+
+app = Flask(__name__)
+babel = Babel(app, locale_selector=select_locale)
+
+
+@app.route("/inbox/<int:count>")
+def inbox(count):
+    return {
+        "title": gettext("Inbox"),
+        "unread": ngettext("You have %(num)d unread message.", "You have %(num)d unread messages.", count),
+        "price": format_currency(1234.5, "EUR"),
+        "date": format_date(date(2026, 10, 16), format="long"),
+    }
+```
+
+`pybabel extract`, `pybabel init -l pl` e `pybabel compile` generano un catalogo polacco in cui ogni `msgstr` è vuoto. Con Flask-Babel 4.0.0, una richiesta con `Accept-Language: pl` ha poi restituito:
+
+```json title="Output"
+{
+  "date": "16 października 2026",
+  "price": "1 234,50 €",
+  "title": "Inbox",
+  "unread": "You have 5 unread messages."
+}
+```
+
+Babel formatta la data e il prezzo per il polacco, ma tutte le stringhe restano in inglese, senza alcun avviso. Ogni stringa resta in attesa che qualcuno compili la relativa voce PO, comprese tutte e tre le forme plurali del polacco, e poi che si eseguano `pybabel compile` e una nuova distribuzione. Per ogni stringa nuova o modificata, lo stesso processo va ripetuto in ciascuna lingua.
+
+## Tradurre i cataloghi di Babel con General Translation
+
+Se Flask-Babel fa già al caso tuo, continua a usarlo e lascia che sia la CLI di General Translation a scrivere i cataloghi. Crea una volta sola un catalogo in inglese e aggiornalo dopo ogni estrazione, così che la sorgente si trovi nello stesso albero delle traduzioni:
+
+```bash
+pybabel extract -F babel.cfg -k lazy_gettext -o messages.pot .
+pybabel init -i messages.pot -d translations -l en     # una sola volta
+pybabel update -i messages.pot -d translations -l en   # dopo ogni estrazione
+```
+
+Poi fai puntare `gt.config.json` a quel file. Questa config è stata verificata con `gt` 2.26.5:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "pl", "pt_BR"],
+  "customMapping": { "pt_BR": { "code": "pt-BR" } },
+  "files": {
+    "pot": {
+      "include": ["translations/[locale]/LC_MESSAGES/messages.po"],
+      "transformationFormat": "PO"
+    }
+  }
+}
+```
+
+La chiave `pot` legge i file PO e POT, mentre `"transformationFormat": "PO"` scrive i file `.po` tradotti (consulta il [riferimento al formato PO / POT](/docs/cli/reference/formats/po-pot-files)). [`customMapping`](/docs/cli/reference/config#custom-mapping) collega la directory `pt_BR` di Babel al codice locale standard `pt-BR`. Configura la [CLI](/docs/cli/quickstart). Se hai già delle traduzioni, importale con [`npx gt upload`](/docs/cli/reference/commands/upload) prima di generarne di nuove. Poi esegui [`npx gt translate`](/docs/cli/reference/commands/translate) e, a seguire, `pybabel compile -d translations`.
+
+General Translation invia ogni voce come contesto insieme al relativo `msgctxt`, ai commenti per i traduttori, ai riferimenti all&#39;origine e ai flag. Per le voci plurali scrive l&#39;intestazione `Plural-Forms` della lingua di destinazione e compila ogni slot `msgstr[n]` (il polacco, ad esempio, li riceve tutti e tre), verificando inoltre che i segnaposto come `%(num)d` restino intatti. Alla successiva esecuzione, le voci non modificate riutilizzano le traduzioni precedenti. Il Glossario e i prompt personalizzati di un [gruppo di contesto](/docs/platform/dashboard/guides/defining-context-for-translations) mantengono la terminologia coerente tra i tuoi cataloghi e il resto del prodotto, mentre i revisori possono [modificare ogni voce](/docs/platform/dashboard/guides/reviewing-translations) dalla dashboard. Esegui la CLI nella pipeline di CI, così ogni distribuzione include cataloghi aggiornati. Se in seguito apporti modifiche locali, salvale con [`npx gt save-local`](/docs/cli/reference/commands/save-local) prima di generare di nuovo.
+
+## Babel e Flask-Babel vs. General Translation in sintesi
+
+| Funzionalità                           | Babel e Flask-Babel                                              | General Translation                                                   |
+| -------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Come si scrivono le stringhe           | Chiamate `gettext` e `{% trans %}` di Jinja, estratte in file PO | Mantieni quelle chiamate e quei modelli; traduci i cataloghi estratti |
+| Traduce i tuoi contenuti               | No                                                               | Sì, con [`npx gt translate`](/docs/cli/reference/commands/translate)  |
+| Forme plurali                          | `pybabel init` crea gli slot, che devi compilare uno per uno     | Genera tutti gli slot PO per la lingua di destinazione                |
+| Formattazione di date, numeri e valute | Sì, tramite CLDR                                                 | Mantiene la formattazione di Babel                                    |
+| Modelli Jinja                          | Sì                                                               | Traduce i messaggi estratti dai modelli esistenti                     |
+| Framework                              | Babel ovunque; Flask-Babel per Flask                             | CLI per cataloghi PO di Flask o di altre applicazioni gettext         |
+| Licenza                                | BSD                                                              | CLI con licenza MIT                                                   |
+| Costo                                  | Gratuito                                                         | [Traduzione a consumo](https://generaltranslation.com/pricing)        |
+
+## Quando usare l&#39;uno o l&#39;altro
+
+Mantieni il tuo attuale processo di traduzione se i traduttori o un TMS forniscono già i cataloghi di cui hai bisogno. Aggiungi General Translation se vuoi che i messaggi nuovi e modificati vengano tradotti già in fase di sviluppo, con gli strumenti di terminologia e revisione condivisi dal tuo team in tutti i progetti. Flask-Babel continua a gestire Jinja, le impostazioni locali della richiesta, le date e le valute, mentre il codice della tua applicazione resta invariato.
+
+## Punti chiave
+
+* Babel formatta date, numeri e valute per qualsiasi impostazione regionale e gestisce i cataloghi gettext, mentre Flask-Babel lo integra in Flask; tuttavia, nessuno dei due traduce le tue stringhe.
+* La CLI di General Translation traduce i file PO di Babel tramite la chiave `pot`, `"transformationFormat": "PO"` e `customMapping` per directory come `pt_BR`, compilando tutte le forme plurali di ciascuna lingua.
+* Mantieni il rendering e la formattazione di Flask-Babel, importa le traduzioni esistenti e inserisci General Translation tra l&#39;estrazione e la compilazione.

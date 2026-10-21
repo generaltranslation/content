@@ -1,0 +1,109 @@
+---
+title: "General Translation ou vue-i18n : lequel choisir ?"
+summary: "General Translation permet aux équipes Vue d’écrire le texte source directement dans les modèles et de générer les traductions avec la CLI. Son plugin gt-vue affiche ce contenu avec un formatage des formes plurielles et des nombres adapté au paramètre régional. Choisissez-le pour ne plus avoir à maintenir de fichiers sources à clés ; vue-i18n reste pertinent pour les équipes qui utilisent le module i18n de Nuxt et disposent d’un workflow de catalogue bien établi."
+description: "Avec General Translation, le texte source Vue s’écrit dans les modèles et les traductions sont générées sans fichiers sources à clés. vue-i18n reste pertinent avec le module i18n de Nuxt et des flux de travail de catalogue bien établis."
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-i18next, general-translation-vs-lingui, general-translation-vs-react-intl, i18n-without-translation-files]
+---
+
+vue-i18n affiche les messages dans la langue de l’utilisateur dans les applications Vue. Vous définissez les messages pour chaque paramètre régional, vous les récupérez par clé dans vos modèles, et la bibliothèque se charge du formatage des formes plurielles, des dates et des nombres. En revanche, elle ne traduit rien : les messages de chaque langue doivent être fournis par vous, vos traducteurs ou un système de gestion de la traduction (TMS). Le plugin `gt-vue` de General Translation affiche les traductions de la même manière, mais General Translation les génère en plus à partir du texte que vous écrivez directement dans vos modèles.
+
+## Les points forts de vue-i18n
+
+* **Maturité.** vue-i18n est disponible sur npm depuis 2014. [La version 11 est la branche maintenue](https://vue-i18n.intlify.dev/guide/maintenance), et la version 12 est en alpha.
+* **Nuxt.** Le [module `@nuxtjs/i18n` repose sur vue-i18n 11](https://i18n.nuxtjs.org/docs/getting-started) et ajoute des routes préfixées par le paramètre régional, des chemins localisés, la détection de la langue du navigateur, le chargement différé des traductions et des balises SEO comme les variantes localisées hreflang.
+* **Formatage et texte enrichi.** `datetimeFormats` et `numberFormats` acceptent des options `Intl`, et le [composant `<i18n-t>`](https://vue-i18n.intlify.dev/guide/advanced/component) permet d&#39;insérer des éléments dans un message traduit sans passer par `v-html`.
+* **Messages au plus près des composants.** Avec `@intlify/unplugin-vue-i18n`, un [bloc `<i18n>`](https://vue-i18n.intlify.dev/guide/advanced/sfc) regroupe les messages d&#39;un composant directement dans son composant monofichier (SFC).
+* **Outillage.** Le [plugin ESLint officiel](https://eslint-plugin-vue-i18n.intlify.dev/rules/) détecte le texte brut dans les modèles ainsi que les clés manquantes ou inutilisées.
+
+## Ce que vue-i18n laisse à votre charge
+
+Voici une petite boîte de réception construite avec la Composition API de vue-i18n. Chaque chaîne de caractères reçoit une clé, et le texte anglais est stocké dans un fichier de messages :
+
+```json title="locales/en.json"
+{
+  "inbox": {
+    "heading": "Inbox",
+    "unread": "You have {n} unread message | You have {n} unread messages"
+  }
+}
+```
+
+```vue title="Inbox.vue"
+<script setup>
+import { useI18n } from 'vue-i18n'
+
+defineProps({ count: { type: Number, required: true } })
+const { t } = useI18n()
+</script>
+
+<template>
+  <section>
+    <h1>{{ t('inbox.heading') }}</h1>
+    <p>{{ t('inbox.unread', count) }}</p>
+  </section>
+</template>
+```
+
+Chaque langue cible nécessite des messages traduits, fournis par votre équipe ou par un service de traduction. Deux détails d&#39;implémentation sont importants pour l&#39;exemple :
+
+* **Règles de pluriel.** La règle par défaut de vue-i18n 11 sélectionne les formes selon leur position. Le polonais utilise les catégories `one`, `few`, `many` et `other` : configurez donc une [fonction `pluralRules` personnalisée](https://github.com/intlify/vue-i18n/blob/master/docs/guide/v11/essentials/pluralization.md) pour faire correspondre les nombres à vos formes traduites. vue-i18n 12, encore en version alpha, [passe à `Intl.PluralRules`](https://github.com/intlify/vue-i18n/releases/tag/v12.0.0-alpha.4).
+* **Nombres dans les messages.** Le `{n}` d&#39;un message au pluriel n&#39;est pas formaté selon le paramètre régional : 12345 s&#39;affiche donc « 12345 » en espagnol au lieu de « 12.345 », à moins que vous ne transmettiez une valeur déjà formatée.
+
+## Modèles intégrés avec traductions générées
+
+`gt-vue` remplit le même rôle que vue-i18n. Il affiche les messages de chaque paramètre régional, sélectionne les formes du pluriel selon les règles CLDR propres à chaque paramètre régional, et formate les nombres, les devises et les dates avec [`<Num>`](/docs/vue/reference/components/num), [`<Currency>`](/docs/vue/reference/components/currency) et [`<DateTime>`](/docs/vue/reference/components/datetime). General Translation va ensuite plus loin que vue-i18n : il génère les traductions. Voici la même boîte de réception, avec le texte intégré directement :
+
+```vue title="Inbox.vue"
+<script setup>
+import { Num, Plural, T } from 'gt-vue'
+
+defineProps({ count: { type: Number, required: true } })
+</script>
+
+<template>
+  <section>
+    <T><h1>Inbox</h1></T>
+    <p>
+      <T>
+        <Plural :n="count">
+          <template #singular>You have <Num :value="count" /> unread message</template>
+          <template #plural>You have <Num :value="count" /> unread messages</template>
+        </Plural>
+      </T>
+    </p>
+  </section>
+</template>
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) analyse vos modèles, envoie chaque bloc [`<T>`](/docs/vue/reference/components/t) avec sa structure à l&#39;API de General Translation, puis génère un catalogue pour chaque locale cible. Les slots `singular` et `plural` fournissent le texte source à partir duquel sont produites les formes de la langue cible. [`<Plural>`](/docs/vue/reference/components/plural) sélectionne ces formes selon les règles du paramètre régional, et [`<Num>`](/docs/vue/reference/components/num) formate le nombre : 12,345 en anglais, 12.345 en espagnol et 12 345 en polonais.
+
+L&#39;exemple utilise `gt-vue` 0.1.22 avec Vue 3.3 ou version ultérieure ; le [Démarrage rapide Vue](/docs/vue/quickstart) explique la configuration initiale du plugin et du chargeur de catalogues. Votre équipe peut peaufiner le texte généré dans le [tableau de bord](/docs/platform/dashboard/guides/reviewing-translations), tandis que les [termes de glossaire partagés et les instructions personnalisées](/docs/platform/dashboard/guides/defining-context-for-translations) assurent une terminologie cohérente d&#39;un projet à l&#39;autre.
+
+## vue-i18n ou General Translation : comparaison rapide
+
+| Fonctionnalité                  | vue-i18n                                                                                                                 | General Translation (`gt-vue`)                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Rédaction du texte              | Clés dans un fichier de messages ou un bloc `<i18n>` par paramètre régional                                              | Intégré directement dans les modèles, à l&#39;intérieur de [`<T>`](/docs/vue/reference/components/t)                        |
+| Traduit votre contenu           | Non                                                                                                                      | Oui, avec [`npx gt translate`](/docs/cli/reference/commands/translate)                                                      |
+| Formes du pluriel               | Formes séparées par une barre verticale ; la version 11 exige une règle personnalisée pour des langues comme le polonais | Slots [`<Plural>`](/docs/vue/reference/components/plural) sélectionnés selon les règles CLDR pour chaque paramètre régional |
+| Nombres dans les messages       | Formatés uniquement si vous transmettez une valeur déjà formatée                                                         | [`<Num>`](/docs/vue/reference/components/num) applique le format de chaque paramètre régional                               |
+| Intégration à l&#39;application | Plugin Vue ; `@nuxtjs/i18n` ajoute le routage Nuxt, la détection de la langue et les balises SEO                         | Plugin Vue avec changement réactif de paramètre régional et chargement du catalogue                                         |
+
+Conservez vue-i18n si vous dépendez de `@nuxtjs/i18n` pour le routage Nuxt et le SEO, ou si vous disposez déjà d&#39;un workflow de catalogue que vous souhaitez conserver. Optez pour General Translation pour garder un texte lisible dans vos modèles Vue, générer les traductions au moment de la compilation et permettre aux relecteurs de les modifier dans le tableau de bord.
+
+## Migrer depuis vue-i18n
+
+Migrez un composant à la fois : remplacez chaque recherche par clé par le texte anglais correspondant, placé dans [`<T>`](/docs/vue/reference/components/t), et convertissez les messages de pluriel séparés par des barres verticales en slots `singular` et `plural` dans [`<Plural>`](/docs/vue/reference/components/plural), comme dans l&#39;exemple ci-dessus. Conservez vue-i18n et ses catalogues déjà relus pour les composants qui n&#39;ont pas encore été migrés. Configurez `gt-vue` en suivant le [Démarrage rapide Vue](/docs/vue/quickstart), puis exécutez [`npx gt translate`](/docs/cli/reference/commands/translate) avant la compilation.
+
+## Pourquoi vue-i18n affiche-t-il la mauvaise forme du pluriel en polonais ?
+
+Dans vue-i18n 11, configurez une fonction `pluralRules` qui associe les catégories du polonais aux positions correspondantes dans votre message. Par exemple, 1 sélectionne `one`, 2 et 22 sélectionnent `few`, et 5 sélectionne `many`. Avec General Translation, l’exemple intégré fournit le texte source, le service génère les formes traduites et [`<Plural>`](/docs/vue/reference/components/plural) se charge de sélectionner la bonne.
+
+## Points clés à retenir
+
+* vue-i18n est un plugin i18n mature, bien intégré à Nuxt, mais il ne traduit rien par lui-même, et la version 11 exige une règle de pluriel personnalisée pour des langues comme le polonais.
+* La CLI de General Translation génère les traductions à partir de blocs [`<T>`](/docs/vue/reference/components/t) intégrés ; `gt-vue` les affiche en gérant la sélection du pluriel et le formatage des nombres propres à chaque paramètre régional.
+* Conservez vue-i18n si vous avez déjà un workflow Nuxt ou basé sur des catalogues bien établi. Optez pour `gt-vue` si vous ne voulez plus maintenir de fichiers sources à base de clés.

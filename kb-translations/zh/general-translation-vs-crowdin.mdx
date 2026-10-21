@@ -1,0 +1,76 @@
+---
+title: "General Translation 与 Crowdin：该选哪一个？"
+summary: 如果你希望文案保留在组件中，并在构建时生成译文，请选择 General Translation。Crowdin 围绕资源文件、译者和审校工作流程来管理翻译项目，工程师需要将其接入应用，并随产品迭代持续维护。对于开源社区翻译和由翻译服务商主导的项目，Crowdin 依然是很好的选择。
+description: General Translation 将文案保留在组件中，并在构建时完成翻译。Crowdin 负责管理资源文件、译者和审校，适合开源社区翻译和由翻译服务商主导的翻译项目。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-lokalise, general-translation-vs-phrase, general-translation-vs-smartling, general-translation-vs-transifex]
+---
+
+Crowdin 的[本地化平台](https://crowdin.com/)以翻译项目为核心来组织本地化工作：工程师维护资源文件并将其接入 Crowdin，再把翻译完成的消息目录同步回应用，平台的自动化功能则推动内容在这一工作流中流转。General Translation 则把翻译直接融入开发过程：文案保留在你的组件中，译文随构建一同生成。
+
+## Crowdin 的优势
+
+* **免费起步。** [免费套餐](https://crowdin.com/pricing)包含 60,000 个托管词数，译文会共享到 Crowdin 的翻译记忆库中；符合其[开源许可标准](https://crowdin.com/product/for-open-source) (例如采用 OSI 许可证且没有相关商业产品) 的开源项目可以获得免费许可。
+* **开发者工具。** 提供通过 `crowdin.yml` 配置的 CLI、支持 GitHub、GitLab、Bitbucket 和 Azure Repos 的 Git 集成、GitHub Action、MCP 服务器，以及 [700 多个应用和集成](https://store.crowdin.com/)。
+* **结合上下文的 AI。** 你可以[使用自己的 OpenAI、Anthropic、Gemini 或其他服务商的 API 密钥](https://support.crowdin.com/crowdin-ai/)，也可以使用 Crowdin 托管的模型。每个请求都会附带字符串的上下文、键和最大长度，提示词中还可以加入你的词汇表、翻译记忆库、风格指南、相邻字符串以及已添加标签的截图。
+* **人工翻译。** 提供翻译供应商市场，并可在项目内直接订购 [Crowdin Language Services](https://crowdin.com/features/vendor-integrations)。
+* **上下文与质量检查。** 支持将截图关联到对应字符串，并提供[适用于 Web 应用的 In-Context 编辑器](https://support.crowdin.com/in-context-localization/)、Figma 插件以及内置的 QA 检查。
+* **移动端 OTA 更新。** iOS、Android 和 Flutter SDK 以及 JavaScript 客户端可直接从 [Crowdin 的 CDN](https://support.crowdin.com/content-delivery/) 更新字符串，无需发布新版应用。
+
+## Crowdin 仍需工程师处理的工作
+
+工程师仍需搭建并维护应用与 Crowdin 翻译项目之间的往返流程：
+
+1. 配置国际化库，将每个英文字符串以键的形式提取到资源文件中，然后在组件中引用该键。
+2. 在 `crowdin.yml` 中描述这些文件，并通过 [`crowdin upload sources`](https://crowdin.github.io/crowdin-cli/commands/crowdin-upload-sources) 上传，或改用 Git 集成或 GitHub Action。
+3. 安排 AI、机器翻译、供应商或自己的译者完成各语言的翻译，并按项目需要设置审校步骤。
+4. 将翻译后的消息目录引入应用。[Crowdin 的 GitHub 集成](https://support.crowdin.com/github-integration/)会通过一个 `l10n_` 服务分支回传这些内容。其自动同步默认每小时运行一次，间隔可调，也支持立即同步。
+
+Crowdin 也可以从代码中收集上下文：借助其编码智能体技能和 [`crowdin context` 命令](https://crowdin.github.io/crowdin-cli/commands/crowdin-context)，智能体会分析代码库并为字符串上传描述。而使用 General Translation 的 [`<T>`](/docs/react/reference/components/t) 时，被标记的 JSX 本身就提供了翻译所需的文本、嵌套元素和命名占位符。
+
+付费套餐主要按托管词数 (即源词数 × 目标语言数) 加管理员席位计价，因此每新增一种语言，托管词数都会随之增加。 (参见 [Crowdin 定价](https://crowdin.com/pricing)，核实于 2026 年 10 月。)
+
+## Crowdin 与 General Translation 对比一览
+
+| 功能        | Crowdin                                       | General Translation                                                                                                         |
+| --------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 字符串存放位置   | 代码仓库中基于键的资源文件，同步到 Crowdin 项目                  | 在代码中由 [`<T>`](/docs/react/reference/components/t) 包裹，或保留在你现有的资源文件中                                                          |
+| 代码接入方式    | 通过 `crowdin.yml` 配合 CLI、Git 集成或 GitHub Action | 在构建流程中运行 [`npx gt translate`](/docs/cli/reference/commands/translate)，或通过 [Locadex](/docs/platform/locadex/quickstart) 拉取请求 |
+| 由谁翻译      | 机器翻译或 AI 服务商、供应商，或你自己的译者                      | 由 AI 结合代码、词汇表和自定义提示词提供的上下文进行翻译，再由你的团队在仪表板中审核                                                                                |
+| 每个字符串的上下文 | 键、最大长度、截图、词汇表、翻译记忆库以及智能体生成的上下文                | 标记的 JSX、命名占位符、开发者备注，以及项目分配的词汇表和自定义提示词                                                                                       |
+| 定价        | 提供免费套餐；付费套餐按托管词数和管理员席位计费                      | 按翻译用量计费；参见[定价](https://generaltranslation.com/pricing)                                                                      |
+| 原生移动应用    | 提供适用于 iOS、Android 和 Flutter 的 OTA (空中下载) SDK  | CLI 在应用发布时翻译 iOS 和 Android 资源文件                                                                                             |
+| 开源        | 为符合条件的开源项目提供免费许可                              | JavaScript 库和 CLI 均采用 MIT 许可                                                                                                |
+
+## 为什么团队选择 General Translation 而非 Crowdin
+
+General Translation 免去了为 React UI 编写文案目录的工作：文案直接保留在组件中的 [`<T>`](/docs/react/reference/components/t) 内。删除组件时，其内联文案也会随之删除，不会在别处留下有待清理的键。
+
+* **更快。** 在应用构建之前运行 [`npx gt translate`](/docs/cli/reference/commands/translate)，即可在同一工作流中生成并下载翻译。它会复用已有的翻译，仅为新增或变更的内容生成翻译。如果采用拉取请求工作流，[Locadex](/docs/platform/locadex/quickstart) 会替你准备好翻译变更。
+* **运行成本更低。** Crowdin 的托管字数会随源文案目录的扩大和目标语言的增多而不断增长。General Translation 按翻译用量计费，而非为托管文案目录收费。保留已完成的翻译不会产生持续性的翻译费用；具体用量费率请参阅[定价](https://generaltranslation.com/pricing)。
+* **质量更高。** 一个 [`<T>`](/docs/react/reference/components/t) 块可以将标题、句子、链接和动态占位符放在一起，让译者了解它们之间的关系，而不是面对一个个孤立的键。你可以添加开发者备注，并借助共享的[词汇表和自定义提示词](/docs/platform/dashboard/guides/defining-context-for-translations)统一产品术语。审校人员可以在[翻译编辑器](/docs/platform/dashboard/guides/reviewing-translations)中编辑翻译结果。
+* **风险更低。** 你可以继续使用现有的国际化库，在改变新翻译的生成方式之前，先导入已审校的翻译。这样既无需重写每个组件，也不必舍弃译者已有的工作成果，就能顺利采用 General Translation。
+
+Cursor 借助 General Translation，在其网站和文档中支持 14 种以上的区域设置。 (参见[生产环境部署案例](https://generaltranslation.com/enterprise)。)
+
+## Crowdin 更适合的场景
+
+以下情况建议选择 Crowdin：开源项目符合其免费许可条件，并希望借助社区译者；你在运营由供应商参与、包含多轮审校的人工翻译项目；需要交换 XLIFF 或 Office 文件；或者原生移动应用需要使用其 OTA (空中下载) SDK。
+
+## 从 Crowdin 迁移到 General Translation
+
+对于受支持的消息目录 (如 JSON、YAML、PO 以及 iOS 或 Android 资源文件) ，请在 `gt.config.json` 中配置其源路径和区域设置路径。按照[文件翻译初始化设置](/docs/cli/quickstart)操作，然后运行 [`npx gt upload`](/docs/cli/reference/commands/upload)，先导入现有译文，再生成新译文。将你的词汇表导入[上下文分组](/docs/platform/dashboard/guides/defining-context-for-translations)，确保新译文沿用相同的术语。
+
+之后，在 React 应用中，你可以在构建新页面时逐步引入 [`<T>`](/docs/react/reference/components/t)。如需了解与各供应商的对比，请参阅[为什么选择 General Translation 而非 TMS？](/kb/general-translation-vs-tms)。
+
+## General Translation 可以替代 Crowdin 吗？
+
+可以。General Translation 集 AI 翻译、用于人工审核的编辑器，以及让 React 文案直接保留在 JSX 中的库于一体。它还能翻译现有的消息目录，因此从 Crowdin 迁移时，无需先更换你的国际化库。
+
+## 要点总结
+
+* Crowdin 是一款适合开源项目和人工翻译项目的强大 TMS，提供免费方案，其 AI 功能可借助键、截图和词汇表提升翻译质量。
+* Crowdin 能自动投递消息目录，但工程师仍需自行将这些消息目录接入应用，并配置翻译工作流。
+* 如果你希望在 React 开发中摆脱基于键的消息目录、在发布流程中生成译文，并在迁移时保留现有的已审校译文，请选择 General Translation。

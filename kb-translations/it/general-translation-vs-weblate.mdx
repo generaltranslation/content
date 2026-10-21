@@ -1,0 +1,113 @@
+---
+title: "General Translation o Weblate: quale scegliere?"
+summary: Weblate è una piattaforma di localizzazione basata su Git e installabile in self-hosting, pensata per tradurre i file di un repository insieme a una community o a un team. General Translation integra la generazione delle traduzioni nello sviluppo e nei rilasci, sfruttando JSX contrassegnato e un contesto di prodotto condiviso. Puoi mantenere i tuoi file gettext oppure adottare la scrittura inline per eliminare anche la manutenzione dei cataloghi sorgente.
+description: Weblate è una piattaforma basata su Git e installabile in self-hosting per la traduzione da parte di community e team. General Translation genera le traduzioni a ogni rilascio a partire da JSX contrassegnato e dal contesto di prodotto.
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-gettext, general-translation-vs-tolgee, general-translation-vs-django-i18n, best-localization-software]
+---
+
+Weblate è una piattaforma di traduzione web open source costruita attorno a Git. Colleghi un repository, Weblate ne legge i file di traduzione, traduttori o servizi di traduzione configurati li completano e infine Weblate esegue il commit dei risultati oppure apre una pull request. È la scelta abituale di molti progetti open source con traduttori della community. General Translation porta la generazione delle traduzioni direttamente nella tua build: i nuovi testi e le relative traduzioni possono uscire nello stesso rilascio, mentre il tuo team può rivederli nella Dashboard.
+
+## Cosa fa bene Weblate
+
+* **Open source copyleft.** Weblate è [distribuito con licenza GPL-3.0-or-later](https://github.com/WeblateOrg/weblate): puoi scaricare ed eseguire l&#39;intera piattaforma gratuitamente, con piani di supporto a pagamento se ti serve aiuto per installarla e mantenerla.
+* **Hosting gratuito per i progetti liberi.** La versione ospitata di Weblate gira su infrastruttura europea e i progetti liberi pubblici possono ottenere gratuitamente il piano Libre, con gli stessi limiti del piano da 160.000 stringhe.
+* **Localizzazione continua basata su Git.** Weblate recupera le modifiche quando la tua forge invia un webhook (o con un fetch giornaliero), esegue il commit delle traduzioni tramite commit differiti che raggruppano le modifiche per autore e ne fa il push sul tuo branch oppure [apre pull request](https://docs.weblate.org/en/latest/vcs.html) su GitHub, GitLab, Gitea, Bitbucket, Azure DevOps e Pagure. La versione ospitata di Weblate si collega anche tramite una GitHub App.
+* **Supporto molto ampio dei formati di file.** La documentazione di Weblate elenca [circa 50 formati](https://docs.weblate.org/en/latest/formats.html), tra cui gettext PO, XLIFF 1.2 e 2.0, stringhe Android e Apple, ARB, JSON i18next, Fluent, properties Java, RESX .NET, YAML Ruby, stringhe PHP e Laravel, Qt Linguist, CSV, Excel e Markdown.
+* **Componenti aggiuntivi per le operazioni ripetitive sui file.** I [componenti aggiuntivi integrati](https://docs.weblate.org/en/latest/admin/addons.html) aggiornano i file PO a partire da un template POT, generano i file MO, eseguono lo squash dei commit e avviano la traduzione automatica.
+* **Traduzione automatica e LLM.** Le [integrazioni](https://docs.weblate.org/en/latest/admin/machine.html) comprendono DeepL, Google, Azure, Amazon e LibreTranslate, oltre a OpenAI, Azure OpenAI, Anthropic, Mistral e Ollama, i cui prompt includono i termini del glossario pertinenti e le tue impostazioni di stile; a queste si affianca la memoria di traduzione di Weblate.
+* **Controlli di qualità.** [Decine di controlli](https://docs.weblate.org/en/latest/user/checks.html) verificano segnaposto, forme plurali mancanti, lunghezza massima, sintassi ICU MessageFormat e traduzioni invariate, mentre le correzioni automatiche sistemano spazi e puntini di sospensione.
+* **Traduzione collaborativa.** I volontari possono suggerire traduzioni e lasciare commenti, i revisori le approvano e un progetto può [eseguire il commit solo delle stringhe approvate](https://docs.weblate.org/en/latest/workflows.html). Screenshot, glossari e riferimenti all&#39;origine forniscono contesto ai traduttori.
+
+## Cosa Weblate lascia ancora sulle spalle dei tuoi sviluppatori
+
+Ecco un&#39;app Python che usa gettext, con un catalogo spagnolo tradotto prima che venisse aggiunta l&#39;ultima riga:
+
+```python title="app.py"
+import gettext
+t = gettext.translation("messages", localedir="locale", languages=["es"])
+_ = t.gettext
+print(_("Inbox"))
+print(_("No messages yet."))  # nuovo testo, aggiunto dopo l'ultimo ciclo di traduzione
+```
+
+Dopo aver estratto il template POT, tradotto solo &quot;Inbox&quot; in `locale/es/LC_MESSAGES/messages.po` e compilato il file con Babel 2.17.0, un utente di lingua spagnola vede la nuova riga in inglese:
+
+```text title="Output"
+Bandeja de entrada
+No messages yet.
+```
+
+Quella riga resta in inglese finché non si completa l&#39;intero ciclo:
+
+1. Racchiudi la stringa in `_()` e rigenera il template POT con `xgettext` o `pybabel extract`, poi esegui il commit.
+2. Weblate rileva la modifica tramite un webhook o al fetch successivo, e il suo componente aggiuntivo `msgmerge` aggiunge la nuova voce a ogni file PO.
+3. Traduci con volontari, traduttori o con la traduzione automatica configurata, e revisiona i risultati se richiedi un&#39;approvazione.
+4. Weblate esegue il commit delle modifiche e ne fa il push oppure apre una pull request. Il tuo processo di rilascio ne esegue il merge, compila i file MO e distribuisce l&#39;applicazione.
+
+Le modifiche agli stessi file apportate al di fuori di Weblate possono causare conflitti di merge, che [la documentazione di Weblate suggerisce di evitare](https://docs.weblate.org/en/latest/admin/continuous.html#avoiding-merge-conflicts-by-locking-weblate-while-doing-outside-changes) bloccando il componente mentre modifichi i file. Inoltre, il traduttore vede ogni stringa con i relativi riferimenti all&#39;origine e gli screenshot, ma non il codice che la renderizza.
+
+Il self-hosting è gratuito. La versione in hosting di Weblate ha un prezzo basato sulle stringhe ospitate, ovvero le stringhe di origine moltiplicate per il numero di lingue più uno, e ogni piano include lingue, progetti e traduttori illimitati. (Vedi [Weblate hosting](https://weblate.org/en/hosting/), verificato a ottobre 2026.)
+
+## Weblate e General Translation a confronto
+
+| Funzionalità                | Weblate                                                                                                                         | General Translation                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dove si trovano le stringhe | File di traduzione nel tuo repository, replicati nei componenti di Weblate                                                      | Nel tuo codice all&#39;interno di [`<T>`](/docs/react/reference/components/t), oppure nei file di risorse che hai già                             |
+| Come si collega il codice   | Weblate esegue il pull da Git, poi invia commit o apre pull request                                                             | [`npx gt translate`](/docs/cli/reference/commands/translate) nella tua build, oppure pull request di [Locadex](/docs/platform/locadex/quickstart) |
+| Chi traduce                 | Volontari, i tuoi traduttori, traduzione automatica o LLM                                                                       | IA che sfrutta il contesto del tuo codice, il Glossario e i prompt personalizzati, con revisione del tuo team nella dashboard                     |
+| Contesto per ogni stringa   | Riferimenti all'origine, screenshot, glossario e memoria di traduzione                                                          | Struttura JSX marcata con librerie inline; contesto del sorgente nei cataloghi supportati; Glossario e prompt personalizzati condivisi            |
+| Formati di file             | Circa 50, tra cui XLIFF, ARB, Fluent e Java properties                                                                          | JSON, YAML, PO, Markdown e MDX, stringhe iOS e Android e altri ancora                                                                             |
+| Hosting                     | Self-hosted gratuito, oppure Hosted Weblate                                                                                     | Piattaforma in hosting; librerie e CLI open source                                                                                                |
+| Prezzi                      | Self-hosted gratuito; piani in hosting in base al numero di stringhe ospitate; piano Libre gratuito per progetti libre pubblici | [Traduzione a consumo](https://generaltranslation.com/pricing)                                                                                    |
+| Licenza                     | GPL-3.0-or-later                                                                                                                | Librerie JavaScript e CLI con licenza MIT                                                                                                         |
+
+## Perché i team scelgono General Translation invece di Weblate
+
+General Translation integra la traduzione nello stesso rilascio che introduce i nuovi testi. Puoi continuare a usare gettext e generare i file PO durante la build, oppure usare le librerie inline per mantenere il testo sorgente direttamente nei componenti, all&#39;interno di [`<T>`](/docs/react/reference/components/t).
+
+* **Più veloce.** [`npx gt translate`](/docs/cli/reference/commands/translate) genera le traduzioni prima della distribuzione. Per i progetti React e Next.js, [Locadex](/docs/platform/locadex/quickstart) può preparare le modifiche sotto forma di pull request. Basta aggiungere un&#39;impostazione regionale in `gt.config.json` perché la generazione per quella lingua parta alla successiva esecuzione.
+* **Costi di gestione inferiori.** Il servizio di traduzione è gestito da General Translation, quindi il tuo team non deve installare, aggiornare o fare il backup di alcun server di traduzione. Con la scrittura inline, inoltre, gli sviluppatori non devono più mantenere un catalogo sorgente separato.
+* **Qualità superiore.** Con la traduzione inline, gli elementi JSX marcati e i rami del plurale restano uniti alla frase. Con gettext, i commenti nel sorgente e `msgctxt` chiariscono il significato di ogni voce. I [gruppi di contesto](/docs/platform/dashboard/guides/defining-context-for-translations) condivisi applicano il tuo Glossario e i tuoi prompt personalizzati, e il tuo team rifinisce il risultato nell&#39;[Editor di traduzione della dashboard](/docs/platform/dashboard/guides/reviewing-translations).
+* **Rischi ridotti.** I file tradotti risiedono nel tuo repository ed è il tuo processo di rilascio a stabilire quando vengono pubblicati. Puoi continuare a usare gettext e i file PO standard, oppure le librerie JavaScript di General Translation con licenza MIT e traduzioni incluse nel bundle; in entrambi i casi, la consegna non richiede alcuna chiamata a General Translation a runtime.
+
+La piattaforma e la documentazione di Profound sono disponibili in oltre 47 impostazioni regionali grazie a General Translation. (Vedi le [distribuzioni in produzione](https://generaltranslation.com/enterprise).)
+
+## Quando Weblate è la scelta migliore
+
+Scegli Weblate se ti servono la traduzione collaborativa con la community, una piattaforma interamente self-hosted o il suo ampio supporto ai formati di catalogo. Scegli General Translation se vuoi che i nuovi testi del prodotto vengano tradotti a ogni rilascio, con il contesto del codice per i contenuti scritti inline e un percorso diretto tramite CLI per i file JSON, YAML, PO o Markdown esistenti.
+
+## Usare entrambi con i file gettext
+
+La CLI di General Translation traduce gli stessi file gettext letti da Weblate. Fai puntare una voce `pot` al tuo template e mappa ogni output sulla struttura di cartelle usata da Weblate:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "pl"],
+  "files": {
+    "pot": {
+      "include": ["locale/messages.pot"],
+      "transformationFormat": "PO",
+      "transform": {
+        "match": "locale/messages\\.pot",
+        "replace": "locale/{locale}/LC_MESSAGES/messages.po"
+      }
+    }
+  }
+}
+```
+
+Con `gt` 2.26.5, questa config mappa `locale/messages.pot` su `locale/es/LC_MESSAGES/messages.po` e sul percorso equivalente per ciascuna impostazione regionale. Per le voci plurali, General Translation scrive l&#39;intestazione `Plural-Forms` della lingua di destinazione e compila ogni forma `msgstr[n]`. Assegna a ciascuna lingua un solo responsabile, ad esempio General Translation per le lingue non coperte dalla tua community e i volontari di Weblate per le altre, così da evitare che entrambi modifichino lo stesso file. Per i nomi delle cartelle gettext con trattino basso, come `pt_BR`, aggiungi una voce [`customMapping`](/docs/cli/reference/config#custom-mapping) che li mappi sul formato standard `pt-BR`. (Vedi [PO / POT](/docs/cli/reference/formats/po-pot-files).)
+
+## General Translation è un&#39;alternativa a Weblate?
+
+Sì. General Translation integra nel tuo processo di rilascio la generazione delle traduzioni, una terminologia di prodotto condivisa e la revisione nella Dashboard. Puoi mantenere i file gettext mostrati sopra e cambiare solo il modo in cui vengono generate le relative traduzioni, senza sostituire le chiamate gettext dell&#39;applicazione.
+
+## Punti chiave
+
+* Weblate è una solida piattaforma con licenza copyleft forte per la traduzione open source e collaborativa, con localizzazione continua basata su Git, self-hosting gratuito e circa 50 formati di file supportati.
+* Il suo flusso di lavoro di traduzione ruota attorno ai cataloghi nel repository, ai collaboratori e alla sincronizzazione con Git.
+* General Translation genera le traduzioni prima della distribuzione. Puoi continuare a usare gettext e i file PO standard, oppure adottare la scrittura inline per fornire il contesto direttamente nel codice, senza un catalogo sorgente separato.

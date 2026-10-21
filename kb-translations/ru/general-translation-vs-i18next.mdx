@@ -1,0 +1,134 @@
+---
+title: "General Translation или i18next: что выбрать?"
+summary: Выбирайте General Translation, если хотите хранить тексты прямо в React-компонентах и генерировать переводы с учётом их JSX-структуры и контекста продукта. Можно также оставить i18next и переводить существующие каталоги с помощью General Translation. i18next отвечает за рендеринг сообщений и выбор форм множественного числа, а сами переводы создаёт отдельный сервис.
+description: i18next отвечает за рендеринг сообщений и выбор форм множественного числа, но сами переводы берутся из отдельного сервиса. General Translation генерирует их — из встроенных текстов в React-компонентах или из ваших каталогов i18next.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-react-intl, general-translation-vs-lingui, general-translation-vs-vue-i18n, how-to-handle-plurals-in-react]
+---
+
+i18next загружает файлы перевода, выбирает сообщение на языке пользователя, определяет формы множественного числа, интерполирует значения и форматирует числа и даты с помощью `Intl`. Библиотека доступна в npm с 2012 года и вместе с `react-i18next` и `next-i18next` часто используется в приложениях на React и Next.js. Но переводить i18next не умеет: каждое сообщение на каждом языке должны подготовить вы, ваши переводчики или сервис вроде Locize, который [развивают создатели i18next](https://www.i18next.com/). Библиотеки General Translation так же отвечают за рендеринг, но вдобавок General Translation сам генерирует переводы из текстов в ваших компонентах.
+
+## Сильные стороны i18next
+
+* **Распространённость.** Это один из самых популярных i18n-фреймворков для JavaScript.
+* **Широта охвата.** [Есть привязки для React, Vue, Angular, Svelte и других фреймворков](https://www.i18next.com/overview/supported-frameworks), а плагины позволяют загружать файлы по HTTP, определять язык пользователя и переводить сообщения на ICU MessageFormat с помощью `i18next-icu`.
+* **Полная поддержка форм множественного числа и контекста.** Ключи содержат [суффиксы форм множественного числа CLDR](https://www.i18next.com/translation-function/plurals), такие как `_one`, `_few` и `_many`, которые разрешаются через `Intl.PluralRules`, а также контекстные варианты, например `friend_male`.
+* **Инструменты.** Официальный [`i18next-cli`](https://github.com/i18next/i18next-cli) извлекает ключи, генерирует типы TypeScript и создаёт ключи форм множественного числа для каждой локали, а его команда `status` завершается с ошибкой, если в какой-либо локали есть непереведённые ключи, — благодаря этому CI может выявлять пропуски.
+* **Серверные компоненты.** [`next-i18next` 16](https://github.com/i18next/next-i18next) добавляет серверную функцию перевода для Next.js App Router.
+* **Не привязан к сервису.** Каталоги — это обычные JSON-файлы, которые полностью принадлежат вам, а i18next работает с любым сервисом перевода или вовсе без него.
+
+## Что i18next оставляет на ваше усмотрение
+
+Вот небольшой почтовый ящик на react-i18next. У каждой строки свой ключ, и у каждой формы множественного числа — тоже отдельный ключ:
+
+```json title="locales/en/translation.json"
+{
+  "inbox": {
+    "title": "Inbox",
+    "unread_one": "You have {{count}} unread message.",
+    "unread_other": "You have {{count}} unread messages."
+  }
+}
+```
+
+```tsx title="Inbox.tsx"
+import { useTranslation } from 'react-i18next';
+
+export function Inbox({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <section>
+      <h1>{t('inbox.title')}</h1>
+      <p>{t('inbox.unread', { count })}</p>
+    </section>
+  );
+}
+```
+
+Во всех остальных языках нужны те же ключи сообщений — с теми формами множественного числа, которые есть в конкретном языке. Например, для польского нужны `unread_one`, `unread_few`, `unread_many` и `unread_other`. Если в польском файле есть только формы `_one` и `_other`, как в английском, а ваш [резервный язык](https://www.i18next.com/principles/fallback) — английский, то для чисел вроде 2 и 5 будет выводиться английский текст:
+
+```text title="Output"
+pl, count 1:  Masz 1 nieprzeczytaną wiadomość.
+pl, count 2:  You have 2 unread messages.
+pl, count 5:  You have 5 unread messages.
+pl, count 22: You have 22 unread messages.
+```
+
+Команда `i18next-cli status`, запущенная в CI, выявляет отсутствующие формы. Сервисы перевода могут сгенерировать содержимое каталогов, но приложение по-прежнему обращается к ключам вроде `inbox.unread`, а рабочий процесс извлечения и перевода поддерживает эти каталоги в актуальном состоянии.
+
+## General Translation хранит текст прямо в коде и генерирует переводы
+
+Библиотеки General Translation решают ту же задачу, что и i18next. Они подбирают сообщения для каждой локали, применяют её правила множественного числа, интерполируют переменные и форматируют числа, валюты и даты с помощью [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency) и [`<DateTime>`](/docs/react/reference/components/datetime), а командам, которые предпочитают ключи, доступны словари через [`useTranslations`](/docs/react/reference/hooks/use-translations). Но General Translation умеет то, чего не умеет i18next: он сам генерирует переводы. Вот тот же почтовый ящик на `gt-react`:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) перед сборкой отправляет каждый блок [`<T>`](/docs/react/reference/components/t) вместе со структурой его элементов в API General Translation и создаёт перевод для каждой целевой локали. Обобщённые исходные ветви `singular` и `plural` задают формулировки для всех форм, которые нужны каждому целевому языку. Затем [`<Plural>`](/docs/react/reference/components/plural) выбирает переведённую ветвь по правилам соответствующей локали. Значение, обёрнутое в [`<Var>`](/docs/react/reference/components/var), никогда не отправляется в API.
+
+Если вы измените предложение внутри [`<T>`](/docs/react/reference/components/t), при следующем запуске перевода оно обновится для каждого языка, а переводы неизменённого содержимого будут использованы повторно. Рецензенты работают в [Редакторе переводов на панели управления](/docs/platform/dashboard/guides/reviewing-translations), поэтому для правки переводов не нужно изменять компоненты.
+
+JavaScript-библиотеки распространяются по лицензии MIT и работают без учётной записи, если вы предоставляете переводы сами. Приложение, которое загружает все переводы из своего бандла, не обращается к General Translation во время выполнения. `gt-react` и `gt-next` не построены поверх какой-либо другой библиотеки интернационализации.
+
+С помощью General Translation Cursor поддерживает более 14 локалей на сайте и в документации. (См. [развёртывания в рабочей среде](https://generaltranslation.com/enterprise).)
+
+## i18next и General Translation: краткое сравнение
+
+| Возможность                | i18next                                                                        | General Translation                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Как пишутся тексты         | Ключи в JSON-файлах для каждого языка и пространства имён                      | JSX внутри [`<T>`](/docs/react/reference/components/t), строки через [`useGT`](/docs/react/reference/hooks/use-gt) или словари с ключами |
+| Переводит ваш контент      | Нет                                                                            | Да, с помощью [`npx gt translate`](/docs/cli/reference/commands/translate)                                                               |
+| Откуда берутся переводы    | От вас, переводчиков или сервиса вроде Locize                                  | Генерируются с учётом контекста вашего кода или пишутся вашей командой                                                                   |
+| Формы множественного числа | Отдельный ключ для каждой формы CLDR, заполняемый для каждого языка            | Ветви [`<Plural>`](/docs/react/reference/components/plural), которые переводятся вместе с остальным блоком                               |
+| Контекст перевода          | Исходные сообщения и контекст, которые поставляет ваш рабочий процесс перевода | Структура внутри размеченных JSX-блоков, заметки с контекстом, а также общие Glossary и пользовательские промпты                         |
+| Фреймворки                 | React, Next.js и привязки для Vue, Angular, Svelte и других                    | React, Next.js, Vue, Node.js и [дополнительные SDK](/docs/overview/get-started)                                                          |
+| Нужна ли учётная запись    | Нет                                                                            | Для библиотек — нет; перевод выполняется через проект General Translation                                                                |
+
+Оставайтесь на i18next, если ваши каталоги и процесс перевода уже отлажены, если вы работаете с фреймворком, который библиотеки General Translation не поддерживают, или если вам нужны ключи, которые не меняются при правке текстов. Выбирайте General Translation, если хотите писать тексты прямо в компонентах, получать переводы с учётом контекста вашего кода и обновлять все языки при каждой сборке.
+
+## Оставьте i18next, а перевод доверьте General Translation
+
+Менять библиотеку не нужно. CLI `gt` находит `i18next` в вашем `package.json` и сохраняет его синтаксис интерполяции. Вот конфигурация для перевода приведённого выше каталога сообщений для раздела «Входящие» на немецкий язык:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["de"],
+  "files": {
+    "json": {
+      "include": ["locales/[locale]/translation.json"]
+    }
+  }
+}
+```
+
+В английском и немецком языках используется одинаковая структура ключей множественного числа: `_one` и `_other`. Эта конфигурация генерирует `locales/de/translation.json` на основе `locales/en/translation.json`. Чтобы добавить контекст для отдельных ключей — например, указать, где отображается строка, — используйте [метаданные, привязанные к ключам](/docs/cli/reference/keyed-metadata). Выполните [`npx gt upload`](/docs/cli/reference/commands/upload), чтобы импортировать исходные тексты и существующие переводы, а затем запускайте [`npx gt translate`](/docs/cli/reference/commands/translate) для перевода нового текста.
+
+Если вы хотите перейти на [`<T>`](/docs/react/reference/components/t), воспользуйтесь руководством [Миграция с i18n-библиотек](/docs/react/guides/migrating-i18n-libraries). В нём описано, как заменить поиск по ключу встроенным текстом, сохранить словари с помощью [`useTranslations`](/docs/react/reference/hooks/use-translations) и использовать обе библиотеки параллельно, переводя маршруты по одному. (Сравнение i18next с другими решениями см. в статье [General Translation vs. i18next, react-intl, and next-intl](/kb/general-translation-vs-i18n-libraries).)
+
+## Как работать с польским и другими языками со сложными формами множественного числа в i18next?
+
+Для каждого языка нужен ключ под каждую используемую в нём форму множественного числа CLDR — например, `_one`, `_few`, `_many` и `_other` для польского. Чтобы выявлять отсутствующие формы, запускайте `i18next-cli status` в CI. При встроенном написании текстов с General Translation достаточно указать ветви `singular` и `plural`, как показано выше, а сервис перевода сам сгенерирует формы для целевых языков. Нужную форму во время выполнения выбирает [`<Plural>`](/docs/react/reference/components/plural).
+
+## Ключевые выводы
+
+* i18next выполняет рендеринг каталогов с ключами и выбирает формы множественного числа, а сами переводы создают люди или подключённый сервис.
+* Библиотеки General Translation выполняют рендеринг переводов точно так же, но General Translation ещё и сам делает перевод — на основе текста, встроенного прямо в [`<T>`](/docs/react/reference/components/t).
+* Можно оставить i18next и поручить `gt` CLI переводить его JSON-файлы, а можно мигрировать на [`<T>`](/docs/react/reference/components/t) постепенно, маршрут за маршрутом.

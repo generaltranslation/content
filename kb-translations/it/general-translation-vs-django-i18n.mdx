@@ -1,0 +1,114 @@
+---
+title: "General Translation e il framework di traduzione di Django: servono entrambi?"
+summary: Usa insieme il framework di traduzione di Django e General Translation. Django si occupa dell'estrazione dei messaggi, della selezione della lingua e del rendering. General Translation compila i suoi file PO, forme plurali incluse, applicando la terminologia del tuo prodotto e la revisione nella Dashboard. Template e pattern URL restano invariati, mentre le traduzioni si aggiornano di pari passo con il codice.
+description: "Usali entrambi: Django estrae i messaggi, seleziona la lingua ed esegue il rendering. General Translation compila i suoi file PO, forme plurali incluse, applicando la tua terminologia e la revisione nella Dashboard."
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-gettext, general-translation-vs-flask-babel, general-translation-vs-rails-i18n, general-translation-vs-tms, general-translation-vs-i18n-libraries]
+---
+
+Django include un framework di internazionalizzazione (i18n) completo: contrassegni le stringhe con `gettext` e `{% translate %}`, `makemessages` le estrae in un file PO per ogni lingua, `compilemessages` genera i file `.mo` caricati da Django e `LocaleMiddleware` sceglie la lingua per ogni richiesta. General Translation aggiunge la fase di traduzione tra l&#39;estrazione e la compilazione: la sua CLI legge il catalogo in inglese e scrive i file PO tradotti che Django poi carica.
+
+## Cosa fa bene il framework di traduzione di Django
+
+* **Marcatura delle stringhe ovunque.** `gettext` e `ngettext` [coprono il codice Python](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#internationalization-in-python-code), `gettext_lazy` gestisce le stringhe definite al momento dell&#39;importazione, come i campi dei modelli e le etichette dei form, `pgettext` aggiunge contesto alle parole ambigue, mentre `{% translate %}` e `{% blocktranslate %}` (con `count` per i plurali) coprono i template.
+* **Estrazione e compilazione integrate.** `makemessages` esegue `xgettext` di GNU gettext sui file Python e sui template ed [esegue il merge delle nuove stringhe in un file `django.po`](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#message-files) per ciascuna lingua, in `locale/<locale>/LC_MESSAGES/`. Un commento `# Translators:` posto sopra una stringa viene riportato nel file PO, a beneficio di chi la traduce.
+* **Selezione della lingua per ogni richiesta.** `LocaleMiddleware` [controlla il prefisso dell&#39;URL](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#how-django-discovers-language-preference) aggiunto da `i18n_patterns`, poi il cookie della lingua, poi l&#39;intestazione `Accept-Language` e infine `LANGUAGE_CODE`. Seleziona solo le lingue elencate in `LANGUAGES` e, in mancanza di `de-at`, ripiega su `de`.
+* **Non solo stringhe.** Date e numeri vengono [formattati in base all&#39;impostazione regionale attiva](https://docs.djangoproject.com/en/5.2/topics/i18n/formatting/) e `JavaScriptCatalog` fornisce al browser un catalogo `djangojs` separato.
+* **Django è già tradotto di serie.** L&#39;interfaccia di amministrazione e le app integrate [includono cataloghi per circa un centinaio di lingue](https://github.com/django/django/tree/stable/5.2.x/django/contrib/admin/locale) e il framework è gratuito, con licenza BSD.
+
+## Ciò che Django lascia a te
+
+[La documentazione stessa di Django](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#compiling-message-files) descrive il passaggio di cui non si occupa: una volta che i traduttori hanno completato il file dei messaggi, tocca a te compilarlo. Ecco un template con un plurale:
+
+```html title="shop/templates/shop/inbox.html"
+{% load i18n %}
+<p>{% blocktranslate count counter=count %}{{ counter }} file{% plural %}{{ counter }} files{% endblocktranslate %}</p>
+```
+
+Con Django 5.2, `python manage.py makemessages -l ru` copia nell&#39;intestazione la regola di plurale a quattro forme del russo, presa dal catalogo interno di Django, ma per la voce scrive solo due slot vuoti:
+
+```text title="locale/ru/LC_MESSAGES/django.po"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || "
+"(n%100>=11 && n%100<=14)? 2 : 3);\n"
+
+#: shop/templates/shop/inbox.html:2
+#, python-format
+msgid "%(counter)s file"
+msgid_plural "%(counter)s files"
+msgstr[0] ""
+msgstr[1] ""
+```
+
+In un test, compilando solo quei due slot si è ottenuto un catalogo che `compilemessages` ha compilato senza errori, e la pagina ha renderizzato &quot;1 файл&quot; e &quot;3 файла&quot;, ma poi &quot;5 files&quot; in inglese per un conteggio pari a cinque, perché lo slot che la regola sceglie per il cinque non era mai stato compilato. Un catalogo vuoto fallisce allo stesso modo, in silenzio: senza nulla in `pt_BR`, la pagina `/pt-br/` è stata renderizzata interamente in inglese. E per ogni nuova stringa che contrassegni, il ciclo si ripete in ogni lingua.
+
+Inoltre, Django si limita alle stringhe nel codice. I contenuti memorizzati nel database, come nomi di prodotti o pagine, richiedono un pacchetto di terze parti: django-modeltranslation [aggiunge un campo per ogni lingua](https://django-modeltranslation.readthedocs.io/en/latest/registration.html) ai modelli registrati, mentre django-parler conserva le traduzioni in una tabella separata. Entrambi ti offrono un posto dove inserire le traduzioni, ma nessuno dei due le scrive al posto tuo.
+
+## Tradurre i file PO di Django con General Translation
+
+La CLI di General Translation legge il catalogo inglese già gestito da Django, traduce ogni voce e scrive un file PO per ciascuna lingua di destinazione nel percorso in cui Django si aspetta di trovarlo. Mantieni aggiornato il catalogo inglese con `makemessages`:
+
+```bash
+python manage.py makemessages -l en
+```
+
+Poi fai puntare `gt.config.json` a questo file. Questa configurazione è stata verificata con `gt` 2.26.5:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "pl", "pt_BR"],
+  "customMapping": {
+    "pt_BR": { "code": "pt-BR" }
+  },
+  "files": {
+    "pot": {
+      "include": ["locale/[locale]/LC_MESSAGES/*.po"],
+      "transformationFormat": "PO"
+    }
+  }
+}
+```
+
+Ci sono alcuni dettagli importanti, tutti trattati nel [riferimento al formato PO / POT](/docs/cli/reference/formats/po-pot-files):
+
+* **`pot` è la chiave sia per i file PO sia per i file POT.** `transformationFormat` deve essere `PO`; altrimenti l&#39;output resta un template non tradotto.
+* **Le directory delle impostazioni regionali usano i nomi di Django.** La CLI sostituisce `[locale]` con ciascuna impostazione regionale esattamente come la scrivi. [`customMapping`](/docs/cli/reference/config#custom-mapping) collega la directory `pt_BR` di Django al codice locale standard `pt-BR`.
+* **`*.po` include tutti i domini**, compreso `djangojs.po` se esegui anche `makemessages -d djangojs -l en`.
+
+Dopo aver configurato la CLI (consulta l&#39;[Avvio rapido della CLI](/docs/cli/quickstart)), esegui [`npx gt translate`](/docs/cli/reference/commands/translate) e poi `python manage.py compilemessages`. General Translation invia ogni voce accompagnata, come contesto, da tutte le informazioni che il file PO contiene su di essa: il `msgctxt`, i commenti `# Translators:`, i riferimenti alla sorgente e i flag come `python-format`. Per le voci plurali scrive l&#39;intestazione `Plural-Forms` della lingua di destinazione, compila tutti gli slot `msgstr[n]` previsti da tale intestazione e verifica che i segnaposto come `%(counter)s` rimangano intatti. Per il russo si tratta della regola gettext standard a tre forme; Django legge separatamente la regola di ciascun catalogo, quindi non c&#39;è conflitto con la regola a quattro forme del catalogo russo incluso in Django.
+
+Le voci invariate riutilizzano le traduzioni precedenti, quindi all&#39;esecuzione successiva viene tradotto solo ciò che è cambiato; `--force` ritraduce tutto. Se i tuoi file PO contengono già traduzioni, esegui [`npx gt upload`](/docs/cli/reference/commands/upload) prima di generarne di nuove. Per conservare le modifiche locali apportate in seguito, sincronizzale con [`npx gt save-local`](/docs/cli/reference/commands/save-local) prima della successiva esecuzione della traduzione.
+
+È qui che lo stack completo fa la differenza. Un Glossario e i prompt personalizzati in un [gruppo di contesto](/docs/platform/dashboard/guides/defining-context-for-translations) mantengono coerenti terminologia di prodotto e tono tra i tuoi cataloghi Django e gli altri progetti assegnati al gruppo. I revisori possono [modificare ogni voce PO](/docs/platform/dashboard/guides/reviewing-translations), comprese le relative forme plurali, direttamente nella dashboard. Esegui `makemessages`, [`gt translate`](/docs/cli/reference/commands/translate) e `compilemessages` in CI per aggiornare le traduzioni a ogni rilascio.
+
+Per i contenuti del database e gli altri testi disponibili solo a runtime, l&#39;API di General Translation traduce le stringhe su richiesta ([`POST /v2/translate`](/docs/platform/openapi/reference/translation/translate-runtime)); la memorizzazione dei risultati è a tuo carico, ad esempio nei campi per lingua di django-modeltranslation.
+
+Installa Node.js sulla macchina che esegue la CLI. Django continua a servire i cataloghi compilati tramite il runtime Python già in uso.
+
+## Il framework di traduzione di Django e General Translation a confronto
+
+| Funzionalità                                       | Framework di traduzione di Django                                                                        | General Translation                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Contrassegna le stringhe nel codice e nei template | Sì: `gettext`, `{% translate %}` e altro                                                                 | Usa le chiamate ai messaggi Django già presenti nel codice                      |
+| Estrae le stringhe in file PO                      | Sì, con `makemessages`                                                                                   | Legge i file generati da `makemessages`                                         |
+| Scrive le traduzioni                               | No                                                                                                       | Sì, con [`npx gt translate`](/docs/cli/reference/commands/translate)            |
+| Forme plurali                                      | Intestazione presa dal catalogo di Django; ogni slot va compilato a mano                                 | Scrive l&#39;intestazione della lingua di destinazione e compila tutti gli slot |
+| Contesto per la traduzione                         | Commenti `# Translators:` e `msgctxt` nel file PO                                                        | Gli stessi, più Glossario e prompt personalizzati                               |
+| Lingua per richiesta e prefissi URL                | Sì, con `LocaleMiddleware` e `i18n_patterns`                                                             | Mantiene il routing e la selezione della lingua di Django                       |
+| Contenuti del database                             | Pacchetti di terze parti come django-modeltranslation                                                    | Traduzione tramite API a runtime; il salvataggio dei risultati è a tuo carico   |
+| Costo                                              | Gratuito, open source ([BSD](https://docs.djangoproject.com/en/5.2/faq/general/#how-is-django-licensed)) | [Traduzione a consumo](https://generaltranslation.com/pricing)                  |
+
+## Quando usare l&#39;uno o l&#39;altro
+
+Usa il framework di Django da solo se hai traduttori o un sistema di gestione delle traduzioni che popola già i tuoi file PO, se pubblichi in una o due lingue e puoi tradurre a mano, oppure se ogni traduzione deve essere scritta da una persona. Aggiungi General Translation se vuoi che a ogni modifica ogni file PO venga popolato per tutte le lingue, con le forme plurali complete e una terminologia coerente, senza un ciclo di traduzione tra il merge e il rilascio.
+
+Non è necessario scegliere tra i due: Django gestisce la marcatura, l&#39;estrazione, la compilazione e la selezione della lingua, mentre General Translation si occupa della traduzione. Non c&#39;è nulla da migrare, perché i tuoi template, il middleware e i pattern URL restano invariati.
+
+## Punti chiave
+
+* Il framework di traduzione di Django renderizza le traduzioni, ma non le scrive. Se manca uno slot plurale o il catalogo è vuoto, si ricade sull&#39;inglese senza alcun errore di build.
+* General Translation traduce il catalogo inglese generato da `makemessages` in un file PO per ciascuna lingua. Template, middleware e pattern degli URL restano invariati.
+* Per ogni voce plurale, General Translation scrive l&#39;intestazione `Plural-Forms` della lingua di destinazione e tutti gli slot `msgstr[n]`, e passa `msgctxt` e i commenti per i traduttori come contesto.

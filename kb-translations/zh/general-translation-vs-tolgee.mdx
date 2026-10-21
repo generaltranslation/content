@@ -1,0 +1,128 @@
+---
+title: "General Translation 与 Tolgee 对比：该选哪一个？"
+summary: Tolgee 在一个可自托管的平台中整合了基于键的消息、上下文内编辑和 AI 翻译。General Translation 则将可读的文案直接保留在组件中，并根据标记的 JSX 生成译文，让你无需维护消息键，即可用所有语言发布新文案。
+description: Tolgee 在一个可自托管的平台中整合了基于键的消息、上下文内编辑和 AI 翻译。General Translation 直接根据组件中的文案生成译文，无需使用键。
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-tms, general-translation-vs-weblate, general-translation-vs-locize, best-localization-software, i18n-without-translation-files]
+---
+
+Tolgee 是一个开源本地化平台：你为每个字符串分配一个键，通过其 CLI 或 SDK 将键同步到 Tolgee 项目，在那里借助机器翻译、AI 和团队协作完成翻译，再以文件形式或通过 Tolgee 的 CDN 将结果加载回应用。你可以通过 Docker 镜像自行部署，也可以使用 Tolgee Cloud。它最大的亮点是上下文内编辑：在运行中的应用里按住 ALT 并点击任意文本，即可直接翻译。不过，围绕这个编辑器、以键为核心的整套流程，仍需工程师自行维护。General Translation 则从代码出发：内容保留在组件中，翻译作为构建流程的一部分自动运行。
+
+## Tolgee 的优势
+
+* **开源，可自托管。** 平台核心采用 [Apache 2.0](https://tolgee.io/licencing) 许可证，而 `ee` 目录中的功能 (如 SSO、细粒度权限、词汇表、任务、分支和 Webhook) 采用 Tolgee EE License，需要许可证密钥才能使用。[免费自托管版本](https://tolgee.io/pricing/self-hosted)包含核心功能、不限数量的键、最多 10 个席位，并支持使用您自己的服务商密钥进行机器翻译。
+* **上下文内编辑。** 在开发环境中，按住 ALT (Mac 上为 Option) 并点击运行中应用里的字符串，即可编辑其翻译。适用于 Chrome 和 Firefox 的 [Tolgee Tools 扩展](https://docs.tolgee.io/js-sdk/in-context)支持直接在同一对话框中截图，还能在生产环境中启用上下文内编辑。
+* **SDK 覆盖多种技术栈。** [JavaScript SDK](https://docs.tolgee.io/js-sdk) 支持 React、Vue、Angular、Svelte 和原生 JavaScript，另提供可与 i18next 配合使用的集成。[iOS](https://docs.tolgee.io/ios-sdk) 和 Android SDK 可直接从 Tolgee 的 CDN 更新字符串，无需发布新版应用。
+* **能读懂代码的 CLI。** `@tolgee/cli` 可从 React、Vue、Svelte 和 Angular 代码中[提取键及其默认值](https://docs.tolgee.io/tolgee-cli/extraction/parsers)，并通过 `push`、`pull`、`sync` 和 `compare` 命令让 Tolgee 项目与您的代码仓库保持同步。它还支持导入和导出多种格式，包括 XLIFF、ARB 和 Java properties。
+* **结合上下文的 AI。** [机器翻译](https://docs.tolgee.io/platform/translation_process/machine_translation)由 DeepL、Google、Amazon 或 Azure 提供；AI Translator 在 Tolgee Cloud 上使用 Claude 或 OpenAI 模型，也可接入您自己的 OpenAI、Azure OpenAI、Anthropic、Gemini 或兼容 OpenAI 的服务商。翻译时，它会参考屏幕截图、键和项目描述、翻译记忆库，以及 [SDK 记录的键关系](https://docs.tolgee.io/platform/translation_process/ai_translator)。
+* **多种交付方式。** [Content Delivery](https://docs.tolgee.io/platform/projects_and_organizations/content_delivery) 可将译文发布到 Tolgee 的 CDN，或您自己的 S3、Azure 存储，Web 应用无需重新构建即可获取更新。
+
+## 使用 Tolgee 时，工程师仍需处理的工作
+
+在 Tolgee 中，UI 里的每个字符串都是一个带默认值的键：
+
+```tsx title="src/Inbox.tsx"
+import { T, useTranslate } from '@tolgee/react';
+
+export function Inbox({ count }: { count: number }) {
+  const { t } = useTranslate();
+  return (
+    <section>
+      <h1>
+        <T keyName="inbox_title" defaultValue="Inbox" />
+      </h1>
+      <p>
+        {t('inbox_unread', '{count, plural, one {# unread message} other {# unread messages}}', { count })}
+      </p>
+    </section>
+  );
+}
+```
+
+对此文件运行 `npx @tolgee/cli extract print` (CLI 2.21.0) ，可以找到这两个键及其英文默认值：
+
+```text title="Output"
+2 keys found in src/Inbox.tsx:
+	line 8: inbox_title
+		default: Inbox
+	line 11: inbox_unread
+		default: {count, plural, one {# unread message} other {# unread messages}}
+```
+
+提取功能能找出键，但要让新文案进入每种语言，仍然得反复走一遍流程：
+
+1. 为每个字符串命名一个键，并把英文写作它的默认值。
+2. 使用 `tolgee push` 或 [`tolgee sync`](https://docs.tolgee.io/tolgee-cli/extraction/syncing-strings) 在 Tolgee 项目中创建这些键。
+3. 通过机器翻译、AI Translator 或你的译者完成翻译，并审校结果。
+4. 运行 [`tolgee pull`](https://docs.tolgee.io/tolgee-cli/push-pull-strings) 并提交文件，或者配置 Content Delivery 并将 SDK 指向它，然后在应用中逐一添加新语言。
+
+在键完成翻译之前，读者看到的是后备语言或英文默认值。此外，AI Translator 依据的是有人手动附加的截图和描述，以及哪些键会同时出现在屏幕上，而不是渲染该字符串的组件本身。
+
+Tolgee Cloud 主要按托管词数计费，基础语言和每种译文分别计数；各套餐包含相应的机器翻译使用额度，当前套餐均不限席位数。自托管许可证则按键数和席位数计费。 (参见 [Tolgee 定价](https://tolgee.io/pricing)，查阅于 2026 年 10 月。)
+
+## Tolgee 与 General Translation 概览对比
+
+| 功能        | Tolgee                                                                      | General Translation                                                                                                         |
+| --------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 字符串存放位置   | 代码中带默认值的键，同步到 Tolgee 项目                                                     | 代码中的 [`<T>`](/docs/react/reference/components/t) 内，或你现有的资源文件中                                                               |
+| 代码如何对接    | `@tolgee/cli` 的 `push`、`pull` 和 `sync` 命令，或在开发环境中使用 SDK                     | 在构建流程中运行 [`npx gt translate`](/docs/cli/reference/commands/translate)，或通过 [Locadex](/docs/platform/locadex/quickstart) 拉取请求 |
+| 由谁翻译      | 机器翻译、AI Translator 或你的译者                                                    | AI 结合代码、词汇表和自定义提示词提供的上下文进行翻译，再由你的团队在仪表板中审阅                                                                                  |
+| 每个字符串的上下文 | 键描述和项目描述、截图、翻译记忆库以及键之间的关联                                                    | 已标记 JSX 块的内部结构、上下文备注，以及共享的词汇表和自定义提示词                                                                                        |
+| 应用内编辑     | 在运行中的应用里按住 ALT 并点击即可编辑，借助浏览器扩展还可在生产环境中使用                                    | 在仪表板的翻译编辑器中审阅和编辑                                                                                                            |
+| 托管方式      | 使用 Docker 自托管，或使用 Tolgee Cloud                                              | 托管平台；库和 CLI 均已开源                                                                                                            |
+| 定价        | 提供免费套餐；Cloud 套餐按托管词数计费；自托管许可证按键数和席位数计费                                      | [按用量计费](https://generaltranslation.com/pricing)                                                                             |
+| 原生移动应用    | 提供 iOS 和 [Android SDK](https://docs.tolgee.io/android-sdk)，支持 OTA (空中下载) 更新 | CLI 可翻译 iOS 和 Android 字符串文件，随应用版本一同发布                                                                                       |
+
+## 为什么团队选择 General Translation 而不是 Tolgee
+
+General Translation 从代码出发，因此无需为键命名，也无需同步键。它的 [`<T>`](/docs/react/reference/components/t) 直接包裹内容本身。下面是用 `gt-react` 实现的同一个收件箱 (需先[设置好提供者](/docs/react/react-quickstart)) ：
+
+```tsx title="src/Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <p>
+          <Plural
+            n={count}
+            singular={<><Num>{count}</Num> unread message</>}
+            plural={<><Num>{count}</Num> unread messages</>}
+          />
+        </p>
+      </section>
+    </T>
+  );
+}
+```
+
+标题和消息在源代码中始终放在一起。[`npx gt translate`](/docs/cli/reference/commands/translate) 会生成翻译后的代码块，其中包含每种目标语言所需的复数形式。
+
+* **更快。** [`npx gt translate`](/docs/cli/reference/commands/translate) 可在构建过程中运行，Locadex 也可以在代码变更时自动创建拉取请求，因此新文案会随引入它的版本一同以翻译完成的状态发布。添加一种语言只需在 `gt.config.json` 中加一行，下一次构建就会将整个项目翻译成该语言。
+* **运行成本更低。** 工程师直接编辑可读的 JSX，无需为每句话命名键，也无需维护单独的源字典。文案改动与使用这些文案的组件在同一次代码审查中一并完成。
+* **质量更高。** 收件箱示例会将标题、消息结构和复数分支一并发送，相比孤立的句子，能为翻译提供更丰富的语义。你的词汇表和自定义提示词还会通过[上下文组](/docs/platform/dashboard/guides/defining-context-for-translations)补充产品术语和语气。
+* **风险更低。** 你可以在[仪表板翻译编辑器](/docs/platform/dashboard/guides/reviewing-translations)中审阅生成的文本，并将译文保存在自己的构建中。采用 MIT 许可证的 JavaScript 库无需 General Translation 账户，也无需调用运行时服务，即可渲染这些文件。
+
+Ramp 借助 General Translation 将其仪表板、落地页和 iOS 应用本地化为 11 种以上的区域设置。 (参见[生产环境部署案例](https://generaltranslation.com/enterprise)。)
+
+## 何时更适合选择 Tolgee
+
+以下情况建议选择 Tolgee：需要自托管整个平台；译者或产品经理希望在运行中的应用里直接点击文本进行编辑；前端使用 Angular 或 Svelte；需要交换 [XLIFF、ARB 或 CSV 文件](https://docs.tolgee.io/platform/supported_formats)；或者原生 iOS 和 Android 应用需要通过 OTA (空中下载) 方式更新字符串。如果产品的大部分文本都写在 React、Next.js 或 Vue 代码中，并且你希望每次发布都能同时支持所有语言、无需额外执行键同步步骤，请选择 General Translation。
+
+## 从 Tolgee 迁移到 General Translation
+
+建议逐个功能进行迁移。将每个 `<T keyName="…" defaultValue="…" />` 替换为 General Translation 的 [`<T>`](/docs/react/reference/components/t)，并用它包裹英文内容；将每个 `t('key', 'default')` 替换为 [`useGT`](/docs/react/reference/hooks/use-gt)。如果你的团队希望保留键，可以将英文值放入字典，再通过 [`useTranslations`](/docs/react/reference/hooks/use-translations) 读取。在所有功能迁移完成之前，请继续加载 Tolgee 的译文。 (参见[迁移国际化库](/docs/react/guides/migrating-i18n-libraries)。) 别忘了把词汇表也一并迁移过来：上下文分组支持导入 CSV、TSV、JSON 和文本文件。 (参见[为翻译定义上下文](/docs/platform/dashboard/guides/defining-context-for-translations)。)
+
+## General Translation 能否替代 Tolgee？
+
+可以，前提是你的产品文本大多写在 React、Next.js 或 Vue 代码中。General Translation 会在构建时翻译这些内容，无需创建或同步任何键。如果你需要自托管平台，或希望译者直接在运行中的应用里编辑文本，Tolgee 仍是更合适的选择。
+
+## 要点总结
+
+* Tolgee 是一个开源、可自托管的本地化平台，支持上下文内编辑，为多种技术栈提供 SDK，其 AI 功能还能借助截图和描述信息辅助翻译。
+* 它通过 SDK 和 CLI，将基于键的源消息与翻译、审校和交付流程串联起来。
+* General Translation 采用内联编写方式，无需再维护消息键：源文本直接写在 JSX 中，清晰易读；译文在构建过程中生成，并可在仪表板中审校。

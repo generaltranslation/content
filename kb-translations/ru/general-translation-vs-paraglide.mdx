@@ -1,0 +1,120 @@
+---
+title: "General Translation или Paraglide JS: что выбрать?"
+summary: Выбирайте General Translation, если хотите хранить тексты прямо в коде и создавать переводы с учётом структуры React-компонентов, общей терминологии и проверки в панели управления. Выбирайте Paraglide JS, если вам нужны скомпилированные типизированные функции сообщений и tree-shaking на уровне отдельных сообщений. Paraglide рендерит ваши каталоги, а General Translation связывает исходные тексты с созданием переводов и их последующим обновлением.
+description: Выбирайте Paraglide JS, если вам нужны скомпилированные типизированные функции сообщений с поддержкой tree-shaking. Выбирайте General Translation, чтобы хранить тексты прямо в коде и создавать переводы с учётом контекста кода и с последующей проверкой.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-intlayer, i18n-without-translation-files, how-to-handle-plurals-in-react, general-translation-vs-tms]
+---
+
+Paraglide JS — библиотека интернационализации от inlang, в основе которой лежит компилятор. Сообщения хранятся в JSON-файлах, например `messages/en.json`, а компилятор превращает каждое из них в типизированную функцию, которую вы вызываете как `m.greeting({ name })`. Благодаря этому сборщик может отбросить сообщения, которые на странице не используются. А вот сам перевод Paraglide оставляет вам: каждое сообщение на каждом языке должны подготовить вы, переводчик или команда машинного перевода, которую вы запускаете для этих файлов. Библиотеки General Translation тоже рендерят переводы, но General Translation ещё и создаёт их — из текста, который вы пишете один раз прямо в своих компонентах.
+
+## Сильные стороны Paraglide JS
+
+* **Типобезопасность.** Для ключей сообщений и параметров генерируются типы. В версии 2.29.0 и опечатка `m.greting()`, и вызов `m.greeting({})` без параметра `name` приводят к ошибкам TypeScript.
+* **Размер бандла.** Сообщения компилируются в ES-модули, поэтому неиспользуемые удаляются при tree-shaking. В [опубликованном бенчмарке](https://paraglidejs.com/benchmark) Paraglide страница, использующая 100 из 200 сообщений в пяти локалях, загружала 47 КБ с Paraglide и 205 КБ с i18next.
+* **Формы множественного числа и варианты.** Формат сообщений по умолчанию [объявляет селектор множественного числа](https://paraglidejs.com/variants) и сопоставляет значения с категориями CLDR, такими как `one`, `few` и `many`. [Плагины](https://paraglidejs.com/file-formats) добавляют поддержку ICU MessageFormat 1 и файлов i18next, а форматтеры обрабатывают числа, даты и относительное время через `Intl`.
+* **Стратегии определения локали.** Упорядоченный [список `strategy`](https://paraglidejs.com/strategy) определяет локаль по URL, cookie-файлу, `localStorage`, предпочтительному языку браузера, глобальной переменной, пользовательским стратегиям или `baseLocale`. В версии 2.29.0 [по умолчанию](https://github.com/opral/paraglide-js/blob/main/src/compiler/compiler-options.ts) используются `cookie`, `globalVariable`, а затем `baseLocale`. [Серверное промежуточное ПО](https://paraglidejs.com/middleware) и `localizeUrl` обрабатывают локализованные маршруты.
+* **Поддержка фреймворков.** Paraglide [работает с любым приложением на Vite](https://paraglidejs.com/vite) и предлагает руководства для React, Vue, Solid, SvelteKit, TanStack Start, React Router, Astro и Next.js. Именно на нём основано [дополнение `npx sv add paraglide`](https://paraglidejs.com/sveltekit) в Svelte CLI. Его [руководство по Next.js](https://paraglidejs.com/next-js) описывает поддержку App Router через плагин webpack, который запускается с флагом `--webpack`.
+* **Бесплатные открытые инструменты.** Библиотека распространяется [по лицензии MIT](https://github.com/opral/paraglide-js/blob/main/LICENSE). [inlang CLI](https://inlang.com/m/2qj2w8pu/app-inlang-cli) проверяет проекты в CI, [Sherlock](https://inlang.com/m/r7kp499g/app-inlang-ideExtension) показывает переводы прямо в коде в VS Code, а [Fink](https://fink.inlang.com/) — бесплатный браузерный редактор, который коммитит изменения переводчиков в репозиторий GitHub.
+
+## Что Paraglide JS оставляет на вас
+
+Проект inlang — это папка `project.inlang`, в которой файл `settings.json` задаёт ваши локали, плагины и путь к файлам сообщений. Вот пример раздела «Входящие» с простым сообщением, сообщением с параметром и сообщением с множественными формами:
+
+```json title="messages/en.json"
+{
+  "inbox_title": "Inbox",
+  "greeting": "Hello {name}!",
+  "unread_messages": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "You have {count} unread message.",
+        "countPlural=*": "You have {count} unread messages."
+      }
+    }
+  ]
+}
+```
+
+```tsx title="Inbox.tsx"
+import { m } from './paraglide/messages.js';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <section>
+      <h1>{m.inbox_title()}</h1>
+      <p>{m.greeting({ name })}</p>
+      <p>{m.unread_messages({ count })}</p>
+    </section>
+  );
+}
+```
+
+Для каждой другой локали нужен отдельный файл с теми же ключами и с теми вариантами, которые нужны этому языку: для польского это `one`, `few`, `many` и `*`. Если ключа нет в `messages/pl.json`, скомпилированная функция молча откатывается к базовой локали. Вот как выглядит компонент при рендеринге с польским файлом, в котором нет `greeting`:
+
+```text title="Output"
+pl  <h1>Skrzynka odbiorcza</h1><p>Hello Ada!</p><p>Masz 2 nieprzeczytane wiadomości.</p>
+```
+
+`npx @inlang/cli check` обнаружил проблему: сообщил, что у `greeting` нет перевода на польский, и завершился с кодом 1, так что CI может не пропустить такой пробел. Но восполнять его по-прежнему придётся вам. `inlang machine translate` переводит недостающие сообщения — по умолчанию через бесплатный сервис, поддерживаемый сообществом, либо с вашим собственным ключом Google Cloud Translation или DeepL. Сообщения переводятся по одному и без компонента, в котором они используются. В собственной документации inlang CLI отмечается, что ИИ-агенты для программирования, которым доступен контекст продукта и кода, способны создавать более качественные черновики, чем универсальный машинный перевод.
+
+## Переводы пишет General Translation
+
+Библиотеки General Translation отвечают за тот же рендеринг. Разница в том, где хранятся тексты и кто их переводит. Вот тот же почтовый ящик на `gt-react`:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num, Var } from 'gt-react';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <p>Hello <Var>{name}</Var>!</p>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+Здесь нет файла сообщений, который нужно поддерживать в актуальном состоянии: английский текст — это и есть компонент. [`npx gt translate`](/docs/cli/reference/commands/translate) отправляет каждый блок [`<T>`](/docs/react/reference/components/t) вместе со структурой его элементов в API General Translation и записывает перевод для каждой целевой локали, поэтому новое предложение переводится ещё до сборки, а не отображается на английском. Значение в [`<Var>`](/docs/react/reference/components/var) никогда не отправляется в API, а [`<Plural>`](/docs/react/reference/components/plural) выбирает ветвь по правилам множественного числа локали читателя. [`npx gt validate`](/docs/cli/reference/commands/validate) проверяет проект без обращения к API, а [`gt generate`](/docs/cli/reference/commands/generate) создаёт файлы шаблонов для команд, которые переводят вручную.
+
+Заголовок, приветствие и ветви множественного числа внутри этого блока отправляются на перевод вместе. General Translation также применяет [Glossary и пользовательские промпты](/docs/platform/dashboard/guides/defining-context-for-translations), назначенные проекту, а рецензенты правят результаты в панели управления. Добавьте CLI в CI или настройте [Locadex](/docs/platform/locadex/quickstart), чтобы при изменениях в коде автоматически открывались пул-реквесты с переводами.
+
+JavaScript-библиотеки General Translation распространяются по лицензии MIT и работают с готовыми переводами без учётной записи. Если включить переводы в сборку приложения, рендеринг не будет зависеть от облачного сервиса; доставка через CDN позволяет публиковать правки переводов независимо от релизов приложения. Подробнее о настройке — в разделе [«Хранение переводов»](/docs/react/guides/storing-translations).
+
+С помощью General Translation компания Sierra локализует свой веб-контент и маркетинговые материалы более чем на 7 локалей. (См. [развёртывания в рабочей среде](https://generaltranslation.com/enterprise).)
+
+## Paraglide JS и General Translation: краткое сравнение
+
+| Возможность           | Paraglide JS                                                                                             | General Translation                                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Как пишется текст     | Ключи в JSON-файле для каждой локали, вызов через `m.key()`                                              | JSX внутри [`<T>`](/docs/react/reference/components/t), строки через [`useGT`](/docs/react/reference/hooks/use-gt) или словари с ключами    |
+| Переводит ли контент  | Нет; `inlang machine translate` использует сервис сообщества, Google или DeepL                           | Да, с помощью [`npx gt translate`](/docs/cli/reference/commands/translate)                                                                  |
+| Что видит переводчик  | Текст сообщения, переданный выбранному инструменту перевода                                              | Размеченный блок JSX, заметки разработчика, а также назначенные Glossary и пользовательские промпты                                         |
+| Типобезопасность      | Сгенерированные типы для каждого ключа и параметра                                                       | Встроенный JSX: нет ключей сообщений, в которых можно опечататься                                                                           |
+| Бандл                 | Tree-shaking на уровне отдельных сообщений                                                               | Переводы загружаются по локалям                                                                                                             |
+| Отсутствующий перевод | Используется базовая локаль; `inlang check` сообщает об этом                                             | Генерируется с помощью [`npx gt translate`](/docs/cli/reference/commands/translate); непереведённый контент отображается на языке-источнике |
+| Фреймворки            | Приложения на Vite, React, Vue, Solid, SvelteKit, Astro, TanStack Start, React Router, Next.js (webpack) | React, Next.js, Vue, Node.js и [другие SDK](/docs/overview/get-started)                                                                     |
+| Стоимость             | Бесплатно, открытый исходный код                                                                         | JavaScript-библиотеки бесплатны; [перевод оплачивается по факту использования](https://generaltranslation.com/pricing)                      |
+
+Оставайтесь на Paraglide JS, если вы работаете с SvelteKit, Astro или Solid, если для вас важнее всего tree-shaking отдельных сообщений и типизированные функции сообщений или если ваша команда уже сама пишет или заказывает переводы. Выбирайте General Translation, если хотите, чтобы текст оставался читаемым прямо в компонентах, а переводы на все языки генерировались при каждой сборке с учётом контекста вашего кода.
+
+## Переход на General Translation по одному компоненту
+
+Переносить компоненты по одному — вполне рабочий подход. Сообщения Paraglide — это обычные функции, которым не нужен провайдер, поэтому вызов `m.*` и блок [`<T>`](/docs/react/reference/components/t) могут рендериться рядом, пока вы переводите маршруты на новую библиотеку. Все шаги описаны в руководстве [Миграция с других i18n-библиотек](/docs/react/guides/migrating-i18n-libraries), начиная с [Быстрого старта React](/docs/react/react-quickstart) или [Быстрого старта Next.js](/docs/react/nextjs-quickstart).
+
+## Ключевые выводы
+
+* Paraglide JS компилирует каталоги в типизированные функции с поддержкой tree-shaking. Переводы для этих каталогов можно создавать с помощью отдельных инструментов inlang.
+* General Translation хранит текст непосредственно в [`<T>`](/docs/react/reference/components/t) и создаёт переводы с учётом контекста из вашего кода, Glossary и пользовательских промптов, а проверить их можно в панели управления.
+* Существующие сообщения Paraglide могут продолжать работать, пока вы переносите компоненты на General Translation. Каждый мигрированный компонент хранит исходный текст и контекст перевода прямо в JSX.

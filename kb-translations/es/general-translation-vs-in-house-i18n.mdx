@@ -1,0 +1,193 @@
+---
+title: ¿Deberías crear tu propia i18n o usar General Translation?
+summary: "Una i18n hecha a mano (un diccionario por idioma y una pequeña función auxiliar t()) funciona bien para uno o dos idiomas y poco texto. A medida que la app crece, acabas reconstruyendo las reglas de plural, las alternativas de respaldo y la sincronización de archivos, y aun así tienes que producir las traducciones. Las bibliotecas de código abierto de General Translation se encargan del renderizado, y General Translation genera y actualiza las traducciones a partir de tu código."
+description: "Un diccionario y una función auxiliar t() bastan para uno o dos idiomas. A medida que la app crece, acabas reconstruyendo plurales, alternativas de respaldo y la sincronización de archivos, y aun así necesitas traducciones. General Translation resuelve ambas cosas."
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, how-to-handle-plurals-in-react, multilingual-nextjs-seo, i18n-without-translation-files, general-translation-vs-google-translate]
+---
+
+Puedes implementar la internacionalización (i18n) por tu cuenta: un objeto de mensajes por idioma, una función auxiliar `t()` que busca una clave y rellena las variables, un selector de configuración regional y las API integradas de `Intl` para números y fechas. Para uno o dos idiomas y unas pocas docenas de cadenas, a menudo no necesitas más, y es justo lo que suele escribir un agente de programación cuando le pides que añada un idioma. Lo que crece con la app es todo lo que rodea a esa función auxiliar: las reglas de plural, las claves que faltan, mantener cada archivo de idioma al día con el código y, antes que nada, producir cada traducción. Las bibliotecas de código abierto de General Translation se encargan de la parte de ese trabajo que ocurre en tiempo de ejecución, y General Translation genera y actualiza las traducciones a partir de tu código.
+
+## Cuándo basta con una i18n hecha a mano
+
+* **Sin dependencias de terceros.** El diccionario y la función auxiliar son tuyos, y controlas cada línea de código.
+* **La plataforma se encarga del formato.** `Intl.NumberFormat`, `Intl.DateTimeFormat`, `Intl.PluralRules` e `Intl.Locale` están [integrados en los navegadores modernos y en Node.js](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) y dan formato a monedas, fechas y categorías de plural según la configuración regional.
+* **Textos breves y estables.** A un prototipo, una herramienta interna o un sitio con un solo idioma adicional redactado por un compañero de equipo no les hace falta más.
+* **Idiomas que forman el plural como el inglés.** Tanto el inglés como el alemán usan solo [`one` y `other`](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html).
+
+## Qué falla a medida que crece
+
+Esta es una primera versión típica, a la que se ha añadido un diccionario en polaco:
+
+```js title="i18n.mjs"
+const messages = {
+  en: {
+    greeting: 'Hello, {name}!',
+    files: { one: '{count} file', other: '{count} files' },
+    checkout: 'Checkout',
+  },
+  pl: {
+    greeting: 'Cześć, {name}!',
+    files: { one: '{count} plik', other: '{count} pliki' },
+    // «checkout» aún no se ha traducido
+  },
+};
+
+export function t(locale, key, vars = {}) {
+  let message = messages[locale][key];
+  if (typeof message === 'object') {
+    message = vars.count === 1 ? message.one : message.other;
+  }
+  return message.replace(/\{(\w+)\}/g, (_, name) => vars[name]);
+}
+
+console.log(t('pl', 'greeting', { name: 'Ania' }));
+console.log([1, 2, 5].map((count) => t('pl', 'files', { count })).join(', '));
+console.log(t('pl', 'checkout'));
+```
+
+Al ejecutarlo con Node.js 24:
+
+```text title="Output"
+Cześć, Ania!
+1 plik, 2 pliki, 5 pliki
+TypeError: Cannot read properties of undefined (reading 'replace')
+```
+
+Aparecen dos errores a la vez. &quot;5 pliki&quot; es incorrecto (en polaco se dice &quot;5 plików&quot;), y la clave `checkout` sin traducir hace que falle el renderizado. La plataforma ofrece las herramientas necesarias para corregir ambos:
+
+```js title="intl.mjs"
+// Categorías de plural por idioma
+for (const locale of ['en', 'ja', 'pl', 'ar']) {
+  console.log(locale, new Intl.PluralRules(locale).resolvedOptions().pluralCategories.join(' '));
+}
+const pl = new Intl.PluralRules('pl');
+console.log([1, 2, 5, 22].map((n) => `${n} → ${pl.select(n)}`).join(', '));
+
+// Monedas y fechas
+const date = new Date(Date.UTC(2026, 9, 16));
+for (const locale of ['en-US', 'de-DE', 'ja-JP']) {
+  const price = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(1234.5);
+  const day = new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+  console.log(locale, price, day);
+}
+
+// Dirección del texto
+console.log(new Intl.Locale('ar').getTextInfo().direction);
+```
+
+```text title="Output"
+en one other
+ja other
+pl one few many other
+ar zero one two few many other
+1 → one, 2 → few, 5 → many, 22 → few
+en-US €1,234.50 October 16, 2026
+de-DE 1.234,50 € 16. Oktober 2026
+ja-JP €1,234.50 2026年10月16日
+rtl
+```
+
+Cada corrección es pequeña, pero en conjunto suman:
+
+* **Plurales.** `n === 1` falla en polaco (cuatro categorías) y en árabe (seis), así que la función auxiliar necesita [`Intl.PluralRules`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules), y cada diccionario necesita una cadena por categoría. (Consulta [¿Cómo manejo los plurales en React?](/kb/how-to-handle-plurals-in-react))
+* **Orden de las palabras.** Los marcadores de posición como `{name}` permiten que cada idioma coloque el valor donde corresponda. La concatenación no: `t('by') + ' ' + author` pone el nombre al final, pero en japonés se escribe «Ana 著».
+* **Formato.** `{count}` inserta el número sin formato, así que la función auxiliar también necesita [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) para mostrar 12,500 como «12 500» en polaco.
+* **Claves faltantes.** La función auxiliar necesita una cadena de alternativas de respaldo (idioma de destino, luego el de origen y luego la clave); de lo contrario, los usuarios verán `undefined` o un error.
+* **Mantener los archivos sincronizados.** Nada te avisa de que a `pl` le falta `checkout` o de que tiene la redacción del mes pasado hasta que un usuario lo ve.
+* **Idiomas de derecha a izquierda.** El árabe y el hebreo necesitan `lang` y `dir="rtl"` en la página, además de un diseño en espejo.
+* **Motores de búsqueda.** Un selector que guarda la elección en el estado o en una cookie deja todos los idiomas bajo una misma URL, mientras que Google recomienda una URL por idioma ([Managing multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)). (Consulta [¿Cómo configuro el SEO para una aplicación de Next.js multilingüe?](/kb/multilingual-nextjs-seo))
+* **Las traducciones.** Ninguna función auxiliar elimina este costo: alguien tiene que escribir «plików» y todas las demás cadenas en cada idioma, y volver a hacerlo cada vez que cambia el texto en inglés.
+
+Para cuando la función auxiliar gestione las categorías de plural, las alternativas de respaldo y el formato de números, habrás escrito el núcleo de una biblioteca de i18n, y aun así te seguirán faltando las traducciones.
+
+## Qué hace General Translation en su lugar
+
+General Translation conserva lo que funciona del enfoque artesanal (textos legibles y el formato propio de la plataforma) y se encarga de las partes que van creciendo. Con `gt-react` (o `gt-next` para Next.js), el texto se queda en el componente, dentro de [`<T>`](/docs/react/reference/components/t), así que no hay ningún diccionario ni función auxiliar que mantener:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num, Var } from 'gt-react';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <T>
+      <h1>Welcome back, <Var>{name}</Var></h1>
+      <Plural
+        n={count}
+        singular={<p>You have <Num>{count}</Num> unread message.</p>}
+        plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+      />
+    </T>
+  );
+}
+```
+
+[`<Plural>`](/docs/react/reference/components/plural) elige una rama según las reglas de plural de CLDR de cada configuración regional (las mismas en las que se basa `Intl.PluralRules`), así que no hay ningún `n === 1` con el que equivocarse. [`<Num>`](/docs/react/reference/components/num) formatea la cantidad según la configuración regional del lector, y el valor de [`<Var>`](/docs/react/reference/components/var) nunca se envía a la API de General Translation. Este es el componente renderizado en el servidor con `gt-react` 11.4.12, con una traducción al español añadida a mano en la plantilla de [`gt generate`](/docs/cli/reference/commands/generate) a modo de ejemplo (sin los separadores de texto de React):
+
+```html title="Output"
+<!-- en, count = 12500 -->
+<h1>Welcome back, Ana</h1><p>You have 12,500 unread messages.</p>
+<!-- es, count = 12500 -->
+<h1>Hola de nuevo, Ana</h1><p>Tienes 12.500 mensajes sin leer.</p>
+```
+
+Cuando una configuración regional no tiene traducción para un bloque, [`<T>`](/docs/react/reference/components/t) renderiza el contenido de origen, no `undefined` ni un error.
+
+El cambio más importante es que General Translation genera las traducciones:
+
+* **Generadas con contexto.** [`npx gt translate`](/docs/cli/reference/commands/translate) envía cada bloque [`<T>`](/docs/react/reference/components/t) con sus elementos, variables, ramas de plural y cualquier nota de [`context`](/docs/react/reference/components/t#context), y escribe un archivo por configuración regional. Un glosario fija la terminología y los prompts personalizados definen el tono en todos los proyectos que comparten un grupo de contexto. (Consulta [Definir el contexto para las traducciones](/docs/platform/dashboard/guides/defining-context-for-translations)).
+* **Siempre sincronizadas.** Cada ejecución traduce el contenido nuevo y modificado, y reutiliza las traducciones existentes para el resto. Ejecútalo en CI o deja que [Locadex](/docs/platform/locadex/quickstart), el agente de IA de General Translation, abra pull requests según los disparadores que elijas. En aplicaciones Next.js y React, Locadex también puede envolver el texto existente en [`<T>`](/docs/react/reference/components/t).
+* **Revisadas por personas.** Tu equipo edita las traducciones en el panel de control. (Consulta [Revisar y editar traducciones](/docs/platform/dashboard/guides/reviewing-translations)).
+* **Dirección y enrutamiento.** [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) devuelve `'rtl'` para el árabe, y `gt-next` puede servir cada configuración regional en su propia URL mediante su [middleware](/docs/react/nextjs/app-router-middleware).
+
+Las bibliotecas de JavaScript tienen licencia MIT y funcionan sin una cuenta de General Translation si tú proporcionas las traducciones. Una aplicación configurada para cargar todas las traducciones desde su paquete no realiza ninguna llamada a General Translation en tiempo de ejecución. Usa el servicio alojado para generar traducciones, con [precios según el uso](https://generaltranslation.com/pricing).
+
+En el otro extremo, Profound ofrece su plataforma y su documentación en más de 47 configuraciones regionales con General Translation. (Consulta [despliegues en producción](https://generaltranslation.com/enterprise)).
+
+## Solución propia vs. una biblioteca vs. General Translation de un vistazo
+
+|                                    | Diccionario y función auxiliar propios                     | Biblioteca de código abierto, como i18next                                                                | General Translation                                                                                                                                                            |
+| ---------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dependencias                       | Ninguna                                                    | La biblioteca más los bindings del framework, como `react-i18next`                                        | `gt-react` o `gt-next`, más la CLI `gt`                                                                                                                                        |
+| Plurales                           | Tu propio código de selección y cada forma en cada archivo | Selección CLDR; las formas las aportan personas o un servicio de traducción conectado                     | [`<Plural>`](/docs/react/reference/components/plural) selecciona con reglas CLDR; la traducción genera las formas de cada idioma de destino a partir de las ramas que escribes |
+| Números, fechas, monedas           | API `Intl` que llamas tú mismo                             | Formateadores integrados sobre `Intl`                                                                     | [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency) y [`<DateTime>`](/docs/react/reference/components/datetime)         |
+| Traducciones faltantes             | Lo que haga tu función auxiliar                            | [Recurre a un idioma configurado y, si no, muestra la clave](https://www.i18next.com/principles/fallback) | Renderiza el contenido de origen                                                                                                                                               |
+| Mantener los idiomas sincronizados | A mano o con tu propio script                              | Herramientas de extracción y un servicio de traducción que conectas tú                                    | Cada ejecución de [`npx gt translate`](/docs/cli/reference/commands/translate) traduce el contenido nuevo y modificado                                                         |
+| Quién traduce                      | Personas o un servicio que integras                        | Personas o un servicio de traducción conectado                                                            | IA con contexto JSX marcado, glosario y prompts personalizados; tu equipo revisa en el panel de control                                                                        |
+| Costo                              | Tu tiempo y cualquier servicio que integres                | Biblioteca gratuita; la traducción va aparte                                                              | Bibliotecas de JavaScript gratuitas; [traducción según el uso](https://generaltranslation.com/pricing)                                                                         |
+
+## Cuándo implementarlo por tu cuenta
+
+Implementarlo por tu cuenta tiene sentido cuando tu producto se publica en uno o dos idiomas, los textos son pocos y estables, tus idiomas forman el plural como el inglés y alguien del equipo se encarga de las traducciones, o cuando se trata de un prototipo. Añade una biblioteca de código abierto como i18next cuando necesites reglas de plural y alternativas de respaldo y ya cuentes con traductores o con un sistema de gestión de traducciones. Usa General Translation cuando vayas a añadir varios idiomas, los textos cambien en cada lanzamiento o nadie del equipo deba encargarse de escribir las formas plurales del polaco: General Translation genera las traducciones con el contexto de tu código y mantiene todos los idiomas actualizados en cada compilación. (Consulta [General Translation frente a i18next, react-intl y next-intl](/kb/general-translation-vs-i18n-libraries)).
+
+## Conserva tu diccionario y deja que la CLI lo traduzca
+
+No hace falta que reescribas tu función auxiliar para dejar de traducir a mano. Mueve los mensajes de cada idioma a un archivo JSON (`locales/en.json`, `locales/es.json`), conserva tu `t()` y haz que `gt.config.json` apunte a ellos con el marcador de posición `[locale]`:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "locales/[locale].json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) muestra `locales/en.json` como origen, y una ejecución completa genera `locales/es.json`. Este ejemplo usa mensajes en inglés y en español con la misma estructura de claves y marcadores de posición sencillos como `{name}`. Un archivo complementario `locales/en.metadata.json` permite añadir contexto o límites de caracteres por clave. Consulta [JSON](/docs/cli/reference/formats/json-files) y [Metadatos asociados a claves](/docs/cli/reference/keyed-metadata). Tu función auxiliar sigue encargándose de la búsqueda de claves y de la selección de plurales; comprueba ambas en la salida renderizada en español.
+
+Para dejar de usar la función auxiliar, envuelve los componentes en [`<T>`](/docs/react/reference/components/t) uno por uno, o conserva las claves con [`useTranslations`](/docs/react/guides/translating-with-dictionaries). Si el trabajo lo hace un agente de programación, dale las [instrucciones para agentes](/docs/overview/for-coding-agents) de General Translation en lugar de pedirle una función auxiliar `t()`. Empieza con el [Inicio rápido de Next.js](/docs/react/nextjs-quickstart) o con la [Guía de inicio rápido para una SPA de React](/docs/react/react-spa-quickstart).
+
+## Conclusiones clave
+
+* Un diccionario, una función auxiliar `t()` y las API integradas de `Intl` son suficientes para uno o dos idiomas, poco texto y plurales que funcionan como en inglés.
+* A medida que la aplicación crece, te toca mantener la selección de plurales, las alternativas de respaldo, el formato, la sincronización de archivos, la compatibilidad con right-to-left, las URL por configuración regional y el proceso que genera las traducciones.
+* Las bibliotecas de General Translation se encargan del trabajo en tiempo de ejecución, General Translation genera las traducciones usando tu código como contexto y, si decides conservar tu diccionario JSON hecho a mano, la CLI puede traducirlo.

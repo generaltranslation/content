@@ -1,0 +1,114 @@
+---
+title: "General Translation 与 Django 翻译框架：两者都需要吗？"
+summary: 将 Django 的翻译框架与 General Translation 搭配使用。Django 负责消息提取、语言选择和渲染；General Translation 则依据你的产品术语填充 PO 文件（包括复数形式），并支持在仪表板中审校。你的模板和 URL 模式无需改动，译文会随代码同步更新。
+description: "两者搭配使用：Django 负责提取消息、选择语言和渲染；General Translation 依据你的术语填充 PO 文件（包括复数形式），并支持在仪表板中审校。"
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-gettext, general-translation-vs-flask-babel, general-translation-vs-rails-i18n, general-translation-vs-tms, general-translation-vs-i18n-libraries]
+---
+
+Django 自带一套完整的国际化 (i18n) 框架：你用 `gettext` 和 `{% translate %}` 标记字符串，`makemessages` 将其提取到各语言对应的 PO 文件中，`compilemessages` 构建供 Django 加载的 `.mo` 文件，`LocaleMiddleware` 则为每个请求选择语言。General Translation 在提取与编译之间补上了翻译这一步：其 CLI 读取你的英文目录，并写出供 Django 加载的已翻译 PO 文件。
+
+## Django 翻译框架的优势
+
+* **随处标记字符串。** `gettext` 和 `ngettext` [用于 Python 代码](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#internationalization-in-python-code)，`gettext_lazy` 用于在导入时定义的字符串 (如模型字段和表单标签) ，`pgettext` 为有歧义的词语添加上下文，而 `{% translate %}` 和 `{% blocktranslate %}` (配合 `count` 处理复数形式) 则用于模板。
+* **内置提取与编译。** `makemessages` 会对你的 Python 文件和模板运行 GNU gettext 的 `xgettext`，并[将新字符串合并到各语言对应的 `django.po` 文件中](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#message-files)，文件位于 `locale/<locale>/LC_MESSAGES/`。写在字符串上方的 `# Translators:` 注释会被带入 PO 文件，供译者参考。
+* **按请求选择语言。** `LocaleMiddleware` 会依次[检查由 `i18n_patterns` 添加的 URL 前缀](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#how-django-discovers-language-preference)、语言 cookie、`Accept-Language` 请求头，最后是 `LANGUAGE_CODE`。它只会选用 `LANGUAGES` 中列出的语言，并支持从 `de-at` 回退到 `de`。
+* **不止于字符串。** 日期和数字会[按当前区域设置进行格式化](https://docs.djangoproject.com/en/5.2/topics/i18n/formatting/)，`JavaScriptCatalog` 还会向浏览器单独提供 `djangojs` 目录。
+* **Django 本身自带翻译。** 管理后台和内置应用[附带约一百种语言的目录](https://github.com/django/django/tree/stable/5.2.x/django/contrib/admin/locale)，且框架本身基于 BSD 许可证免费使用。
+
+## Django 留给你处理的部分
+
+[Django 官方文档](https://docs.djangoproject.com/en/5.2/topics/i18n/translation/#compiling-message-files)说明了它本身不负责的那一步：译者填好消息文件后，需要由你来编译。下面是一个包含复数形式的模板：
+
+```html title="shop/templates/shop/inbox.html"
+{% load i18n %}
+<p>{% blocktranslate count counter=count %}{{ counter }} file{% plural %}{{ counter }} files{% endblocktranslate %}</p>
+```
+
+在 Django 5.2 中，`python manage.py makemessages -l ru` 会把俄语的四种复数形式规则从 Django 自带的目录复制到文件头中，却只为该条目写入两个空槽位：
+
+```text title="locale/ru/LC_MESSAGES/django.po"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || "
+"(n%100>=11 && n%100<=14)? 2 : 3);\n"
+
+#: shop/templates/shop/inbox.html:2
+#, python-format
+msgid "%(counter)s file"
+msgid_plural "%(counter)s files"
+msgstr[0] ""
+msgstr[1] ""
+```
+
+在一次测试中，只填写这两个槽位生成的目录能被 `compilemessages` 顺利编译、不报任何错误，页面也渲染出了 &quot;1 файл&quot; 和 &quot;3 файла&quot;；但当数量为五时，页面却以英文渲染出 &quot;5 files&quot;，因为复数规则为五选用的那个槽位从未填写。空目录同样会悄无声息地失效：`pt_BR` 中没有任何内容时，`/pt-br/` 页面会完全以英文渲染。你每标记一个新字符串，都要在每种语言中把这个过程重走一遍。
+
+此外，Django 只管代码中的字符串。存储在数据库中的内容 (例如产品名称或页面) 需要借助第三方包：django-modeltranslation 会为你注册的模型[为每种语言添加一个字段](https://django-modeltranslation.readthedocs.io/en/latest/registration.html)，而 django-parler 则把翻译保存在单独的表中。两者都只是为翻译提供了存放之处，却都不会替你写出翻译。
+
+## 使用 General Translation 翻译 Django 的 PO 文件
+
+General Translation 的 CLI 会读取 Django 已在维护的英文目录，翻译其中的每个条目，并为每种目标语言生成一个 PO 文件，写入 Django 查找翻译文件的位置。请使用 `makemessages` 让英文目录保持最新：
+
+```bash
+python manage.py makemessages -l en
+```
+
+然后在 `gt.config.json` 中指向该文件。此配置已在 `gt` 2.26.5 版本中验证通过：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "pl", "pt_BR"],
+  "customMapping": {
+    "pt_BR": { "code": "pt-BR" }
+  },
+  "files": {
+    "pot": {
+      "include": ["locale/[locale]/LC_MESSAGES/*.po"],
+      "transformationFormat": "PO"
+    }
+  }
+}
+```
+
+以下几个细节需要注意，详见 [PO / POT 格式参考](/docs/cli/reference/formats/po-pot-files)：
+
+* **PO 和 POT 文件都使用 `pot` 这个键。** `transformationFormat` 必须设为 `PO`；否则输出的仍是未翻译的模板。
+* **区域设置目录沿用 Django 的命名。** CLI 会将 `[locale]` 原样替换为你所写的每个区域设置。[`customMapping`](/docs/cli/reference/config#custom-mapping) 可将 Django 的 `pt_BR` 目录映射到标准区域设置代码 `pt-BR`。
+* **`*.po` 会匹配所有域**，如果你还运行了 `makemessages -d djangojs -l en`，`djangojs.po` 也会包含在内。
+
+配置好 CLI 后 (参见 [CLI 快速入门](/docs/cli/quickstart)) ，运行 [`npx gt translate`](/docs/cli/reference/commands/translate)，然后运行 `python manage.py compilemessages`。General Translation 在发送每个条目时，会把 PO 文件中与该条目相关的信息一并作为上下文发送：`msgctxt`、`# Translators:` 注释、源引用，以及 `python-format` 等标记。对于复数条目，它会写入目标语言的 `Plural-Forms` 头部字段，填充该字段所要求的每个 `msgstr[n]` 槽位，并检查 `%(counter)s` 等占位符是否完整保留。以俄语为例，使用的是 gettext 标准的三种复数形式规则；由于 Django 会分别读取每个目录的规则，因此不会与 Django 自带俄语目录中的四种形式规则冲突。
+
+未更改的条目会复用之前的译文，因此下次运行只会翻译有变化的内容；使用 `--force` 则会重新翻译全部内容。如果你的 PO 文件中已有译文，请先运行 [`npx gt upload`](/docs/cli/reference/commands/upload)，再生成新译文。若要保留之后的本地修改，请在下次翻译运行前使用 [`npx gt save-local`](/docs/cli/reference/commands/save-local) 进行同步。
+
+这正是完整技术栈的优势所在。借助[上下文分组](/docs/platform/dashboard/guides/defining-context-for-translations)中的词汇表和自定义提示词，你的 Django 目录与分配到该组的其他项目都能保持统一的产品术语和语气。审阅者可以在仪表板中[编辑每个 PO 条目](/docs/platform/dashboard/guides/reviewing-translations)，包括其复数形式。在 CI 中运行 `makemessages`、[`gt translate`](/docs/cli/reference/commands/translate) 和 `compilemessages`，即可在每次发布时自动更新译文。
+
+对于数据库内容以及其他仅在运行时才存在的文本，可通过 General Translation 的 API 按需翻译字符串 ([`POST /v2/translate`](/docs/platform/openapi/reference/translation/translate-runtime)) ；翻译结果需自行存储，例如存入 django-modeltranslation 的各语言字段中。
+
+请在运行 CLI 的机器上安装 Node.js。Django 仍会通过其现有的 Python 运行时提供编译后的目录。
+
+## Django 翻译框架与 General Translation 对比一览
+
+| 功能              | Django 翻译框架                                                                              | General Translation                                                |
+| --------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 在代码和模板中标记字符串    | 支持：`gettext`、`{% translate %}` 等                                                         | 沿用你现有的 Django 消息调用                                                 |
+| 将字符串提取到 PO 文件   | 支持，使用 `makemessages`                                                                     | 读取 `makemessages` 生成的文件                                            |
+| 生成译文            | 不支持                                                                                      | 支持，使用 [`npx gt translate`](/docs/cli/reference/commands/translate) |
+| 复数形式            | 文件头来自 Django 的目录；需要你逐一填写每个槽位                                                             | 写入目标语言的文件头并填写所有槽位                                                  |
+| 翻译上下文           | PO 文件中的 `# Translators:` 注释和 `msgctxt`                                                   | 同上，另有词汇表和自定义提示词                                                    |
+| 按请求确定语言及 URL 前缀 | 支持，使用 `LocaleMiddleware` 和 `i18n_patterns`                                               | 保留 Django 的路由和语言选择机制                                               |
+| 数据库内容           | 借助第三方包，例如 django-modeltranslation                                                        | 通过 API 在运行时翻译；结果由你自行存储                                             |
+| 费用              | 免费开源 ([BSD](https://docs.djangoproject.com/en/5.2/faq/general/#how-is-django-licensed))  | [翻译按用量计费](https://generaltranslation.com/pricing)                  |
+
+## 如何选择
+
+如果你已有译者或翻译管理系统负责填充 PO 文件，或者只需支持一两种语言、可以手动翻译，又或者每条译文都必须由人工撰写，那么单独使用 Django 框架就足够了。如果你希望每次变更后，所有语言的 PO 文件都能自动填充完毕，复数形式完整、术语统一，并且从合并到发布之间无需再经历一轮翻译，那么可以引入 General Translation。
+
+两者并不冲突：Django 负责标记、提取、编译和语言选择，General Translation 负责翻译。你也无需进行任何迁移，模板、中间件和 URL 模式都保持不变。
+
+## 要点总结
+
+* Django 的翻译框架只负责渲染译文，并不会生成译文。如果缺少某个复数槽位或目录为空，就会直接回退为英文，且构建时不会报任何错误。
+* General Translation 会将 `makemessages` 生成的英文目录翻译成各语言对应的 PO 文件。你的模板、中间件和 URL 模式均无需改动。
+* 对于每个复数条目，General Translation 会写入目标语言的 `Plural-Forms` 头部及所有 `msgstr[n]` 槽位，并将 `msgctxt` 和译者注释作为上下文一并传递。

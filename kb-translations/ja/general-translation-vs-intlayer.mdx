@@ -1,0 +1,136 @@
+---
+title: "General Translation と Intlayer の比較：どちらを選ぶべきか？"
+summary: Intlayer は各コンポーネントのコンテンツを、そのすぐ隣に置いた型付きの宣言ファイルで管理し、すべての言語を並べて記述します。不足している言語は、自分で設定した AI プロバイダーで補完できます。General Translation はテキストを 1 つの言語でコンポーネント内にインラインで記述し、コードの文脈を踏まえて他の言語を生成します。
+description: Intlayer は型付きの宣言ファイルで全言語を並べて管理し、不足分を自分で設定した AI プロバイダーで補完します。General Translation はテキストをインラインで記述し、コードを文脈として翻訳を生成します。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-paraglide, i18n-without-translation-files, how-to-handle-plurals-in-react, general-translation-vs-tms]
+---
+
+Intlayer は[オープンソースの i18nライブラリ](https://github.com/aymericzip/intlayer)です。`inbox.content.ts` のような宣言ファイルを各コンポーネントの隣に置いてコンテンツを管理し、各文字列の翻訳は 1 回の `t({ en, es, pl })` 呼び出しの中にまとめて記述します。`useIntlayer('inbox')` のようなフックを使うと、そのコンテンツが現在のロケールで型付きで返されます。Intlayer は不足している言語を自分で設定した AI プロバイダーで補完でき、無料のビジュアルエディターや任意で使えるホスト型 CMS も提供しています。とはいえ、すべての文字列の全言語分は依然として原文ファイル内に置かれ、その記述・補完・レビューは開発者自身が担うことになります。一方、General Translation は異なるアプローチを取ります。テキストはソース言語で一度だけインラインで記述すればよく、他の言語は General Translation がコードの文脈を踏まえて生成します。
+
+## Intlayer の優れている点
+
+* **コンテンツをコンポーネントのすぐそばに配置。** コンポーネントごとに宣言ファイルを 1 つ用意するため、テキストをそれをレンダリングするコードの近くに置けます。
+* **型安全性。** `useIntlayer` のキーには型が付いており、バージョン 9.7.0 では `useIntlayer('inbx')` は TypeScript エラーになります。設定済みのロケールのいずれかが欠けている `t()` 呼び出しも検出されるため (9.7.0 でのテストでは型エラーとなり、チェックの厳しさは `strictMode` で設定します) 、リリース前に抜け漏れに気付けます。
+* **豊富なコンテンツタイプ。** 宣言では、ロケールごとのテキストに加えて、[CLDR カテゴリに基づく複数形](https://intlayer.org/doc/concept/content/plural) (`plural({ one, few, many, other })`) 、列挙、条件分岐、性別、Markdown、HTML、ネスト、挿入をサポートしています。
+* **好きなモデルを利用可能。** `intlayer fill` は、OpenAI、Anthropic、Mistral、Gemini、DeepSeek、Ollama、OpenRouter などのプロバイダーを使って、不足しているロケールを翻訳します。プロバイダーは [`intlayer.config.ts` の `ai`](https://intlayer.org/doc/concept/configuration) で設定するか、`--provider` と `--api-key` で指定します。自分の API キーを用意し、`@intlayer/ai` パッケージをインストールしていれば、[ローカルで実行でき](https://intlayer.org/doc/concept/cli/fill)、料金はプロバイダーに直接支払う形になります。
+* **ビジュアル編集。** `intlayer-editor` パッケージは実行中のアプリをエディターに読み込みます。ライターがテキストを選択して編集すると、その変更が宣言ファイルに書き戻されます。[Intlayer のドキュメントによると](https://intlayer.org/doc/concept/editor)、エディターは Apache 2.0 ライセンスで商用利用も無料であり、開発環境やステージング環境での使用を想定しています。
+* **幅広いフレームワーク対応。** [ガイド](https://intlayer.org/doc/get-started)では、Next.js、React (Vite) 、React Router、TanStack Start、React Native、Vue と Nuxt、Svelte と SvelteKit、Solid、Preact、Astro、Angular に加え、Express、NestJS、Fastify、Hono などのサーバーフレームワークも取り上げています。
+
+## Intlayer が開発者任せにしていること
+
+以下は、3 つのロケールに対応した受信トレイのコンテンツファイルの例です。
+
+```ts title="inbox.content.ts"
+import { t, plural, type Dictionary } from 'intlayer';
+
+const inboxContent = {
+  key: 'inbox',
+  content: {
+    title: t({
+      en: 'Inbox',
+      es: 'Bandeja de entrada',
+      pl: 'Skrzynka odbiorcza',
+    }),
+    unread: t({
+      en: plural({
+        one: 'You have {{count}} unread message.',
+        other: 'You have {{count}} unread messages.',
+      }),
+      es: plural({
+        one: 'Tienes {{count}} mensaje sin leer.',
+        other: 'Tienes {{count}} mensajes sin leer.',
+      }),
+      pl: plural({
+        one: 'Masz {{count}} nieprzeczytaną wiadomość.',
+        few: 'Masz {{count}} nieprzeczytane wiadomości.',
+        many: 'Masz {{count}} nieprzeczytanych wiadomości.',
+        other: 'Masz {{count}} nieprzeczytanej wiadomości.',
+      }),
+    }),
+  },
+} satisfies Dictionary;
+
+export default inboxContent;
+```
+
+```tsx title="Inbox.tsx"
+import { useIntlayer } from 'react-intlayer';
+
+export function Inbox({ count }: { count: number }) {
+  const { title, unread } = useIntlayer('inbox');
+  return (
+    <section>
+      <h1>{title}</h1>
+      <p>{unread({ count })}</p>
+    </section>
+  );
+}
+```
+
+これはどのロケールでも正しくレンダリングされますが、ロケールを追加するたびにファイルは肥大化していきます。20 ロケールなら、1 つの文字列につき 20 個のエントリが必要です。新しい文字列を追加する場合も、そのすべてを用意しなければなりません。`archive: t({ en: 'Archive' })` を追加すると、まだ不足しているロケールを列挙した型エラーが発生しました:
+
+```text title="Output"
+Type '{ en: string; }' is missing the following properties from type
+'Required<Record<keyof __RequiredLocalesRegistry, unknown>>': es, pl
+```
+
+実行時には、不足しているロケールは英語にフォールバックしていました。このギャップを埋めるには、翻訳を自分で書くか、`intlayer fill` を実行します。Fill は、辞書の内容、[その説明](https://intlayer.org/doc/concept/content)、そして設定内の `applicationContext` 文字列をモデルに送信します。コンポーネントや、文字列を囲む JSX は参照しません。[Intlayer のコンパイラ](https://intlayer.org/doc/compiler)を使えば、ビルド時にプレーンな JSX テキストをコンテンツファイルへ抽出できるため、宣言を手作業で書く必要はなくなります。ただし、翻訳が最終的にそれらのファイルに格納されることに変わりはありません。
+
+## General Translation ならコードに置く言語は 1 つだけ
+
+General Translation のライブラリも、各ロケールのメッセージを選び、そのロケールの複数形規則を適用するという同じ方法で翻訳をレンダリングします。違いは、コンポーネント内に記述するのがソース言語だけだという点です。同じ受信トレイを `gt-react` で実装すると次のようになります：
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+コンテンツファイルもキーも不要です。[`npx gt translate`](/docs/cli/reference/commands/translate) は各 [`<T>`](/docs/react/reference/components/t) ブロックを要素構造ごと General Translation API に送信し、すべての対象ロケールの翻訳を個別のファイルに書き出します。そのため、ロケールを追加しても変更されるのは `gt.config.json` だけで、コンポーネントに手を加える必要はありません。英語で使う複数形だけを記述すれば、各対象言語に必要な形は翻訳時に生成され、[`<Plural>`](/docs/react/reference/components/plural) が読み手のロケールの規則に従って翻訳済みの分岐を選択します。[`npx gt validate`](/docs/cli/reference/commands/validate) は API を呼び出さずにプロジェクトを検証し、[`gt generate`](/docs/cli/reference/commands/generate) は手作業で翻訳するチーム向けにテンプレートを書き出します。
+
+翻訳結果を左右するのは文脈です。General Translation は、マークされた各ブロック内のテキストと JSX 構造をまとめて翻訳し、意味を明確にするための開発者のメモも参考にします。たとえば、ドキュメントの「Save」ボタンはドイツ語で「speichern」ですが、お金を節約するという意味なら「sparen」になります。[コンテキストグループ](/docs/platform/dashboard/guides/defining-context-for-translations)を使うと、割り当てたプロジェクトに用語集とカスタムプロンプトを適用できます。レビュアーはダッシュボードで編集でき、コードの変更に伴う更新は CLI または [Locadex](/docs/platform/locadex/quickstart) が処理します。既存の JSX を自動でマークしたい場合は、[自動 JSX インジェクション](/docs/cli/guides/using-auto-jsx)を有効にしてください。
+
+JavaScript ライブラリは MIT ライセンスで提供されており、用意した翻訳であればアカウントなしでもレンダリングできます。翻訳はビルドに含めることも、General Translation の CDN に公開することもできます。
+
+Cursor は、Web サイトとドキュメントで 14 以上のロケールに General Translation を採用しています。 ([本番環境での導入事例](https://generaltranslation.com/enterprise)をご覧ください。)
+
+## Intlayer と General Translation の比較早見表
+
+| 機能         | Intlayer                                                                                                | General Translation                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| テキストの書き方   | コンポーネントごとの宣言ファイルに `t({ en, es, ... })` を記述し、`useIntlayer` で読み込む                                         | [`<T>`](/docs/react/reference/components/t) 内に JSX を記述、[`useGT`](/docs/react/reference/hooks/use-gt) で文字列を扱う、またはキー付きの辞書を使用 |
+| 翻訳の保存場所    | 宣言ファイル内、またはロケールごとのコンテンツファイル                                                                             | ロケールごとの個別ファイル、または General Translation の CDN                                                                                |
+| AI 翻訳      | 自前のプロバイダーキーを使った `intlayer fill`、または Intlayer のサービス経由                                                    | General Translation API を通じた [`npx gt translate`](/docs/cli/reference/commands/translate)                                  |
+| モデルに渡される文脈 | 辞書のコンテンツ、説明、アプリケーションの文脈を表す文字列                                                                           | マークされた JSX 構造、開発者のメモ、割り当てられた用語集とカスタムプロンプト                                                                                  |
+| 欠落しているロケール | 検出される (9.7.0 のテストでは型エラーとして) 。[`intlayer test`](https://intlayer.org/doc/concept/cli/test) でレポートされる      | [`npx gt translate`](/docs/cli/reference/commands/translate) で生成される。未翻訳のコンテンツはソース言語でレンダリングされる                              |
+| 編集         | 無料のローカルビジュアルエディター。オプションでホスト型 CMS                                                                        | ダッシュボードで翻訳を編集・レビュー                                                                                                         |
+| フレームワーク    | React、Next.js、Vue、Svelte、Solid、Angular、Astro、React Native、Node.js サーバー                                  | React、Next.js、Vue、Node.js、および[その他の SDK](/docs/overview/get-started)                                                        |
+| ライセンスと費用   | Apache 2.0。ホスト型 CMS のプランはプロジェクト数、シート数、ストレージ量に応じて変動 ([料金](https://app.intlayer.org/pricing)、2026年10月時点)  | MIT ライセンスの JavaScript ライブラリ。[従量課金制の翻訳](https://generaltranslation.com/pricing)                                             |
+
+すべての言語をコンポーネントのすぐ横で確認したい、欠落しているロケールを型エラーで検出したい、ライター向けにページ上で編集できるエディターが欲しい、あるいは Svelte・Solid・Angular のインテグレーションを使いたい、という場合は Intlayer を選びましょう。テキストはソース言語で一度書くだけにして、他の言語はコード、用語集、カスタムプロンプトの文脈を踏まえて自動生成したい場合は General Translation がおすすめです。
+
+## IntlayerからGeneral Translationへの移行
+
+移行はコンポーネント単位で1つずつ進め、General Translation版の準備が整うまでは、そのコンポーネントでIntlayerの翻訳を引き続き使用してください。`react-intlayer` 9.7.0と`gt-react` 11.4.12を使ったサーバーレンダリングでは、`IntlayerProvider`と[`GTProvider`](/docs/react/reference/components/gt-provider)の配下で、Intlayerのコンポーネントと[`<T>`](/docs/react/reference/components/t)コンポーネントを並べてレンダリングできることを確認しています。コンポーネントの`en`の値を[`<T>`](/docs/react/reference/components/t)内のJSXにコピーし、[`npx gt translate`](/docs/cli/reference/commands/translate)で翻訳を生成したら、コンポーネントを切り替える前に結果を確認してください。まずは[Next.jsクイックスタート](/docs/react/nextjs-quickstart)または[Reactクイックスタート](/docs/react/react-quickstart)から始めましょう。移行中に2つのライブラリを併用する方法については、[i18nライブラリの移行](/docs/react/guides/migrating-i18n-libraries)を参照してください。
+
+## 重要なポイント
+
+* Intlayer は、各コンポーネントのコンテンツを型付きの宣言ファイルにまとめ、すべての言語を並べて管理します。不足しているロケールは型エラーとして検出され、設定した AI プロバイダーによって補完されます。
+* General Translation では、コンポーネントにはソース言語のみを記述します。その他の言語は、コード、用語集、カスタムプロンプトから得た文脈をもとに自動生成され、レビューはダッシュボードで行えます。
+* Intlayer はより多くのフレームワークに対応しており、ページ上でのビジュアル編集も可能です。両ライブラリは併用してレンダリングできるため、General Translation へはコンポーネント単位で段階的に移行できます。

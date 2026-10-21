@@ -1,0 +1,143 @@
+---
+title: What's the best i18n library for a React app?
+summary: The four main React i18n libraries are General Translation's gt-react, react-i18next, Lingui and React Intl. All four render and format translations, but only gt-react also generates them, from copy written inline in your JSX. Choose react-i18next to keep i18next catalogues and plugins, Lingui for extraction to compiled catalogues, and React Intl for FormatJS and ICU MessageFormat.
+description: The main React i18n libraries are gt-react, react-i18next, Lingui and React Intl. All render and format translations, but only gt-react also generates them, from inline JSX.
+date: 2026-10-16
+category: workflow-tools
+authors: [jackie]
+related: [general-translation-vs-i18n-libraries, multilingual-app-launch-checklist, i18n-without-translation-files, how-to-handle-plurals-in-react]
+---
+
+The best React i18n library depends on where you want copy to live and who produces the translations. gt-react keeps copy inline in JSX and is the only option here that also generates translations. react-i18next, Lingui and React Intl render translations that you supply in catalogue files, each with a different authoring style and toolchain.
+
+Start with your rendering model. A browser-only React app, a server-rendered React app and a Next.js App Router app each have different set-up requirements, and each library documents them separately.
+
+## How do the main React i18n libraries compare?
+
+| Library                        | How you write copy                                                                                                                                                        | Translates your content?                                           | Plurals                                                        | Server rendering                                                                                        | Choose it when                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| gt-react (General Translation) | Inline JSX in [`<T>`](/docs/react/reference/components/t), strings with [`useGT`](/docs/react/reference/hooks/use-gt), optional automatic wrapping, or keyed dictionaries | Yes, with [`gt translate`](/docs/cli/reference/commands/translate) | [`<Plural>`](/docs/react/reference/components/plural) branches | [SSR set-up](/docs/react/react-quickstart); [gt-next](/docs/react/nextjs-quickstart) for the App Router | You want readable copy in components and translations generated on each build |
+| react-i18next                  | Keys in JSON resources, with `Trans` for rich text                                                                                                                        | No. Use your team or a service such as Locize                      | One key per plural form                                        | [SSR guide](https://react.i18next.com/latest/ssr)                                                       | You already use i18next or need its plugins                                   |
+| Lingui                         | Inline macros or explicit IDs, extracted to PO catalogues                                                                                                                 | No. Catalogues go to translators or a service                      | ICU MessageFormat                                              | [RSC integration](https://lingui.dev/tutorials/react-rsc)                                               | You want an extract-and-compile catalogue workflow                            |
+| React Intl (FormatJS)          | Message descriptors with IDs and default messages                                                                                                                         | No. You supply translated catalogues                               | ICU MessageFormat                                              | Check your framework&#39;s integration                                                                  | Your team already works with FormatJS and ICU                                 |
+
+## What does the same button look like in react-i18next and gt-react?
+
+With react-i18next, the copy lives in a resource file:
+
+```json title="locales/en/translation.json"
+{
+  "settings": {
+    "save": "Save changes"
+  }
+}
+```
+
+The component looks it up by key:
+
+```tsx
+import { useTranslation } from 'react-i18next';
+
+export function SaveButton() {
+  const { t } = useTranslation();
+  return <button type="submit">{t('settings.save')}</button>;
+}
+```
+
+Every other language needs its own resource file, written by hand or sent out for translation.
+
+With gt-react, the copy stays in the component:
+
+```tsx
+import { T } from 'gt-react';
+
+export function SaveButton() {
+  return (
+    <T>
+      <button type="submit">Save changes</button>
+    </T>
+  );
+}
+```
+
+Running [`gt translate`](/docs/cli/reference/commands/translate) before your build sends each [`<T>`](/docs/react/reference/components/t) block, along with its element structure, to General Translation and writes a translation for every target locale. A copy edit shows up in the component diff, and the next run translates it again.
+
+## 1. gt-react: copy in JSX, translations generated
+
+gt-react keeps source copy in the component. Wrap JSX in [`<T>`](/docs/react/reference/components/t), and use [`useGT`](/docs/react/reference/hooks/use-gt) where an API needs a string, such as an input&#39;s `placeholder`. For rich text, keep the sentence and its inline elements in one [`<T>`](/docs/react/reference/components/t) block so they&#39;re translated together, and add a [`context` prop](/docs/react/reference/components/t#context) when the wording alone is ambiguous.
+
+For an app with a lot of unmarked JSX, [automatic JSX injection](/docs/cli/guides/using-auto-jsx) adds the translation wrappers for you at build time. Set `enableAutoJsxInjection` under `files.gt.parsingFlags` in `gt.config.json` and add `@generaltranslation/compiler` to your bundler. It works in React SPAs, server-rendered React apps and Next.js webpack builds, and leaves existing [`<T>`](/docs/react/reference/components/t) blocks untouched. Check the extracted text, dynamic values and rich-text grouping on a few screens before enabling it across the app.
+
+gt-react is [MIT-licensed](https://github.com/generaltranslation/gt) and built on General Translation&#39;s own ICU and formatting packages, rather than on another i18n library. It renders [bundled translations](/docs/react/guides/storing-translations) without a General Translation account or runtime requests. When General Translation generates the translations, reviewers can correct them in the [Translation Editor](/docs/platform/dashboard/guides/reviewing-translations).
+
+Set-up differs by rendering model: use the [React SPA quickstart](/docs/react/react-spa-quickstart) for browser-only apps, the [React quickstart](/docs/react/react-quickstart) for server-rendered apps, and [gt-next](/docs/react/nextjs-quickstart) for Next.js.
+
+**Choose gt-react** when you want copy that is reviewable in component diffs, translations generated as part of your build, or automatic wrapping to localise an existing app quickly.
+
+## 2. react-i18next: the i18next ecosystem
+
+[react-i18next](https://react.i18next.com/) connects React to i18next, the most widely used JavaScript i18n framework. Its hooks render messages from JSON resources, and its `Trans` component handles text that contains React elements.
+
+The [i18next plugin ecosystem](https://www.i18next.com/overview/plugins-and-utils) includes translation-loading backends, language detectors and extraction tools, and the official CLI handles extraction, locale synchronisation and TypeScript type generation. i18next also supports [source text as keys](https://www.i18next.com/principles/fallback), though its documentation warns that this makes copy changes harder to coordinate with translations.
+
+react-i18next doesn&#39;t translate your resources. Translations come from your team or a service; the i18next team documents a [Locize workflow](https://react.i18next.com/guides/multiple-translation-files). The `gt` CLI can also [translate react-i18next JSON files](/docs/cli/guides/generating-translations) without a migration.
+
+**Choose react-i18next** when you already have i18next resources, or need its plugins for loading and language detection.
+
+## 3. Lingui: extract and compile catalogues
+
+[Lingui](https://lingui.dev/introduction) lets you write messages inline with macros, extract them into catalogues, translate them, and compile the result for the app. It supports generated and explicit message IDs, with PO as the default catalogue format. Its [React tutorial](https://lingui.dev/tutorials/react) covers the full cycle, and Server Component apps have a [dedicated integration](https://lingui.dev/tutorials/react-rsc).
+
+Lingui keeps copy close to the UI, but your team owns every step after extraction: translation, review, compilation and loading. Extraction finds new messages; it doesn&#39;t translate them.
+
+**Choose Lingui** when your translators or translation service work with PO catalogues and you want Lingui&#39;s extraction and compiler tooling.
+
+## 4. React Intl: FormatJS and ICU MessageFormat
+
+[React Intl](https://formatjs.github.io/docs/react-intl/) is FormatJS&#39;s React library for messages, plurals, dates and numbers. [Message descriptors](https://formatjs.github.io/docs/react-intl/api/) identify each message by ID, with an optional default message and a description for translators. [FormatJS extraction](https://formatjs.github.io/docs/getting-started/message-extraction/) collects them and can generate the IDs.
+
+Messages use [ICU MessageFormat](https://formatjs.github.io/docs/core-concepts/icu-syntax/), so reviewers need to be able to read its placeholder and plural syntax, and your pipeline supplies the translated catalogues. Server rendering and client boundaries vary by framework, so check your framework&#39;s integration before adopting it.
+
+**Choose React Intl** if your team already uses FormatJS or wants to use ICU MessageFormat throughout.
+
+## How should you test a React i18n library before choosing?
+
+Pick one feature with a heading, a named variable, a plural count, an accessible input label and a formatted price. Localise it into two languages with each candidate, then change a source sentence and add a new message. Compare:
+
+1. **Authoring:** Can a reviewer understand the copy and its context in the diff?
+2. **Translation:** How does new or changed text reach whoever translates it?
+3. **Verification:** Can you catch missing messages and broken variables before release?
+4. **Delivery:** Which files or services must be available when the production app renders?
+
+If your current library wins, keep it. The `gt` CLI translates react-i18next catalogues too, so choosing how to author copy doesn&#39;t lock you into how it gets translated. Before you ship, run through the [multilingual app launch checklist](/kb/multilingual-app-launch-checklist).
+
+General Translation is used by developer teams at Cursor, Ramp, Profound, Cognition, Sierra and ClickHouse. To try it, start with the [React Quickstart](/docs/react/react-quickstart).
+
+## Common questions
+
+### Which React i18n library translates my app automatically?
+
+gt-react. react-i18next, Lingui and React Intl render translations that you supply. With gt-react, [`gt translate`](/docs/cli/reference/commands/translate) generates translations for every target locale, using your code as context.
+
+### Is react-i18next or React Intl better?
+
+Neither is better in general. react-i18next suits teams that want JSON resources and i18next&#39;s plugins. React Intl suits teams that have standardised on FormatJS and ICU MessageFormat. Both leave translation to your team or a separate service.
+
+### Which React i18n library supports Server Components?
+
+For Next.js App Router apps, use [gt-next](/docs/react/nextjs-quickstart), which supports both Server and Client Components. Lingui has a [dedicated RSC integration](https://lingui.dev/tutorials/react-rsc), and next-intl is another App Router option.
+
+### Can I use General Translation without leaving react-i18next?
+
+Yes. When your `package.json` declares `i18next` directly, the `gt` CLI detects it and translates your react-i18next JSON resources while preserving their syntax. See [Generating translations](/docs/cli/guides/generating-translations).
+
+### Do I still need JSON translation files with gt-react?
+
+Not as source files. You write copy inline, and translations are generated as files during your build or served from General Translation&#39;s CDN. See [i18n without translation files](/kb/i18n-without-translation-files).
+
+## Key takeaways
+
+* gt-react, react-i18next, Lingui and React Intl all render and format translations in React. Only gt-react also generates them.
+* gt-react keeps copy inline in JSX and can wrap existing JSX automatically at build time.
+* react-i18next, Lingui and React Intl rely on catalogues that your team or a translation service fills in.
+* You can keep react-i18next and still use General Translation to translate its resources.

@@ -1,0 +1,151 @@
+---
+title: 翻訳ファイルなしでi18nは実現できますか？
+summary: はい。gt-react または gt-next を使えば、コンテンツは <T> コンポーネントで囲んだままコンポーネント内にインラインで記述でき、翻訳はビルド時に出力として生成されます。そのため、キーやロケールごとのJSONファイルを作成したり、同期を維持したりする必要はありません。
+description: はい。gt-react または gt-next を使えば、コンテンツは <T> コンポーネント内にインラインで記述でき、翻訳はビルド時に生成されます。キーやロケールごとのJSONファイルを同期させる手間はありません。
+date: 2026-05-07
+category: internationalization
+authors: [jackie, ernest]
+redirectFrom: [i18n-without-translation-files, nextjs-i18n-code-is-the-source-of-truth]
+related: [translate-conditional-jsx, how-to-handle-plurals-in-react, best-localization-software]
+---
+
+JavaScriptアプリを国際化したことがある人なら、このワークフローはおなじみでしょう。i18nライブラリをインストールして `en.json` ファイルを作成し、ユーザーに表示される文字列をコンポーネントからすべて抜き出します。それぞれにキーを割り当て、元の文字列があった場所でそのキーを参照します。あとは、サポートする言語の数だけそのJSONファイルを複製します。`es.json`、`fr.json`、`ja.json` といった具合です。
+
+最初のうちは問題ありません。文字列が30個、言語が3つなら、エントリは90件です。
+
+ところが、アプリは成長していきます。6か月後には文字列が400個、言語は12に増え、十数個のファイルに計4,800件のエントリが散らばることになります。ある開発者が新機能を追加して新しい文字列を5つ書き、そのうち3つの翻訳ファイルの更新を忘れてしまいます。東京のユーザーが日本語のインターフェースに英語のフォールバックが混じっているのを目にするまで、誰も気づきません。そして誰かが「翻訳管理システムを導入しよう」と言い出すのです。
+
+<Video src="https://assets.gtx.dev/i18n-no-translation.mp4" />
+
+## ファイル管理という「税金」
+
+翻訳ファイルの保守負担は、サポートする言語の数に比例して膨らんでいきます。文字列を1つ変更すれば、十数個のファイルを更新しなければなりません。やがてファイル同士の同期はずれていきます。整合性を保つには、ツールや自動化、あるいは地道な規律が欠かせません。
+
+数々の回避策が生まれていること自体が、その実態を物語っています。翻訳キーを自動生成する VS Code 拡張機能、JSON を TypeScript インターフェースと照らし合わせて検証する型ジェネレーター、未使用のキーを検出するリンター、すべてのロケールが同期しているかを確認する CI チェックなどです。うまく機能しているワークフローであれば、こうしたツールをわざわざ作る必要はありません。
+
+UI に書かれている内容と翻訳ファイルに書かれている内容は別々で、キーベースのマッピングがその2つを結び付けています:
+
+```tsx
+function CheckoutSummary({ itemCount, discount }) {
+  const { t } = useTranslation('checkout');
+
+  return (
+    <div>
+      <h2>{t('summary.title')}</h2>
+      <p>{t('summary.item_count', { count: itemCount })}</p>
+      {discount && <p>{t('summary.discount_applied', { percent: discount })}</p>}
+      <p>{t('summary.total_label')}</p>
+      <small>{t('summary.tax_notice')}</small>
+    </div>
+  );
+}
+```
+
+このコンポーネントが何をレンダリングするのかを把握するには、`checkout.json` を開き、`summary` 名前空間を探し、5つのキーを突き合わせなければなりません。これが数百のコンポーネントに及ぶと、コードレビューはファイルを行ったり来たりするだけの作業になってしまいます。
+
+ICU メッセージ構文が、この問題に拍車をかけます。`i18next`、`react-intl`、`next-intl` などのライブラリが複数形、性別、補間の表現に使うこのフォーマットは、JSON 文字列に埋め込まれた独自のミニ言語です。`{count, plural, one {# item} other {# items}}` の波括弧が 1 つずれていても、ランタイムまで問題は表面化しません。これを検出するリンターもありますが、ほとんどのチームは使っていません。一方、インラインのコードであれば、入力したその場で TypeScript コンパイラと IDE がチェックしてくれます。
+
+## コードを直接翻訳する
+
+そもそも文字列を抽出しないとしたら、どうでしょうか？
+
+```tsx
+import { T } from 'gt-react';
+
+function CheckoutSummary({ itemCount, discount }) {
+  return (
+    <T>
+      <div>
+        <h2>Order Summary</h2>
+        <p>You have {itemCount} items in your cart.</p>
+        {discount && <p>{discount}% discount applied!</p>}
+        <p>Total (before tax):</p>
+        <small>Tax calculated at checkout.</small>
+      </div>
+    </T>
+  );
+}
+```
+
+[`gt-react`](/docs/react/react-quickstart) の [`<T>`](/docs/react/reference/components/t) コンポーネントは、JSX のブロックを翻訳対象としてマークします。英語のテキストはコンポーネント内にそのまま書いておけます。ユーザーがスペイン語でアクセスすると、[`<T>`](/docs/react/reference/components/t) 内のコンテンツがスペイン語の訳文に置き換わります。構造やフォーマットもそのまま維持されます。
+
+`t('checkout.summary.title')` も `en.json` も不要で、ロケールごとの JSON ファイルを同期させ続ける手間もありません。
+
+## ビルド成果物としての翻訳
+
+翻訳はデプロイ時に生成されます。[GT CLI](/docs/cli/reference/commands/translate) がコードベースをスキャンして [`<T>`](/docs/react/reference/components/t) コンポーネント内のコンテンツをすべて検出し、各対象言語の翻訳を生成します。生成された翻訳は、コンパイル済みの CSS やバンドル済みの JavaScript と同じように、gitignore 対象のディレクトリに出力されます。
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja", "de", "ko", "zh"],
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json"
+    }
+  }
+}
+```
+
+```txt title=".gitignore"
+public/_gt/
+```
+
+開発環境では、翻訳はオンデマンドで行われます。文字列を変更してページを再読み込みすれば、すぐに日本語で表示されます。本番環境では、すべての翻訳が事前生成済みで、CDN から配信されます。翻訳ファイル自体は引き続きディスク上に存在しますが、あくまでビルドの出力成果物であり、自分で作成・管理するものではありません。
+
+## 実際に何が変わるのか
+
+その違いは、アーキテクチャ図よりも日々の作業の中にこそ表れます。
+
+ページに新しいセクションを追加する PR は、見たとおり「ページに新しいセクションを追加する PR」として読めます。レビュアーが目にするのは `checkout.summary.discount_applied_notice` ではなく、実際の文言です。コードレビューのたびに JSON ファイルと見比べる必要もなくなります。
+
+リファクタリングの負担も軽くなります。コンポーネントの名前を変える、移動する、いくつかに分割する——再マッピングすべきキーがないので、翻訳はコンテンツにそのまま追従します。言語の追加も設定を 1 行変えるだけです。コンポーネントを削除すれば、その翻訳はひっそりと生成されなくなるだけです。誰も片付けたがらない孤立したキーが 15 個のファイルに散らばったまま残ることもありません。
+
+## i18n ライブラリの今後の方向性
+
+エコシステム全体で、インライン文字列への移行が進んでいます。`i18next` や `react-intl` といった初期の i18n ライブラリは、機械翻訳がまだ実用的ではなく、すべての文字列を人間の翻訳者に引き渡す必要があった時代に作られました。そのため、受け渡し用のフォーマットとして辞書を使うのは理にかなっていました。しかし、そうした制約はすでになくなり、文字列ファイルを並行して保守するという開発者体験上のコストは、ますます正当化しにくくなっています。
+
+`next-intl` は、辞書モードに加えて[自動抽出に対応した実験的なインラインメッセージ](https://next-intl.dev/docs/usage/extraction)を導入しました。[Lingui の Compiler](https://lingui.dev/ref/swc-plugin) は、インラインのタグ付きテンプレートからビルド時にメッセージを抽出します。[Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) は異なるアプローチを取り、メッセージファイルをロケールごとのツリーシェイク可能な関数へとコンパイルします。手法はそれぞれ異なるものの、いずれもコンテンツをコンポーネントに近づける方向へ向かっています。GT はこの流れを突き詰めたものです。JSX こそが信頼できる唯一の情報源であり、翻訳はコンパイル工程のひとつにすぎません。
+
+## トレードオフ
+
+コンテンツをインラインで記述するとき、あなたは自分の母語で書いています。コンポーネントの構造も、文のパターンも、UIの流れも、すべて英語 (あるいはあなたの翻訳元の言語) での思考を反映しています。`next-intl` のような辞書ベースのアプローチは、設計上、言語への依存がより少なくなっています。コンポーネントにはどの言語の文も実際には含まれず、別の場所を参照するキーがあるだけだからです。
+
+とはいえ、ほとんどの開発者はUIを作る時点ですでにひとつの言語で考えています。レイアウトも、文言も、ボタンのラベルも、まず英語で発想されます。文字列がインラインにあってもJSONファイルにあっても、この偏りは設計そのものに組み込まれています。私たちは、i18nフレームワークのほうが実際の作業スタイルに合わせるべきだと考えています。言語の中立性のためにコンテンツをキーへと抽象化するのではなく、アプリは自然に構築し、翻訳はフレームワークに任せましょう。
+
+## はじめに
+
+```bash
+npx gt@latest init
+```
+
+セットアップウィザードは、プロジェクトの設定、依存関係のインストール、開発用の翻訳ホットリロードのセットアップを行います。詳しい手順は [CLI クイックスタート](/docs/cli/quickstart)をご覧ください。
+
+セットアップが完了したら、コンテンツを [`<T>`](/docs/react/reference/components/t) でラップして開発サーバーを起動し、[`<LocaleSelector>`](/docs/react/reference/components/locale-selector) コンポーネントを使って言語を切り替えます。
+
+```tsx
+import { LocaleSelector } from 'gt-react';
+
+function Header() {
+  return (
+    <header>
+      <nav>{/* ... */}</nav>
+      <LocaleSelector />
+    </header>
+  );
+}
+```
+
+開発環境では翻訳がオンデマンドで行われるため、アプリを任意の言語ですぐに確認できます。本番環境では、事前生成済みの翻訳が使用されます。ビルドに翻訳ステップを追加し、ホスティングサービスで `GT_PROJECT_ID` と `GT_API_KEY` を設定してください。
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && next build"
+  }
+}
+```
+
+[`translate`](/docs/cli/reference/commands/translate) コマンドはコードベース内の [`<T>`](/docs/react/reference/components/t) の使用箇所をすべてスキャンして翻訳を生成するため、アプリのビルド時にはすべてのロケールの準備が整っています。
+
+`gt-react` はオープンソースです。Next.js App Router の場合は [`gt-next`](/docs/react/nextjs-quickstart) を、React Native の場合は [`gt-react-native`](/docs/react/react-native-quickstart) を使用してください。

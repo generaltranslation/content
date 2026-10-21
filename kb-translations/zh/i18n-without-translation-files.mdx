@@ -1,0 +1,151 @@
+---
+title: 不用翻译文件也能做国际化吗？
+summary: 可以。使用 gt-react 或 gt-next 时，内容以内联方式直接写在组件里的 <T> 组件中，译文则在构建时作为产物生成，因此无需编写键，也不必维护各区域设置的 JSON 文件并保持同步。
+description: 可以。使用 gt-react 或 gt-next 时，内容以内联方式直接写在 <T> 组件中，译文在构建时生成，无需编写键，也不必同步各区域设置的 JSON 文件。
+date: 2026-05-07
+category: internationalization
+authors: [jackie, ernest]
+redirectFrom: [i18n-without-translation-files, nextjs-i18n-code-is-the-source-of-truth]
+related: [translate-conditional-jsx, how-to-handle-plurals-in-react, best-localization-software]
+---
+
+凡是给 JavaScript 应用做过国际化的人，对这套工作流都不陌生：安装一个国际化库，创建 `en.json` 文件，把组件里所有面向用户的字符串抽取出来，给每个字符串分配一个键，再在原来字符串所在的位置引用这个键。然后，每支持一种语言，就复制一份 JSON 文件：`es.json`、`fr.json`、`ja.json`。
+
+起初倒也没什么问题。30 个字符串，3 种语言，90 个条目。
+
+可应用会越做越大。六个月后，你已经有 400 个字符串、12 种语言，十几个文件里加起来有 4,800 个条目。某位开发者新增了一个功能，写了 5 个新字符串，却忘了更新其中 3 个翻译文件。一直没人发现，直到东京的一位用户在日语界面里看到了英文后备内容。于是有人提议：买一套翻译管理系统吧。
+
+<Video src="https://assets.gtx.dev/i18n-no-translation.mp4" />
+
+## 文件管理的隐性成本
+
+翻译文件带来的维护负担会随支持语言的数量增加而不断加重。改动一个字符串，就得同步更新十几个文件。这些文件迟早会彼此脱节，要让它们保持一致，就只能依靠工具、自动化或严格的规范。
+
+围绕这一问题涌现的各种变通方案本身就说明了一切：自动生成翻译键的 VS Code 扩展、根据 TypeScript 接口校验 JSON 的类型生成器、检查未使用键的 linter，以及确认所有区域设置是否同步的 CI 检查。如果工作流本身运转良好，谁也不会去开发这类工具。
+
+UI 里写的是一套内容，翻译文件里写的是另一套，而基于键的映射把两者连接在一起：
+
+```tsx
+function CheckoutSummary({ itemCount, discount }) {
+  const { t } = useTranslation('checkout');
+
+  return (
+    <div>
+      <h2>{t('summary.title')}</h2>
+      <p>{t('summary.item_count', { count: itemCount })}</p>
+      {discount && <p>{t('summary.discount_applied', { percent: discount })}</p>}
+      <p>{t('summary.total_label')}</p>
+      <small>{t('summary.tax_notice')}</small>
+    </div>
+  );
+}
+```
+
+要弄清这个组件渲染的是什么，你得打开 `checkout.json`，找到 `summary` 命名空间，再逐一对照五个键。组件一旦多达数百个，代码审查就成了在文件之间来回跳转的苦差事。
+
+ICU 消息语法更是雪上加霜。`i18next`、`react-intl` 和 `next-intl` 等库处理复数形式、性别和插值所用的格式，本身就是一门嵌在 JSON 字符串里的小型语言。`{count, plural, one {# item} other {# items}}` 中哪怕错放一个花括号，也要等到运行时才会暴露出来。虽然有专门的 linter 能检查这类问题，但大多数团队都没有用。相比之下，内联代码在你敲下的那一刻，就会接受 TypeScript 编译器和 IDE 的检查。
+
+## 直接翻译代码
+
+如果根本不提取字符串呢？
+
+```tsx
+import { T } from 'gt-react';
+
+function CheckoutSummary({ itemCount, discount }) {
+  return (
+    <T>
+      <div>
+        <h2>Order Summary</h2>
+        <p>You have {itemCount} items in your cart.</p>
+        {discount && <p>{discount}% discount applied!</p>}
+        <p>Total (before tax):</p>
+        <small>Tax calculated at checkout.</small>
+      </div>
+    </T>
+  );
+}
+```
+
+[`gt-react`](/docs/react/react-quickstart) 中的 [`<T>`](/docs/react/reference/components/t) 组件用于标记需要翻译的 JSX 代码块。英文内容直接保留在组件中。当用户以西班牙语访问时，[`<T>`](/docs/react/reference/components/t) 内的内容会被替换为对应的西班牙语译文，结构和格式都会原样保留。
+
+无需 `t('checkout.summary.title')`，无需 `en.json`，也无需维护一堆按区域设置拆分、还得时刻保持同步的 JSON 文件。
+
+## 将译文作为构建产物
+
+译文在部署时生成。[GT CLI](/docs/cli/reference/commands/translate) 会扫描你的代码库，找出所有 [`<T>`](/docs/react/reference/components/t) 组件中的内容，并为每种目标语言生成译文。生成结果会写入一个已加入 gitignore 的目录，就像编译后的 CSS 或打包后的 JavaScript 一样。
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja", "de", "ko", "zh"],
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json"
+    }
+  }
+}
+```
+
+```txt title=".gitignore"
+public/_gt/
+```
+
+在开发环境中，翻译按需进行。修改一个字符串，刷新页面，立刻就能看到对应的日语版本。在生产环境中，所有内容都会预先生成，并通过 CDN 分发。翻译文件仍然存放在磁盘上，但它们只是构建产物，无需你手动编写或维护。
+
+## 实际工作中有哪些变化
+
+这种差异更多体现在日常工作中，而不是架构图上。
+
+一个为页面新增章节的 PR，读起来就是一个为页面新增章节的 PR。审查者看到的是实际的文字，而不是 `checkout.summary.discount_applied_notice`。代码审查时，再也不用对着 JSON 文件来回比对。
+
+重构也没那么痛苦了。重命名组件、移动组件、把组件拆成几块——译文都会跟着内容走，因为根本没有需要重新映射的键。添加一种语言只需改一行配置。删除一个组件后，它的译文会悄然停止生成，而不会在 15 个文件里留下一堆没人愿意清理的孤立键。
+
+## 国际化库的发展方向
+
+整个生态系统都在朝内联字符串的方向发展。`i18next` 和 `react-intl` 等早期国际化库诞生时，机器翻译尚不可行，每个字符串都需要交给人工译者处理。在当时，用字典作为交换格式是合理的选择。如今这一限制已不复存在，而维护并行字符串文件所带来的开发体验成本也越来越难以说得过去。
+
+`next-intl` 在字典模式之外，新增了[支持自动提取的实验性内联消息](https://next-intl.dev/docs/usage/extraction)。[Lingui 的编译器](https://lingui.dev/ref/swc-plugin)会在构建时从内联标签模板中提取消息。[Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) 则另辟蹊径，将消息文件编译为按区域设置划分、支持 tree-shaking 的函数。这些方案虽各不相同，但都在让内容更贴近组件。GT 则将这一思路贯彻到底：你的 JSX 就是唯一可信源，翻译只是一个编译步骤。
+
+## 权衡取舍
+
+以内联方式编写内容时，你是在用自己的母语写作。组件结构、句式、UI 流程，都体现了你用英语 (或其他源语言) 思考的方式。而像 `next-intl` 这样基于字典的方案在设计上更加语言无关，因为组件中从不包含任何语言的真实句子，只有一个指向别处的键。
+
+但大多数开发者在构建 UI 时，本来就是用某一种语言思考的。布局、文案、按钮标签，最初都是用英语构思的。无论字符串是内联在代码中还是存放在 JSON 文件里，这种倾向早已融入设计之中。我们认为，i18n 框架应当适应你实际的工作方式：自然地构建应用，把翻译交给框架处理，而不是为了追求语言中立而把内容抽象成键。
+
+## 快速开始
+
+```bash
+npx gt@latest init
+```
+
+初始化设置向导会自动配置你的项目、安装依赖，并为开发环境配置翻译热重载。完整流程请参阅 [CLI 快速入门](/docs/cli/quickstart)。
+
+完成后，用 [`<T>`](/docs/react/reference/components/t) 包裹内容，启动开发服务器，然后使用 [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) 组件切换语言：
+
+```tsx
+import { LocaleSelector } from 'gt-react';
+
+function Header() {
+  return (
+    <header>
+      <nav>{/* ... */}</nav>
+      <LocaleSelector />
+    </header>
+  );
+}
+```
+
+在开发环境中，翻译按需进行，你可以立即以任意语言查看应用。在生产环境中，译文则是预先生成的。请将 translate 步骤添加到构建流程中，并在托管服务商处设置 `GT_PROJECT_ID` 和 `GT_API_KEY`：
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && next build"
+  }
+}
+```
+
+[`translate`](/docs/cli/reference/commands/translate) 命令会扫描你的代码库中所有使用 [`<T>`](/docs/react/reference/components/t) 的地方并生成译文，确保应用构建时每个区域设置的翻译都已就绪。
+
+`gt-react` 是开源的。Next.js App Router 项目请使用 [`gt-next`](/docs/react/nextjs-quickstart)；React Native 项目请使用 [`gt-react-native`](/docs/react/react-native-quickstart)。

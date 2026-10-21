@@ -1,0 +1,140 @@
+---
+title: "General Translation 与 nestjs-i18n：该选哪一个？"
+summary: nestjs-i18n 会在 NestJS 应用中为每个请求解析语言，并从各语言对应的 JSON 或 YAML 消息目录中渲染消息，但它本身不做任何翻译。General Translation 的 CLI 可以翻译这些消息目录，其 gt-node 库则负责翻译仅在运行时才出现的内容，因此你可以继续使用 nestjs-i18n，同时引入 General Translation。
+description: nestjs-i18n 为每个请求选定语言并渲染 JSON 或 YAML 消息目录，但不负责翻译。General Translation 的 CLI 负责翻译消息目录，gt-node 则处理运行时内容。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, general-translation-vs-in-house-i18n, general-translation-vs-symfony-translation, i18n-without-translation-files]
+---
+
+nestjs-i18n 是一个面向 NestJS 的开源 i18n 模块：它根据查询字符串、请求头、cookie 或 `Accept-Language` 判断每个请求的语言，再由 `I18nContext` 或 `I18nService` 从你的消息目录中返回该语言对应的消息。它只负责渲染译文，并不生成译文，因此每种语言的消息目录都要由你、你的译者或某项服务来编写并持续更新。General Translation 从两个方面补上了这一空缺：其 CLI 可以翻译 nestjs-i18n 的消息目录，其 `gt-node` 库则负责翻译仅在运行时才出现的内容。
+
+## nestjs-i18n 的优势
+
+* **专为 Nest 打造。** 只需调用一次 `I18nModule.forRoot()`，[即可通过 `@I18n()` 参数装饰器获取 `I18nContext`，并在服务中使用 `I18nContext.current()`](https://nestjs-i18n.com/quick-start)。它支持 HTTP、GraphQL、gRPC 和 WebSockets。
+* **语言解析器。** [`QueryResolver`、`HeaderResolver`、`CookieResolver` 和 `AcceptLanguageResolver`](https://nestjs-i18n.com/concepts/resolver) 会按你配置的顺序依次运行，GraphQL 和 gRPC 解析器则负责相应的传输协议，你也可以编写自定义解析器。
+* **简洁的消息目录。** 每种语言对应一个文件夹 (`src/i18n/en/`、`src/i18n/es/`) ，其中存放 [JSON 或 YAML 文件](https://nestjs-i18n.com/concepts/loader)，文件名即命名空间 (`inbox.title`) ，开发环境下还支持实时重载。
+* **复数形式与插值。** 支持 `{name}` 占位符、用 `$t()` 引用其他键，以及[包含 `zero`、`one`、`two`、`few`、`many` 和 `other` 键的复数对象](https://nestjs-i18n.com/guides/plurals)，由 `Intl.PluralRules` 选出对应形式。[10.8.0 版本新增](https://github.com/toonvanstrijp/nestjs-i18n/releases/tag/v10.8.0)了可主动启用的 `useICU` 设置，启用后改用 ICU MessageFormat 格式化消息。
+* **类型安全。** [`typesOutputPath` 会生成 `I18nTranslations` 和 `I18nPath` 类型](https://nestjs-i18n.com/guides/type-safety)，键名拼错会直接导致编译失败；若某种语言缺少键，`nestjs-i18n check` 命令会报错退出。
+* **验证消息。** `I18nValidationPipe`、`I18nValidationExceptionFilter` 和 `i18nValidationMessage()` [可为 DTO 翻译 class-validator 的错误信息](https://nestjs-i18n.com/guides/dto_validation/global-validation)。
+
+它采用 MIT 许可证，[10.8.5 版本要求 Node.js 22 或更高版本](https://github.com/toonvanstrijp/nestjs-i18n/blob/v10.8.5/package.json)。
+
+## nestjs-i18n 需要你自己处理的部分
+
+下面是一个英文的收件箱消息目录，其中包含一条复数形式的消息：
+
+```json title="src/i18n/en/inbox.json"
+{
+  "title": "Inbox",
+  "unread": {
+    "one": "You have {count} unread message.",
+    "other": "You have {count} unread messages."
+  }
+}
+```
+
+西班牙语文件夹中存放着该文件的翻译副本，某个 数据控制者 返回 `i18n.t('inbox.unread', { args: { count } })`。没有德语文件夹。以下是向一个基于 nestjs-i18n 10.8.5 的最简 Nest 11 应用发出的请求：
+
+```text title="Output"
+?lang=es&count=3  "Tienes 3 mensajes sin leer."
+?lang=de&count=3  "You have 3 unread messages."
+```
+
+德语之所以回退到英语，是因为它的消息目录还没有翻译。语言检测虽然能正常工作，却无法补上缺失的文本。而这正是 nestjs-i18n 留给你的工作：生成消息目录，并在英语内容每次变更时及时同步更新。
+
+## General Translation 如何融入 NestJS 应用
+
+General Translation 的 CLI 会就地翻译 nestjs-i18n 的消息目录。只需将一个 `json` 条目指向各语言文件夹：
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es",
+    "de"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "src/i18n/[locale]/*.json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) 会读取 `src/i18n/en/inbox.json`，生成 `src/i18n/es/inbox.json` 和 `src/i18n/de/inbox.json`，并保留所有键。在 CI 中运行时，未改动的条目会直接复用之前的译文。nestjs-i18n 则通过其现有的加载器加载生成的消息目录。
+
+本示例使用英语、西班牙语和德语消息，每条消息都包含 `one` 和 `other` 两种形式。请分别用计数 1 和 3 预览生成的消息，并在发布前运行 `nestjs-i18n check -p src/i18n`，检查是否有缺失的键。
+
+对于仅在运行时才存在的内容 (例如团队成员发布的帖子或数据库记录) ，请使用 General Translation 的 [`gt-node`](/docs/node/quickstart)。只需初始化一次，之后在调用 [`tx`](/docs/node/reference/functions/tx) 时，将 nestjs-i18n 已解析的语言传给 [`withGT`](/docs/node/reference/functions/with-gt)：
+
+```ts title="src/main.ts"
+import { NestFactory } from '@nestjs/core';
+import { initializeGT } from 'gt-node';
+import { AppModule } from './app.module';
+
+// 从环境变量读取 GT_PROJECT_ID 和 GT_API_KEY（需为启用了运行时翻译的项目密钥）。
+initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'de'] });
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+```ts title="src/posts.controller.ts"
+import { Controller, Get, Param } from '@nestjs/common';
+import { I18n, I18nContext } from 'nestjs-i18n';
+import { tx, withGT } from 'gt-node';
+import { PostsService } from './posts.service';
+
+@Controller('posts')
+export class PostsController {
+  constructor(private readonly posts: PostsService) {}
+
+  @Get(':id')
+  async findOne(@Param('id') id: string, @I18n() i18n: I18nContext) {
+    return withGT(i18n.lang, async () => {
+      const post = await this.posts.findOne(id);
+      return { ...post, body: await tx(post.body, { $context: 'A post written by a user' }) };
+    });
+  }
+}
+```
+
+现在，两个工具都会使用你现有的 nestjs-i18n 解析器所选定的语言。如果 `?lang=es` 的优先级高于 `Accept-Language: de`，那么消息目录中的消息和翻译后的帖子都会是西班牙语。固定的界面文案请使用消息目录，用户创建的内容请使用 [`tx`](/docs/node/reference/functions/tx)。
+
+类型化键、消息目录查找和验证消息仍交由 nestjs-i18n 处理。General Translation 则负责生成翻译，并提供共享的词汇表、自定义提示词以及[仪表板审阅](/docs/platform/dashboard/guides/reviewing-translations)功能。固定文案请使用上述消息目录工作流，动态内容请使用 `tx`。
+
+## nestjs-i18n 与 General Translation 速览
+
+| 功能     | nestjs-i18n                                             | General Translation                                                                                           |
+| ------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 定位     | 解析请求语言，并基于消息目录渲染消息                                      | 翻译消息目录，并在运行时翻译动态内容                                                                                            |
+| 翻译你的内容 | 否                                                       | 是，通过 [`npx gt translate`](/docs/cli/reference/commands/translate) 和 [`tx`](/docs/node/reference/functions/tx) |
+| 语言检测   | 查询参数、请求头、cookie、`Accept-Language`、GraphQL、gRPC 以及自定义解析器 | 通过 [`withGT`](/docs/node/reference/functions/with-gt) 沿用同一个已解析的语言                                             |
+| 复数形式   | 按语言划分的类别键，由 `Intl.PluralRules` 选择                       | 翻译源文件中已有的复数键                                                                                                  |
+| 类型安全   | 生成键类型，并检查缺失的键                                           | 保留消息目录中的键，以便沿用相同的生成类型                                                                                         |
+| 验证消息   | 集成 class-validator                                      | 翻译这些消息所在的消息目录                                                                                                 |
+| 费用     | 免费，采用 MIT 许可证                                           | [按用量计费](https://generaltranslation.com/pricing)                                                               |
+
+## 如何选择
+
+如果你需要 nestjs-i18n 的解析器、类型化键以及验证集成，请继续使用 nestjs-i18n。如果你希望在英文内容变更时自动在 CI 中翻译消息目录，或者你的 API 返回的用户内容或数据库内容需要实时翻译，请添加 General Translation。现有的数据控制者仍沿用相同的键，而 General Translation 负责让这些键背后的文本始终保持最新。
+
+## 同时使用两者
+
+1. 保留 nestjs-i18n 及其文件夹，无需改动。
+2. 添加 `gt.config.json` 并在其中配置目录路径，然后设置 `GT_API_KEY` 和 `GT_PROJECT_ID`。 (参见[配置 CLI](/docs/cli/guides/configuring#credentials)。) 
+3. 使用 [`npx gt upload`](/docs/cli/reference/commands/upload) 上传现有译文，然后在 CI 中运行 [`npx gt translate`](/docs/cli/reference/commands/translate)。
+4. 如果之后在本地修改了译文，请先运行 [`npx gt save-local`](/docs/cli/reference/commands/save-local)，再重新生成。在需要运行时翻译的地方添加 `gt-node`。
+
+## 要点总结
+
+* nestjs-i18n 负责处理 NestJS 中的语言检测、类型化键、复数形式和验证消息，但所有语言的所有消息目录都得由你自己编写，包括每种语言的复数形式。
+* General Translation 的 CLI 可以原地翻译 nestjs-i18n 的 JSON 消息目录，`gt-node` 则基于同一请求语言翻译动态内容。
+* 两者搭配使用：nestjs-i18n 负责渲染，General Translation 负责翻译。

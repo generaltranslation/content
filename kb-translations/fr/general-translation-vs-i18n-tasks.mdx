@@ -1,0 +1,92 @@
+---
+title: "General Translation ou i18n-tasks : lequel choisir ?"
+summary: i18n-tasks est une gem Ruby qui repère les clés Rails I18n manquantes et inutilisées, nettoie les fichiers de paramètres régionaux et peut compléter les clés manquantes via Google Translate, DeepL, OpenAI, Yandex ou watsonx. General Translation traduit des fichiers de paramètres régionaux entiers en s’appuyant sur votre glossaire, vos instructions personnalisées et la relecture dans le tableau de bord. Les deux outils ne remplissent pas la même fonction, et de nombreuses équipes peuvent les utiliser conjointement.
+description: i18n-tasks repère les clés Rails I18n manquantes et inutilisées et peut combler les manques par traduction automatique. General Translation traduit des fichiers de paramètres régionaux entiers, avec relecture. De nombreuses équipes utilisent les deux.
+date: 2026-10-16
+category: workflow-tools
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-rails-i18n, general-translation-vs-mobility, general-translation-vs-google-translate, general-translation-vs-tms, best-localization-software]
+---
+
+i18n-tasks est un outil en ligne de commande destiné aux applications Ruby qui utilisent la gem i18n, soit toutes les applications Rails. Il parcourt votre code à la recherche d’appels tels que `t(".title")`, les compare à vos fichiers de paramètres régionaux et signale les clés manquantes ou inutilisées ; sa commande `translate-missing` comble les manques à l’aide d’un service de traduction automatique dont vous fournissez vous-même la clé. Il vérifie donc vos traductions et peut traduire automatiquement une clé manquante, mais il ne maintient pas les traductions à jour lorsque le texte anglais évolue. General Translation, lui, se charge de la traduction : sa CLI génère chaque fichier de paramètres régionaux à partir de votre source anglaise, en tenant compte de votre glossaire et de vos instructions personnalisées. Les deux outils sont ainsi plus complémentaires que concurrents.
+
+## Les points forts d&#39;i18n-tasks
+
+* **Détecte les clés manquantes et inutilisées dans le code.** [Un analyseur AST lit les fichiers `.rb` et `.html.erb`](https://github.com/glebm/i18n-tasks#features--limitations) (et un analyseur par expressions régulières prend en charge des formats comme HAML), résout les clés relatives comme `t(".title")` et signale les clés utilisées dans le code mais absentes d&#39;un paramètre régional, ou présentes mais jamais utilisées.
+* **Vérifications tenant compte du pluriel.** Avec les règles de pluriel de rails-i18n, [`missing` signale les paramètres régionaux auxquels il manque une forme CLDR](https://github.com/glebm/i18n-tasks/blob/main/CHANGES.md), comme `few` et `many` en polonais.
+* **Adapté à la CI.** `missing`, `unused` et les autres vérifications se terminent avec le code de sortie 1 lorsqu&#39;elles détectent des problèmes, et la gem fournit des [modèles RSpec et Minitest](https://github.com/glebm/i18n-tasks/tree/main/templates) qui font échouer votre suite de tests en cas de clés manquantes ou inutilisées.
+* **Entretien des fichiers.** [`normalize` trie les clés](https://github.com/glebm/i18n-tasks#normalize) (et, avec `-p`, les déplace vers les fichiers attribués par votre configuration), `mv` et `rm` renomment ou suppriment des clés dans tous les paramètres régionaux, `find` indique où une clé est utilisée, et `check-consistent-interpolations` repère un `%{count}` renommé ou supprimé lors de la traduction.
+* **Cinq backends de traduction.** [`translate-missing` fonctionne avec Google Translate, DeepL, Yandex, OpenAI et IBM watsonx](https://github.com/glebm/i18n-tasks#translation-backends). Vous pouvez [définir les identifiants et options de glossaire DeepL](https://github.com/glebm/i18n-tasks/blob/main/templates/config/i18n-tasks.yml), ou encore le modèle OpenAI (`gpt-4o-mini` par défaut), le prompt système et un prompt par paramètre régional. Les espaces réservés `%{...}` sont remplacés par des jetons avant l&#39;envoi, puis restaurés au retour.
+* **Gratuit.** L&#39;outil est [sous licence MIT (version 1.1.2)](https://rubygems.org/gems/i18n-tasks) ; vous payez directement chaque fournisseur de traduction, généralement au caractère ou au jeton.
+
+## Ce qu&#39;i18n-tasks vous laisse à faire
+
+Voici le résultat de `missing` et `unused` sur une petite application Rails avec des fichiers en anglais, en polonais et en espagnol, dont la vue de la boîte de réception appelle une clé que personne n&#39;a définie :
+
+```text title="bundle exec i18n-tasks missing (excerpt)"
+| Locale | Key                 | Value in other locales or source  |
+|  all   | inbox.show.empty    | app/views/inbox/show.html.erb:3   |
+|   es   | inbox.show.title    | en Inbox                          |
+|   es   | inbox.show.unread   | en {"one" => "You have %{count} unread message.", ...} |
+|   pl   | flash.saved         | en Saved.                         |
+|   pl   | inbox.show.unread   | few, many                         |
+```
+
+```text title="bundle exec i18n-tasks unused"
+| Locale | Key                 | Value    |
+|   en   | inbox.show.archived | Archived |
+```
+
+Ce rapport est exact et utile. C’est pour combler les lacunes que le travail vous revient :
+
+* **Le backend Google envoie des valeurs de chaînes de caractères.** Lors d’une exécution où l’appel réseau de ce backend était remplacé par un bouchon, `translate-missing es` a envoyé les valeurs ci-dessous, espaces réservés masqués, sans les clés, le fichier ni la vue.
+
+  ```text
+  ["Inbox", "You have X__0 unread message.", "You have X__0 unread messages.", "Archived"]
+  ```
+
+* **Les formes du pluriel calquent la structure de l&#39;anglais.** Pour une clé polonaise totalement absente, il a écrit `one` et `other`, et l’exécution suivante de `missing` a signalé `few, many`.
+
+* **L&#39;anglais modifié n&#39;est pas retraduit.** [`translate-missing` remplit les clés qui n’existent pas dans un paramètre régional](https://github.com/glebm/i18n-tasks#translate-missing-keys). Lorsque vous modifiez une chaîne de caractères anglaise, les traductions existantes restent telles quelles.
+
+* **Une requête Google en échec peut tout de même écrire des fichiers.** Sans clé API Google définie, `translate-missing --backend=google pl` a signalé l’échec du lot, indiqué deux clés comme traduites, copié les valeurs anglaises dans `pl.yml` et s’est terminé avec le code 0. Ces clés ont ensuite disparu de `missing` ; seul `eq-base` (traductions identiques à la source) les faisait apparaître.
+
+## La place de General Translation
+
+General Translation se charge de générer les traductions, tandis qu&#39;i18n-tasks vérifie les catalogues Rails. Pointez la CLI `gt` vers votre fichier anglais et lancez [`npx gt translate`](/docs/cli/reference/commands/translate) dans votre CI. La commande génère chaque locale cible puis, lors des exécutions suivantes, réutilise les traductions des entrées inchangées et retraduit celles dont le texte anglais a été modifié. Chaque exécution s&#39;appuie sur le [glossaire et les instructions personnalisées](/docs/platform/dashboard/guides/defining-context-for-translations) de votre projet : la terminologie et le ton restent ainsi cohérents d&#39;un fichier à l&#39;autre, et votre équipe peut [relire et modifier les traductions](/docs/platform/dashboard/guides/reviewing-translations) dans le tableau de bord.
+
+Conservez i18n-tasks pour l&#39;analyse du code source Ruby et la validation des catalogues. Utilisez la CLI Node.js de General Translation pour générer les traductions, puis convertissez le YAML obtenu au format Rails, dont la racine est le paramètre régional, comme indiqué dans [General Translation vs. Rails I18n](/kb/general-translation-vs-rails-i18n). Réservez ce workflow aux catalogues dont les structures de clés source et cible correspondent.
+
+## i18n-tasks et General Translation en un coup d&#39;œil
+
+| Fonctionnalité               | i18n-tasks                                                                          | General Translation                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Rôle                         | Analyse le code Ruby et vérifie les clés de catalogue manquantes ou inutilisées     | Génère les traductions et les tient à jour à mesure que le texte source évolue                                     |
+| Validation des pluriels      | Vérifie les catégories requises pour chaque paramètre régional                      | Combinez la génération avec les vérifications d&#39;i18n-tasks                                                     |
+| Traduction automatique       | `translate-missing`, via le fournisseur de votre choix                              | [`npx gt translate`](/docs/cli/reference/commands/translate)                                                       |
+| Contexte de traduction       | Dépend du backend : DeepL accepte des identifiants de glossaire, OpenAI des prompts | Le contenu et les métadonnées de votre fichier, ainsi que le glossaire et les instructions personnalisées associés |
+| Lorsque l&#39;anglais change | Les traductions existantes restent inchangées                                       | Les entrées modifiées sont retraduites                                                                             |
+| Relecture                    | Diff Git                                                                            | Tableau de bord et diff Git                                                                                        |
+| Coût                         | Gem gratuite ; le fournisseur facture au caractère ou au jeton                      | [Traduction facturée à l&#39;usage](https://generaltranslation.com/pricing)                                        |
+
+Choisissez i18n-tasks seul si des traducteurs rédigent vos fichiers de paramètres régionaux et que vous avez besoin que la CI détecte les clés manquantes et inutilisées, ou si vous voulez simplement une ébauche automatique rapide pour quelques chaînes. Optez pour General Translation si vous souhaitez que les traductions suivent l&#39;évolution du texte anglais, avec une terminologie cohérente et une relecture dans le tableau de bord. Conservez i18n-tasks pour l&#39;analyse du code source Rails et les vérifications de catalogue.
+
+## Utiliser les deux en CI
+
+Reprenez la configuration initiale du catalogue anglais-espagnol décrite dans l&#39;[intégration Rails](/kb/general-translation-vs-rails-i18n). Lancez d&#39;abord la traduction et la correspondance des paramètres régionaux, puis vérifiez avec i18n-tasks l&#39;exhaustivité des clés, les catégories de pluriel et les espaces réservés :
+
+```bash
+npx gt translate
+ruby script/export_rails_locales.rb                     # exporte les catalogues pour Rails
+bundle exec i18n-tasks missing                           # clés utilisées dans le code, ainsi que les formes du pluriel
+bundle exec i18n-tasks unused
+bundle exec i18n-tasks check-consistent-interpolations   # %{name} correspond à la source
+```
+
+Chaque commande `i18n-tasks` se termine avec le code de sortie 1 en cas de problème : la tâche échoue donc avant qu’un fichier défectueux ne soit fusionné. La CLI a besoin d’un identifiant de projet et d’une clé API disposant des autorisations **Files &gt; Write** et **Translation queue &gt; Enabled**, définis respectivement dans `GT_PROJECT_ID` et `GT_API_KEY`. (Consultez [Configurer la CLI](/docs/cli/guides/configuring#credentials).)
+
+## Points clés
+
+* i18n-tasks détecte les clés manquantes, les clés inutilisées et les clés de pluriel incomplètes dans les applications Rails.
+* `translate-missing` complète les clés manquantes, mais ne met pas à jour les traductions existantes lorsque vous modifiez la source en anglais.
+* General Translation traduit des fichiers de paramètres régionaux entiers en appliquant votre glossaire et vos instructions personnalisées, et les maintient à jour au fil des modifications de l&#39;anglais. Exécutez-le avant les vérifications d&#39;i18n-tasks, dans la même tâche CI.

@@ -1,0 +1,125 @@
+---
+title: "General Translation ou Rails I18n : avez-vous besoin des deux ?"
+summary: "Rails I18n recherche les messages et met en forme les dates et les nombres. General Translation produit les traductions, les maintient à jour à mesure que votre texte anglais évolue et offre à votre équipe un tableau de bord pour les relire. Utilisez les deux pour livrer des catalogues Rails traduits à chaque livraison."
+description: "Rails I18n recherche les messages et met en forme les dates et les nombres. General Translation produit les traductions, les maintient à jour et ajoute la relecture dans le tableau de bord. Utilisez les deux pour livrer des catalogues traduits."
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-tasks, general-translation-vs-mobility, general-translation-vs-i18n-libraries, general-translation-vs-tms, best-localization-software]
+---
+
+Rails I18n est l’API d’internationalisation fournie avec Ruby on Rails : vous appelez `t` et `l` dans les vues et les contrôleurs, et Rails recherche le message correspondant au paramètre régional actuel dans les fichiers YAML situés dans `config/locales`. Rails I18n affiche les traductions, mais vous laisse le soin de les produire, que ce soit vous-même, vos traducteurs ou un service. General Translation rédige ces traductions à partir de votre source en anglais, en respectant la terminologie de votre produit. Vos vues, vos contrôleurs et vos appels à Rails I18n restent en place.
+
+## Les points forts de Rails I18n
+
+* **Intégré.** Rails [charge automatiquement tous les fichiers `.yml` et `.rb` situés dans `config/locales`](https://guides.rubyonrails.org/i18n.html#configuring-the-load-paths-and-default-locale). Chaque fichier YAML a pour racine la clé de son paramètre régional (`en:`, `es:`), ce qui permet à une même application de répartir ses traductions sur de nombreux fichiers.
+* **Recherche paresseuse.** Dans `app/views/inbox/show.html.erb`, [`t(".title")` se résout en `inbox.show.title`](https://guides.rubyonrails.org/i18n.html#lazy-lookup), et dans une action de contrôleur, `t(".success")` se résout à partir des noms du contrôleur et de l&#39;action : les clés suivent ainsi l&#39;organisation de vos fichiers.
+* **Interpolation et HTML sécurisé.** Les messages acceptent des valeurs nommées comme `%{name}`, et [les clés se terminant par `_html` sont affichées sans échappement](https://guides.rubyonrails.org/i18n.html#using-safe-html-translations), tandis que les valeurs qui y sont interpolées restent échappées.
+* **Solutions de repli et restriction des paramètres régionaux.** Les nouvelles applications Rails définissent `config.i18n.fallbacks = true` en production : une clé manquante s&#39;affiche alors dans la langue par défaut. Par ailleurs, [`config.i18n.available_locales` restreint les paramètres régionaux acceptés par l&#39;application](https://guides.rubyonrails.org/configuring.html#config-i18n-available-locales).
+* **Des données de paramètres régionaux fournies par la communauté.** La gem [rails-i18n](https://github.com/svenfuchs/rails-i18n) (8.1.0, MIT) ajoute des formats de date, d&#39;heure et de nombre, les messages d&#39;erreur d&#39;Active Record ainsi que les règles de pluriel CLDR pour plus de 100 paramètres régionaux.
+* **Aucune inscription requise.** Ce n&#39;est que du Ruby et du YAML, et le [guide Rails](https://guides.rubyonrails.org/i18n.html) couvre le sujet de A à Z.
+
+## Ce que Rails I18n vous laisse à gérer
+
+Rails I18n ne connaît que les messages que vous lui fournissez. Voici une vue de boîte de réception et ses messages en anglais :
+
+```yaml title="config/locales/en.yml"
+en:
+  inbox:
+    show:
+      title: "Inbox"
+      unread:
+        one: "You have %{count} unread message."
+        other: "You have %{count} unread messages."
+```
+
+```erb title="app/views/inbox/show.html.erb"
+<h1><%= t(".title") %></h1>
+<p><%= t(".unread", count: @count) %></p>
+```
+
+Sélectionner l&#39;espagnol ne traduit pas ce fichier. Si les solutions de repli vers l&#39;anglais sont activées, les lecteurs hispanophones voient toujours « Inbox » et « You have 3 unread messages. » Rails a besoin d&#39;un catalogue espagnol pour pouvoir afficher du contenu en espagnol. Chaque message anglais ajouté ou modifié implique le même travail dans chaque langue.
+
+La gem [rails-i18n](https://github.com/svenfuchs/rails-i18n) fournit les formats des paramètres régionaux et les règles de pluriel. [i18n-tasks](/kb/general-translation-vs-i18n-tasks) détecte les clés et les formes du pluriel manquantes. General Translation fournit les messages traduits qu&#39;exploitent ces outils.
+
+## Traduire les fichiers de paramètres régionaux Rails avec General Translation
+
+Conservez Rails I18n pour les recherches et laissez General Translation générer les autres fichiers de paramètres régionaux. La CLI `gt` s&#39;exécute sur Node.js, traduit le YAML et conserve vos clés. Pour cet exemple de l&#39;anglais vers l&#39;espagnol, placez les messages dans `translations/en.yml`, sans la clé racine `en:` :
+
+```yaml title="translations/en.yml"
+inbox:
+  show:
+    title: "Inbox"
+    unread:
+      one: "You have %{count} unread message."
+      other: "You have %{count} unread messages."
+```
+
+Faites pointer `gt.config.json` vers ces fichiers de travail. Une courte étape d&#39;export ajoute les clés de paramètre régional propres à Rails et génère les catalogues chargés par l&#39;application :
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es"
+  ],
+  "files": {
+    "yaml": {
+      "include": [
+        "translations/[locale].yml"
+      ]
+    }
+  }
+}
+```
+
+Définissez `GT_PROJECT_ID` et `GT_API_KEY` comme indiqué dans [Générer des traductions](/docs/cli/guides/generating-translations). Si vous disposez déjà de traductions pour ce catalogue, placez-les dans `translations/es.yml` sans la clé racine `es:`, puis exécutez [`npx gt upload`](/docs/cli/reference/commands/upload) avant de générer de nouvelles traductions.
+
+```ruby title="script/export_rails_locales.rb"
+require "json"
+require "yaml"
+require "fileutils"
+
+config = JSON.parse(File.read("gt.config.json"))
+locales = ([config.fetch("defaultLocale")] + config.fetch("locales")).uniq
+catalogs = locales.to_h do |locale|
+  messages = YAML.safe_load_file("translations/#{locale}.yml", aliases: true)
+  raise "Expected a message map for #{locale}" unless messages.is_a?(Hash)
+  [locale, { locale => messages }.to_yaml]
+end
+
+FileUtils.mkdir_p("config/locales")
+catalogs.each do |locale, catalog|
+  File.write("config/locales/#{locale}.yml", catalog)
+end
+```
+
+```bash
+npx gt translate && ruby script/export_rails_locales.rb
+```
+
+L&#39;export génère les fichiers `config/locales/en.yml` et `config/locales/es.yml` de ce catalogue. Continuez à modifier les fichiers de travail dans `translations/` ; l&#39;application charge les copies exportées. Synchronisez vos modifications de traduction locale avec [`npx gt save-local`](/docs/cli/reference/commands/save-local) avant la prochaine exécution de la traduction.
+
+General Translation traduit chaque fichier en s&#39;appuyant sur le [glossaire et les instructions personnalisées](/docs/platform/dashboard/guides/defining-context-for-translations) de votre projet : un nom de produit ou un ton formel reste ainsi cohérent d&#39;un fichier de paramètres régionaux à l&#39;autre, et votre équipe peut [relire et modifier les traductions](/docs/platform/dashboard/guides/reviewing-translations) dans le tableau de bord. Les entrées inchangées réutilisent les traductions précédentes : exécuter la CLI dans votre CI à chaque fusion ne traduit donc que ce qui a changé.
+
+Avant la livraison, exécutez `i18n-tasks missing` et `i18n-tasks check-consistent-interpolations` pour vérifier les clés, les formes du pluriel et les espaces réservés `%{count}` des catalogues exportés.
+
+## Rails I18n et General Translation en un coup d’œil
+
+| Fonctionnalité                                     | Rails I18n                                                    | General Translation                                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Description                                        | Bibliothèque Ruby pour rechercher et formater les traductions | Plateforme de traduction avec une CLI, des bibliothèques pour JavaScript et Python, et un tableau de bord |
+| Affiche les traductions dans une application Rails | Oui, dans les vues, les contrôleurs et les mailers            | Fournit les catalogues utilisés par ces mêmes appels Rails I18n                                           |
+| Produit les traductions                            | Non                                                           | Oui, sous forme de fichiers YAML avec [`npx gt translate`](/docs/cli/reference/commands/translate)        |
+| Règles de pluriel                                  | Règles anglaises par défaut ; règles CLDR avec rails-i18n     | Traduit les formes source configurées ; Rails choisit la bonne à l’exécution                              |
+| Cohérence entre les fichiers                       | À la charge de vos traducteurs                                | Glossaire et instructions personnalisées appliqués à chaque fichier                                       |
+| Relecture                                          | Votre processus de pull request                               | Tableau de bord, en complément de votre processus de pull request                                         |
+| Coût                                               | Gratuit, licence MIT                                          | [Facturation à l’usage](https://generaltranslation.com/pricing)                                           |
+
+Utilisez Rails I18n seul si des traducteurs ou un prestataire vous livrent déjà vos fichiers de paramètres régionaux, ou si vous ne prenez en charge qu’une ou deux langues que vous modifiez à la main. Ajoutez General Translation si le texte anglais évolue souvent et que vous souhaitez régénérer automatiquement chaque fichier de paramètres régionaux dans la CI, avec une terminologie cohérente, sans attendre les allers-retours avec les traducteurs.
+
+## Points clés
+
+* Rails I18n affiche les traductions à partir de `config/locales` et formate les dates et les nombres ; rails-i18n ajoute les règles de pluriel et les données de paramètres régionaux. Aucun des deux ne produit de traductions.
+* General Translation traduit le YAML en s&#39;appuyant sur votre glossaire et vos instructions personnalisées, et tient les traductions à jour à mesure que le texte anglais évolue.
+* Conservez les catalogues modifiables dans `translations/`, puis exportez-les vers les répertoires racines de paramètres régionaux de Rails après avoir exécuté [`npx gt translate`](/docs/cli/reference/commands/translate).

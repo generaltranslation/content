@@ -1,0 +1,151 @@
+---
+title: ¿Puedo hacer i18n sin archivos de traducción?
+summary: Sí. Con gt-react o gt-next, el contenido permanece inline en tus componentes dentro de un componente <T>, y las traducciones se generan en tiempo de compilación, así que no hay claves ni archivos JSON por configuración regional que escribir y mantener sincronizados.
+description: Sí. Con gt-react o gt-next, el contenido permanece inline en un componente <T> y las traducciones se generan en tiempo de compilación, sin claves ni archivos JSON por configuración regional que mantener sincronizados.
+date: 2026-05-07
+category: internationalization
+authors: [jackie, ernest]
+redirectFrom: [i18n-without-translation-files, nextjs-i18n-code-is-the-source-of-truth]
+related: [translate-conditional-jsx, how-to-handle-plurals-in-react, best-localization-software]
+---
+
+Cualquiera que haya internacionalizado una aplicación de JavaScript conoce el flujo de trabajo. Instalas una biblioteca de i18n, creas un archivo `en.json`, extraes de tus componentes cada cadena visible para el usuario, le asignas una clave a cada una y haces referencia a esa clave donde antes estaba la cadena. Luego duplicas ese archivo JSON para cada idioma que admites: `es.json`, `fr.json`, `ja.json`.
+
+Al principio, todo va bien. Treinta cadenas, tres idiomas, 90 entradas.
+
+Pero la aplicación crece. Seis meses después tienes 400 cadenas y 12 idiomas: 4800 entradas repartidas en una docena de archivos. Un desarrollador añade una nueva funcionalidad, escribe cinco cadenas nuevas y se olvida de actualizar tres de los archivos de traducción. Nadie se da cuenta hasta que un usuario en Tokio ve textos en inglés en una interfaz en japonés. Alguien propone comprar un sistema de gestión de traducciones.
+
+<Video src="https://assets.gtx.dev/i18n-no-translation.mp4" />
+
+## El peaje de gestionar archivos
+
+Los archivos de traducción generan una carga de mantenimiento que crece con cada idioma que admites. Cambias una cadena y tienes que actualizar una docena de archivos. Con el tiempo, esos archivos se desincronizan. Mantenerlos alineados exige herramientas, automatización o disciplina.
+
+El ecosistema de soluciones improvisadas lo dice todo: extensiones de VS Code que generan automáticamente claves de traducción, generadores de tipos que validan tu JSON contra interfaces de TypeScript, linters que detectan claves sin usar, comprobaciones de CI que verifican que todas las configuraciones regionales estén sincronizadas. Nadie crea este tipo de herramientas para un flujo de trabajo que funciona bien.
+
+Tu UI dice una cosa, tus archivos de traducción dicen otra, y lo único que las mantiene unidas es un mapeo basado en claves:
+
+```tsx
+function CheckoutSummary({ itemCount, discount }) {
+  const { t } = useTranslation('checkout');
+
+  return (
+    <div>
+      <h2>{t('summary.title')}</h2>
+      <p>{t('summary.item_count', { count: itemCount })}</p>
+      {discount && <p>{t('summary.discount_applied', { percent: discount })}</p>}
+      <p>{t('summary.total_label')}</p>
+      <small>{t('summary.tax_notice')}</small>
+    </div>
+  );
+}
+```
+
+Para entender qué renderiza este componente, tendrías que abrir `checkout.json`, buscar el namespace `summary` y cotejar cinco claves. Multiplicado por cientos de componentes, la revisión de código se convierte en un continuo ir y venir entre archivos.
+
+La sintaxis de mensajes ICU lo empeora aún más. El formato que usan bibliotecas como `i18next`, `react-intl` y `next-intl` para plurales, género e interpolación es un minilenguaje propio incrustado en cadenas JSON. Una llave mal colocada en `{count, plural, one {# item} other {# items}}` no saldrá a la luz hasta el tiempo de ejecución. Existen linters para esto, pero la mayoría de los equipos no los usan. El código inline, en cambio, lo validan tu compilador de TypeScript y tu IDE en cuanto lo escribes.
+
+## Traducir el código directamente
+
+¿Y si directamente no extrajeras ninguna cadena?
+
+```tsx
+import { T } from 'gt-react';
+
+function CheckoutSummary({ itemCount, discount }) {
+  return (
+    <T>
+      <div>
+        <h2>Order Summary</h2>
+        <p>You have {itemCount} items in your cart.</p>
+        {discount && <p>{discount}% discount applied!</p>}
+        <p>Total (before tax):</p>
+        <small>Tax calculated at checkout.</small>
+      </div>
+    </T>
+  );
+}
+```
+
+El componente [`<T>`](/docs/react/reference/components/t) de [`gt-react`](/docs/react/react-quickstart) marca un bloque de JSX para traducirlo. El texto en inglés se queda en tu componente. Cuando un usuario visita el sitio en español, el contenido dentro de [`<T>`](/docs/react/reference/components/t) se sustituye por su equivalente en español. La estructura y el formato se mantienen.
+
+Nada de `t('checkout.summary.title')`, ni `en.json`, ni archivos JSON por configuración regional que haya que mantener sincronizados.
+
+## Traducciones como resultado de la compilación
+
+Se generan al desplegar. La [CLI de GT](/docs/cli/reference/commands/translate) analiza tu base de código en busca de todo lo que haya dentro de los componentes [`<T>`](/docs/react/reference/components/t) y genera las traducciones para cada idioma de destino. El resultado se guarda en un directorio excluido mediante .gitignore, igual que el CSS compilado o el JavaScript empaquetado.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja", "de", "ko", "zh"],
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json"
+    }
+  }
+}
+```
+
+```txt title=".gitignore"
+public/_gt/
+```
+
+En desarrollo, las traducciones se generan bajo demanda. Cambia una cadena, recarga la página y la verás en japonés al instante. En producción, todo está pregenerado y se sirve desde una CDN. Los archivos de traducción siguen existiendo en disco, pero son artefactos generados en la compilación, no algo que tengas que escribir ni mantener.
+
+## Qué cambia en la práctica
+
+La diferencia se nota más en el trabajo diario que en los diagramas de arquitectura.
+
+Un PR que añade una nueva sección a una página se lee como un PR que añade una nueva sección a una página. El revisor ve el texto real, no `checkout.summary.discount_applied_notice`. La revisión de código ya no exige tener un archivo JSON abierto al lado.
+
+Refactorizar deja de ser tan doloroso. Cambia el nombre de un componente, muévelo, divídelo en partes. Las traducciones siguen al contenido porque no hay claves que reasignar. Añadir un idioma es un cambio de una sola línea en la configuración. Eliminar un componente significa que sus traducciones dejan de generarse sin más, en lugar de dejar claves huérfanas repartidas por 15 archivos que nadie quiere limpiar.
+
+## Hacia dónde se dirigen las bibliotecas de i18n
+
+La tendencia en todo el ecosistema apunta hacia las cadenas inline. Las primeras bibliotecas de i18n, como `i18next` y `react-intl`, se crearon cuando la traducción automática no era viable y cada cadena tenía que pasar por las manos de un traductor humano. En ese contexto, los diccionarios tenían sentido como formato de intercambio. Esa limitación ya no existe, y el coste que supone para la experiencia de desarrollo mantener archivos de cadenas paralelos es cada vez más difícil de justificar.
+
+`next-intl` añadió [mensajes inline experimentales con extracción automática](https://next-intl.dev/docs/usage/extraction) junto a su modo de diccionario. [El compilador de Lingui](https://lingui.dev/ref/swc-plugin) extrae mensajes en tiempo de compilación a partir de plantillas etiquetadas inline. [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) opta por otra vía: compila archivos de mensajes en funciones por configuración regional compatibles con tree-shaking. Los enfoques difieren, pero en todos ellos el contenido se acerca cada vez más al componente. GT lleva esta idea hasta sus últimas consecuencias: tu JSX es la fuente de verdad y la traducción es un paso más de la compilación.
+
+## La contrapartida
+
+Cuando escribes contenido inline, lo haces en tu idioma nativo. La estructura de tus componentes, tus patrones de frase y el flujo de tu UI reflejan cómo piensas en inglés (o en cualquiera que sea tu idioma de origen). Un enfoque basado en diccionarios como `next-intl` es, por diseño, más independiente del idioma, porque el componente nunca contiene una frase real en ningún idioma, sino solo una clave que apunta a otro lugar.
+
+Sin embargo, la mayoría de los desarrolladores ya piensan en un idioma concreto cuando crean una UI. El diseño, los textos y las etiquetas de los botones se conciben primero en inglés. Ese sesgo forma parte del diseño, tanto si las cadenas están inline como si están en un archivo JSON. Creemos que el framework de i18n debería adaptarse a tu forma real de trabajar. Crea la aplicación de forma natural y deja que el framework se encargue de la traducción, en lugar de abstraer el contenido en claves en aras de la neutralidad lingüística.
+
+## Primeros pasos
+
+```bash
+npx gt@latest init
+```
+
+El asistente de configuración inicial configura tu proyecto, instala las dependencias y habilita la recarga en caliente de las traducciones durante el desarrollo. Consulta la guía completa en el [Inicio rápido de la CLI](/docs/cli/quickstart).
+
+Una vez hecho esto, envuelve el contenido en [`<T>`](/docs/react/reference/components/t), inicia tu servidor de desarrollo y usa el componente [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) para cambiar de idioma:
+
+```tsx
+import { LocaleSelector } from 'gt-react';
+
+function Header() {
+  return (
+    <header>
+      <nav>{/* ... */}</nav>
+      <LocaleSelector />
+    </header>
+  );
+}
+```
+
+En desarrollo, las traducciones se generan bajo demanda para que puedas ver tu aplicación en cualquier idioma al instante. En producción, las traducciones son pregeneradas. Agrega el paso `translate` a tu proceso de compilación y configura `GT_PROJECT_ID` y `GT_API_KEY` en tu proveedor de hosting:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && next build"
+  }
+}
+```
+
+El comando [`translate`](/docs/cli/reference/commands/translate) analiza tu base de código en busca de todos los usos de [`<T>`](/docs/react/reference/components/t) y genera las traducciones, para que cada configuración regional esté lista al compilar tu aplicación.
+
+`gt-react` es de código abierto. Para el App Router de Next.js, usa [`gt-next`](/docs/react/nextjs-quickstart). Para React Native, usa [`gt-react-native`](/docs/react/react-native-quickstart).

@@ -1,0 +1,136 @@
+---
+title: "General Translation vs. Intlayer: ¿cuál deberías usar?"
+summary: Intlayer guarda el contenido de cada componente en un archivo de declaración tipado situado junto a él, con todos los idiomas escritos en paralelo, y puede completar los idiomas que faltan con el proveedor de IA que configures. General Translation mantiene el texto inline en tus componentes en un solo idioma y genera los demás idiomas a partir del contexto de tu código.
+description: Intlayer mantiene los idiomas en paralelo en archivos de declaración tipados y completa lo que falta con tu proveedor de IA. General Translation mantiene el texto inline y genera las traducciones usando tu código como contexto.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-paraglide, i18n-without-translation-files, how-to-handle-plurals-in-react, general-translation-vs-tms]
+---
+
+Intlayer es una [biblioteca de i18n de código abierto](https://github.com/aymericzip/intlayer) que coloca el contenido en un archivo de declaración junto a cada componente, como `inbox.content.ts`, donde cada cadena enumera sus traducciones en una única llamada `t({ en, es, pl })`. Un hook como `useIntlayer('inbox')` devuelve ese contenido, tipado, en la configuración regional actual. Intlayer completa los idiomas que faltan con el proveedor de IA que configures e incluye un editor visual gratuito y un CMS alojado opcional, pero todos los idiomas de cada cadena siguen estando en tus archivos de origen, y eres tú quien tiene que escribirlos, completarlos y revisarlos. General Translation opta por el enfoque contrario: escribes el texto una sola vez, inline, en el idioma de origen, y General Translation genera los demás idiomas a partir del contexto de tu código.
+
+## Lo que Intlayer hace bien
+
+* **Contenido junto al componente.** Un archivo de declaración por componente mantiene el texto cerca del código que lo renderiza.
+* **Seguridad de tipos.** Las claves de `useIntlayer` están tipadas: en la versión 9.7.0, `useIntlayer('inbx')` produce un error de TypeScript. También se detecta una llamada a `t()` a la que le falte alguna de las configuraciones regionales que hayas definido (en una prueba con la 9.7.0 dio un error de tipo, y `strictMode` determina el rigor de la comprobación), así que cualquier carencia aparece antes de publicar.
+* **Tipos de contenido enriquecidos.** Además de texto por configuración regional, las declaraciones admiten [plurales por categoría CLDR](https://intlayer.org/doc/concept/content/plural) (`plural({ one, few, many, other })`), enumeraciones, condiciones, género, Markdown, HTML, anidamiento e inserción.
+* **Usa tu propio modelo.** `intlayer fill` traduce las configuraciones regionales que faltan con OpenAI, Anthropic, Mistral, Gemini, DeepSeek, Ollama, OpenRouter y otros proveedores, que se configuran en [`ai` dentro de `intlayer.config.ts`](https://intlayer.org/doc/concept/configuration) o con `--provider` y `--api-key`. Con tu propia clave y el paquete `@intlayer/ai` instalado, [se ejecuta localmente](https://intlayer.org/doc/concept/cli/fill) y pagas directamente al proveedor.
+* **Edición visual.** El paquete `intlayer-editor` carga tu aplicación en ejecución dentro de un editor donde los redactores seleccionan y modifican el texto, y luego guarda los cambios en tus archivos de declaración. [Según la documentación de Intlayer](https://intlayer.org/doc/concept/editor), el editor tiene licencia Apache 2.0, es gratuito para uso comercial y está pensado para desarrollo y preproducción.
+* **Amplia compatibilidad con frameworks.** Las [guías](https://intlayer.org/doc/get-started) cubren Next.js, React con Vite, React Router, TanStack Start, React Native, Vue y Nuxt, Svelte y SvelteKit, Solid, Preact, Astro, Angular y frameworks de servidor como Express, NestJS, Fastify y Hono.
+
+## Lo que Intlayer deja en tus manos
+
+Este es el archivo de contenido de una bandeja de entrada con tres configuraciones regionales:
+
+```ts title="inbox.content.ts"
+import { t, plural, type Dictionary } from 'intlayer';
+
+const inboxContent = {
+  key: 'inbox',
+  content: {
+    title: t({
+      en: 'Inbox',
+      es: 'Bandeja de entrada',
+      pl: 'Skrzynka odbiorcza',
+    }),
+    unread: t({
+      en: plural({
+        one: 'You have {{count}} unread message.',
+        other: 'You have {{count}} unread messages.',
+      }),
+      es: plural({
+        one: 'Tienes {{count}} mensaje sin leer.',
+        other: 'Tienes {{count}} mensajes sin leer.',
+      }),
+      pl: plural({
+        one: 'Masz {{count}} nieprzeczytaną wiadomość.',
+        few: 'Masz {{count}} nieprzeczytane wiadomości.',
+        many: 'Masz {{count}} nieprzeczytanych wiadomości.',
+        other: 'Masz {{count}} nieprzeczytanej wiadomości.',
+      }),
+    }),
+  },
+} satisfies Dictionary;
+
+export default inboxContent;
+```
+
+```tsx title="Inbox.tsx"
+import { useIntlayer } from 'react-intlayer';
+
+export function Inbox({ count }: { count: number }) {
+  const { title, unread } = useIntlayer('inbox');
+  return (
+    <section>
+      <h1>{title}</h1>
+      <p>{unread({ count })}</p>
+    </section>
+  );
+}
+```
+
+Esto se renderiza correctamente en todas las configuraciones regionales, pero el archivo crece con cada una que añades: con 20 configuraciones regionales, cada cadena lleva 20 entradas. Además, cada cadena nueva las necesita todas. Al añadir `archive: t({ en: 'Archive' })`, se produjo un error de tipo que indicaba las configuraciones regionales que aún faltaban:
+
+```text title="Output"
+Type '{ en: string; }' is missing the following properties from type
+'Required<Record<keyof __RequiredLocalesRegistry, unknown>>': es, pl
+```
+
+En tiempo de ejecución, las configuraciones regionales que faltaban recurrieron al inglés. Para cubrir ese hueco, escribes tú las traducciones o ejecutas `intlayer fill`. Fill envía al modelo el contenido del diccionario, [su descripción](https://intlayer.org/doc/concept/content) y una cadena `applicationContext` definida en tu configuración. No ve el componente ni el JSX que rodea a cada cadena. [El compilador de Intlayer](https://intlayer.org/doc/compiler) puede extraer texto JSX simple a archivos de contenido en tiempo de compilación, de modo que no tienes que escribir las declaraciones a mano, pero las traducciones siguen terminando en esos archivos.
+
+## General Translation mantiene un solo idioma en el código
+
+Las bibliotecas de General Translation renderizan las traducciones del mismo modo: eligen los mensajes de cada configuración regional y aplican sus reglas de plural. La diferencia es que en tus componentes solo está el idioma de origen. Esta es la misma bandeja de entrada con `gt-react`:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num } from 'gt-react';
+
+export function Inbox({ count }: { count: number }) {
+  return (
+    <T>
+      <section>
+        <h1>Inbox</h1>
+        <Plural
+          n={count}
+          singular={<p>You have <Num>{count}</Num> unread message.</p>}
+          plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+        />
+      </section>
+    </T>
+  );
+}
+```
+
+No hay archivo de contenido ni clave. [`npx gt translate`](/docs/cli/reference/commands/translate) envía cada bloque [`<T>`](/docs/react/reference/components/t), junto con su estructura de elementos, a la API de General Translation y escribe las traducciones de cada configuración regional de destino en archivos independientes, de modo que añadir una configuración regional modifica `gt.config.json`, no tus componentes. Tú escribes las formas plurales que usa el inglés, la traducción genera las que necesita cada idioma de destino y [`<Plural>`](/docs/react/reference/components/plural) elige la rama traducida según las reglas de la configuración regional del lector. [`npx gt validate`](/docs/cli/reference/commands/validate) comprueba el proyecto sin llamar a la API, y [`gt generate`](/docs/cli/reference/commands/generate) genera plantillas para los equipos que traducen manualmente.
+
+Lo que marca la diferencia es el contexto. General Translation traduce conjuntamente el texto y la estructura JSX de cada bloque marcado, con notas del desarrollador que aclaran el significado. Un botón «Save» para un documento se traduce como «speichern» en alemán; una oferta para ahorrar dinero, como «sparen». Los [grupos de contexto](/docs/platform/dashboard/guides/defining-context-for-translations) aplican tu glosario y tus prompts personalizados a los proyectos que les asignes. Los revisores editan en el panel de control, y la CLI o [Locadex](/docs/platform/locadex/quickstart) se encargan de las actualizaciones a medida que cambia el código. Los equipos que quieran marcar automáticamente el JSX existente pueden activar la [inyección automática de JSX](/docs/cli/guides/using-auto-jsx).
+
+Las bibliotecas de JavaScript tienen licencia MIT y pueden renderizar traducciones proporcionadas sin necesidad de una cuenta. Mantén las traducciones en tu compilación o publícalas en la CDN de General Translation.
+
+Cursor usa General Translation para más de 14 configuraciones regionales en su web y su documentación. (Consulta los [despliegues en producción](https://generaltranslation.com/enterprise)).
+
+## Intlayer vs. General Translation de un vistazo
+
+| Característica                       | Intlayer                                                                                                                                                               | General Translation                                                                                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cómo se escribe el texto             | `t({ en, es, ... })` en un archivo de declaración por componente, que se lee con `useIntlayer`                                                                         | JSX dentro de [`<T>`](/docs/react/reference/components/t), cadenas mediante [`useGT`](/docs/react/reference/hooks/use-gt) o diccionarios con claves |
+| Dónde se guardan las traducciones    | En los archivos de declaración o en archivos de contenido por configuración regional                                                                                   | En archivos separados por configuración regional o en la CDN de General Translation                                                                 |
+| Traducción con IA                    | `intlayer fill` con la clave de tu proveedor o mediante el servicio de Intlayer                                                                                        | [`npx gt translate`](/docs/cli/reference/commands/translate) mediante la API de General Translation                                                 |
+| Contexto que recibe el modelo        | Contenido del diccionario, descripción y una cadena de contexto de la aplicación                                                                                       | Estructura JSX marcada, notas del desarrollador y el glosario y los prompts personalizados asignados                                                |
+| Configuraciones regionales faltantes | Se señalan como error de tipo en una prueba con la versión 9.7.0; [`intlayer test`](https://intlayer.org/doc/concept/cli/test) las notifica                            | Se generan con [`npx gt translate`](/docs/cli/reference/commands/translate); el contenido sin traducir se renderiza en el idioma de origen          |
+| Edición                              | Editor visual local gratuito; CMS alojado opcional                                                                                                                     | Edición y revisión de traducciones en el panel de control                                                                                           |
+| Frameworks                           | React, Next.js, Vue, Svelte, Solid, Angular, Astro, React Native y servidores Node.js                                                                                  | React, Next.js, Vue, Node.js y [otros SDK](/docs/overview/get-started)                                                                              |
+| Licencia y costo                     | Apache 2.0; los planes del CMS alojado escalan según proyectos, puestos y almacenamiento ([precios](https://app.intlayer.org/pricing), consultados en octubre de 2026) | Bibliotecas de JavaScript con licencia MIT; [traducción con precio según el uso](https://generaltranslation.com/pricing)                            |
+
+Elige Intlayer si quieres ver todos los idiomas junto al componente, obtener errores de tipo cuando falten configuraciones regionales, ofrecer a los redactores un editor en la propia página o usar su integración con Svelte, Solid o Angular. Usa General Translation si prefieres escribir el texto una sola vez en el idioma de origen y que todos los demás idiomas se generen con el contexto de tu código, tu glosario y tus prompts personalizados.
+
+## Migrar de Intlayer a General Translation
+
+Migra un componente cada vez y sigue usando sus traducciones de Intlayer hasta que su versión de General Translation esté lista. En un renderizado en el servidor con `react-intlayer` 9.7.0 y `gt-react` 11.4.12, un componente de Intlayer y un componente [`<T>`](/docs/react/reference/components/t) se renderizaron uno junto al otro dentro de `IntlayerProvider` y [`GTProvider`](/docs/react/reference/components/gt-provider). Copia los valores `en` del componente como JSX dentro de [`<T>`](/docs/react/reference/components/t), genera las traducciones con [`npx gt translate`](/docs/cli/reference/commands/translate) y revisa el resultado antes de cambiar el componente. Empieza con el [Inicio rápido de Next.js](/docs/react/nextjs-quickstart) o el [Quickstart de React](/docs/react/react-quickstart), y consulta [Migrar bibliotecas de i18n](/docs/react/guides/migrating-i18n-libraries) para saber cómo usar dos bibliotecas a la vez durante una migración.
+
+## Conclusiones clave
+
+* Intlayer guarda el contenido de cada componente en un archivo de declaración tipado con todos los idiomas lado a lado, detecta las configuraciones regionales que faltan como errores de tipo y las completa con el proveedor de IA que tú configures.
+* General Translation mantiene solo el idioma de origen en tus componentes y genera todos los demás idiomas usando el contexto de tu código, tu glosario y tus prompts personalizados, con revisión en el panel de control.
+* Intlayer es compatible con más frameworks y ofrece edición visual directamente en la página; puedes migrar a General Translation componente a componente, ya que ambas bibliotecas pueden renderizar en paralelo.

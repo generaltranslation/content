@@ -1,0 +1,146 @@
+---
+title: 发布多语言应用前应检查哪些内容？
+summary: "发布多语言应用前，需在每个支持的区域设置中测试九项内容：包括错误状态在内的完整用户流程、语言检测与语言切换、变量与复数形式、货币与时区、文本扩展、从右到左布局、无障碍访问、生产环境中的译文交付，以及便于 SEO 抓取的语言 URL。每项检查都需要设定明确的通过标准。"
+description: "在每个区域设置中测试九项内容：用户流程、语言切换、变量与复数形式、货币与时区、文本扩展、RTL、无障碍访问、译文交付，以及可被抓取的 URL。"
+date: 2026-10-16
+category: internationalization
+authors: [jackie]
+related: [best-react-i18n-library, i18n-without-translation-files, how-to-handle-plurals-in-react, multilingual-nextjs-seo]
+---
+
+首页翻译完成后看起来可能已经大功告成，但结账流程、校验错误提示或密码重置流程可能仍在使用源语言。请先从用户必须走完的路径入手，并在生产环境构建中测试这些路径。
+
+发布多语言 Web 应用前，请在每个支持的区域设置中检查以下九项内容：
+
+1. **完整流程均已翻译**，包括加载状态、空状态和错误状态，以及邮件和通知。
+2. **语言选择前后一致**，无论是首次访问、切换语言后还是再次访问。
+3. **变量和复数形式正确**，覆盖所用语言涉及的每一种复数类别。
+4. **货币和时区已显式设置**，且独立于 UI 语言。
+5. **布局能应对文本扩展**，在窄屏和浏览器缩放下依然显示正常。
+6. **从右向左书写的语言**具有正确的文本方向和布局，混合方向文本也能正确显示。
+7. **辅助技术能获取正确的语言**、标签和无障碍名称。
+8. **生产环境构建包含完整的译文**，且新文案在发布前完成翻译。
+9. **公开页面具有可被抓取的语言 URL**，并配有已翻译的元数据和 `hreflang`。
+
+请在每个支持的区域设置中测试内容，并在具有代表性的设备和浏览器上测试布局与交互。第 9 项仅适用于你希望被搜索引擎索引的公开页面。
+
+## 检查内容与语言切换行为
+
+### 1. 翻译完整流程，包括失败状态
+
+选择一个关键流程，例如创建账户或完成购买。逐一触发其加载、空、成功和错误状态，检查按钮、对话框、表单校验、占位符、无障碍标签，以及该流程发出的所有邮件或通知。
+
+**通过条件：** 除产品名称等有意保留的例外外，每个用户交互界面都使用经过审校的目标语言内容，且不出现原始键、缺失消息标记或原因不明的源语言后备内容。
+
+**使用 General Translation 时：** 确认发布中包含的是 [`gt translate`](/docs/cli/reference/commands/translate) 输出的版本。 ([`gt generate`](/docs/cli/reference/commands/generate) 只会写入源模板，这些模板仍需填入译文。) 审校人员可在 [仪表板翻译编辑器](/docs/platform/dashboard/guides/reviewing-translations) 中修改措辞；如果你的团队改为直接在代码仓库中编辑生成的文件，请运行 [`gt save-local`](/docs/cli/reference/commands/save-local)，以便后续运行时保留这些修改。为了让产品术语在应用、文档和通知中保持一致，请在生成翻译之前，通过 [上下文组](/docs/platform/dashboard/guides/defining-context-for-translations) 分配共享的词汇表术语和自定义提示词。上下文的更改仅对新翻译生效，不会改写已有译文。
+
+### 2. 验证首次访问、语言切换和再次访问
+
+分别测试以下场景：全新浏览器、显式选择语言、重新加载、深层链接，以及不受支持的浏览器语言。如果应用会将语言偏好保存在账户中，还需测试登录和退出登录。记下当 URL、已保存的偏好和浏览器设置不一致时，以哪一项为准。
+
+**通过条件：** 应用始终如一地遵循该策略，且用户误选语言后能够切换回来。对于服务器端渲染的应用，除了检查水合后的页面，还要检查初始响应。
+
+区域设置标识符遵循 BCP 47：`es-MX` 和 `es-AR` 可以分别作为墨西哥西班牙语和阿根廷西班牙语的独立目标。请逐一测试你发布的每个区域目标。基于 cookie 的语言切换器和带区域设置前缀的路由适用于不同需求，请检查应用实际的 URL 行为。
+
+**使用 General Translation：** 在你的[区域设置配置](/docs/react/guides/managing-locales)中定义受支持的语言，包括各区域目标。
+
+### 3. 测试变量和复数类别
+
+测试 0、1、2 以及更大的数值，然后针对目标语言的各个复数类别补充测试用例。测试内容应涵盖带标点的名称、较长的账户名称，以及翻译后变量顺序可能变化的句子。不要将分别翻译的片段拼接成句子。
+
+**通过标准：** 值保持完整，句子通顺正确，且每个必需的复数形式都有可用内容。Unicode 的[复数规则](https://cldr.unicode.org/index/cldr-spec/plural-rules)解释了为什么仅用一组英语单数/复数用例进行测试是不够的。
+
+**使用 General Translation：** [`<Plural>`](/docs/react/reference/components/plural) 遵循区域设置的复数规则：英语有两个基数类别，而阿拉伯语有六个。如果措辞取决于某个明确的值 (例如某人的语法性别) ，请使用 [`<Branch>`](/docs/react/reference/components/branch)；对于名称等动态文本，请使用 [`<Var>`](/docs/react/reference/components/var)。包裹在该变量组件中的值不会发送到翻译 API。[React 复数处理文章](/kb/how-to-handle-plurals-in-react)介绍了具体的实现模式。
+
+## 检查格式化、布局和无障碍访问
+
+### 4. 区分语言、货币和时区
+
+使用多个区域设置测试同一金额和同一时间点。如果产品有需要，请显式指定所需的货币和时区。仅凭语言偏好，既无法确定客户用哪种货币付款，也无法确定预约采用哪个时区。
+
+例如，以下代码按照德语惯例格式化一个已有的 USD 金额：
+
+```js
+new Intl.NumberFormat('de-DE', {
+  style: 'currency',
+  currency: 'USD',
+}).format(1234.5);
+```
+
+它只对传入的金额进行格式化，不会进行货币换算。格式化可能会对显示的数字进行舍入，因此请确认产品所需的精度。同理，若要按选定地点显示某个时间点，请显式指定时区：
+
+```js
+new Intl.DateTimeFormat('en-GB', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Europe/Paris',
+}).format(new Date('2026-01-15T12:00:00Z'));
+```
+
+**通过条件：** 分隔符、货币种类、日历日期和显示的时间均符合产品的预期含义。如果你支持的时区实行夏令时，测试中应包含夏令时切换的情况。[数字](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat)和[日期](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) API 会分别提供这些选项。
+
+**使用 General Translation：** [`<Currency>`](/docs/react/reference/components/currency)、[`<DateTime>`](/docs/react/reference/components/datetime) 和 [`<Num>`](/docs/react/reference/components/num) 会按当前区域设置格式化值。请根据实际业务含义设置货币和时区；切换 UI 语言不应改变应付金额，也不应改变事件发生的时刻。
+
+### 5. 在不同屏幕尺寸下测试文本扩展
+
+在窄视口下打开已翻译的界面，并配合浏览器缩放进行检查。重点查看导航、按钮、表格、对话框和校验消息。测试内容应包含较长的译文字符串和较长的用户输入值；简短的标题对布局的考验远不及一个完整的地址。
+
+**通过标准：** 关键文本清晰可读，控件正常可用。不会有任何操作因文本被裁切或元素重叠而被遮挡。应审慎评估每一处截断，而不是用截断来掩盖所有溢出问题。
+
+[伪本地化](https://lingui.dev/guides/pseudolocalization)可以在译文就绪之前帮助发现布局问题和未标记字符串的问题。它只是对真实语言测试的补充，并不能证明翻译质量。
+
+### 6. 将从右到左内容作为布局需求进行测试
+
+如果你支持阿拉伯语、希伯来语或其他从右到左的语言，请测试文档方向、导航顺序、表单，以及电子邮件地址、订单 ID 等混合方向内容。凡是布局需要随文本方向变化的地方，都应使用 CSS 逻辑属性；带方向性的图标则需逐一检查。
+
+**通过条件：** 布局符合预期的阅读方向，同时其中嵌入的从左到右的值仍清晰可读。设置语言代码并不会同时设置文本方向；请参阅 W3C 的 [HTML 方向指南](https://www.w3.org/International/questions/qa-html-dir)。
+
+### 7. 检查辅助技术获取到的语言
+
+检查页面的 `lang` 属性、内容中的语言切换 (如适用) 、可见标签、无障碍名称以及替代文本。在主要使用流程中试用键盘导航和屏幕阅读器。翻译后的占位符无法替代始终可见的表单标签。
+
+**通过条件：** 文档声明了正确的语言，控件具有有意义的本地化名称，且翻译后的布局仍可正常操作。W3C 对[语言声明](https://www.w3.org/International/questions/qa-html-language-declarations)作了说明，其[表单标签指南](https://www.w3.org/WAI/tutorials/forms/labels/)则介绍了如何关联标签。
+
+## 检查用户实际获得的发布版本
+
+### 8. 验证生产环境资源和翻译更新
+
+按照发布流程，从干净的检出副本进行构建，然后在每个支持的区域设置下运行该构建。确认翻译资源齐全且能成功加载。在测试分支中修改一条源消息，验证翻译流水线能否在下一次发布之前检测到该变更。
+
+**通过条件：** 应用能够提供预期的译文，且不依赖开发过程中遗留的文件。资源缺失或生成失败时，应出现明显的报错或显式认可的后备内容，而不是悄无声息地发布一个不完整的版本。
+
+**使用 General Translation：** 运行 [`gt validate`](/docs/cli/reference/commands/validate)，在调用 API 之前捕获受支持的内联翻译错误，然后将[增量翻译步骤放在构建之前](/docs/cli/guides/generating-translations)。该步骤会复用已有译文，只翻译有变更的内容，因此新增文案在首次上线的那次发布中就能带上译文。[分支跟踪](/docs/cli/guides/branching)可将并行的开发分支彼此隔离。[Locadex 自动化](/docs/platform/locadex/guides/configuring-automations)可以通过拉取请求处理翻译更新。作为本次发布检查的一部分，请修改一处源文案，测试已配置的触发器是否生效。
+
+使用[本地存储工作流](/docs/react/guides/storing-translations)时，应用直接提供打包在应用包中的译文，运行时无需调用 General Translation；更新随新构建一同交付。使用 CDN 投递时，已发布的修改无需重新部署即可生效，但具体取决于翻译版本和缓存设置。请测试这条更新路径。私有翻译工具的凭据应保存在构建环境中，切勿放入浏览器端的应用包。
+
+### 9. 验证公开语言版本的可发现性
+
+对于需要被搜索引擎收录的页面，请检查每个语言版本是否具备可抓取的 URL、已翻译的标题和描述、预期的规范网址，以及有效的语言替代项。检查 `hreflang` 引用是否双向对应，包括指向当前页面自身的引用。如果在 sitemap 中声明了替代项，请确认其表达的页面关系与之一致。
+
+**通过条件：** 每个公开语言 URL 都能加载预期内容，在需要时可被索引，并指向真实存在的替代版本。Google 的[本地化页面指南](https://developers.google.com/search/docs/specialty/international/localized-versions)介绍了受支持的注释方法。如需在 Next.js 中实现，请参阅[多语言 SEO 指南](/kb/multilingual-nextjs-seo)。
+
+路径前缀、语言子域名和国家/地区域名都可以为各语言提供独立的 URL。`Accept-Language` 请求头或 cookie 可用于选择访问者的语言，但仅靠它们并不会为每个版本生成可抓取的 URL。Google 的[多语言网站指南](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)建议使用独立的 URL。需要登录的仪表板可能无需让语言 URL 被索引；请根据产品的受众选择路由策略。
+
+## 保留发布记录
+
+记录构建版本、区域设置、用户旅程、浏览器或设备、预期结果、实际结果以及审核人。为每项未通过的检查指定负责人。结账流程缺少翻译或主要操作无法辨认，与细微的措辞偏好性质不同，应区别对待；对于任何可接受的后备内容，都应明确注明。
+
+如需快速初步检查公开网站，可使用 General Translation 免费的 [Report Card](https://generaltranslation.com/report-card) 为其本地化情况评分。它无法检查需要身份验证的流程或失败状态，因此请结合上述用户旅程检查一起使用。
+
+## 常见问题
+
+### 如何测试多语言应用？
+
+在生产环境构建中，针对每个支持的区域设置完整走一遍用户流程，包括错误状态、电子邮件和通知。检查复数形式、变量、货币、时区、布局、从右到左文本以及无障碍访问，并为每项检查记录通过条件。
+
+### 最常被忽略的本地化缺陷是什么？
+
+未翻译的失败状态。主要界面翻译完成后，错误提示、表单校验、空状态和事务性邮件往往仍停留在源语言。请在检查 1 中专门测试这些内容。
+
+### 什么是伪本地化？
+
+伪本地化会将源文本替换为更长且带有重音字符的占位符文本，让你在正式译文就绪之前，提前发现布局溢出和未标记的字符串。但它无法取代使用真实语言进行的测试。请参阅 [Lingui 的伪本地化指南](https://lingui.dev/guides/pseudolocalization)。
+
+### 多语言页面需要为 SEO 使用独立的 URL 吗？
+
+对于希望被索引的页面，需要。Google 建议[为每个语言版本使用独立的 URL](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)，并通过 `hreflang` 将它们关联起来。仅靠 cookie 或 `Accept-Language` 请求头，无法生成可供抓取的页面版本。如果使用 Next.js，请参阅[多语言 Next.js SEO](/kb/multilingual-nextjs-seo)。

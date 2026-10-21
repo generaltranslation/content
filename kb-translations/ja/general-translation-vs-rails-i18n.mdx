@@ -1,0 +1,125 @@
+---
+title: "General Translation と Rails I18n：両方必要か？"
+summary: Rails I18n はメッセージの参照と、日付や数値のフォーマットを担います。General Translation は翻訳を生成し、英語の変更に合わせて翻訳を常に最新の状態に保つほか、チームでレビューできる ダッシュボード を提供します。両方を組み合わせれば、リリースのたびに翻訳済みの Rails カタログを提供できます。
+description: Rails I18n はメッセージの参照と、日付や数値のフォーマットを担います。General Translation は翻訳を生成して最新の状態に保ち、ダッシュボード でのレビューも可能にします。両方を組み合わせて翻訳済みカタログを提供しましょう。
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-tasks, general-translation-vs-mobility, general-translation-vs-i18n-libraries, general-translation-vs-tms, best-localization-software]
+---
+
+Rails I18n は Ruby on Rails に標準搭載されている国際化 API です。ビューやコントローラーで `t` や `l` を呼び出すと、Rails が `config/locales` 配下の YAML ファイルから現在のロケールに対応するメッセージを参照します。Rails I18n が担うのは翻訳のレンダリングまでで、翻訳そのものの作成は開発者自身や翻訳者、外部サービスに任されています。General Translation は、プロダクト固有の用語に沿って、英語の翻訳元からこれらの翻訳を作成します。ビュー、コントローラー、Rails I18n の呼び出しは、いずれも変更する必要はありません。
+
+## Rails I18n の優れている点
+
+* **標準搭載。** Rails は [`config/locales` 配下のすべての `.yml` および `.rb` ファイルを自動的に読み込みます](https://guides.rubyonrails.org/i18n.html#configuring-the-load-paths-and-default-locale)。各 YAML ファイルはロケールキー (`en:`、`es:`) をルートとするため、1 つのアプリで翻訳を多数のファイルに分割できます。
+* **遅延参照。** `app/views/inbox/show.html.erb` 内では [`t(".title")` が `inbox.show.title` に解決され](https://guides.rubyonrails.org/i18n.html#lazy-lookup)、コントローラーのアクション内では `t(".success")` がコントローラー名とアクション名に基づいて解決されます。これにより、キーがファイル構成に沿った形になります。
+* **補間と安全な HTML。** メッセージには `%{name}` のような名前付きの値を渡せます。また、[`_html` で終わるキーはエスケープされずにレンダリングされます](https://guides.rubyonrails.org/i18n.html#using-safe-html-translations)が、そこに補間される値は引き続きエスケープされます。
+* **フォールバックとロケールの制限。** 新規作成した Rails アプリでは本番環境で `config.i18n.fallbacks = true` が設定されるため、キーが見つからない場合はデフォルト言語でレンダリングされます。また、[`config.i18n.available_locales` でアプリが受け付けるロケールを制限できます](https://guides.rubyonrails.org/configuring.html#config-i18n-available-locales)。
+* **コミュニティ提供のロケールデータ。** [rails-i18n](https://github.com/svenfuchs/rails-i18n) gem (8.1.0、MIT) を導入すると、100 以上のロケールに対応した日付・時刻・数値のフォーマット、Active Record のエラーメッセージ、CLDR の複数形規則が追加されます。
+* **登録不要。** 素の Ruby と YAML だけで完結し、[Rails ガイド](https://guides.rubyonrails.org/i18n.html)で一通り解説されています。
+
+## Rails I18n が開発者任せにしていること
+
+Rails I18n が扱えるのは、渡されたメッセージだけです。受信トレイのビューと、その英語メッセージの例を見てみましょう：
+
+```yaml title="config/locales/en.yml"
+en:
+  inbox:
+    show:
+      title: "Inbox"
+      unread:
+        one: "You have %{count} unread message."
+        other: "You have %{count} unread messages."
+```
+
+```erb title="app/views/inbox/show.html.erb"
+<h1><%= t(".title") %></h1>
+<p><%= t(".unread", count: @count) %></p>
+```
+
+スペイン語を選択しても、このファイルが翻訳されるわけではありません。英語へのフォールバックが有効な場合、スペイン語の読者にはそのまま &quot;Inbox&quot; や &quot;You have 3 unread messages.&quot; と表示されます。Rails でスペイン語の文言を表示するには、先にスペイン語のカタログを用意する必要があります。英語のメッセージを追加・編集するたびに、すべての言語で同じ作業が発生します。
+
+[rails-i18n](https://github.com/svenfuchs/rails-i18n) gem は、ロケールごとのフォーマットと複数形規則を提供します。[i18n-tasks](/kb/general-translation-vs-i18n-tasks) は、不足しているキーや複数形を検出します。そして General Translation は、これらのツールが利用する翻訳済みメッセージを提供します。
+
+## General Translation で Rails のロケールファイルを翻訳する
+
+キーの参照には引き続き Rails I18n を使い、他のロケールファイルの生成は General Translation に任せましょう。`gt` CLI は Node.js 上で動作し、キーを保持したまま YAML を翻訳します。この英語からスペイン語への例では、外側の `en:` キーを除いたメッセージを `translations/en.yml` に記述します。
+
+```yaml title="translations/en.yml"
+inbox:
+  show:
+    title: "Inbox"
+    unread:
+      one: "You have %{count} unread message."
+      other: "You have %{count} unread messages."
+```
+
+`gt.config.json` がこれらの作業用ファイルを参照するように設定します。簡単なエクスポート処理で Rails のロケールキーを付加し、アプリが読み込むカタログを書き出します:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es"
+  ],
+  "files": {
+    "yaml": {
+      "include": [
+        "translations/[locale].yml"
+      ]
+    }
+  }
+}
+```
+
+[翻訳の生成](/docs/cli/guides/generating-translations)の説明に従って、`GT_PROJECT_ID` と `GT_API_KEY` を設定します。このカタログの翻訳がすでにある場合は、`es:` ルートを除いた形で `translations/es.yml` に配置し、新しい翻訳を生成する前に [`npx gt upload`](/docs/cli/reference/commands/upload) を実行してください。
+
+```ruby title="script/export_rails_locales.rb"
+require "json"
+require "yaml"
+require "fileutils"
+
+config = JSON.parse(File.read("gt.config.json"))
+locales = ([config.fetch("defaultLocale")] + config.fetch("locales")).uniq
+catalogs = locales.to_h do |locale|
+  messages = YAML.safe_load_file("translations/#{locale}.yml", aliases: true)
+  raise "Expected a message map for #{locale}" unless messages.is_a?(Hash)
+  [locale, { locale => messages }.to_yaml]
+end
+
+FileUtils.mkdir_p("config/locales")
+catalogs.each do |locale, catalog|
+  File.write("config/locales/#{locale}.yml", catalog)
+end
+```
+
+```bash
+npx gt translate && ruby script/export_rails_locales.rb
+```
+
+エクスポートを実行すると、このカタログの `config/locales/en.yml` と `config/locales/es.yml` が書き出されます。編集は引き続き `translations/` 内の作業ファイルで行ってください。アプリが読み込むのはエクスポートされたコピーです。ローカル翻訳の編集内容は、次の翻訳の実行前に [`npx gt save-local`](/docs/cli/reference/commands/save-local) で同期してください。
+
+General Translation は、プロジェクトの[用語集とカスタムプロンプト](/docs/platform/dashboard/guides/defining-context-for-translations)を適用して各ファイルを翻訳します。そのため、製品名やフォーマルな文体がすべてのロケールファイルで統一されます。また、チームはダッシュボードで[翻訳をレビュー・編集](/docs/platform/dashboard/guides/reviewing-translations)できます。変更のないエントリには以前の翻訳が再利用されるため、マージのたびに CI で CLI を実行しても、翻訳されるのは変更箇所だけです。
+
+リリース前に `i18n-tasks missing` と `i18n-tasks check-consistent-interpolations` を実行し、エクスポートされたカタログのキー、複数形、`%{count}` プレースホルダーを確認してください。
+
+## Rails I18n と General Translation の比較早見表
+
+| 機能                   | Rails I18n                                | General Translation                                                               |
+| -------------------- | ----------------------------------------- | --------------------------------------------------------------------------------- |
+| 概要                   | 翻訳の参照とフォーマットを行う Ruby ライブラリ                | CLI、JavaScript および Python 向けライブラリ、ダッシュボードを備えた翻訳プラットフォーム                           |
+| Rails アプリでの翻訳のレンダリング | 対応 (ビュー、コントローラー、メーラー)                     | 同じ Rails I18n の呼び出しで使うカタログを提供                                                     |
+| 翻訳の作成                | 非対応                                       | 対応 ([`npx gt translate`](/docs/cli/reference/commands/translate) で YAML ファイルを生成)  |
+| 複数形規則                | デフォルトは英語の規則。rails-i18n を導入すると CLDR の規則に対応 | 設定済みの翻訳元の各形式を翻訳し、ランタイムで Rails が選択                                                 |
+| ファイル間の一貫性            | 翻訳者次第                                     | 用語集とカスタムプロンプトをすべてのファイルに適用                                                         |
+| レビュー                 | 既存のプルリクエストのプロセス                           | ダッシュボード＋既存のプルリクエストのプロセス                                                           |
+| 料金                   | 無料 (MIT)                                  | [従量課金](https://generaltranslation.com/pricing)                                    |
+
+翻訳者や翻訳会社からすでにロケールファイルが納品されている場合や、対応言語が 1〜2 言語程度で手作業で編集している場合は、Rails I18n 単体で十分です。英語の内容が頻繁に変わり、翻訳の往復を待たずに、用語を統一したまますべてのロケールファイルを CI で再生成したい場合は、General Translation を導入しましょう。
+
+## 重要なポイント
+
+* Rails I18n は `config/locales` の翻訳をレンダリングし、日付や数値をフォーマットします。rails-i18n は複数形規則とロケールデータを追加します。ただし、どちらも翻訳そのものは作成しません。
+* General Translation は用語集とカスタムプロンプトに沿って YAML を翻訳し、英語の原文が変更されても翻訳を常に最新の状態に保ちます。
+* 編集用のカタログは `translations/` に置き、[`npx gt translate`](/docs/cli/reference/commands/translate) を実行した後、Rails のロケールルートにエクスポートします。

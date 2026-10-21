@@ -1,0 +1,140 @@
+---
+title: "General Translation vs. nestjs-i18n: which should you use?"
+summary: nestjs-i18n resolves each request's language in a NestJS app and renders messages from per-language JSON or YAML catalogues, but it doesn't translate anything. General Translation's CLI translates those catalogues, and its gt-node library translates content that only exists at run time, so you can keep nestjs-i18n and add General Translation.
+description: nestjs-i18n picks each request's language and renders JSON or YAML catalogues, but doesn't translate. General Translation's CLI translates the catalogues, and gt-node handles runtime content.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, general-translation-vs-tms, general-translation-vs-in-house-i18n, general-translation-vs-symfony-translation, i18n-without-translation-files]
+---
+
+nestjs-i18n is an open-source i18n module for NestJS: it works out each request&#39;s language from the query string, a header, a cookie or `Accept-Language`, and `I18nContext` or `I18nService` returns the message for that language from your catalogues. It renders translations, but it doesn&#39;t produce them, so every language&#39;s catalogue has to be written and kept up to date by you, your translators or a service. General Translation fills that gap in two ways: its CLI translates nestjs-i18n&#39;s catalogues, and its `gt-node` library translates content that only exists at run time.
+
+## What nestjs-i18n does well
+
+* **Built for Nest.** One `I18nModule.forRoot()` call, [an `@I18n()` parameter decorator for `I18nContext` and `I18nContext.current()` in services](https://nestjs-i18n.com/quick-start). It works over HTTP, GraphQL, gRPC and WebSockets.
+* **Language resolvers.** [`QueryResolver`, `HeaderResolver`, `CookieResolver` and `AcceptLanguageResolver`](https://nestjs-i18n.com/concepts/resolver) run in the order you list them, GraphQL and gRPC resolvers cover those transports, and you can write your own.
+* **Simple catalogues.** One folder per language (`src/i18n/en/`, `src/i18n/es/`) with [JSON or YAML files](https://nestjs-i18n.com/concepts/loader), where each file name becomes a namespace (`inbox.title`), plus live reloading in development.
+* **Plurals and interpolation.** `{name}` placeholders, `$t()` references to other keys, and [plural objects whose `zero`, `one`, `two`, `few`, `many` and `other` keys](https://nestjs-i18n.com/guides/plurals) are chosen with `Intl.PluralRules`. An opt-in `useICU` setting, [added in 10.8.0](https://github.com/toonvanstrijp/nestjs-i18n/releases/tag/v10.8.0), formats messages with ICU MessageFormat instead.
+* **Type safety.** [`typesOutputPath` generates `I18nTranslations` and `I18nPath` types](https://nestjs-i18n.com/guides/type-safety), so a mistyped key fails to compile, and the `nestjs-i18n check` command exits with an error when a language is missing keys.
+* **Validation messages.** `I18nValidationPipe`, `I18nValidationExceptionFilter` and `i18nValidationMessage()` [translate class-validator errors for DTOs](https://nestjs-i18n.com/guides/dto_validation/global-validation).
+
+It&#39;s MIT-licensed, and [version 10.8.5 requires Node.js 22 or later](https://github.com/toonvanstrijp/nestjs-i18n/blob/v10.8.5/package.json).
+
+## What nestjs-i18n leaves to you
+
+Here&#39;s an inbox catalogue in English, with a plural:
+
+```json title="src/i18n/en/inbox.json"
+{
+  "title": "Inbox",
+  "unread": {
+    "one": "You have {count} unread message.",
+    "other": "You have {count} unread messages."
+  }
+}
+```
+
+The Spanish folder holds a translated copy of the file, and a controller returns `i18n.t('inbox.unread', { args: { count } })`. There&#39;s no German folder. Requests to a minimal Nest 11 app with nestjs-i18n 10.8.5:
+
+```text title="Output"
+?lang=es&count=3  "Tienes 3 mensajes sin leer."
+?lang=de&count=3  "You have 3 unread messages."
+```
+
+German falls back to English because its catalogue hasn&#39;t been translated. Language detection works, but it can&#39;t supply the missing text. That&#39;s the work nestjs-i18n leaves to you: producing catalogues and keeping them up to date every time the English changes.
+
+## How General Translation fits a NestJS app
+
+General Translation&#39;s CLI translates nestjs-i18n&#39;s catalogues in place. Point a `json` entry at the language folders:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es",
+    "de"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "src/i18n/[locale]/*.json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) reads `src/i18n/en/inbox.json` and writes `src/i18n/es/inbox.json` and `src/i18n/de/inbox.json`, keeping every key. Run it in CI, and entries that haven&#39;t changed reuse their earlier translations. nestjs-i18n loads the generated catalogues through its existing loader.
+
+This example uses English, Spanish and German messages with `one` and `other` forms. Preview the generated messages with counts of 1 and 3, and run `nestjs-i18n check -p src/i18n` to check for missing keys before release.
+
+For content that only exists at run time, such as a teammate&#39;s post or a database record, use General Translation&#39;s [`gt-node`](/docs/node/quickstart). Initialise it once, then pass nestjs-i18n&#39;s resolved language to [`withGT`](/docs/node/reference/functions/with-gt) when calling [`tx`](/docs/node/reference/functions/tx):
+
+```ts title="src/main.ts"
+import { NestFactory } from '@nestjs/core';
+import { initializeGT } from 'gt-node';
+import { AppModule } from './app.module';
+
+// Reads GT_PROJECT_ID and GT_API_KEY (a project key with Runtime translation) from the environment.
+initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'de'] });
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+```ts title="src/posts.controller.ts"
+import { Controller, Get, Param } from '@nestjs/common';
+import { I18n, I18nContext } from 'nestjs-i18n';
+import { tx, withGT } from 'gt-node';
+import { PostsService } from './posts.service';
+
+@Controller('posts')
+export class PostsController {
+  constructor(private readonly posts: PostsService) {}
+
+  @Get(':id')
+  async findOne(@Param('id') id: string, @I18n() i18n: I18nContext) {
+    return withGT(i18n.lang, async () => {
+      const post = await this.posts.findOne(id);
+      return { ...post, body: await tx(post.body, { $context: 'A post written by a user' }) };
+    });
+  }
+}
+```
+
+Both tools now use the language selected by your existing nestjs-i18n resolvers. If `?lang=es` takes priority over `Accept-Language: de`, the catalogue messages and the translated post are both in Spanish. Use catalogues for fixed interface copy and [`tx`](/docs/node/reference/functions/tx) for user-generated content.
+
+Keep nestjs-i18n for typed keys, catalogue lookups and validation messages. General Translation provides translation generation, a shared Glossary and custom prompts, and [Dashboard review](/docs/platform/dashboard/guides/reviewing-translations). Use the catalogue workflow above for fixed copy and `tx` for dynamic content.
+
+## nestjs-i18n vs. General Translation at a glance
+
+| Feature                 | nestjs-i18n                                                                  | General Translation                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Role                    | Resolves the request language and renders messages from catalogues           | Translates catalogues, and translates dynamic content at run time                                                    |
+| Translates your content | No                                                                           | Yes, with [`npx gt translate`](/docs/cli/reference/commands/translate) and [`tx`](/docs/node/reference/functions/tx) |
+| Language detection      | Query, header, cookie, `Accept-Language`, GraphQL, gRPC and custom resolvers | Uses the same resolved language through [`withGT`](/docs/node/reference/functions/with-gt)                           |
+| Plurals                 | Per-language category keys, chosen with `Intl.PluralRules`                   | Translates the plural keys in your source file                                                                       |
+| Type safety             | Generated key types and a missing-key check                                  | Keeps catalogue keys for the same generated types                                                                    |
+| Validation messages     | class-validator integration                                                  | Translates the catalogues those messages come from                                                                   |
+| Cost                    | Free and MIT-licensed                                                        | [Usage-based](https://generaltranslation.com/pricing)                                                                |
+
+## When to use which
+
+Keep nestjs-i18n for its resolvers, typed keys and validation integration. Add General Translation when you want catalogues translated in CI as the English changes, or when your API returns user or database content that needs translating on the fly. Your existing controllers keep using the same keys; General Translation keeps the text behind those keys up to date.
+
+## Using both
+
+1. Leave nestjs-i18n and its folders as they are.
+2. Add `gt.config.json` with your catalogue path and set `GT_API_KEY` and `GT_PROJECT_ID`. (See [Configuring the CLI](/docs/cli/guides/configuring#credentials).)
+3. Upload the translations you already have with [`npx gt upload`](/docs/cli/reference/commands/upload), then run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI.
+4. For later local translation edits, run [`npx gt save-local`](/docs/cli/reference/commands/save-local) before generating again. Add `gt-node` wherever you need runtime translation.
+
+## Key takeaways
+
+* nestjs-i18n handles language detection, typed keys, plurals and validation messages in NestJS, but you have to write every catalogue in every language yourself, including each language&#39;s plural forms.
+* General Translation&#39;s CLI translates nestjs-i18n&#39;s JSON catalogues in place, and `gt-node` translates dynamic content using the same request language.
+* Use them together: nestjs-i18n renders, General Translation translates.
