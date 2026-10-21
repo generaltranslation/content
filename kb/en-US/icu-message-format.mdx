@@ -8,7 +8,7 @@ authors: [kevin-wu, jackie]
 related: [how-to-handle-plurals-in-react, general-translation-vs-react-intl, locale-codes, general-translation-vs-i18next, i18n-key-naming]
 ---
 
-The syntax comes from the MessageFormat class in ICU (International Components for Unicode), the Unicode Consortium's internationalization library for C and Java, and JavaScript libraries such as FormatJS implement the same grammar. It's now also called MessageFormat 1, since a redesigned MessageFormat 2 exists.
+The syntax comes from the MessageFormat class in ICU (International Components for Unicode), the Unicode Consortium's internationalization libraries for C/C++ and Java. JavaScript libraries such as FormatJS implement the same grammar. It's now also called MessageFormat 1, since a redesigned MessageFormat 2 exists.
 
 ## What problem does ICU message format solve?
 
@@ -24,7 +24,7 @@ Every example below was run with FormatJS's [`intl-messageformat`](https://forma
 import { IntlMessageFormat } from 'intl-messageformat';
 
 const msg = new IntlMessageFormat(
-  'You have {count, plural, =0 {no messages} one {# message} other {# messages}}.',
+  '{count, plural, =0 {You have no messages.} one {You have # message.} other {You have # messages.}}',
   'en'
 );
 
@@ -39,7 +39,7 @@ msg.format({ count: 1234 }); // 'You have 1,234 messages.'
 
 ### plural, `#`, and exact matches
 
-`{count, plural, ...}` picks a branch by the locale's plural category: `zero`, `one`, `two`, `few`, `many`, or `other`. Inside a branch, `#` is the number, formatted for the locale; the German message `Sie haben {count, plural, one {# Nachricht} other {# Nachrichten}}.` prints "Sie haben 1.234 Nachrichten." An exact match such as `=0` wins over the category, which is how the example above says "no messages" instead of "0 messages."
+`{count, plural, ...}` picks a branch by the locale's plural category: `zero`, `one`, `two`, `few`, `many`, or `other`. Inside a branch, `#` is the number, formatted for the locale; the German message `{count, plural, one {Sie haben # Nachricht.} other {Sie haben # Nachrichten.}}` prints "Sie haben 1.234 Nachrichten." An exact match such as `=0` wins over the category, which is how the example above says "no messages" instead of "0 messages."
 
 The same Polish sentence, with the branches Polish uses:
 
@@ -54,20 +54,27 @@ With `pl`, that formats 1, 2, 5, 22, and 1.5 as "1 plik," "2 pliki," "5 plików,
 `select` chooses a branch by a string value, and the `other` branch catches everything else:
 
 ```text
-{gender, select, female {She} male {He} other {They}} replied to your comment.
+{gender, select,
+  female {She replied to your comment.}
+  male {He replied to your comment.}
+  other {They replied to your comment.}}
 ```
 
-`{ gender: 'female' }` gives "She replied to your comment." and `{ gender: 'nonbinary' }` gives "They replied to your comment."
+`{ gender: 'female' }` gives "She replied to your comment." and `{ gender: 'nonbinary' }` gives "They replied to your comment." Keep the whole sentence inside each branch: gender can change the verb as well as the pronoun in another language.
 
 ### selectordinal
 
 `selectordinal` uses ordinal rules, which in English have four categories:
 
 ```text
-You finished {place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}.
+{place, selectordinal,
+  one {You finished #st.}
+  two {You finished #nd.}
+  few {You finished #rd.}
+  other {You finished #th.}}
 ```
 
-That prints "1st," "2nd," "3rd," "4th," "11th," "22nd," and "103rd."
+For places 1, 2, and 11, the outputs are `You finished 1st.`, `You finished 2nd.`, and `You finished 11th.` The suffixes for 3, 4, 22, and 103 are `rd`, `th`, `nd`, and `rd`.
 
 ### offset
 
@@ -75,10 +82,10 @@ That prints "1st," "2nd," "3rd," "4th," "11th," "22nd," and "103rd."
 
 ```text
 {guests, plural, offset:1
-  =0 {Nobody is going}
-  =1 {{host} is going}
-  one {{host} and # other person are going}
-  other {{host} and # other people are going}}.
+  =0 {Nobody is going.}
+  =1 {{host} is going.}
+  one {{host} and # other person are going.}
+  other {{host} and # other people are going.}}
 ```
 
 With `host: 'Mia'`, 0, 1, 2, and 5 guests give "Nobody is going.", "Mia is going.", "Mia and 1 other person are going.", and "Mia and 4 other people are going."
@@ -149,7 +156,7 @@ Run with `messageformat` 4.1.0, it prints "You have no messages.", "You have 1 m
 
 ## How General Translation handles ICU
 
-In General Translation's React SDKs, string functions take ICU syntax directly, and the translations are generated for you. In `gt-react` and `gt-next`, [`useGT`](/docs/react/reference/hooks/use-gt) returns a function that accepts an ICU message and its values:
+In `gt-react` and `gt-next`, [`useGT`](/docs/react/reference/hooks/use-gt) returns a function that accepts an ICU message and its values:
 
 ```tsx title="Inbox.tsx"
 import { useGT } from 'gt-react';
@@ -158,7 +165,7 @@ export function Inbox({ count }: { count: number }) {
   const gt = useGT();
   return (
     <p>
-      {gt('You have {count, plural, =0 {no messages} one {# message} other {# messages}}.', {
+      {gt('{count, plural, =0 {You have no messages.} one {You have # message.} other {You have # messages.}}', {
         count,
         $context: 'Unread message count in the inbox',
       })}

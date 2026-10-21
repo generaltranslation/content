@@ -1,14 +1,14 @@
 ---
 title: How do I translate Markdown and MDX files without breaking them?
-summary: Parse the file and translate only its prose, leaving code blocks, inline code, link URLs, frontmatter keys, imports, and JSX component names and props as they are. Pasting the raw file into a generic translator can change that syntax, which breaks links, anchors, YAML, or the MDX build.
-description: Translate only the prose and leave code blocks, inline code, link URLs, frontmatter keys, imports, and MDX components untouched, or links, YAML, and the build will break.
+summary: Translate prose and selected display-text fields, including alt text, frontmatter titles and descriptions, and relevant component props. Preserve code, identifiers, structural keys, and technical URLs unless your localization setup deliberately rewrites them. Keep complete sentences together during translation, then validate the files with your actual site build.
+description: Translate Markdown prose and selected metadata or display-text props while preserving code, identifiers, and structure. Keep sentence context and validate the translated site build.
 date: 2026-10-20
 category: translation
 authors: [kevin-wu, jackie]
-related: [translate-docusaurus-site, general-translation-vs-google-translate, general-translation-vs-tms, general-translation-vs-crowdin]
+related: [translate-json-files, make-website-multilingual, general-translation-vs-google-translate, general-translation-vs-crowdin]
 ---
 
-A Markdown file mixes prose with syntax a translator must not touch. MDX adds JavaScript on top: `import` lines, JSX components, and `{expressions}` that a compiler has to parse after translation. The safe rule is to translate the text a reader sees and leave every other byte alone.
+A Markdown file mixes prose with technical syntax. MDX adds JavaScript: `import` lines, JSX components, and `{expressions}` that a compiler must still parse after translation. Decide which fields carry display text before translating; a component's `title` may need translation while its `id` must remain stable.
 
 ## What breaks when Markdown goes through a generic translator
 
@@ -17,7 +17,7 @@ A translator that sees the file as plain text treats all of it as language. Thes
 - **Code blocks and inline code.** Commands and identifiers can get translated, so `npm install` can come back as `npm installer`.
 - **Link URLs and anchors.** A slug or `#fragment` in a link can get translated and then points nowhere. Translated headings also get new generated IDs, which breaks every `#anchor` link to them; Docusaurus recommends [explicit heading IDs](https://docusaurus.io/docs/i18n/tutorial#translate-markdown-files) for this reason.
 - **Frontmatter.** Keys like `title` can be translated, `slug` values can change, or a translated value can break the YAML. French puts a space before a colon, so `title: Installer la CLI : guide rapide` is invalid YAML (the `yaml` parser reports a nested mapping). The value needs quotes.
-- **HTML attributes.** `alt` and `title` text should be translated; `src`, `href`, and `class` must not be.
+- **HTML attributes.** Translate `alt` and `title` text. Preserve `class` and other identifiers; change `src` or `href` only through an explicit localized-asset or URL mapping.
 - **MDX imports and JSX.** If `import Tabs from '@theme/Tabs'` is translated like a sentence, or `<Tabs>` becomes `<Onglets>`, the build fails. The [Docusaurus Crowdin guide](https://docusaurus.io/docs/i18n/crowdin#mdx) warns that tools which read JSX as HTML can produce invalid JSX, and that props with object or array values are the most likely to fail.
 - **Admonitions.** Docusaurus recognizes `:::note`, `:::tip`, `:::info`, `:::warning`, and `:::danger` as [keywords](https://docusaurus.io/docs/markdown-features/admonitions). A translated `:::astuce` isn't one, so the callout renders as plain text.
 - **Tables.** A GFM table is only recognized when the header row has the same number of cells as the delimiter row, and a literal pipe inside a cell must be escaped as `\|` ([GFM spec](https://github.github.com/gfm/#tables-extension-)). A translator that adds a pipe or a line break inside a cell breaks the row.
@@ -66,9 +66,9 @@ The second file has a translated frontmatter key, invalid YAML, a changed slug, 
 
 [Google Cloud Translation](https://docs.cloud.google.com/translate/docs/supported-formats) document translation (Advanced edition) accepts Word, PDF, PowerPoint, and Excel files, not Markdown; its text translation takes plain text or HTML. The [DeepL API](https://developers.deepl.com/docs/api-reference/document) lists Markdown (`.md`) document translation as beta, and doesn't list MDX. Either way, test the output on your own files before trusting it with code blocks and frontmatter. (See [Why use General Translation instead of Google Translate?](/kb/general-translation-vs-google-translate) for the wider tradeoff.)
 
-### b) Parse into an AST and translate only text nodes
+### b) Use an AST to separate prose from syntax
 
-[remark](https://github.com/remarkjs/remark) parses Markdown into an [mdast](https://github.com/syntax-tree/mdast) tree, where prose lives in `text` nodes and code, inline code, frontmatter, imports, and JSX are separate node types. Visit only the `text` nodes and the rest is skipped by construction:
+[remark](https://github.com/remarkjs/remark) parses Markdown into an [mdast](https://github.com/syntax-tree/mdast) tree. The following extraction demonstration visits `text` nodes and skips code, attributes, and frontmatter. It is a useful starting point for inspecting content, not a complete translation pipeline:
 
 ```js
 // extract.mjs: npm i unified remark-parse remark-stringify remark-mdx
@@ -93,8 +93,8 @@ const processor = unified()
 
 const tree = processor.parse(readFileSync(process.argv[2], 'utf8'));
 
-// Only `text` nodes are prose. Code, inline code, link URLs, frontmatter,
-// imports, and JSX attributes are different node types, so they are skipped.
+// This demonstration extracts text nodes only. Display text in attributes
+// and frontmatter needs separate handling in a production translator.
 const segments = [];
 visit(tree, 'text', (node) => {
   if (node.value.trim()) segments.push(node);
@@ -120,7 +120,7 @@ Run against the source file above plus a fenced `bash` block and a two-column ta
 " you already have."
 ```
 
-The re-serialized file kept the frontmatter, the import, `{/* #install */}`, the inline code, the link URL, `:::tip`, `<Tabs groupId="pm">`, and the code block unchanged, and uppercased only the prose. Three limits showed up:
+The re-serialized file preserved the frontmatter content, import, heading ID, inline code, link destination, admonition name, JSX attributes, and code block content while uppercasing text nodes. It did not preserve every byte of formatting. Three limits showed up:
 
 - **Sentences arrive in pieces.** "Run … then read the … setup guide" is five segments, so a translator can't reorder words around the code and the link. Production scripts translate a whole paragraph with placeholders for the inline nodes.
 - **Some prose isn't in `text` nodes.** Image `alt` text, JSX attribute values like a `title` prop, and frontmatter values such as `title` need their own handling.
@@ -128,13 +128,15 @@ The re-serialized file kept the frontmatter, the import, `{/* #install */}`, the
 
 Parsing also exposes syntax errors early. A Mintlify-style `{#install}` heading suffix made `remark-mdx` fail with "Could not parse expression with acorn", because braces start a JavaScript expression in MDX. Docusaurus also accepts the comment form `{/* #install */}`, which `docusaurus write-heading-ids --syntax mdx-comment` can write for you.
 
+The [runnable preservation example](https://github.com/generaltranslation/content/tree/main/examples/kb/markdown-preservation) includes the script, a source fixture, pinned dependencies, and tests comparing protected fields before and after replacement. It also tests the two gaps above: sentence fragmentation and display text outside text nodes. Run `npm ci`, `npm test`, and `npm run demo` in that directory. The fixture uses uppercase text to expose what the parser selects; it does not claim to measure translation quality.
+
 ### c) A translation management system
 
 A translation management system (TMS) parses the file for you. [Crowdin](https://store.crowdin.com/mdx) supports Markdown and MDX natively, with parser options to exclude code blocks and chosen frontmatter elements; MDX files upload as MDX v1 by default, and v2 is selected with the `mdx_v2` type. You still map source and output paths, sync files in CI, and work around JSX the parser misreads. (See [General Translation vs. Crowdin](/kb/general-translation-vs-crowdin).)
 
 ### d) Prompt an LLM with rules
 
-A model given the whole file and explicit rules ("translate prose only; never change code, URLs, frontmatter keys, imports, JSX tags or props, or `:::` keywords; quote YAML values that contain a colon") keeps paragraph context, which the text-node script loses. Nothing enforces the rules, though, so check every file: parse it, compile the MDX, and diff the code blocks and URLs against the source.
+A model given the whole file can retain paragraph context. Specify the display-text fields to translate, such as prose, image alt text, frontmatter `title` and `description`, and named component props. Protect code, structural keys, imports, JSX component names, and `:::` keywords; allow URL changes only through your locale mapping, and require valid YAML quoting. Nothing enforces a prompt's rules, so parse the result, compile the MDX, and compare protected content with the source.
 
 ### Compared
 
@@ -175,12 +177,12 @@ The CLI replaces `[locale]` with `en` to find sources under `docs/en/` and write
 - **Manual edits.** Syncing edits back is opt-in, with [`npx gt translate --save-local`](/docs/cli/reference/commands/translate) or [`npx gt save-local`](/docs/cli/reference/commands/save-local).
 - **Links and imports.** Rewriting URLs, static imports, and relative asset paths per locale is experimental, behind flags such as `--experimental-localize-static-urls`.
 
-Run [`npx gt translate`](/docs/cli/reference/commands/translate) [in CI](/docs/cli/guides/generating-translations) before your build, and add a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) with a Glossary so product names stay untranslated across every page. For a Docusaurus site, which keeps translations in its own `i18n/` folder, see [How do I translate a Docusaurus site?](/kb/translate-docusaurus-site)
+Run [`npx gt translate`](/docs/cli/reference/commands/translate) [in CI](/docs/cli/guides/generating-translations) before your build. Use a [Glossary](/docs/platform/dashboard/guides/defining-context-for-translations) for product terms, then run the framework's build and link checks on every translated locale.
 
 ## Key takeaways
 
-- Translate `text` nodes only; code, inline code, URLs, frontmatter keys, imports, JSX names and props, and `:::` keywords must come back unchanged.
+- Translate complete sentences and selected display-text fields, including alt text, frontmatter values, and relevant props. Preserve technical syntax and identifiers; rewrite URLs only through a configured mapping.
 - French `" : "` punctuation can break unquoted YAML frontmatter, and `{#id}` heading suffixes fail a plain MDX parser.
 - Google's document translation doesn't take Markdown; DeepL lists `.md` as beta and doesn't list MDX.
-- A remark script works but splits sentences around inline code and skips `alt` text and JSX props.
+- The remark demonstration exposes text nodes, but a complete pipeline must retain sentence context and handle display text outside those nodes.
 - General Translation's CLI translates `md` and `mdx` files with syntax preserved and reuses unchanged translations on each run.

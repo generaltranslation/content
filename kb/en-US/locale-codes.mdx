@@ -61,7 +61,7 @@ BCP 47 uses hyphens, but several platforms spell locales their own way, and thos
 
 Store one canonical spelling and convert at each platform boundary. `Intl.getCanonicalLocales('en_US')` throws a `RangeError`, so replace underscores first.
 
-## Canonicalize and fall back with Intl
+## Canonicalize tags and choose a supported locale
 
 JavaScript's `Intl` API canonicalizes tags and fills in the likely script and region. These results come from Node.js 24:
 
@@ -78,32 +78,33 @@ new Intl.Locale('pt-BR').minimize().toString(); // 'pt'
 new Intl.Locale('pt-PT').minimize().toString(); // 'pt-PT'
 ```
 
-`maximize()` makes a script-aware fallback short to write. Compare the full tag first, then language and script, then language alone:
+`maximize()` reveals likely subtags; it doesn't rank your supported locales. For example, `pt-AO` and `pt-BR` share a language and script, but the regional relationship to `pt-PT` still matters. Use a locale matcher instead of returning the first same-language entry in your configuration.
 
-```js
-const supported = ['en', 'zh-Hans', 'zh-Hant', 'pt-BR', 'pt-PT'];
+This example uses [`@formatjs/intl-localematcher`](https://formatjs.github.io/docs/polyfills/intl-localematcher/) 0.9.0 with best-fit matching:
 
-function bestMatch(requested, fallback = 'en') {
-  const want = new Intl.Locale(requested).maximize();
-  const have = supported.map((tag) => [tag, new Intl.Locale(tag).maximize()]);
-  return (
-    // 1. Same language, script, and region
-    have.find(([, l]) => l.baseName === want.baseName)?.[0] ??
-    // 2. Same language and script
-    have.find(([, l]) => l.language === want.language && l.script === want.script)?.[0] ??
-    // 3. Same language
-    have.find(([, l]) => l.language === want.language)?.[0] ??
-    fallback
-  );
-}
-
-bestMatch('zh-HK'); // 'zh-Hant'
-bestMatch('zh-SG'); // 'zh-Hans'
-bestMatch('pt');    // 'pt-BR' (pt maximizes to pt-Latn-BR)
-bestMatch('fr-CA'); // 'en' (no French build, so the default)
+```bash
+npm install @formatjs/intl-localematcher@0.9.0
 ```
 
-Chopping `zh-TW` down to `zh` would have served Simplified characters to a Traditional reader. Comparing maximized tags avoids that. For reading the requested list from the browser or the `Accept-Language` header, see [How do I detect a user's preferred language?](/kb/detect-user-language).
+```js
+import { match } from '@formatjs/intl-localematcher';
+
+const supported = ['en', 'zh-Hans', 'zh-Hant', 'pt-BR', 'pt-PT'];
+
+function bestMatch(requested) {
+  return match(requested, supported, 'en', { algorithm: 'best fit' });
+}
+
+bestMatch(['zh-HK']);          // 'zh-Hant'
+bestMatch(['zh-SG']);          // 'zh-Hans'
+bestMatch(['pt']);             // 'pt-BR'
+bestMatch(['pt-AO']);          // 'pt-PT'
+bestMatch(['pt-MZ']);          // 'pt-PT'
+bestMatch(['fr-CA', 'pt-PT']); // 'pt-PT'
+bestMatch(['fr-CA']);          // 'en' (no French build, so the default)
+```
+
+These results were tested on Node.js 24; the [runnable fixture](https://github.com/generaltranslation/content/tree/main/examples/kb/locale-matching) pins the package and checks script, region, and fallback cases. Best fit is still a product policy: test it against the languages you actually serve. Pass valid locale tags in preference order; parse q-values and remove wildcard or malformed ranges from `Accept-Language` first, as shown in [detecting a user's preferred language](/kb/detect-user-language).
 
 ## How do you choose which locales to support?
 
@@ -115,7 +116,7 @@ Chopping `zh-TW` down to `zh` would have served Simplified characters to a Tradi
 
 ## How General Translation uses locale codes
 
-General Translation uses BCP 47 tags throughout. You set the source locale and target locales in `gt.config.json`:
+Set the source locale and target BCP 47 tags in `gt.config.json`:
 
 ```json title="gt.config.json"
 {
@@ -131,7 +132,7 @@ Every tag in that list is a target the platform translates, and the [Supported l
 - **Aliases.** If your app already uses a nonstandard code such as `cn`, [`customMapping`](/docs/cli/reference/config#custom-mapping) maps it to `zh` without renaming your files.
 - **Android directories.** For `strings.xml` files, the CLI [converts each tag to a resource qualifier](/docs/cli/reference/formats/android-strings-files#qualifiers): `fr-CA` becomes `values-fr-rCA`, and `zh-Hans` becomes `values-b+zh+Hans`. (See [How do I translate Android strings.xml files?](/kb/translate-android-strings).)
 
-General Translation localizes by region and dialect, so English as `en-GB`, `en-AU`, and `en-CA`, or Spanish as `es-MX` and `es-AR`, are each a separate target. Dates, numbers, currencies, and plurals in the SDKs format by the active tag, so `pt-BR` and `pt-PT` users each get their own conventions.
+Regional variants such as `en-GB`, `en-AU`, and `en-CA` can be separate translation targets. Dates, numbers, currencies, and plurals in the SDKs format by the active tag.
 
 ## Key takeaways
 
@@ -139,4 +140,4 @@ General Translation localizes by region and dialect, so English as `en-GB`, `en-
 - Keep tags short. Add a region for spelling or formatting differences (`en-GB`, `pt-PT`), and a script when a language has two writing systems (`zh-Hans`, `zh-Hant`, `sr-Latn`).
 - For Chinese, choose the script before the region; `zh-TW` and `zh-HK` both imply Traditional characters.
 - Use hyphens in your canonical list, convert to `en_US` or `values-b+zh+Hant` only at platform boundaries, and remember hreflang doesn't accept `es-419`.
-- `Intl.getCanonicalLocales` fixes casing, and `Intl.Locale.maximize()` gives you script-aware fallback in a few lines.
+- `Intl.getCanonicalLocales` fixes casing and `Intl.Locale.maximize()` reveals likely subtags; use a locale matcher or an explicit policy to choose among supported regional variants.

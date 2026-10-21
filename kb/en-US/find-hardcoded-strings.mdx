@@ -94,7 +94,7 @@ src/Checkout.jsx
 
 What the run shows:
 
-- **The default mode finds 4 of these 7.** With the plugin's `flat/recommended` config, the attributes and the `{'...'}` child pass.
+- **The default mode reports 4 issues.** With the plugin's `flat/recommended` config, the attributes and the `{'...'}` child pass; `jsx-only` adds those 3 findings.
 - **Some literals still pass.** `className` and `type` are excluded by default, which is what you want. The template literal on line 10 passes unless you add `'should-validate-template': true`, and the `'Payment failed'` constant passes unless you use `mode: 'all'`, which also flags every non-UI string in the file.
 - **Expect false positives.** `+ 2` is flagged because the default ignore patterns cover symbol-only strings without spaces. Add a pattern under `words.exclude`, and copy the defaults from the plugin's `lib/options/defaults.js` into it: an option you pass replaces that option's defaults.
 
@@ -131,8 +131,11 @@ Find hardcoded user-facing strings in src/features/checkout and wrap them.
   toast and validation messages, and labels in constants that render in the UI.
 - Not user-facing: class names, test IDs, URLs, log messages, analytics
   event names, and the product name "Acme".
-- Wrap JSX with <T> and strings in props or plain functions with useGT(),
-  following src/features/cart/CartSummary.tsx.
+- Wrap JSX with <T>. Call useGT() at the top level of a React component or
+  custom Hook, then use the returned gt(...) for string props and callbacks.
+  Never call a Hook from an ordinary helper or event handler.
+- For module-level messages or non-React utilities, follow the documented
+  API for that framework. Use src/features/cart/CartSummary.tsx as a reference.
 - Keep names, prices, and counts as variables, not part of the text.
 - Don't disable lint rules or add eslint-disable comments.
 - When done, run `npx eslint src/features/checkout` and fix every
@@ -140,7 +143,7 @@ Find hardcoded user-facing strings in src/features/checkout and wrap them.
   unwrapped and why.
 ```
 
-Then verify it yourself: rerun ESLint and expect zero errors, read the diff for strings that were wrapped but shouldn't be (identifiers, enum values sent to an API), and open the changed screens in a pseudo-locale or a second language. The linter proves the literals are gone; only the running app proves the wrapped text renders translated.
+Then verify it yourself: rerun ESLint, including your React Hooks rules, read the diff for strings that were wrapped but shouldn't be (identifiers, enum values sent to an API), and open the changed screens in a pseudo-locale or a second language. A clean lint run covers only the patterns the enabled rules detect; check constants and template literals separately. React's [Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks) apply to [`useGT`](/docs/react/reference/hooks/use-gt) too. Register module-level messages with [`msg`](/docs/react/reference/functions/msg) and render them with [`useMessages`](/docs/react/reference/hooks/use-messages); async Next.js server code uses [`getGT`](/docs/react/nextjs/reference/functions/get-gt).
 
 ## Lint and wrap React strings with General Translation
 
@@ -174,13 +177,13 @@ export default [
 
 On a component with a wrapped heading, an unwrapped paragraph, and an `aria-label`, this config reported 3 errors: `static-jsx` flagged `{user.name}` inside [`<T>`](/docs/react/reference/components/t), and `no-literal-string` flagged the paragraph and the attribute. `npx eslint src --fix` wrapped the name in [`<Var>`](/docs/react/reference/components/var) and added the import; the other two stayed for you to wrap in [`<T>`](/docs/react/reference/components/t) or pass through [`useGT`](/docs/react/reference/hooks/use-gt).
 
-You can also skip wrapping JSX text by hand. With [automatic JSX injection](/docs/cli/guides/using-auto-jsx), General Translation's compiler (`@generaltranslation/compiler`) wraps translatable JSX text in [`<T>`](/docs/react/reference/components/t) at build time. It's off by default: set `enableAutoJsxInjection` under `files.gt.parsingFlags` in `gt.config.json`. It works in React single-page apps (except with the esbuild adapter), server-rendered React apps, and Next.js webpack builds with `gt-next`'s Babel compiler (not Turbopack), and it leaves text you've already wrapped alone. Strings in props and plain JavaScript still go through [`useGT`](/docs/react/reference/hooks/use-gt) or [`msg`](/docs/react/reference/functions/msg).
+With [automatic JSX injection](/docs/cli/guides/using-auto-jsx), `@generaltranslation/compiler` wraps translatable JSX text in [`<T>`](/docs/react/reference/components/t) at build time. It's off by default: set `enableAutoJsxInjection` under `files.gt.parsingFlags` in `gt.config.json`. It works in React single-page apps (except with the esbuild adapter), server-rendered React apps, and Next.js webpack builds with `gt-next`'s Babel compiler (not Turbopack), and it leaves text you've already wrapped alone. String props still use the function returned by [`useGT`](/docs/react/reference/hooks/use-gt); module-level messages use [`msg`](/docs/react/reference/functions/msg).
 
 For a whole repository, Locadex, General Translation's AI agent, runs a **Generate code** automation that detects untranslated UI content, wraps it with the right calls such as [`<T>`](/docs/react/reference/components/t) and [`t()`](/docs/react/reference/functions/t-function), and opens a pull request for review. It runs lint rules on the files it edits; in files that already import General Translation, one of them catches hardcoded text reaching the UI through an object or constant, such as `{labels.save}`. Locadex supports Next.js and React apps built with Vite, Gatsby, Redwood, React Router, TanStack Start, and other build tools, and requires a Starter or Enterprise plan. (See [Configuring Locadex automations](/docs/platform/locadex/guides/configuring-automations).) In CI, [`npx gt validate`](/docs/cli/reference/commands/validate) then checks the wrapped content for errors that would break translation, without calling the API.
 
 ## Key takeaways
 
-- `no-literal-string` in its default mode found 4 of 7 hardcoded strings in our sample; `mode: 'jsx-only'` found all 7 in JSX, and constants need `mode: 'all'` or a review.
+- `no-literal-string` reported 4 issues in its default mode and 7 in `jsx-only` mode for this fixture. The template literal and constant still need additional settings or a review.
 - Android Lint's `HardcodedText` covers layout XML and `SetTextI18n` covers `TextView.setText`; neither flags Compose `Text` calls.
 - Xcode extracts strings passed to localizable APIs, so a string missing from the String Catalog after a build is the sign of hardcoded text.
 - Give a coding agent a scope, a definition of user-facing, and the lint command it must pass, then check the running app.

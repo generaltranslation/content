@@ -1,7 +1,7 @@
 ---
-title: What's the best way to translate JSON locale files?
-summary: Use a tool that parses the JSON and translates only the string values, leaves keys, placeholders such as {{name}}, and markup unchanged, adds the plural forms each target language needs, and gives the translator context for short strings. Then check the output against the source, because pasting the file into a generic translator often breaks one of these.
-description: Use a tool that translates only string values, keeps keys, placeholders, and markup intact, adds each language's plural forms, and gives context for short strings. Then check the output.
+title: How to translate JSON locale files
+summary: Translate the string values in JSON locale files, preserve nonplural keys, placeholders, and markup, and supply the plural forms your i18n library needs. Give short strings context, then validate the output with checks for that library’s message syntax before reviewing the translation itself.
+description: Translate JSON locale files while preserving placeholders and markup, with tested validation examples for i18next plurals and ICU messages.
 date: 2026-10-20
 category: translation
 authors: [kevin-wu, jackie]
@@ -52,7 +52,7 @@ A general-purpose translator treats the file as text, so the structure is at ris
 | Script against the DeepL or Google Cloud Translation API | You walk the JSON and send only values; DeepL's document API also accepts `.json` and protects placeholders by default | You generate the missing keys yourself | DeepL's `context` parameter; Google has none per string | You rerun the script and diff the output |
 | Prompt an LLM with the file | Usually kept, but nothing guarantees it | Added if you ask and name the categories | Whatever you put in the prompt | You rerun the prompt and validate every run |
 | Translation management system (TMS) | Parsed by format, so keys are safe | Depends on the TMS and file format | Screenshots, comments, and descriptions per key | Sync files through the TMS's repository integration |
-| General Translation CLI | Parsed by format; i18next and next-intl syntax kept | Run the check below for languages with more categories | Keyed metadata per string, plus Glossary and Custom Prompts | [`npx gt translate`](/docs/cli/reference/commands/translate) translates what changed on each run |
+| General Translation CLI | Parsed by format; i18next and next-intl syntax kept | Validate the generated plural families for each locale | Keyed metadata per string, plus Glossary and Custom Prompts | [`npx gt translate`](/docs/cli/reference/commands/translate) translates what changed on each run |
 
 Two of the scripted options need more detail. DeepL's [document API](https://developers.deepl.com/api-reference/document) lists `json` as a supported format and, by default, keeps placeholders such as `{stars}` or `{{userName}}` verbatim and protects ICU plural skeletons, translating only their branch text. Google's [document translation](https://docs.cloud.google.com/translate/docs/advanced/translate-documents) accepts Office files and PDFs but not JSON, and the consumer Google Translate site takes only `.docx`, `.pdf`, `.pptx`, and `.xlsx` uploads, so with Google you extract the string values and send them to the text API yourself.
 
@@ -108,64 +108,41 @@ The CLI detects the companion file, checks that its keys exist in the source, an
 
 ## Check the translated files before they ship
 
-Whatever tool translates the files, a short Node.js script catches the mechanical errors: missing or extra keys, changed placeholders and tags, invalid JSON, and plural categories the target language needs but the file lacks. It uses `Intl.PluralRules`, so the plural check follows the same CLDR rules i18next uses.
+Use checks that understand the message format. The [runnable JSON validation example](https://github.com/generaltranslation/content/tree/main/examples/kb/json-validation) includes a validator, fixtures, tests, and a lockfile. It has two explicit modes:
 
-```js title="check-json.mjs"
-// Usage: node check-json.mjs <source.json> <translated.json> <target-locale>
-import { readFileSync } from 'node:fs';
+- **i18next:** checks default `{{name}}` interpolation, balanced simple tags such as `<1>`, and cardinal plural families ending in `_one`, `_few`, `_many`, or `_other`. It permits the additional forms Polish and Arabic need, checks their placeholders, and lets Japanese use only `_other`. An optional `_zero` form is allowed.
+- **ICU:** uses the [FormatJS ICU message parser](https://formatjs.github.io/docs/icu-messageformat-parser/) to parse nested messages and compare argument names and types, rich-text tag names, select cases, exact-number selectors, and plural offsets. Changing the controlling variable from `count` to `total` fails even when both messages parse. ICU can use its `other` branch as a fallback, so this mode does not demand every CLDR plural category.
 
-const [src, out, locale] = process.argv.slice(2);
-const flatten = (obj, prefix = '') =>
-  Object.entries(obj).flatMap(([k, v]) =>
-    v && typeof v === 'object' ? flatten(v, `${prefix}${k}.`) : [[`${prefix}${k}`, String(v)]]
-  );
-const source = new Map(flatten(JSON.parse(readFileSync(src, 'utf8'))));
-const target = new Map(flatten(JSON.parse(readFileSync(out, 'utf8')))); // throws on invalid JSON
+Clone or download the [content repository](https://github.com/generaltranslation/content), then open `examples/kb/json-validation`. With Node.js 20 or later, run:
 
-// {{name}} (i18next), {name} (ICU), and tags such as <1>, </1>, <b>
-const tokens = (s) => (s.match(/\{\{[^{}]+\}\}|\{[^{}\s,]+\}|<\/?\w+\s*\/?>/g) ?? []).sort().join(' ');
-const problems = [];
-
-for (const [key, text] of source) {
-  if (!target.has(key)) problems.push(`missing key: ${key}`);
-  else if (tokens(text) !== tokens(target.get(key)))
-    problems.push(`placeholders differ in ${key}: "${tokens(text)}" vs "${tokens(target.get(key))}"`);
-}
-for (const key of target.keys()) if (!source.has(key)) problems.push(`extra key: ${key}`);
-
-// i18next plural suffixes: the target locale needs every category its CLDR rules use
-const suffix = /_(zero|one|two|few|many|other)$/;
-const bases = new Set([...source.keys()].filter((k) => suffix.test(k)).map((k) => k.replace(suffix, '')));
-for (const base of bases)
-  for (const cat of new Intl.PluralRules(locale).resolvedOptions().pluralCategories)
-    if (!target.has(`${base}_${cat}`)) problems.push(`missing plural form for ${locale}: ${base}_${cat}`);
-
-console.log(problems.length ? problems.join('\n') : `OK: ${source.size} keys match`);
-process.exitCode = problems.length ? 1 : 0;
+```bash title="run-examples.sh"
+set -eu
+npm ci --ignore-scripts
+npm test
+node check-json.mjs i18next fixtures/i18next-en.json fixtures/i18next-pl.json pl
+node check-json.mjs icu fixtures/icu-en.json fixtures/icu-de.json de
 ```
 
-Run against the English file above, a correct German translation passes, and a Polish file with a translated key, a renamed placeholder, and only English plural forms fails:
+The commands use the pinned parser dependency and run locally without an API key. The tests also verify that these article commands and the English JSON example match the files in the repository.
 
-```bash
-$ node check-json.mjs locales/en/common.json locales/de/common.json de
-OK: 6 keys match
+These fixtures were run with Node.js 24.19.0 and `@formatjs/icu-messageformat-parser` 3.5.22:
 
-$ node check-json.mjs locales/en/common.json locales/pl/common.json pl
-missing key: nav.home
-missing key: nav.save
-placeholders differ in greeting: "{{name}}" vs "{{imię}}"
-extra key: nawigacja.home
-extra key: nawigacja.save
-missing plural form for pl: inbox_few
-missing plural form for pl: inbox_many
-```
+| Fixture | Result | What it checks |
+| --- | --- | --- |
+| English to Polish, with `_one`, `_few`, `_many`, and `_other` | Pass, exit 0 | Required new plural keys are accepted |
+| Polish with only the English plural forms | Fail, exit 1 | Missing `_few` and `_many` are reported |
+| ICU English to German with `count` preserved | Pass, exit 0 | Translated branch text is accepted |
+| ICU German with `count` renamed to `total` | Fail, exit 1 | A changed plural argument is detected |
+| ICU German with a missing closing brace | Fail, exit 1 | Invalid nested message syntax is rejected |
 
-The script exits with code 1 on any problem, so you can run it in CI after translation. It compares placeholders, not meaning, so a person still reviews the strings that matter most.
+The fixtures are validation examples, not a translation-quality benchmark or recorded output from General Translation. A failing check exits with code 1, so you can use the same command in CI after translation.
+
+The example accepts objects with string values, including nested objects. Its i18next mode reserves `_other` keys for cardinal plural families and excludes ordinal keys, custom interpolation delimiters, formatters, nesting calls, and tags with attributes. Arrays, non-string values, and vue-i18n pipe syntax need a validator adapted to those formats. ICU checks compare contracts across each message; they do not check branch-by-branch argument placement, formatting styles, or meaning. Review important strings in the application as well.
 
 ## Key takeaways
 
-- Translate values only: keys, `{{name}}` or `{name}` placeholders, and tags such as `<1>` must come back unchanged, and the file must still parse.
+- Translate values while preserving message syntax. Nonplural keys stay unchanged; plural keys can differ by language.
 - Plural categories differ by language: Polish needs `_few` and `_many` keys that an English source doesn't have.
 - DeepL's document API accepts JSON and protects placeholders by default; Google's document translation doesn't accept JSON.
 - To translate them with the `gt` CLI, set `files.json.include` to a `[locale]` pattern and run [`npx gt translate`](/docs/cli/reference/commands/translate); keyed metadata adds per-string context and length limits.
-- Check every translated file against its source with a script before release.
+- Validate i18next plural families by target locale, and parse ICU messages instead of checking nested syntax with a regular expression.

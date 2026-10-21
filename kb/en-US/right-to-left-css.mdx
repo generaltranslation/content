@@ -174,17 +174,22 @@ When RTL and LTR text share a line, neutral characters such as spaces, hyphens, 
 
 ## Set dir from the active locale with General Translation
 
-General Translation's libraries return the text direction for the active locale, so you can set `dir` from the same locale that picks the translations. In a Next.js App Router layout, `gt-next` exposes [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) from `gt-next/server`:
+In a Next.js App Router app, `gt-next` exposes [`getLocaleDirection`](/docs/react/nextjs/reference/functions/get-locale-direction) from `gt-next/server`. Set `lang` and `dir` in the root layout. The example below uses `app/[locale]/layout.tsx` as the root, with no layout above it; Next.js [requires both `<html>` and `<body>` there](https://nextjs.org/docs/app/api-reference/file-conventions/layout#root-layout). A nested layout must not add another `<html>` element.
 
 ```tsx title="app/[locale]/layout.tsx"
 import { getLocale, getLocaleDirection } from 'gt-next/server';
+import type { ReactNode } from 'react';
 
-export default async function LocaleLayout({ children }) {
+export default async function LocaleLayout({ children }: { children: ReactNode }) {
   const [locale, direction] = await Promise.all([
     getLocale(),
     getLocaleDirection(),
   ]);
-  return <html lang={locale} dir={direction}>{children}</html>;
+  return (
+    <html lang={locale} dir={direction}>
+      <body>{children}</body>
+    </html>
+  );
 }
 ```
 
@@ -207,7 +212,7 @@ export function DocumentDirection() {
 
 For other stacks, including Vue, `gt-tanstack-start`, and server templates, the Core library's [`getLocaleDirection`](/docs/platform/core/reference/utility-functions/locales/get-locale-direction) from `generaltranslation` runs locally with no API key: `getLocaleDirection('ar-SA')` returns `'rtl'`, `'he-IL'` and `'fa'` do too, and an invalid code falls back to `'ltr'`.
 
-General Translation doesn't rewrite your CSS; the logical properties and icon rules above make the layout flip. It handles the translation side: Arabic and Hebrew are among its 120+ locales, and UI wrapped in [`<T>`](/docs/react/reference/components/t) is translated in place. RTL text isn't always longer: on the General Translation landing page, "Save changes" is 25% narrower in Arabic and 18% narrower in Hebrew than in English, so test layouts for shrinking text too. Arabic also uses one of 6 plural forms for a count where English uses one of 2, which [`<Plural>`](/docs/react/reference/components/plural) handles per locale (see [handling plurals in React](/kb/how-to-handle-plurals-in-react)).
+The SDK sets up translation and exposes direction; your CSS still needs the logical properties and icon rules above. Test shorter labels as well as longer ones: rendered width depends on the wording, font, size, and weight, not just the language. Arabic also uses 6 cardinal plural categories where English uses 2; [`<Plural>`](/docs/react/reference/components/plural) selects them by locale (see [handling plurals in React](/kb/how-to-handle-plurals-in-react)).
 
 Before launch, run the right-to-left check in the [multilingual app launch checklist](/kb/multilingual-app-launch-checklist), and use [pseudo-localization](/kb/pseudo-localization) to catch overflow and unwrapped strings before translations exist.
 

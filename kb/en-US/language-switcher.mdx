@@ -115,16 +115,19 @@ menu.addEventListener('click', (event) => {
 
 ### React
 
-The same idea as a component that works with any router: pass it the current path and locale. It assumes every locale, including the default, has a URL prefix.
+This component uses plain links. Pass the current path, query string, and fragment as `currentHref`, along with the current locale. It assumes every locale has a URL prefix, every page exists in every listed locale, and slugs are identical across languages. For translated slugs or missing pages, resolve each destination from your route or CMS data instead of replacing a prefix.
 
 ```jsx title="LanguageSwitcher.jsx"
 const LOCALES = ['en', 'fr', 'de', 'ja'];
 
-// Swap the locale prefix and keep the rest of the path: /fr/pricing -> /de/pricing
-function pathForLocale(pathname, locale) {
-  const segments = pathname.split('/').filter(Boolean);
+// Preserve path, trailing slash, query, and fragment while swapping the locale.
+function hrefForLocale(currentHref, locale) {
+  const url = new URL(currentHref, 'https://example.invalid');
+  const trailingSlash = url.pathname.endsWith('/');
+  const segments = url.pathname.split('/').filter(Boolean);
   if (LOCALES.includes(segments[0])) segments.shift();
-  return `/${[locale, ...segments].join('/')}`;
+  url.pathname = `/${[locale, ...segments].join('/')}${trailingSlash ? '/' : ''}`;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 // The language's name in that language, capitalized for a menu
@@ -137,14 +140,14 @@ function rememberChoice(locale) {
   document.cookie = `locale=${locale}; path=/; max-age=31536000; samesite=lax`;
 }
 
-export function LanguageSwitcher({ pathname, currentLocale, label }) {
+export function LanguageSwitcher({ currentHref, currentLocale, label }) {
   return (
     <nav aria-label={label}>
       <ul>
         {LOCALES.map((locale) => (
           <li key={locale}>
             <a
-              href={pathForLocale(pathname, locale)}
+              href={hrefForLocale(currentHref, locale)}
               hrefLang={locale}
               lang={locale}
               aria-current={locale === currentLocale ? 'page' : undefined}
@@ -160,11 +163,11 @@ export function LanguageSwitcher({ pathname, currentLocale, label }) {
 }
 ```
 
-Rendered with `pathname="/fr/pricing"`, `currentLocale="fr"`, and `label="Langue"`, it produces links to `/en/pricing`, `/fr/pricing` (marked `aria-current="page"`), `/de/pricing`, and `/ja/pricing`, labeled English, Français, Deutsch, and 日本語.
+With `currentHref="/fr/pricing/?plan=pro#faq"`, `currentLocale="fr"`, and `label="Langue"`, the German link is `/de/pricing/?plan=pro#faq`; the French link is marked `aria-current="page"`. Keep query parameters and fragments only when they mean the same thing on the destination page. For translated anchor IDs, resolve the equivalent fragment too.
 
 ### With General Translation
 
-General Translation's React libraries ship the switcher and the switching logic. [`<LocaleSelector>`](/docs/react/reference/components/locale-selector), available in `gt-react`, `gt-next`, and the experimental `gt-tanstack-start`, renders a native `<select>` of your configured locales, labels each one in its own language, and on change saves the choice in a cookie and refreshes, reloads, or navigates depending on the framework. Its props are `locales` (a subset to show) and `customMapping` (custom labels), and standard `<select>` attributes are forwarded, so you can pass an `aria-label` translated with [`useGT`](/docs/react/reference/hooks/use-gt):
+[`<LocaleSelector>`](/docs/react/reference/components/locale-selector), available in `gt-react`, `gt-next`, and the experimental `gt-tanstack-start`, renders a native `<select>` of your configured locales, labels each one in its own language, and saves the choice in a cookie. It refreshes, reloads, or navigates depending on the framework. Its props are `locales` (a subset to show) and `customMapping` (custom labels), and standard `<select>` attributes are forwarded, so you can pass an `aria-label` translated with [`useGT`](/docs/react/reference/hooks/use-gt):
 
 ```tsx
 'use client';
