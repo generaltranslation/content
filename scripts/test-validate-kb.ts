@@ -74,25 +74,25 @@ assertEqual(
 
 assertEqual(
   first([{ name: "guides", isDirectory: true }]),
-  "kb/guides is a folder; kb/ holds only <slug>.mdx files.",
+  "kb/en-US/guides is a folder; kb/en-US/ holds only <slug>.mdx files.",
   "rejects a subfolder"
 );
 
 assertEqual(
   first([{ name: "notes.md", isDirectory: false }]),
-  "kb/notes.md is not an .mdx file.",
+  "kb/en-US/notes.md is not an .mdx file.",
   "rejects a non-.mdx file"
 );
 
 assertEqual(
   first([article("bad.slug.mdx")]),
-  'kb/bad.slug.mdx: the slug may contain only letters, digits, "-", and "_".',
+  "kb/en-US/bad.slug.mdx: the slug may contain only letters, digits, \"-\", and \"_\".",
   "rejects a slug the site cannot serve"
 );
 
 assertEqual(
   first([article("sitemap.mdx")]),
-  'kb/sitemap.mdx: "sitemap" is a reserved slug.',
+  "kb/en-US/sitemap.mdx: \"sitemap\" is a reserved slug.",
   "rejects a reserved slug"
 );
 
@@ -100,19 +100,19 @@ assertEqual(
 
 assertEqual(
   first([{ name: "a.mdx", isDirectory: false, body: BODY }]),
-  "kb/a.mdx: frontmatter is missing or is not valid YAML.",
+  "kb/en-US/a.mdx: frontmatter is missing or is not valid YAML.",
   "rejects an article without frontmatter"
 );
 
 assertEqual(
   first([article("a.mdx", { summary: undefined })]),
-  "kb/a.mdx: frontmatter is missing summary.",
+  "kb/en-US/a.mdx: frontmatter is missing summary.",
   "rejects a missing required field"
 );
 
 assertEqual(
   first([article("a.mdx", { relatd: ["b"] })]),
-  'kb/a.mdx: unknown frontmatter field "relatd".',
+  "kb/en-US/a.mdx: unknown frontmatter field \"relatd\".",
   "rejects an unknown frontmatter field"
 );
 
@@ -129,31 +129,31 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { category: undefined })]),
-  "kb/a.mdx: frontmatter is missing category.",
+  "kb/en-US/a.mdx: frontmatter is missing category.",
   "rejects an article without a category"
 );
 
 assertEqual(
   first([article("a.mdx", { category: "seo" })]),
-  'kb/a.mdx: category "seo" is not in kb/categories.json.',
+  "kb/en-US/a.mdx: category \"seo\" is not in kb/en-US/categories.json.",
   "rejects a category that is not in the list"
 );
 
 assertEqual(
   first([article("a.mdx")], { categoriesJson: undefined }),
-  "kb/categories.json is missing.",
+  "kb/en-US/categories.json is missing.",
   "rejects a missing category list"
 );
 
 assertEqual(
   first([article("a.mdx")], { categoriesJson: "{not json" }),
-  "kb/categories.json is not valid JSON.",
+  "kb/en-US/categories.json is not valid JSON.",
   "rejects a category list that is not JSON"
 );
 
 assertEqual(
   first([article("a.mdx")], { categoriesJson: categories([]) }),
-  "kb/categories.json must be a non-empty list of categories.",
+  "kb/en-US/categories.json must be a non-empty list of categories.",
   "rejects an empty category list"
 );
 
@@ -167,10 +167,10 @@ assertEqual(
     ]),
   }).join("\n"),
   [
-    'kb/categories.json: category 2 needs a slug of letters, digits, "-", and "_".',
-    "kb/categories.json: category 2 needs a title.",
-    'kb/categories.json: category 3 repeats the slug "translation".',
-    "kb/categories.json: category 3 needs a description.",
+    "kb/en-US/categories.json: category 2 needs a slug of letters, digits, \"-\", and \"_\".",
+    "kb/en-US/categories.json: category 2 needs a title.",
+    "kb/en-US/categories.json: category 3 repeats the slug \"translation\".",
+    "kb/en-US/categories.json: category 3 needs a description.",
   ].join("\n"),
   "reports each problem in the category list"
 );
@@ -189,25 +189,25 @@ assertEqual(
     article("a.mdx", { title: "How do plurals work?" }),
     article("b.mdx", { title: "How do Plurals work?" }),
   ]),
-  'kb/b.mdx: title "How do Plurals work?" duplicates kb/a.mdx.',
+  "kb/en-US/b.mdx: title \"How do Plurals work?\" duplicates kb/en-US/a.mdx.",
   "rejects two articles with the same title"
 );
 
 assertEqual(
   first([article("a.mdx", { title: "" })]),
-  "kb/a.mdx: title must be non-empty text.",
+  "kb/en-US/a.mdx: title must be non-empty text.",
   "rejects an empty title"
 );
 
 assertEqual(
   first([article("a.mdx", { title: 42 })]),
-  "kb/a.mdx: title must be non-empty text.",
+  "kb/en-US/a.mdx: title must be non-empty text.",
   "rejects a title that is not text"
 );
 
 assertEqual(
   first([article("a.mdx", { noindex: "yes" })]),
-  "kb/a.mdx: noindex must be true or false.",
+  "kb/en-US/a.mdx: noindex must be true or false.",
   "rejects a noindex the site would ignore"
 );
 
@@ -224,19 +224,19 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { summary: `${"word ".repeat(61).trim()}.` })]),
-  "kb/a.mdx: summary is 61 words; keep it to 60 or fewer.",
+  "kb/en-US/a.mdx: summary is 61 words; keep it to 60 or fewer.",
   "rejects a summary over 60 words"
 );
 
 assertEqual(
   first([article("a.mdx", { summary: "It works by following the rules" })]),
-  "kb/a.mdx: summary must end with a period.",
+  "kb/en-US/a.mdx: summary must end with a period.",
   "rejects a summary without a closing period"
 );
 
 assertEqual(
   first([article("a.mdx", { summary: "Use the `<Plural>` component." })]),
-  "kb/a.mdx: summary must not contain backticks or Markdown links.",
+  "kb/en-US/a.mdx: summary must not contain backticks or Markdown links.",
   "rejects backticks in the summary"
 );
 
@@ -253,7 +253,7 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { summary: `${"x".repeat(200)}.` })]),
-  "kb/a.mdx: summary is 201 characters, too long for a meta description; add a description of 200 or fewer.",
+  "kb/en-US/a.mdx: summary is 201 characters, too long for a meta description; add a description of 200 or fewer.",
   "rejects a summary over 200 characters without a description"
 );
 
@@ -273,25 +273,25 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { description: `${"x".repeat(200)}.` })]),
-  "kb/a.mdx: description is 201 characters; keep it to 200 or fewer.",
+  "kb/en-US/a.mdx: description is 201 characters; keep it to 200 or fewer.",
   "rejects a description over 200 characters"
 );
 
 assertEqual(
   first([article("a.mdx", { description: "A short meta description" })]),
-  "kb/a.mdx: description must end with a period.",
+  "kb/en-US/a.mdx: description must end with a period.",
   "rejects a description without a closing period"
 );
 
 assertEqual(
   first([article("a.mdx", { description: "Use the `<Plural>` component." })]),
-  "kb/a.mdx: description must not contain backticks or Markdown links.",
+  "kb/en-US/a.mdx: description must not contain backticks or Markdown links.",
   "rejects backticks in the description"
 );
 
 assertEqual(
   first([article("a.mdx", { description: 3 })]),
-  "kb/a.mdx: description must be text.",
+  "kb/en-US/a.mdx: description must be text.",
   "rejects a description that is not text"
 );
 
@@ -299,13 +299,13 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { authors: ["nobody"] })]),
-  'kb/a.mdx: author "nobody" has no file in authors/.',
+  "kb/en-US/a.mdx: author \"nobody\" has no file in authors/.",
   "rejects an author without an authors/ file"
 );
 
 assertEqual(
   first([article("a.mdx", { authors: "jackie" })]),
-  "kb/a.mdx: authors must be a list of author slugs from authors/.",
+  "kb/en-US/a.mdx: authors must be a list of author slugs from authors/.",
   "rejects authors that is not a list"
 );
 
@@ -331,13 +331,13 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { date: "2026-02-30" })]),
-  "kb/a.mdx: date must be a real YYYY-MM-DD date.",
+  "kb/en-US/a.mdx: date must be a real YYYY-MM-DD date.",
   "rejects an impossible date"
 );
 
 assertEqual(
   first([article("a.mdx", { date: "2026-10-14" })]),
-  "kb/a.mdx: date 2026-10-14 is in the future.",
+  "kb/en-US/a.mdx: date 2026-10-14 is in the future.",
   "rejects a future date"
 );
 
@@ -345,7 +345,7 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", {}, "## Soon\n\nComing soon.\n")]),
-  "kb/a.mdx: the body has fewer than 50 words of text and no code; it reads as a placeholder.",
+  "kb/en-US/a.mdx: the body has fewer than 50 words of text and no code; it reads as a placeholder.",
   "rejects an empty-looking article"
 );
 
@@ -360,25 +360,25 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", {}, `# Heading\n\n${BODY}`)]),
-  "kb/a.mdx: line 1 uses a level-1 heading; the title is the page heading, so start at ##.",
+  "kb/en-US/a.mdx: line 1 uses a level-1 heading; the title is the page heading, so start at ##.",
   "rejects a level-1 heading in the body"
 );
 
 assertEqual(
   first([article("a.mdx", {}, `${BODY}\n#### Deep\n\nText.\n`)]),
-  "kb/a.mdx: line 5 jumps from a level-2 to a level-4 heading.",
+  "kb/en-US/a.mdx: line 5 jumps from a level-2 to a level-4 heading.",
   "rejects a skipped heading level"
 );
 
 assertEqual(
   first([article("a.mdx", {}, `${BODY}\n\`\`\`\nnpm install gt-next\n\`\`\`\n`)]),
-  "kb/a.mdx: line 5 starts a code block without a language tag.",
+  "kb/en-US/a.mdx: line 5 starts a code block without a language tag.",
   "rejects a code block without a language tag"
 );
 
 assertEqual(
   first([article("a.mdx", {}, `## TL;DR\n\n${BODY}`)]),
-  'kb/a.mdx: line 1 contains "TL;DR"; the summary is the short answer.',
+  "kb/en-US/a.mdx: line 1 contains \"TL;DR\"; the summary is the short answer.",
   "rejects a TL;DR section"
 );
 
@@ -393,7 +393,7 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", {}, `${BODY}\nIn conclusion, plurals are hard.\n`)]),
-  'kb/a.mdx: line 5 contains "In conclusion".',
+  "kb/en-US/a.mdx: line 5 contains \"In conclusion\".",
   "rejects filler phrasing"
 );
 
@@ -405,25 +405,25 @@ assertEqual(
       `${BODY}\nFirst line\nsecond line\nIn conclusion, plurals are hard.\n`
     ),
   ]),
-  'kb/a.mdx: line 7 contains "In conclusion".',
+  "kb/en-US/a.mdx: line 7 contains \"In conclusion\".",
   "reports the line a phrase is on, not where its paragraph starts"
 );
 
 assertEqual(
   first([article("a.mdx", {}, `${BODY}\nFirst line\nTODO: add an example.\n`)]),
-  'kb/a.mdx: line 6 contains the placeholder "TODO".',
+  "kb/en-US/a.mdx: line 6 contains the placeholder \"TODO\".",
   "reports the line a placeholder is on"
 );
 
 assertEqual(
   first([article("a.mdx", {}, `${BODY}\n## Next steps\n\nRead more.\n`)]),
-  'kb/a.mdx: line 5 is a "Next steps" section; the article footer adds related questions.',
+  "kb/en-US/a.mdx: line 5 is a \"Next steps\" section; the article footer adds related questions.",
   "rejects a hand-written next-steps section"
 );
 
 assertEqual(
   first([article("a.mdx", {}, `${BODY}\nTODO: add an example.\n`)]),
-  'kb/a.mdx: line 5 contains the placeholder "TODO".',
+  "kb/en-US/a.mdx: line 5 contains the placeholder \"TODO\".",
   "rejects leftover placeholders"
 );
 
@@ -438,7 +438,7 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", {}, "## Broken\n\n<Callout>\n")])?.startsWith(
-    "kb/a.mdx: the body is not valid MDX ("
+    "kb/en-US/a.mdx: the body is not valid MDX ("
   ),
   true,
   "reports a body that does not parse"
@@ -448,7 +448,7 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { redirectFrom: "plurals" })]),
-  "kb/a.mdx: redirectFrom must be a list of blog post slugs.",
+  "kb/en-US/a.mdx: redirectFrom must be a list of blog post slugs.",
   "rejects a redirectFrom that is not a list"
 );
 
@@ -456,7 +456,7 @@ assertEqual(
   first([article("a.mdx", { redirectFrom: ["live-post"] })], {
     liveSlugs: ["live-post"],
   }),
-  'kb/a.mdx: redirectFrom "live-post" is a live post; the redirect would hide it.',
+  "kb/en-US/a.mdx: redirectFrom \"live-post\" is a live post; the redirect would hide it.",
   "rejects a redirect from a live post"
 );
 
@@ -465,7 +465,7 @@ assertEqual(
     article("a.mdx", { redirectFrom: ["plurals"] }),
     article("b.mdx", { redirectFrom: ["plurals"] }),
   ]),
-  'kb/b.mdx: redirectFrom "plurals" is already claimed by kb/a.mdx.',
+  "kb/en-US/b.mdx: redirectFrom \"plurals\" is already claimed by kb/en-US/a.mdx.",
   "rejects two articles claiming the same redirect"
 );
 
@@ -482,25 +482,25 @@ assertEqual(
 
 assertEqual(
   first([article("a.mdx", { related: "b" }), article("b.mdx")]),
-  "kb/a.mdx: related must be a list of Knowledge Base article slugs.",
+  "kb/en-US/a.mdx: related must be a list of Knowledge Base article slugs.",
   "rejects a related that is not a list"
 );
 
 assertEqual(
   first([article("a.mdx", { related: ["missing"] })]),
-  'kb/a.mdx: related "missing" is not a Knowledge Base article.',
+  "kb/en-US/a.mdx: related \"missing\" is not a Knowledge Base article.",
   "rejects a related article that does not exist"
 );
 
 assertEqual(
   first([article("a.mdx", { related: ["a"] })]),
-  'kb/a.mdx: related "a" is the article itself.',
+  "kb/en-US/a.mdx: related \"a\" is the article itself.",
   "rejects an article listed as related to itself"
 );
 
 assertEqual(
   first([article("a.mdx", { related: ["b", "b"] }), article("b.mdx")]),
-  'kb/a.mdx: related lists "b" more than once.',
+  "kb/en-US/a.mdx: related lists \"b\" more than once.",
   "rejects a related article listed twice"
 );
 
@@ -509,7 +509,7 @@ assertEqual(
     article("a.mdx", { related: ["b", "c", "d", "e", "f", "g"] }),
     ...["b", "c", "d", "e", "f", "g"].map((slug) => article(`${slug}.mdx`)),
   ]),
-  "kb/a.mdx: related lists 6 articles; the site shows at most 5.",
+  "kb/en-US/a.mdx: related lists 6 articles; the site shows at most 5.",
   "rejects more related articles than the site shows"
 );
 

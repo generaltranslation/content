@@ -1,8 +1,8 @@
 /**
- * Validate the knowledge base folder, kb/, whose articles generaltranslation.com
+ * Validate the knowledge base folder, kb/en-US/, whose articles generaltranslation.com
  * serves at /en-US/kb/<slug> (and as Markdown at /kb/<slug>.md).
  *
- * - kb/ holds only <slug>.mdx files and CATEGORIES_FILE, with no subfolders.
+ * - kb/en-US/ holds only <slug>.mdx files and CATEGORIES_FILE, with no subfolders.
  * - CATEGORIES_FILE is a non-empty JSON list of categories, each with a
  *   unique slug, a title, and a description; its order is the index order.
  * - Slugs use only letters, digits, `-`, and `_` (the site rejects anything
@@ -26,7 +26,7 @@
  * - Every `redirectFrom` entry is a blog post slug claimed by one article
  *   only, and is not the slug of a live blog or devlog post (a redirect would
  *   hide it).
- * - `related` lists at most RELATED_MAX other kb/ article slugs, each once.
+ * - `related` lists at most RELATED_MAX other kb/en-US/ article slugs, each once.
  *
  * Usage: npx tsx validate-kb.ts
  */
@@ -42,14 +42,14 @@ import { visit } from "unist-util-visit";
 import { parse } from "yaml";
 
 const CONTENT_ROOT = resolve(import.meta.dirname, "..");
-const KB_DIR = "kb";
+const KB_DIR = "kb/en-US";
 const AUTHORS_DIR = "authors";
 const LIVE_POST_DIRS = ["blog/en-US", "devlog/en-US"];
 
 const SLUG = /^[A-Za-z0-9_-]+$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The ordered category list inside kb/, read by the site for grouping. */
+/** The ordered category list inside kb/en-US/, read by the site for grouping. */
 export const CATEGORIES_FILE = "categories.json";
 
 /** /kb/sitemap.md is the Knowledge Base index, so no article may use it. */
@@ -505,9 +505,9 @@ function slugProblems(path: string, slug: string): string[] {
 }
 
 /**
- * @param entries - Everything directly inside kb/
+ * @param entries - Everything directly inside kb/en-US/
  * @param context - Live post slugs, author slugs, today's date, and the category list
- * @returns One message per problem; an empty array means kb/ is valid
+ * @returns One message per problem; an empty array means kb/en-US/ is valid
  */
 export function findKbProblems(
   entries: readonly KbEntry[],
@@ -529,7 +529,7 @@ export function findKbProblems(
     const path = `${KB_DIR}/${entry.name}`;
     if (entry.name === CATEGORIES_FILE && !entry.isDirectory) continue;
     if (entry.isDirectory) {
-      problems.push(`${path} is a folder; kb/ holds only <slug>.mdx files.`);
+      problems.push(`${path} is a folder; ${KB_DIR}/ holds only <slug>.mdx files.`);
       continue;
     }
     if (!entry.name.endsWith(".mdx")) {
