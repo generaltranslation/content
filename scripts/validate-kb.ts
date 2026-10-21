@@ -97,7 +97,7 @@ const ROUNDUP_HEADING =
   /^(next steps|see also|learn more|further reading|related(\s.*)?)$/i;
 
 export type KbEntry = {
-  /** File or folder name directly inside kb/. */
+  /** File or folder name directly inside kb/en-US/. */
   name: string;
   isDirectory: boolean;
   /** Parsed frontmatter; undefined when missing or not valid YAML. */
@@ -115,7 +115,7 @@ export type KbContext = {
   authors: readonly string[];
   /** Today as YYYY-MM-DD. */
   today: string;
-  /** Contents of kb/CATEGORIES_FILE; undefined when the file is missing. */
+  /** Contents of kb/en-US/CATEGORIES_FILE; undefined when the file is missing. */
   categoriesJson?: string;
 };
 
@@ -427,7 +427,7 @@ function relatedProblems(
 }
 
 /**
- * Problems in kb/CATEGORIES_FILE, and the category slugs it defines (empty
+ * Problems in kb/en-US/CATEGORIES_FILE, and the category slugs it defines (empty
  * when the file is missing or unreadable).
  */
 function categoryListProblems(json: string | undefined): {

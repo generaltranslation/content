@@ -48,7 +48,6 @@ export const devlog = defineCollections({
   schema: contentFrontmatterSchema,
 });
 
-// Knowledge base articles: flat kb/<slug>.mdx files, served only in en-US.
 export const kb = defineCollections({
   type: 'doc',
   dir: '../../kb',
