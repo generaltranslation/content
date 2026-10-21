@@ -28,13 +28,14 @@ Run the validators from `scripts/`:
 
 | Command | What it checks |
 | ------- | -------------- |
-| `npm test` | Unit tests for every validator (links, unsafe HTML, callouts, reference links, docs structure, and blog order) |
+| `npm test` | Unit tests for every validator (links, unsafe HTML, callouts, reference links, docs structure, blog order, and Knowledge Base content) |
 | `npx tsx validate-links.ts` | Every internal link across all content |
 | `npm run validate:unsafe-html` | The disallowed HTML and MDX patterns listed below |
 | `npm run validate:callouts` | Callout types |
 | `npm run validate:reference-links` | Inline-code API symbols resolve to reference pages |
 | `npm run validate:structure` | `meta.json` filetree and section structure |
 | `npm run validate:blog-order` | `blog/order.json` lists every blog post exactly once |
+| `npm run validate:kb` | Knowledge Base metadata, categories, links, and article structure |
 | `npm run typecheck` | The validation scripts themselves |
 
 These mirror the CI jobs in `.github/workflows/run-tests.yml`. `pnpm install` reports `Ignored build scripts: esbuild, sharp`; that is expected and does not affect dev, build, or the validators.
@@ -46,9 +47,12 @@ These mirror the CI jobs in `.github/workflows/run-tests.yml`. `pnpm install` re
 | `docs/en-US/`     | Documentation pages                 |
 | `blog/en-US/`     | Blog posts                          |
 | `blog/order.json` | The order of posts on the blog page |
+| `kb/en-US/`      | Knowledge Base articles and category labels |
 | `devlog/en-US/`   | Devlog / release note entries       |
 | `authors/`        | Author profiles                     |
 | `docs-templates/` | Shared templates (maintainers only) |
+
+Commit English source content only. Landing's shared GT build generates translations in sibling locale directories for docs, blog, devlog, and KB.
 
 ## MDX formatting conventions
 
