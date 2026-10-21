@@ -27,6 +27,7 @@ The `gt.config.json` file configures what the CLI translates and where results a
 | [`dictionary`](#dictionary) | Path to a dictionary file. | `string` | Yes | — |
 | [`branchOptions`](#branch-options) | Branch-based translation tracking settings. | `object` | Yes | — |
 | [`customMapping`](#custom-mapping) | Locale aliases and property overrides. | `object` | Yes | — |
+| [`options.docsUrlPattern`](#docs-url-pattern) | URL pattern or patterns used to place locale codes in documentation links. | `string \| string[]` | Yes | `/[locale]` |
 | [`options.experimentalLocalizeStaticUrls`](#localize-static-urls) | Localize static URLs in translated Markdown and MDX files. | `boolean \| object` | Yes | `false` |
 | [`options.saveLocal`](#save-local) | Detect and submit local translation edits before enqueueing. | `boolean` | Yes | `false` |
 
@@ -199,7 +200,7 @@ Font files to upload before translation jobs run. Use `include` and optional `ex
 }
 ```
 
-The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt translate`](/docs/cli/reference/commands/translate) runs that enqueue new work. When `stageTranslations` is enabled, [`gt translate`](/docs/cli/reference/commands/translate) only downloads the staged version and does not sync fonts. A failed font sync emits a warning but does not stop translation; Lottie processing continues with fallback fonts. See [Upload project assets](/docs/platform/openapi/reference/project/upload-assets) for font validation and storage behavior.
+The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt translate`](/docs/cli/reference/commands/translate) runs that enqueue new work. When `stageTranslations` is enabled, [`gt translate`](/docs/cli/reference/commands/translate) only downloads the staged version and does not sync fonts. A failed font sync emits a warning but does not stop translation; Lottie processing continues with fallback fonts. See [Upload project assets](/docs/platform/openapi/reference/organizations/upsert-assets) for font validation and storage behavior.
 
 ## `publish` [#publish]
 
@@ -329,11 +330,40 @@ When you use an alias, set `defaultLocale` and entries in `locales` to the alias
 }
 ```
 
+## `options.docsUrlPattern` [#docs-url-pattern]
+
+**Type** `string | string[]` · **Optional** · **Default** `/[locale]`
+
+Sets where the CLI inserts the locale when it localizes documentation URLs. Every pattern must contain `[locale]`, such as `/docs/[locale]`.
+
+Use an array when one site serves documentation from several URL prefixes. The CLI matches each URL against the part of every pattern before `[locale]`, then uses the longest matching prefix.
+
+```json title="gt.config.json"
+{
+  "options": {
+    "docsUrlPattern": ["/docs/[locale]", "/ai/docs/[locale]"],
+    "experimentalLocalizeStaticUrls": true
+  }
+}
+```
+
+With this configuration, `/docs/guide` becomes `/docs/es/guide`, while `/ai/docs/guide` becomes `/ai/docs/es/guide` for Spanish. A URL outside both prefixes is unchanged.
+
+The `/[locale]` default applies to static URL localization. [`options.mintlify.localizeRedirects`](/docs/integrations/mintlify/reference/config#localized-redirects) requires this key explicitly; when it is absent, the CLI warns and does not add localized redirects.
+
+### Version history
+
+| Version | Changes |
+| --- | --- |
+| `2.26.3` | Added arrays of URL patterns and longest-prefix matching. |
+
 ## `options.experimentalLocalizeStaticUrls` [#localize-static-urls]
 
 **Type** `boolean | { skipUntranslatedPages?: boolean; attributes?: string[] }` · **Optional** · **Default** `false`
 
 Localizes static URLs in translated Markdown and MDX files. Set it under the top-level `options` object, or pass the `--experimental-localize-static-urls` flag to [`gt translate`](/docs/cli/reference/commands/translate#experimental) for one run.
+
+Use [`options.docsUrlPattern`](#docs-url-pattern) to control where locale codes are inserted.
 
 - `true` adds the target locale to every matching static URL.
 - `{ "skipUntranslatedPages": true }` keeps a link on the source locale when its source page exists but no translated page exists. Links to generated pages without a source Markdown or MDX file, such as OpenAPI reference pages, are still localized.
