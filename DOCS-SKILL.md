@@ -341,6 +341,7 @@ The publishing app generates machine-readable maps from the docs source:
 - `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
 - `/AGENTS.md` — the default-language drop-in agent guide from the **For coding agents** page.
 - `/agent-prompt.md`: the default-language start prompt from the **For coding agents** page, the text the website's Setup for Agents button copies.
+- `/blog.md` — the default-language Markdown index of blog posts and changelog entries.
 - `sitemap.md` — a default-language Markdown index of every docs page and blog post.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
@@ -350,7 +351,7 @@ Do not add hand-written copies to this repository. When you add, rename, remove,
 
 Beyond the machine-readable outputs above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
+- **Raw Markdown for every page.** Every docs page, blog post, and changelog entry is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 
