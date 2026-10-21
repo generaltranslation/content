@@ -1,8 +1,8 @@
 /**
- * Validate the knowledge base folder, kb/, whose articles generaltranslation.com
+ * Validate the knowledge base folder, kb/en-US/, whose articles generaltranslation.com
  * serves at /en-US/kb/<slug> (and as Markdown at /kb/<slug>.md).
  *
- * - kb/ holds only <slug>.mdx files and CATEGORIES_FILE, with no subfolders.
+ * - kb/en-US/ holds only <slug>.mdx files and CATEGORIES_FILE, with no subfolders.
  * - CATEGORIES_FILE is a non-empty JSON list of categories, each with a
  *   unique slug, a title, and a description; its order is the index order.
  * - Slugs use only letters, digits, `-`, and `_` (the site rejects anything
@@ -13,6 +13,9 @@
  * - Titles are unique.
  * - A summary is at most SUMMARY_MAX_WORDS words, ends with a period, and has
  *   no backticks or Markdown links (it is reused as plain text).
+ * - The meta description is `description` when set, else the summary, and is
+ *   at most DESCRIPTION_MAX_CHARS characters. A `description` ends with a
+ *   period and has no backticks or Markdown links.
  * - `authors` is optional (the site credits the team without it); every
  *   listed author has a file in authors/.
  * - `date` is a real YYYY-MM-DD date, not in the future. `updated`, when
@@ -25,7 +28,7 @@
  * - Every `redirectFrom` entry is a blog post slug claimed by one article
  *   only, and is not the slug of a live blog or devlog post (a redirect would
  *   hide it).
- * - `related` lists at most RELATED_MAX other kb/ article slugs, each once.
+ * - `related` lists at most RELATED_MAX other kb/en-US/ article slugs, each once.
  *
  * Usage: npx tsx validate-kb.ts
  */
@@ -41,14 +44,14 @@ import { visit } from "unist-util-visit";
 import { parse } from "yaml";
 
 const CONTENT_ROOT = resolve(import.meta.dirname, "..");
-const KB_DIR = "kb";
+const KB_DIR = "kb/en-US";
 const AUTHORS_DIR = "authors";
 const LIVE_POST_DIRS = ["blog/en-US", "devlog/en-US"];
 
 const SLUG = /^[A-Za-z0-9_-]+$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The ordered category list inside kb/, read by the site for grouping. */
+/** The ordered category list inside kb/en-US/, read by the site for grouping. */
 export const CATEGORIES_FILE = "categories.json";
 
 /** /kb/sitemap.md is the Knowledge Base index, so no article may use it. */
@@ -59,6 +62,9 @@ export const RELATED_MAX = 5;
 
 export const SUMMARY_MAX_WORDS = 60;
 
+/** Longest meta description; search results truncate anything longer. */
+export const DESCRIPTION_MAX_CHARS = 200;
+
 /** Below this many words of text, an article without code reads as a placeholder. */
 export const MIN_BODY_WORDS = 50;
 
@@ -67,6 +73,7 @@ const REQUIRED_FIELDS = ["title", "summary", "date", "category"];
 /** Every frontmatter field the site reads for a KB article. */
 const KNOWN_FIELDS = new Set([
   ...REQUIRED_FIELDS,
+  "description",
   "authors",
   "updated",
   "redirectFrom",
@@ -93,7 +100,7 @@ const ROUNDUP_HEADING =
   /^(next steps|see also|learn more|further reading|related(\s.*)?)$/i;
 
 export type KbEntry = {
-  /** File or folder name directly inside kb/. */
+  /** File or folder name directly inside kb/en-US/. */
   name: string;
   isDirectory: boolean;
   /** Parsed frontmatter; undefined when missing or not valid YAML. */
@@ -111,7 +118,7 @@ export type KbContext = {
   authors: readonly string[];
   /** Today as YYYY-MM-DD. */
   today: string;
-  /** Contents of kb/CATEGORIES_FILE; undefined when the file is missing. */
+  /** Contents of kb/en-US/CATEGORIES_FILE; undefined when the file is missing. */
   categoriesJson?: string;
 };
 
@@ -179,6 +186,41 @@ function summaryProblems(path: string, summary: unknown): string[] {
   if (summary.includes("`") || /\]\(/.test(summary)) {
     problems.push(
       `${path}: summary must not contain backticks or Markdown links.`
+    );
+  }
+  return problems;
+}
+
+/** The site uses `description` as the meta description, falling back to the summary. */
+function descriptionProblems(
+  path: string,
+  description: unknown,
+  summary: unknown
+): string[] {
+  if (description === undefined || description === null) {
+    if (typeof summary === "string" && summary.length > DESCRIPTION_MAX_CHARS) {
+      return [
+        `${path}: summary is ${summary.length} characters, too long for a meta description; add a description of ${DESCRIPTION_MAX_CHARS} or fewer.`,
+      ];
+    }
+    return [];
+  }
+  if (typeof description !== "string") {
+    return [`${path}: description must be text.`];
+  }
+
+  const problems: string[] = [];
+  if (description.length > DESCRIPTION_MAX_CHARS) {
+    problems.push(
+      `${path}: description is ${description.length} characters; keep it to ${DESCRIPTION_MAX_CHARS} or fewer.`
+    );
+  }
+  if (!description.trim().endsWith(".")) {
+    problems.push(`${path}: description must end with a period.`);
+  }
+  if (description.includes("`") || /\]\(/.test(description)) {
+    problems.push(
+      `${path}: description must not contain backticks or Markdown links.`
     );
   }
   return problems;
@@ -411,7 +453,7 @@ function relatedProblems(
 }
 
 /**
- * Problems in kb/CATEGORIES_FILE, and the category slugs it defines (empty
+ * Problems in kb/en-US/CATEGORIES_FILE, and the category slugs it defines (empty
  * when the file is missing or unreadable).
  */
 function categoryListProblems(json: string | undefined): {
@@ -489,9 +531,9 @@ function slugProblems(path: string, slug: string): string[] {
 }
 
 /**
- * @param entries - Everything directly inside kb/
+ * @param entries - Everything directly inside kb/en-US/
  * @param context - Live post slugs, author slugs, today's date, and the category list
- * @returns One message per problem; an empty array means kb/ is valid
+ * @returns One message per problem; an empty array means kb/en-US/ is valid
  */
 export function findKbProblems(
   entries: readonly KbEntry[],
@@ -513,7 +555,7 @@ export function findKbProblems(
     const path = `${KB_DIR}/${entry.name}`;
     if (entry.name === CATEGORIES_FILE && !entry.isDirectory) continue;
     if (entry.isDirectory) {
-      problems.push(`${path} is a folder; kb/ holds only <slug>.mdx files.`);
+      problems.push(`${path} is a folder; ${KB_DIR}/ holds only <slug>.mdx files.`);
       continue;
     }
     if (!entry.name.endsWith(".mdx")) {
@@ -550,6 +592,11 @@ export function findKbProblems(
 
     problems.push(
       ...summaryProblems(path, frontmatter.summary),
+      ...descriptionProblems(
+        path,
+        frontmatter.description,
+        frontmatter.summary
+      ),
       ...categoryProblems(path, frontmatter.category, categoryList.slugs),
       ...authorProblems(path, frontmatter.authors, authors),
       ...dateProblems(path, frontmatter.date, context.today),

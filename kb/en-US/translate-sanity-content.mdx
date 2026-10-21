@@ -1,0 +1,38 @@
+---
+title: How do I translate content in Sanity?
+summary: Store each language as its own document or as a value per locale in each field, then translate the source into every target locale. General Translation's gt-sanity plugin adds a Translate action to Sanity Studio and, by default, imports each translation as a draft you review and publish.
+description: Store each language as its own document or as a per-locale field value, then translate the source. General Translation's gt-sanity plugin adds a Translate action and, by default, imports drafts.
+date: 2026-10-21
+category: workflow-tools
+related: [translate-storyblok-content, translate-mintlify-docs, translate-google-slides, review-translations]
+---
+
+To translate content in Sanity, you store each language as a separate document tagged with a language field (document-level localization) or as a value per locale inside each field (field-level localization), then fill every target language from the source. It's hard because a document is structured data: Portable Text (Sanity's rich text format) has to keep its blocks and marks; images, dates, and numbers have to be copied unchanged; with one document per language, each reference has to point to the matching translation; and editors' fixes to translations have to survive the next update.
+
+| Approach | What it does well | How translations reach Sanity | What it leaves to you |
+| --- | --- | --- | --- |
+| Sanity's localization plugins alone | Store each language as its own document or as a value per locale in each field | Your editors or translators type each language into Sanity Studio | Every translation, and every update when the source changes |
+| Google Translate | Fast, general-purpose translation of text | Copy and paste, or a script that writes through Sanity's API | It translates each string on its own; splitting Portable Text into strings and rebuilding it, copying other fields, repointing references, consistent terms, and review are up to you |
+| A raw AI API (OpenAI API, Claude API) | Fluent translation that follows instructions | A script that writes through Sanity's API | Splitting and rebuilding Portable Text, copying other fields, repointing references, the context and terms for every request, and review |
+| General Translation (`gt-sanity`) | Translates text and Portable Text with the Context Groups (Glossary and Custom Prompts) on your project | A **Translate** action in Studio imports each locale as a draft | A language field, a credentials document, and a review before you publish |
+
+Use Sanity's localization plugins alone when translators write every language and content rarely changes; use Google Translate or a raw AI API for one-off text someone reviews before publishing. Use General Translation when documents carry rich text and references and keep changing.
+
+General Translation's `gt-sanity` plugin adds a **Translate** action to Sanity Studio and supports both models, with document-level as the default `translationLevel`. Install it with `npm install gt-sanity`, add a `language` field to each document type you translate, store your project ID and project API key in a private `generaltranslation.secrets` document, and add `gtPlugin` to `sanity.config.ts` with your locales and document types:
+
+```ts title="sanity.config.ts"
+import { defineConfig } from 'sanity';
+import { gtPlugin } from 'gt-sanity';
+export default defineConfig({
+  // ... your existing config
+  plugins: [
+    gtPlugin({
+      sourceLocale: 'en',
+      locales: ['es', 'zh', 'ja'],
+      translateDocuments: [{ type: 'article' }, { type: 'page' }],
+    }),
+  ],
+});
+```
+
+In the default document-level setup, clicking **Translate** on a source document sends its text and Portable Text for translation, leaves images, dates, numbers, and references untouched, and imports each locale as a draft. Auto-publish, reference patching (which repoints each reference to the same locale's translation), and **Save local edits** (which keeps editors' changes where the source text hasn't changed) are off by default. Your frontend queries each language with a GROQ filter such as `language == "es"`. If your app also uses General Translation, assign both projects one Context Group so terms translate the same way. The [Sanity Quickstart](/docs/integrations/sanity/quickstart) has the full steps.

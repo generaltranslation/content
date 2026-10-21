@@ -1,0 +1,108 @@
+---
+title: How do I translate conditional text in JSX?
+summary: Keep the sentence whole and translate every version of it, because a ternary splits it into fragments that lose their meaning and their place in each language's word order. General Translation does this with <Branch> inside <T>, which translates the sentence as one unit.
+description: Keep the sentence whole and translate every version, since a ternary splits it into fragments that lose their word order. General Translation's <Branch> inside <T> translates the sentence as one unit.
+date: 2025-09-26
+updated: 2026-10-16
+category: internationalization
+authors: [ernest]
+redirectFrom: [branch_vs_ternary]
+related: [how-to-handle-plurals-in-react, i18n-without-translation-files]
+---
+
+To translate conditional text in JSX (copy that a ternary or another condition picks), keep the sentence whole and translate every version of it. A ternary such as `I eat lunch at {atHome ? 'home' : 'work'}.` splits one sentence into fragments. Translated alone, "home" and "work" lose the sentence that gives them meaning, and the code keeps them at the end of the English sentence. Word order changes by language: Chinese puts the place before the verb, as in 我在家吃午餐 ("I eat lunch at home").
+
+| Approach | What it does well | What it leaves to you |
+| --- | --- | --- |
+| An internationalization (i18n) library alone (`i18next`, `react-intl`, `next-intl`) | One context key per version (`i18next`) or an ICU (International Components for Unicode) `select` message (`react-intl`, `next-intl`) holds every version of the sentence | Moving the sentence out of JSX into a key file and writing every version in every language |
+| Google Translate | Fast, general-purpose translation of text, one string at a time | Writing out each version as a full sentence, putting the results back into the code, and redoing both when the copy changes |
+| A raw AI API (OpenAI API, Claude API) | Fluent translation of the whole sentence, if you send it with every version | Collecting every version and its context, keeping terms consistent across releases, review, and loading the results into the app |
+| General Translation ([`<T>`](/docs/react/reference/components/t) with [`<Branch>`](/docs/react/reference/components/branch)) | [`<T>`](/docs/react/reference/components/t) translates the sentence as one unit, with every version inside one [`<Branch>`](/docs/react/reference/components/branch), and each version's complete wording can change per language | Replacing the ternary with [`<Branch>`](/docs/react/reference/components/branch) (an ESLint auto-fix does it inside [`<T>`](/docs/react/reference/components/t)), a one-time setup, and rerunning [`npx gt translate`](/docs/cli/reference/commands/translate) when the copy changes |
+
+Use a plain ternary when the app ships in one language. Use an i18n library alone when the copy already lives in key files that translators fill in, and Google Translate or a raw AI API for a sentence you translate once. Use [`<Branch>`](/docs/react/reference/components/branch) inside [`<T>`](/docs/react/reference/components/t) when the sentence lives in JSX and has to stay translated as the copy changes. When a number decides the wording, use [`<Plural>`](/docs/react/reference/components/plural) instead, because plural rules differ by language: English has 2 forms and Arabic has 6.
+
+General Translation's `gt-react` and `gt-next` libraries handle the condition with the [`<Branch>`](/docs/react/reference/components/branch) component inside [`<T>`](/docs/react/reference/components/t). Pass the value as `branch` (a string, number, or boolean), add one prop for each value, and put the fallback in `children`, which renders when no prop matches. When the condition changes the grammar beyond one word, put the complete sentence in each branch, so translators can adapt its complete wording. An inline ternary inside [`<T>`](/docs/react/reference/components/t) becomes a [`<Branch>`](/docs/react/reference/components/branch) like this:
+
+```tsx
+// Inline conditional
+<T>{isActive ? 'Active' : 'Inactive'}</T>;
+
+// Translatable branches
+<T>
+  <Branch branch={isActive} true="Active">
+    Inactive
+  </Branch>
+</T>;
+```
+
+General Translation's ESLint plugin, `@generaltranslation/react-core-linter`, flags a ternary inside [`<T>`](/docs/react/reference/components/t), and `npx eslint . --fix` converts it into a [`<Branch>`](/docs/react/reference/components/branch). Then [`npx gt translate`](/docs/cli/reference/commands/translate) translates each [`<T>`](/docs/react/reference/components/t) into every locale listed in `gt.config.json`. [Handling plurals and branches](/docs/react/guides/handling-plurals-and-branches) has the full steps, and the [React overview](/docs/react/overview#frameworks) links each framework's Quickstart.
+
+## How do I translate a sentence with a variable and a link in React?
+
+To translate a sentence that contains a variable and a link, keep the sentence, the variable, and the link text in one translation entry. Each language then gets the complete sentence and can put the name and the link where its grammar needs them. Splitting `Hi {name}, read the terms of service before you continue.` into "Hi", "read the", "terms of service", and "before you continue" gives translators four fragments without the sentence around them, and the code keeps them in English word order.
+
+| Approach | How the sentence marks the link | What it leaves to you |
+| --- | --- | --- |
+| Separate strings for each piece | The link text is its own string | Fragments without the sentence around them, in English word order |
+| react-i18next `<Trans>` | A numbered tag such as `<3>terms of service</3>`, or a named tag from the `components` prop | Writing the string in every language, and renumbering the tags when the JSX changes |
+| react-intl `<FormattedMessage>` | A named tag such as `<link>terms of service</link>`, rendered by a function in `values` | Writing the message in every language, and keeping the tag names matched to `values` |
+| General Translation ([`<T>`](/docs/react/reference/components/t) with [`<Var>`](/docs/react/reference/components/var)) | The link, written as JSX inside the sentence | A one-time setup, and rerunning [`npx gt translate`](/docs/cli/reference/commands/translate) when the copy changes |
+
+Use separate strings only for text that is not part of a sentence, such as a standalone button label. Use react-i18next's `<Trans>` or react-intl's `<FormattedMessage>` when the copy already lives in catalog files that translators fill in, and prefer named tags, which stay the same when the JSX around them changes. Use General Translation's [`<T>`](/docs/react/reference/components/t) with [`<Var>`](/docs/react/reference/components/var) when the sentence lives in JSX and has to stay translated as the copy changes.
+
+General Translation's `gt-react` and `gt-next` libraries keep the sentence whole with [`<T>`](/docs/react/reference/components/t): wrap the sentence in [`<T>`](/docs/react/reference/components/t), put the dynamic value in [`<Var>`](/docs/react/reference/components/var), and write the link as ordinary JSX inside the sentence.
+
+```tsx
+import { T, Var } from 'gt-react';
+
+export function TermsNotice({ name }: { name: string }) {
+  return (
+    <T>
+      <p>
+        Hi <Var>{name}</Var>, read the <a href="/terms">terms of service</a> before you continue.
+      </p>
+    </T>
+  );
+}
+```
+
+General Translation's [`<T>`](/docs/react/reference/components/t) translates the paragraph as one unit, link text included, and keeps the `<a>` element and its `href` as written. [`<Var>`](/docs/react/reference/components/var) renders `name` unchanged, never sends it to the General Translation API, and places it where each locale's sentence needs it. If you write `{name}` without [`<Var>`](/docs/react/reference/components/var), General Translation's [`static-jsx`](/docs/react/reference/lint-rules#static-jsx) lint rule flags it, and `npx eslint . --fix` wraps it in [`<Var>`](/docs/react/reference/components/var). In the Next.js App Router, import [`<T>`](/docs/react/reference/components/t) and [`<Var>`](/docs/react/reference/components/var) from General Translation's `gt-next` and write the link with [`Link` from `gt-next/link`](/docs/react/nextjs/link), which adds the locale prefix to internal URLs, so `/terms` becomes `/en/terms` for an English visitor.
+
+## How do react-i18next's Trans and General Translation's T handle nested elements?
+
+react-i18next's `<Trans>` component renders a sentence that contains React elements from one string per language, and the string marks each element by its position among the children of `<Trans>`. In this sentence the children are the text before the name, the `name` value, the text before the link, the link, and the closing text, so the link is child 3, counting from 0:
+
+```tsx
+import { Trans } from 'react-i18next';
+
+export function TermsNotice({ name }: { name: string }) {
+  return (
+    <Trans i18nKey="termsNotice">
+      Hi {{ name }}, read the <a href="/terms">terms of service</a> before you continue.
+    </Trans>
+  );
+}
+```
+
+```json title="locales/en/translation.json"
+{
+  "termsNotice": "Hi {{name}}, read the <3>terms of service</3> before you continue."
+}
+```
+
+An element nested inside another element is numbered among that parent's children. Elements without attributes from a short default list (`<br>`, `<strong>`, `<i>`, and `<p>`) keep their own names in the string. The `components` prop replaces numbers with names: with `components={{ termsLink: <a href="/terms" /> }}`, the string reads `<termsLink>terms of service</termsLink>`. react-intl's `<FormattedMessage>` also uses names: the message contains `<link>terms of service</link>`, and `values` maps `link` to a function that returns the `<a>` element.
+
+When nested elements stop translating with `<Trans>`, the string and the JSX usually disagree. Adding or removing a child before the link shifts every number after it, so the string in every language needs new numbers. A number that points at the wrong child renders the wrong content or drops the link, and a named tag that is missing from `components` renders as literal text.
+
+With General Translation's [`<T>`](/docs/react/reference/components/t), you write no translation string and keep no numbers in sync. The JSX between the [`<T>`](/docs/react/reference/components/t) tags is the source, General Translation identifies the entry from its content, and it records each nested element with its tag and an internal identifier that General Translation assigns. Text inside any element written between the [`<T>`](/docs/react/reference/components/t) tags is translated with the rest of the sentence, at any depth, as in this example from General Translation's [`<T>` reference](/docs/react/reference/components/t#overview):
+
+```tsx
+<T>
+  Today, I went to
+  <p>
+    the <b>store</b> to buy some <i>groceries</i>.
+  </p>
+</T>
+```
+
+General Translation's [`<T>`](/docs/react/reference/components/t) translates only content written literally between its tags, so a child component that renders its own text internally, such as `<Footer />`, is not translated by the surrounding [`<T>`](/docs/react/reference/components/t). Pass that text to the component as children instead, and avoid nesting one [`<T>`](/docs/react/reference/components/t) inside another. [Translating JSX](/docs/react/guides/translating-jsx) has the steps for each framework.

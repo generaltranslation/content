@@ -1,0 +1,169 @@
+---
+title: How do I internationalize an app with Cursor or Claude Code?
+summary: Start with General Translation's Setup for Agents prompt in Cursor or Claude Code, choose a feature and target languages, and have the agent implement and verify the result. Browser sign-in, machine-readable docs, and MCP tools connect setup to translation and review. Use Locadex to automate continuing localization through pull requests.
+description: Give Cursor or Claude Code General Translation's Setup for Agents prompt, pick a feature and target languages, and let the agent implement and verify it. Locadex then keeps translations current.
+date: 2026-10-21
+category: internationalization
+related: [add-i18n-to-nextjs, i18n-without-translation-files, how-to-handle-plurals-in-react, what-is-locadex]
+---
+
+“Translate my app into Spanish” leaves several decisions unanswered. Should the agent keep an existing library? Does Spanish need its own URL? Who translates new copy after this session ends? Set those boundaries before asking it to edit the application.
+
+General Translation provides a maintained setup prompt that takes a coding agent through project inspection, integration, translation, and verification. Start with one working feature, then apply the verified pattern across the codebase.
+
+## Start with Setup for Agents
+
+Use **Setup for Agents** on generaltranslation.com, or give Cursor or Claude Code the [official agent prompt](https://generaltranslation.com/agent-prompt.md). It directs the agent to inspect your project and use the current framework instructions. For supported projects, [`gt init`](/docs/cli/reference/commands/init) offers experimental framework setup; the agent reviews the generated integration, marks content, generates translations, and verifies the app.
+
+For local service access, [`gt login`](/docs/cli/reference/commands/login) lets you approve sign-in in the browser instead of pasting an API key into chat. The CLI still needs the intended project selected or configured. Setup flags can answer wizard questions without an interactive terminal; initial sign-in still requires your approval. Use scoped credentials from your CI secret store for unattended builds.
+
+The agent can discover documentation through [`llms.txt`](https://generaltranslation.com/llms.txt), fetch clean source by appending `.mdx` to a docs URL, and consult the [OpenAPI specification](https://generaltranslation.com/openapi.yaml). The [coding-agent guide](/docs/overview/for-coding-agents) includes reusable project instructions. These maintained resources keep setup tied to the current product APIs. The [documentation design article](/blog/rewriting-our-docs) explains how those discovery surfaces work.
+
+## Give the agent a bounded task
+
+Ask it to inspect the framework, installed versions, rendering model, routes, existing i18n configuration, and build scripts. If the app already uses an i18n library, retain it unless migration is part of the task. GT's CLI can [translate supported existing catalogs](/docs/cli/guides/generating-translations), including next-intl and react-i18next.
+
+Specify the source language, target locales, and the feature to change. Include validation messages, placeholders, accessible labels, and metadata. Choose local or CDN delivery, and name who will review the result in the [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations).
+
+## Connect General Translation's MCP server
+
+General Translation's hosted [Model Context Protocol (MCP) server](/docs/overview/for-coding-agents#mcp) lets your coding agent inspect live project settings and manage translation context. The agent can look up your project's locales, read shared terminology, and update Glossary terms or Custom Prompts when the task calls for it. That connects the code changes to the translation rules your team maintains in General Translation.
+
+The connection supports the translation workflow end to end through tools for:
+
+- Translating content, uploading source files, queueing translation jobs, checking status, and downloading results.
+- Publishing or unpublishing translations on the CDN.
+- Discovering and creating projects, and creating scoped project API keys when authorized.
+- Managing Context Groups, Glossary terms, and Custom Prompts.
+
+Give the agent the permissions for the workflow you want it to perform. Keep generated keys in a protected secret store, never in chat or browser code. Translation generation uses the service and its usage pricing; the CLI below handles the app's local extraction and translation sequence.
+
+In **Cursor**, add this server entry to your project's `.cursor/mcp.json`, preserving any existing entries. See [Cursor's MCP setup](https://cursor.com/docs/mcp) for configuration and authentication options.
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "generaltranslation": {
+      "url": "https://api.gtx.dev/mcp"
+    }
+  }
+}
+```
+
+In **Claude Code**, register the same server using its [HTTP transport](https://code.claude.com/docs/en/mcp):
+
+```bash
+claude mcp add --transport http generaltranslation https://api.gtx.dev/mcp
+```
+
+Complete the client's OAuth sign-in flow, or configure an API key through its secret-header settings as described in the [MCP authentication guide](/docs/overview/for-coding-agents#mcp). Context Management requires Organization Context access through OAuth or an Organization key with the relevant Context permissions; project keys cannot access those tools.
+
+Start with a concrete request: “Use the generaltranslation MCP server to list my projects and show the locale settings for the project we're localizing.” Then have the agent inspect the project's assigned Context Groups, which hold shared Glossary terms and Custom Prompts. It can use those terms and instructions while preparing the feature, and update them when you've requested a terminology or style change.
+
+Use the framework docs for code integration and the CLI for the extraction and translation steps below. The MCP connection gives the agent access to the live project and its context; the app still needs its SDK setup, translated content, and verification.
+
+## Add a feature brief with acceptance criteria
+
+Add this brief to the official setup prompt. Replace the feature and locales with your own requirements; the example below uses English, Spanish, and French.
+
+```text
+Internationalize the project-list feature in this application.
+Use English as the source language and Spanish and French as target languages.
+Include the heading, owner name, project count, search input, visible label,
+placeholder, and language selector. Use locally bundled translations and
+preserve existing routes and providers. Use the connected GT MCP server to
+read project settings and assigned terminology when permitted. Report any
+connection or permission gaps. Do not change shared context outside this task.
+Verify counts 0, 1, and 2, a name containing punctuation, input labels and
+placeholders, language switching, reload persistence, and the production build.
+Check server-rendered content if this app uses SSR. Report the actual commands
+and results, translation-review status, and anything untested. Source templates
+are not completed translations. Limit changes to this feature and its setup.
+Do not deploy or merge.
+```
+
+Keep project rules in the instruction mechanism your agent reads. Cursor documents [project rules and AGENTS.md](https://cursor.com/docs/rules); Claude Code documents [CLAUDE.md and other project instructions](https://code.claude.com/docs/en/memory). Add the chosen library, source locale, translation command, and required checks to your existing instructions. Avoid maintaining competing copies that can drift.
+
+## Review a representative implementation
+
+For a browser-only React app, the [React SPA quickstart](/docs/react/react-spa-quickstart) configures `gt-react` before rendering. This example assumes that setup is complete, with local output at `src/_gt/[locale].json`. It uses `gt-react@11.4.12` and the `gt@2.26.5` CLI.
+
+The component below covers static copy, a dynamic value, plural forms, and input text. Render it with a project count and an owner name from your application.
+
+```tsx title="src/ProjectSummary.tsx"
+import { Num, Plural, T, Var, useGT } from 'gt-react';
+
+export default function ProjectSummary({
+  count,
+  ownerName,
+}: {
+  count: number;
+  ownerName: string;
+}) {
+  const gt = useGT();
+
+  return (
+    <section>
+      <T>
+        <h1>Projects for <Var>{ownerName}</Var></h1>
+        <p>
+          <Plural
+            n={count}
+            one={<>You have <Num>{count}</Num> project.</>}
+            other={<>You have <Num>{count}</Num> projects.</>}
+          />
+        </p>
+      </T>
+      <label>
+        <T>Search projects</T>
+        <input type='search' placeholder={gt('Search projects')} />
+      </label>
+    </section>
+  );
+}
+```
+
+[`<Var>`](/docs/react/reference/components/var) preserves the owner's name while the surrounding message is translated; its value is not sent to the translation API. [`<Plural>`](/docs/react/reference/components/plural) selects a branch using the locale's rules, and [`<Num>`](/docs/react/reference/components/num) formats the count. [`useGT`](/docs/react/reference/hooks/use-gt) returns the translation function directly. The visible label wraps the input, so the control has a label as well as a translated placeholder.
+
+The `one` and `other` branches describe the English source. Target-language translations must represent their own plural forms; don't assume testing English's singular/plural pair covers every language. See the [React pluralization guide](/kb/how-to-handle-plurals-in-react).
+
+In a React SPA, the documented [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) setup loads translations before the app. Its [`LocaleSelector`](/docs/react/reference/components/locale-selector) saves the language choice in a cookie and reloads the page. Server-rendered frameworks have different setup requirements; use their own quickstart.
+
+## Produce translations before judging the result
+
+For the local trial, run this from the configured app directory after adding the component:
+
+```bash
+npx gt generate
+```
+
+[`gt generate`](/docs/cli/reference/commands/generate) creates source templates without calling the translation service. Supply translated text in the Spanish and French files while preserving generated keys, variable markers, and JSX structure. The existence of `es.json` does not mean it contains Spanish.
+
+For service-generated translations, follow the [CLI authentication and project setup](/docs/cli/quickstart), then use [`gt translate`](/docs/cli/reference/commands/translate). Authenticate with a CLI login or an API key, and configure the project ID separately; login alone does not select a project. For unattended CI, supply `GT_API_KEY` through the CI provider's secret settings, with permissions for the translation workflow. See the [credential configuration guide](/docs/cli/guides/configuring#credentials), and keep tooling keys out of browser code. Service usage applies.
+
+General Translation translates the marked JSX with its structure and any explicit context you provide. Add the [`context` prop](/docs/react/reference/components/t#context) for ambiguous copy, and apply the project's shared [Glossary terms and Custom Prompts](/docs/platform/dashboard/guides/defining-context-for-translations) to guide product terminology and tone. That gives translation production the same product rules the coding agent reads through MCP.
+
+With [locally bundled translations](/docs/react/guides/storing-translations), prepare the locale files before the production build. Preserve manually maintained files in version control or your translation pipeline. Don't ignore the only copy of hand-edited translations as though it were disposable output.
+
+## Verify the feature, then expand
+
+Run [`gt validate`](/docs/cli/reference/commands/validate) to catch supported inline-translation errors before an API request, then have the agent report observed results for each check below.
+
+| Check | Expected result |
+| --- | --- |
+| Select Spanish, then French | Heading, count message, label, and placeholder use the selected language |
+| Reload after choosing a language | The selected language persists according to the app's policy |
+| Try counts 0, 1, and 2 | Each language uses its own plural rules; the number stays correct |
+| Use an owner such as O'Connor | The name remains intact in every language |
+| Inspect the input's accessible name | It matches the translated visible label |
+| Run the production build and preview | The same feature works with the files that will ship |
+
+For the sample, [French zero and English zero use different plural categories](https://cldr.unicode.org/index/cldr-spec/plural-rules). Check that the rendered sentence uses the correct form and preserves the count.
+
+Once the pattern works, expand one route or feature at a time. Reviewers can edit translations in the [Dashboard Translation Editor](/docs/platform/dashboard/guides/reviewing-translations), with [unlimited seats](https://generaltranslation.com/pricing) for translators, PMs, and in-country reviewers. Enterprise adds approval controls for governance. If your team edits the generated local files, opt into [`gt save-local`](/docs/cli/reference/commands/save-local) to upload those changes for later reuse. See [reviewing AI translations](/kb/review-translations) for the review workflow.
+
+## Keep localization running after the agent session
+
+Put [`gt translate` before the production build](/docs/cli/guides/generating-translations) to update translations when source copy changes. The incremental workflow reuses matching translations instead of regenerating every message on each run.
+
+For ongoing work without driving your own coding assistant, General Translation's hosted agent, [Locadex](/docs/platform/locadex/guides/configuring-automations), can internationalize new UI, generate translations, and synchronize added or removed locales. Configure pull-request, push, or manual triggers; changes arrive through pull requests. [Auto-merge](/docs/platform/locadex/guides/auto-merging-prs) is optional. A coding assistant can establish the integration, and Locadex can carry it into subsequent releases. Automation is available across accounts, with [usage-based charges for agent work](https://generaltranslation.com/pricing/usage). See the [automation reference](/docs/platform/locadex/reference/automations) for setup, or [run translation in CI](/kb/translations-in-ci) with your own pipeline.
