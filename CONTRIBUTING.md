@@ -15,11 +15,10 @@ A maintainer will review your PR. CI checks will run automatically to validate y
 
 ## Development environment
 
-This repo holds the MDX content (docs, blog, devlog, authors), a Next.js app that renders it, and Node scripts that validate it. Use the right package manager in each independent dependency root:
+This repo holds the MDX content (docs, blog, devlog, authors), a Next.js app that renders it, and Node scripts that validate it. It has **two independent dependency roots**, so use the right package manager in each:
 
 - The repo root is a pnpm workspace (`pnpm-workspace.yaml`, globbing `apps/*`, currently just `apps/content` — the Fumadocs/Next.js site). Use `pnpm` here.
 - `scripts/` is a separate project with its own `package-lock.json` and uses `npm`. Do not manage it with pnpm.
-- Each runnable example under `examples/kb/` is a separate npm project with pinned dependencies and its own `package-lock.json`.
 
 Run the site with `pnpm --filter ./apps/content dev` (serves on `http://localhost:3000`), or build it with `pnpm build:content` from the root. There is no `/docs` index route, so deep-link to a real page such as `/docs/cli/quickstart`.
 
@@ -40,8 +39,6 @@ Run the validators from `scripts/`:
 | `npm run typecheck` | The validation scripts themselves |
 
 These mirror the CI jobs in `.github/workflows/run-tests.yml`. `pnpm install` reports `Ignored build scripts: esbuild, sharp`; that is expected and does not affect dev, build, or the validators.
-
-For an article with a runnable example, follow the example's README and run `npm ci --ignore-scripts` followed by `npm test` in its directory. CI runs the JSON validation, Markdown preservation, and locale matching examples on Node.js 22. Keep the article snippets and documented commands in sync with their fixtures. Describe what each test establishes and its limitations; a structural check is not evidence of translation quality.
 
 ## Content structure
 

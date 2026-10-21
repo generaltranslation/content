@@ -1,7 +1,7 @@
 ---
 title: How to translate JSON locale files
 summary: Translate the string values in JSON locale files, preserve nonplural keys, placeholders, and markup, and supply the plural forms your i18n library needs. Give short strings context, then validate the output with checks for that library’s message syntax before reviewing the translation itself.
-description: Translate JSON locale files while preserving placeholders and markup, with tested validation examples for i18next plurals and ICU messages.
+description: Translate JSON locale files while preserving placeholders and markup, and validate i18next plural forms and ICU messages before release.
 date: 2026-10-20
 category: translation
 authors: [kevin-wu, jackie]
@@ -108,36 +108,14 @@ The CLI detects the companion file, checks that its keys exist in the source, an
 
 ## Check the translated files before they ship
 
-Use checks that understand the message format. The [runnable JSON validation example](https://github.com/generaltranslation/content/tree/main/examples/kb/json-validation) includes a validator, fixtures, tests, and a lockfile. It has two explicit modes:
+Validate the output with the same message format and locale rules your application uses:
 
-- **i18next:** checks default `{{name}}` interpolation, balanced simple tags such as `<1>`, and cardinal plural families ending in `_one`, `_few`, `_many`, or `_other`. It permits the additional forms Polish and Arabic need, checks their placeholders, and lets Japanese use only `_other`. An optional `_zero` form is allowed.
-- **ICU:** uses the [FormatJS ICU message parser](https://formatjs.github.io/docs/icu-messageformat-parser/) to parse nested messages and compare argument names and types, rich-text tag names, select cases, exact-number selectors, and plural offsets. Changing the controlling variable from `count` to `total` fails even when both messages parse. ICU can use its `other` branch as a fallback, so this mode does not demand every CLDR plural category.
+- **Parse the JSON and compare nonplural keys.** Check nested key paths as well as top-level keys. Missing or renamed keys can break lookups even when the JSON parses. Handle arrays and non-string values according to your application's schema.
+- **Check i18next plurals as families.** Group keys such as `inbox_one` and `inbox_other` by their base key, then check the target locale's categories. Polish needs `inbox_few` and `inbox_many` too; these are required additions, not unexpected keys. Japanese can use only `inbox_other`. i18next follows `Intl.PluralRules` and also allows a special `_zero` form; use the appropriate rules for cardinal or ordinal messages. See [i18next plural rules](https://www.i18next.com/translation-function/plurals).
+- **Preserve placeholders and tags in every translated form.** Check newly added plural forms too. `{{name}}` must still refer to `name`, and numbered tags must still identify the intended components, even when their order changes.
+- **Parse ICU messages and compare their arguments.** Use a parser such as the [FormatJS ICU message parser](https://formatjs.github.io/docs/icu-messageformat-parser/), rather than a regular expression for nested braces. Parsing alone is insufficient: changing the plural argument from `count` to `total` produces valid syntax but no longer matches the value the application supplies. Check argument names and types, rich-text tags, select cases, exact-number selectors such as `=0`, and plural offsets. Allow locale-specific plural categories; ICU's required `other` branch provides a fallback, so ICU messages need not contain every CLDR category.
 
-Clone or download the [content repository](https://github.com/generaltranslation/content), then open `examples/kb/json-validation`. With Node.js 20 or later, run:
-
-```bash title="run-examples.sh"
-set -eu
-npm ci --ignore-scripts
-npm test
-node check-json.mjs i18next fixtures/i18next-en.json fixtures/i18next-pl.json pl
-node check-json.mjs icu fixtures/icu-en.json fixtures/icu-de.json de
-```
-
-The commands use the pinned parser dependency and run locally without an API key. The tests also verify that these article commands and the English JSON example match the files in the repository.
-
-These fixtures were run with Node.js 24.19.0 and `@formatjs/icu-messageformat-parser` 3.5.22:
-
-| Fixture | Result | What it checks |
-| --- | --- | --- |
-| English to Polish, with `_one`, `_few`, `_many`, and `_other` | Pass, exit 0 | Required new plural keys are accepted |
-| Polish with only the English plural forms | Fail, exit 1 | Missing `_few` and `_many` are reported |
-| ICU English to German with `count` preserved | Pass, exit 0 | Translated branch text is accepted |
-| ICU German with `count` renamed to `total` | Fail, exit 1 | A changed plural argument is detected |
-| ICU German with a missing closing brace | Fail, exit 1 | Invalid nested message syntax is rejected |
-
-The fixtures are validation examples, not a translation-quality benchmark or recorded output from General Translation. A failing check exits with code 1, so you can use the same command in CI after translation.
-
-The example accepts objects with string values, including nested objects. Its i18next mode reserves `_other` keys for cardinal plural families and excludes ordinal keys, custom interpolation delimiters, formatters, nesting calls, and tags with attributes. Arrays, non-string values, and vue-i18n pipe syntax need a validator adapted to those formats. ICU checks compare contracts across each message; they do not check branch-by-branch argument placement, formatting styles, or meaning. Review important strings in the application as well.
+Finally, load the messages through your application's i18n library and review them in context. Exercise counts that select each plural form, including zero and decimals where relevant. Syntax checks cannot establish whether a translation is accurate or whether its text fits the interface. Custom interpolation rules and vue-i18n's pipe syntax need checks adapted to those formats.
 
 ## Key takeaways
 
