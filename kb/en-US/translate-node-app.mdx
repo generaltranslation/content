@@ -4,37 +4,48 @@ summary: Detect each request's language, usually from its Accept-Language header
 description: Detect each request's language, often from the Accept-Language header, and return strings in it. General Translation's gt-node sets the locale per request with withGT and translates with getGT.
 date: 2026-10-21
 category: internationalization
+authors: [kevin, kevin-wu]
 related: [translate-react-app, translate-vue-app, add-i18n-to-nextjs, translations-in-ci]
 ---
 
 Translating a Node.js app means detecting each request's language, usually from its `Accept-Language` header, and returning every string in that language. It's hard because one server handles many users at once, so the language can't be a global setting: each request carries its own, and every function that builds the response needs it. Strings with values also need grammar rules per language: a count takes one of 2 plural forms in English and one of 6 in Arabic.
 
+## Ways to translate a Node.js app
+
 | Approach | What it does well | Locale for each request | What it leaves to you |
 | --- | --- | --- | --- |
-| An internationalization (i18n) library alone (`i18next`) | Mature runtime for rendering translations and formatting values | A middleware plugin detects it | Extracting strings into one JSON key file per language, writing each translation, and updating every file when copy changes |
-| Google Translate | Fast, general-purpose translation of text | You pass a target language on each call | It translates each string on its own; consistent terms, tone, plurals, delivery, and review are up to you |
-| A raw AI API (OpenAI API, Claude API) | Fluent translation that follows instructions | You name it in each prompt | Context for each string, consistent terms across releases, delivery, and review |
+| An internationalization (i18n) library alone ([`i18next`](/kb/general-translation-vs-i18next)) | Mature runtime for rendering translations and formatting values | A middleware plugin detects it | Extracting strings into one JSON key file per language, writing each translation, and updating every file when copy changes |
+| [`nestjs-i18n`](/kb/general-translation-vs-nestjs-i18n) (NestJS) | Renders messages from per-language JSON or YAML catalogs, over HTTP, GraphQL, gRPC, and WebSockets | Resolvers read the query string, a header, a cookie, or `Accept-Language`, in the order you list them | Writing every language's catalog and keeping each one current |
+| A machine translation API at request time (DeepL, Google Cloud Translation) | Translates any text, including content that only exists at run time | You pass the target language on each call | Latency and cost on every request unless you cache results, consistent terms, plurals, and review |
 | General Translation (`gt-node` and the `gt` CLI) | Strings stay inline in handlers, in `gt()` calls, and [`npx gt translate --publish`](/docs/cli/reference/commands/translate) translates them before you deploy | [`withGT`](/docs/node/reference/functions/with-gt) binds it | A project ID and `gt.config.json` from [`npx gt init`](/docs/cli/reference/commands/init), [`gt login`](/docs/cli/reference/commands/login) or an API key, and the CLI in your build or deploy step |
 
-Use an i18n library alone when your team already maintains translated key files; use Google Translate or a raw AI API for a one-off batch of text someone checks by hand; use `gt-node` when the strings live in your handlers and change with every release. If your API returns only data and error codes, and a web or mobile client renders every message, a simpler setup is enough: translate in the client.
+Use `i18next` or `nestjs-i18n` alone when your team already maintains translated catalogs. Call a machine translation API at request time only for content that exists just at run time, such as user posts. Use `gt-node` when the strings live in your handlers and change with every release. If your API returns only data and error codes, and a web or mobile client renders every message, a simpler setup is enough: translate in the client.
 
-With General Translation's `gt-node`, you call [`initializeGT`](/docs/node/reference/functions/initialize-gt) once at startup with your locales and wrap each request in [`withGT`](/docs/node/reference/functions/with-gt). [`withGT`](/docs/node/reference/functions/with-gt) binds the locale with `AsyncLocalStorage`, so concurrent requests keep their own, and [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) reads it from `Accept-Language`. In a handler, [`getGT`](/docs/node/reference/functions/get-gt) returns a `gt()` function that takes ICU messages, plurals included, and a `$context` option for ambiguous words:
+## Translate a Node.js app with gt-node
 
-```js title="server.js"
-import express from 'express';
-import { initializeGT, withGT, getRequestLocale, getGT } from 'gt-node';
+1. Call [`initializeGT`](/docs/node/reference/functions/initialize-gt) once at startup with your locales.
+2. Wrap each request in [`withGT`](/docs/node/reference/functions/with-gt). It binds the locale with `AsyncLocalStorage`, so concurrent requests keep their own, and [`getRequestLocale`](/docs/node/reference/functions/get-request-locale) reads it from `Accept-Language`.
+3. In a handler, call [`getGT`](/docs/node/reference/functions/get-gt) for a `gt()` function that takes ICU messages, plurals included, and a `$context` option for ambiguous words:
 
-initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'fr'] });
-const app = express();
-app.use((req, res, next) => withGT(getRequestLocale(req), () => next()));
+   ```js title="server.js"
+   import express from 'express';
+   import { initializeGT, withGT, getRequestLocale, getGT } from 'gt-node';
 
-app.get('/api/greeting', async (req, res) => {
-  const gt = await getGT();
-  res.json({ message: gt('Hello, {name}!', { name: 'Alice' }) });
-});
-app.listen(3000, () => console.log('Listening on http://localhost:3000'));
-```
+   initializeGT({ defaultLocale: 'en', locales: ['en', 'es', 'fr'] });
+   const app = express();
+   app.use((req, res, next) => withGT(getRequestLocale(req), () => next()));
 
-Before you deploy, enable the CDN in your project settings and run [`npx gt translate --publish`](/docs/cli/reference/commands/translate). In production, `gt-node` fetches those translations from the General Translation CDN for the project ID in `GT_PROJECT_ID`, and a missing translation falls back to the source string.
+   app.get('/api/greeting', async (req, res) => {
+     const gt = await getGT();
+     res.json({ message: gt('Hello, {name}!', { name: 'Alice' }) });
+   });
+   app.listen(3000, () => console.log('Listening on http://localhost:3000'));
+   ```
+
+4. Before you deploy, enable the CDN in your project settings and run [`npx gt translate --publish`](/docs/cli/reference/commands/translate).
+
+In production, `gt-node` fetches those translations from the General Translation CDN for the project ID in `GT_PROJECT_ID`, and a missing translation falls back to the source string.
+
+## Share terms with your client app
 
 If your web or mobile client also uses General Translation, assign its Context Group (Glossary and Custom Prompts) to the server's project from **Project > Context** in the Dashboard, so new translations in API responses use the same terms. The [Node.js Quickstart](/docs/node/quickstart) has the full steps.
