@@ -36,13 +36,13 @@ Install the integration, add a config file, initialize with your app, and transl
 <Tabs items={['Flask', 'FastAPI']}>
   <Tab value="Flask">
     ```bash
-    pip install gt-flask
+    pip install "gt-flask>=0.3.1"
     ```
   </Tab>
 
   <Tab value="FastAPI">
     ```bash
-    pip install gt-fastapi
+    pip install "gt-fastapi>=0.3.1"
     ```
   </Tab>
 </Tabs>
@@ -63,7 +63,7 @@ With the placeholder `projectId`, the app still runs and the request locale stil
 
 ### 3. Initialize with your app
 
-Call `initialize_gt(app)` once at startup. It reads `gt.config.json`, registers per-request locale detection, and eager-loads translations. There is no API key parameter — CDN loading uses `project_id` and `cache_url`.
+Call `initialize_gt(app)` once at startup. It reads `gt.config.json`, registers per-request locale detection, and loads translations for the configured locales. After that, translations older than 60 seconds are reloaded in the background while the cached copy keeps being served. There is no API key parameter: CDN loading uses `project_id`, and `cache_url` defaults to the General Translation CDN.
 
 <Tabs items={['Flask', 'FastAPI']}>
   <Tab value="Flask">
@@ -116,13 +116,25 @@ Use ICU placeholders and pass values as keyword arguments.
 t("Hello, {name}!", name="Alice")
 ```
 
-### 5. Generate translations
+### 5. Generate and publish translations
 
-Use the [General Translation CLI](/docs/cli/quickstart) to translate your content before you deploy, so translations are available at runtime. The CLI is a Node tool, so it needs Node installed and runs through `npx`.
+Use the [General Translation CLI](/docs/cli/quickstart) to translate your content before you deploy. The CLI is a Node tool, so it needs Node installed and runs through `npx`. `--publish` uploads the translations to the General Translation CDN, where the app loads them at runtime.
 
 ```bash
-npx gt translate
+npx gt translate --publish
 ```
+
+*Note: Enable the CDN in your project settings first. To ship translations as files in your app instead, see [Storing translations locally](/docs/python/guides/storing-translations).*
+
+### 6. Check a translated response
+
+Restart the app so it loads the new translations, then request it in Spanish.
+
+```bash
+curl -H "Accept-Language: es" http://localhost:5000/
+```
+
+The response's `message` is the Spanish translation of "Hello, world!" (for example `¡Hola, mundo!`), and its `locale` is `es`. Flask writes non-ASCII characters as escapes in JSON (`\u00a1Hola, mundo!`). On FastAPI, Uvicorn serves on port 8000.
 
 ## Use the core library without a framework [#core]
 
