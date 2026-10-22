@@ -1,6 +1,6 @@
 ---
 title: How do I set up SEO for a multilingual Next.js app?
-summary: Put every language under a locale prefix, including the default, such as /en/about and /fr/about, and set html lang in the root layout. Then build the canonical, hreflang alternates, and sitemap from one record of the locales each page is published in, and mark unpublished versions noindex.
+summary: In this gt-next setup, put every language under a locale prefix, including the default, such as /en/about and /fr/about, and set html lang in the root layout. Then build the canonical, hreflang alternates, and sitemap from one record of the locales each page is published in, and mark unpublished versions noindex.
 description: Give each language its own URL in Next.js, then add canonical and hreflang tags, html lang, translated metadata, and a multilingual sitemap with gt-next.
 date: 2026-02-17
 category: multilingual-seo
@@ -156,11 +156,16 @@ export async function getI18NMetadata(path: string): Promise<Metadata> {
   const published = PUBLISHED[path] ?? [];
 
   // Keep an unpublished version out of the index.
-  if (!published.includes(locale)) return { robots: { index: false } };
+  if (!published.includes(locale)) {
+    return {
+      robots: { index: false },
+      alternates: null,
+    };
+  }
 
   const languages: Record<string, string> = {};
   for (const loc of published) languages[loc] = localeUrl(loc, path);
-  languages['x-default'] = localeUrl('en', path);
+  languages['x-default'] = localeUrl(published.includes('en') ? 'en' : published[0], path);
 
   return { alternates: { canonical: localeUrl(locale, path), languages } };
 }
@@ -197,7 +202,7 @@ Built with Next.js 16.4.2 and `gt-next` 11.4.14, `/fr/about`, which is published
 <link rel="alternate" hrefLang="x-default" href="https://example.com/en/pricing"/>
 ```
 
-The route still answers at `/es/pricing`, but its `<head>` carries only `<meta name="robots" content="noindex"/>` and no canonical or alternates, so search engines skip it until you add `es` to the record. `x-default` points at the English version of each page, a URL that always returns English. The helper assumes the same path in every locale; if you use localized slugs or route aliases, build URLs from that route map instead.
+The route still answers at `/es/pricing`, but its `<head>` carries only `<meta name="robots" content="noindex"/>` and no canonical or alternates, so crawlers can discover the `noindex` instruction. Setting `alternates: null` clears any canonical or alternates inherited from a parent layout. Keep the route crawlable; `noindex` is not access control. `x-default` points at English when published, otherwise the first published locale. The helper assumes the same path in every locale; if you use localized slugs or route aliases, build URLs from that route map instead.
 
 Also provide a [language switcher](/kb/language-switcher) with ordinary links to equivalent pages. Hreflang does not replace a visible navigation choice.
 
@@ -225,7 +230,7 @@ export async function generateMetadata() {
 }
 ```
 
-This supplies localized titles and descriptions. Measure actual impressions, clicks, and conversions after publication rather than assuming a fixed click-through improvement.
+The strings must be generated before release. Run [`gt translate`](/docs/cli/reference/commands/translate) before the production build, review titles and descriptions in the [Dashboard editor](/docs/platform/dashboard/guides/reviewing-translations), then add the locale to `PUBLISHED`. GT's CLI and service produce the translations; [`getGT`](/docs/react/nextjs/reference/functions/get-gt) renders the selected locale's strings. Shared [Glossary terms](/docs/platform/dashboard/guides/defining-context-for-translations) help keep product names consistent between the page and its search metadata. Measure actual impressions, clicks, and conversions after publication rather than assuming a fixed click-through improvement.
 
 ---
 
