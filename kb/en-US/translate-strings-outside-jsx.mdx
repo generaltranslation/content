@@ -4,31 +4,43 @@ summary: Pass each string that isn't a JSX child, such as a placeholder or a mod
 description: Pass each string that isn't a JSX child, such as a placeholder or constant, through a translation function. General Translation's useGT returns one, and msg with useMessages handles module constants.
 date: 2026-10-21
 category: internationalization
+authors: [kevin, kevin-wu]
 related: [translate-conditional-jsx, format-numbers-dates-currencies, translate-react-app, i18n-without-translation-files]
 ---
 
 Strings outside JSX are text that isn't a JSX child, so a translation component can't wrap it: attribute values such as `placeholder` and `aria-label`, strings built in code, and constants defined at module scope. Each goes through a translation function from a hook (`useTranslation` in `react-i18next`, for example), and hooks run only inside a component. A module-scope constant is evaluated once, when the file loads, so translating it there locks in whichever language was active then (on a server, one language for every user). Instead, the constant holds a reference, and the string is translated where it renders.
 
+## Ways to translate strings outside JSX
+
 | Approach | What it does well | In the code | What it leaves to you |
 | --- | --- | --- | --- |
-| An internationalization (i18n) library alone (`i18next`, `react-intl`, `next-intl`) | Mature runtimes for rendering translations and formatting values | A hook gives you a function that you call with a key; a constant stores the key, which is translated at render | Inventing a key for each string, writing one file per language, and keeping every file in sync as copy changes |
-| Google Translate | Fast, general-purpose translation of text | No code support: it returns text, so an i18n library still looks up each string by language | It translates each string on its own; context (the input a placeholder labels, your terms, your tone), loading results into the app, and review are up to you |
-| A raw AI API (OpenAI API, Claude API) | Fluent translation that follows instructions | No code support: you call it from a script or at run time and load the results yourself | Collecting context for every string, keeping terms consistent across releases, and review |
+| [`i18next`](/kb/general-translation-vs-i18next) (`react-i18next`) or `next-intl` | Mature runtimes with a translation function for any string | [`t`](https://www.i18next.com/overview/api#t) from [`useTranslation`](https://react.i18next.com/latest/usetranslation-hook) or [`useTranslations`](https://next-intl.dev/docs/environments/server-client-components) takes a key; a constant stores the key, which is translated at render | Inventing a key for each string, writing one file per language, and keeping every file in sync as copy changes |
+| [`react-intl`](/kb/general-translation-vs-react-intl) | Message descriptors carry an ID, a default message, and a description for translators | `defineMessages` declares descriptors in a constant, and [`formatMessage`](https://formatjs.github.io/docs/react-intl/api#formatmessage) from [`useIntl`](https://formatjs.github.io/docs/react-intl/api#useintl-hook) translates one at render | An ID for each message, extracting messages into a file per language, and producing every translation |
+| [Lingui](/kb/general-translation-vs-lingui) | The source text is the message, so there are no keys to invent | The [`msg`](https://lingui.dev/ref/macro#definemessage) macro defines a message in a constant, and `_` from [`useLingui`](https://lingui.dev/ref/react) translates it at render | Running `lingui extract` and `lingui compile`, and translating each catalog |
 | General Translation (`gt-react` and `gt-next`) | [`npx gt translate`](/docs/cli/reference/commands/translate) finds each string in your code and translates it before the production build | [`useGT`](/docs/react/reference/hooks/use-gt) returns a function you call with the source string (no key); [`msg`](/docs/react/reference/functions/msg) registers each string in a constant, and [`useMessages`](/docs/react/reference/hooks/use-messages) translates it at render | Passing each string as a literal so the CLI can find it, and rerunning [`npx gt translate`](/docs/cli/reference/commands/translate) when copy changes |
 
-Use an i18n library alone when your app already has key files and a translator keeps them current. Use Google Translate or a raw AI API for a one-off batch someone checks by hand. Use General Translation when strings sit across components and shared constants and change with each release. If only one component uses a constant, moving it inside is enough: each value becomes an ordinary translation call.
+Use `i18next` or `next-intl` when your app already has key files and a translator keeps them current. Use `react-intl` or Lingui when translators work from extracted catalogs and need a description or the source text with each message. Use General Translation when strings sit across components and shared constants and change with each release. If only one component uses a constant, moving it inside is enough: each value becomes an ordinary translation call.
 
-General Translation's `gt-react` and `gt-next` translate a string in a component with the [`useGT`](/docs/react/reference/hooks/use-gt) hook, and a constant with [`msg`](/docs/react/reference/functions/msg) and [`useMessages`](/docs/react/reference/hooks/use-messages). `const gt = useGT()` returns the function itself; pass it a string literal, with variables as named placeholders: `gt('Welcome back, {name}!', { name: user.name })`. Add `$context` so an ambiguous word gets the right meaning. Async Next.js App Router components can't call hooks, so they await [`getGT`](/docs/react/nextjs/reference/functions/get-gt) and [`getMessages`](/docs/react/nextjs/reference/functions/get-messages) from `gt-next/server`. For a constant, register each string with [`msg`](/docs/react/reference/functions/msg) and resolve it where it renders:
+## Translate strings outside JSX with General Translation
 
-```tsx
-import { msg, useMessages } from 'gt-react';
+General Translation's `gt-react` and `gt-next` translate a string in a component with the [`useGT`](/docs/react/reference/hooks/use-gt) hook, and a constant with [`msg`](/docs/react/reference/functions/msg) and [`useMessages`](/docs/react/reference/hooks/use-messages).
 
-const STATUS = { active: msg('Active'), paused: msg('Paused') };
+1. For a string in a component, call `const gt = useGT()`, which returns the function itself, and pass it a string literal with variables as named placeholders: `gt('Welcome back, {name}!', { name: user.name })`. Add `$context` so an ambiguous word gets the right meaning.
+2. For a constant, register each string with [`msg`](/docs/react/reference/functions/msg) and resolve it with [`useMessages`](/docs/react/reference/hooks/use-messages) where it renders:
 
-function Badge({ status }: { status: 'active' | 'paused' }) {
-  const m = useMessages();
-  return <span>{m(STATUS[status])}</span>;
-}
-```
+   ```tsx
+   import { msg, useMessages } from 'gt-react';
 
-In a client-side `gt-react` app set up with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa), the [`t`](/docs/react/reference/functions/t-function) function also translates at module scope, but a language switch needs a full page reload. Run [`npx gt translate`](/docs/cli/reference/commands/translate) before the production build; the [Translating strings](/docs/react/guides/translating-strings) guide has the full steps for each framework.
+   const STATUS = { active: msg('Active'), paused: msg('Paused') };
+
+   function Badge({ status }: { status: 'active' | 'paused' }) {
+     const m = useMessages();
+     return <span>{m(STATUS[status])}</span>;
+   }
+   ```
+
+3. Run [`npx gt translate`](/docs/cli/reference/commands/translate) before the production build.
+
+## Server components and module scope
+
+Async Next.js App Router components can't call hooks, so they await [`getGT`](/docs/react/nextjs/reference/functions/get-gt) and [`getMessages`](/docs/react/nextjs/reference/functions/get-messages) from `gt-next/server`. In a client-side `gt-react` app set up with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa), the [`t`](/docs/react/reference/functions/t-function) function also translates at module scope, but a language switch needs a full page reload. The [Translating strings](/docs/react/guides/translating-strings) guide has the full steps for each framework.
