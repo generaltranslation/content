@@ -1,0 +1,167 @@
+---
+
+title: formatMessage
+description: Format ICU-style messages with variables and locale-aware values. API reference for formatMessage.
+
+---
+
+Formats a message with variable substitution and locale-aware formatting on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance. General Translation's native ICU formatter supports variable interpolation, pluralization, number formatting, and date formatting.
+
+## Overview [#overview]
+
+Call `formatMessage` on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance with a message string and an optional options object holding the `variables` to interpolate. It returns the formatted message.
+
+```typescript
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'fr' });
+
+const formatted = intl.formatMessage('Hello {name}, you have {count} messages', {
+  variables: { name: 'Alice', count: 5 },
+});
+// "Hello Alice, you have 5 messages"
+```
+
+Signature:
+
+```typescript
+formatMessage(
+  message: string,
+  options?: {
+    locale?: string;
+    locales?: string | string[];
+    variables?: FormatVariables;
+    dataFormat?: StringFormat;
+  }
+): string
+```
+
+*Note: `formatMessage` runs locally and does not require an API key. It formats for `options.locale`, then the instance `locale`, falling back to `defaultLocale` and then `en`; pass `locales` to replace that list. For formatting without a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, see the standalone [`formatMessage`](/docs/platform/core/reference/utility-functions/formatting/format-message).*
+
+## How it works [#how-it-works]
+
+- **ICU processing.** The method uses General Translation's native ICU formatter and applies locale-specific number, date, and currency formatting automatically.
+- **Locale resolution.** The method formats for `options.locale`, then the instance `locale`, falling back to `defaultLocale` and then the library default (`en`). The `locales` array of the [`LocaleConfig`](/docs/platform/core/reference/types/locale-config) is not used. Pass `locale` to change the target for one call, or `locales` to replace the whole fallback list.
+- **Missing variables throw.** Referencing a variable in the message that is not supplied in `variables` results in an error.
+- **Escaping braces.** Following ICU syntax, wrap a literal brace in single quotes (`'{'` or `'}'`) so it is not treated as the start of a placeholder.
+
+### Variable substitution
+
+- Simple variables: `{variableName}` is replaced with the string value.
+- ICU patterns: `{count, plural, ...}` are processed with ICU formatting rules.
+- Missing variables: result in an error.
+- Literal braces: wrap in single quotes following ICU syntax (`'{'` or `'}'`) to render a literal brace.
+
+### Message format support
+
+- **Simple interpolation:** `{variable}`
+- **Number formatting:** `{price, number, ::currency/USD}`, `{discount, number, percent}`, `{num, number, integer}`
+- **Date formatting:** `{date, date, short}`, `{time, time, short}`
+- **Pluralization:** `{count, plural, =0 {none} =1 {one} other {many}}`
+- **Selection:** `{gender, select, male {he} female {she} other {they}}`
+- **Selectordinal:** `{place, selectordinal, =1 {#st} =2 {#nd} =3 {#rd} other {#th}}`
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | The ICU-style message to format. | `string` | No | — |
+| [`options`](#options) | Formatting configuration, including variables. | `object` | Yes | — |
+
+### `message` [#message]
+
+**Type** `string` · **Required**
+
+The message to format, using ICU message format syntax.
+
+### `options` [#options]
+
+**Type** `object` · **Optional**
+
+Formatting configuration:
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locale` | Target locale for this call. | `string` | Yes | instance `locale` → `defaultLocale` |
+| `locales` | Replaces the whole fallback list for this call. | `string \| string[]` | Yes | `[locale, defaultLocale, 'en']` |
+| `variables` | Object of variables for message interpolation. | `FormatVariables` | Yes | `{}` |
+| `dataFormat` | Data format of the message string (`'ICU'`, `'I18NEXT'`, or `'STRING'`). | `StringFormat` | Yes | `'ICU'` |
+
+The `FormatVariables` type:
+
+```typescript
+type FormatVariables = Record<string, string | number | boolean | null | undefined | Date>;
+```
+
+## Returns [#returns]
+
+**Type** `string`
+
+The formatted message, with variables substituted and locale-specific formatting applied.
+
+## Examples [#examples]
+
+```typescript
+// Basic variable substitution
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'en' });
+
+const message = intl.formatMessage('Welcome {name}!', {
+  variables: { name: 'John' },
+});
+console.log(message); // "Welcome John!"
+```
+
+```typescript
+// Pluralization with ICU format
+const message = intl.formatMessage(
+  'You have {count, plural, =0 {no items} =1 {one item} other {# items}} in your cart',
+  {
+    variables: { count: 3 },
+  }
+);
+console.log(message); // "You have 3 items in your cart"
+```
+
+```typescript
+// Number and currency formatting
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'en' });
+
+const message = intl.formatMessage(
+  'Your total is {price, number, ::currency/USD} with {discount, number, percent} off',
+  {
+    variables: {
+      price: 99.99,
+      discount: 0.15,
+    },
+  }
+);
+console.log(message); // "Your total is $99.99 with 15% off"
+```
+
+```typescript
+// Complex message templates
+const orderStatusMessage = intl.formatMessage(`
+  Order #{orderId} status update:
+  - Items: {itemCount, plural, =0 {no items} =1 {one item} other {# items}}
+  - Total: {total, number, ::currency/USD}
+  - Status: {status, select,
+      pending {Pending}
+      shipped {Shipped}
+      delivered {Delivered}
+      other {Unknown}}
+  - Delivery: {deliveryDate, date, short}
+`, {
+  variables: {
+    orderId: 'ORD-12345',
+    itemCount: 3,
+    total: 149.97,
+    status: 'shipped',
+    deliveryDate: new Date('2024-03-20'),
+  },
+});
+```
+
+## Notes [#notes]
+
+- The method processes ICU message format syntax with General Translation's native formatter.
+- Missing variables throw an error.
+- Locale-specific number, date, and currency formatting is applied automatically.
+- To format standalone numbers, use [`formatNum`](/docs/platform/core/reference/gt-intl-methods/formatting/format-num).

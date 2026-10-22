@@ -123,6 +123,10 @@ const references: ReferenceSource[] = [
       'docs/en-US/platform/core/reference/utility-functions/locales/get-locale-properties.mdx',
     source: '---\ntitle: getLocaleProperties\n---\n',
   },
+  {
+    path: 'docs/en-US/platform/core/reference/gt-intl/constructor.mdx',
+    source: '---\ntitle: GTIntl\n---\n',
+  },
 ];
 
 const index = buildReferenceSymbolIndex(references);
@@ -344,6 +348,12 @@ const foundCases = [
       'Import the standalone `getLocaleProperties()` utility from `generaltranslation`.',
     target:
       '/docs/platform/core/reference/utility-functions/locales/get-locale-properties',
+  },
+  {
+    name: 'GTIntl class page',
+    path: 'docs/en-US/platform/core/guides/example.mdx',
+    source: 'Format numbers with `GTIntl`.',
+    target: '/docs/platform/core/reference/gt-intl/constructor',
   },
 ];
 

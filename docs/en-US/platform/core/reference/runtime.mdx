@@ -1,38 +1,55 @@
 ---
 
 title: GTRuntime
-description: Use runtime translation, formatting, and locale helpers without project management. API reference for GTRuntime.
+description: Translate strings at runtime for one project without the project management client. API reference for GTRuntime.
 
 ---
 
-Import `GTRuntime` from `generaltranslation/runtime` when your application does not need file or project management. The supported [`GT`](/docs/platform/core/reference/gt-class/constructor) class extends it and adds those management methods.
+Import `GTRuntime` from `generaltranslation/runtime` when your application translates at runtime but does not manage projects or files. The runtime entry excludes the project and file management client that [`GT`](/docs/platform/core/reference/gt-class/constructor) uses.
 
 | Export | Description |
 | --- | --- |
-| [`GTRuntime`](#runtime) | Runtime translation, formatting, and locale methods. |
-| [`GTConstructorParams`](#configuration) | Shared constructor and reconfiguration options. |
+| [`GTRuntime`](#runtime) | Runtime translation for one project. |
+| [`GTProjectConfig`](#configuration) | Constructor configuration, shared with the project-scoped `GT`. |
+| [`LocaleConfig`](#locale-config) | Default locale, supported locales, and custom mapping. |
 
 ## `GTRuntime` [#runtime]
 
-**Type** class · **Constructor** `new GTRuntime(params?: GTConstructorParams)`
+**Type** class · **Constructor** `new GTRuntime(config: GTProjectConfig)`
 
-The runtime entry excludes the file/project-management client. It retains [`translate`](/docs/platform/core/reference/gt-class-methods/translation/translate), [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many), formatting, locale helpers, and [`setConfig`](/docs/platform/core/reference/gt-class/set-config). Their runtime contracts match the inherited methods on [`GT`](/docs/platform/core/reference/gt-class/constructor).
+`GTRuntime` has two methods, [`translate`](/docs/platform/core/reference/gt-class-methods/translation/translate) and [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many), with the same signatures as on a project-scoped `GT` instance.
 
-```ts title="format.ts"
+```ts title="translate.ts"
 import { GTRuntime } from 'generaltranslation/runtime';
 
-const runtime = new GTRuntime({ sourceLocale: 'en', targetLocale: 'en-US' });
-console.log(runtime.formatNum(1234.5)); // 1,234.5
+const runtime = new GTRuntime({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+  localeConfig: { defaultLocale: 'en' },
+});
+
+const result = await runtime.translate('Hello, world!', 'es');
 ```
 
-Formatting and locale helpers need no API credentials. Runtime translation requires a project ID and an API key.
+- **Required options.** `apiKey` and `projectId` are required, and the constructor reads no environment variables. It throws an `Error` with a diagnostic message when `projectId` is not a non-empty string after trimming.
+- **Locales.** The source locale defaults to `localeConfig.defaultLocale`, then `en`. Pass the target locale on every call; a call without one throws. [`customMapping`](/docs/platform/core/reference/types/custom-mapping) resolves aliases before a locale is sent.
+- **Fixed configuration.** The instance is frozen and keeps a frozen copy of `localeConfig` from construction, including the `locales` array and each `customMapping` entry. Its `projectId`, `apiKey`, `baseUrl`, and `localeConfig` properties are read-only. Construct a new instance for a different configuration.
+- **No formatting.** `GTRuntime` has no formatting or locale methods. Use [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor), which needs no API key.
 
 Do not embed API keys in deployed browser or mobile bundles.
 
-## `GTConstructorParams` [#configuration]
+<Callout type="info">
+  **Changed in v10:** `GTRuntime` only translates. It requires `apiKey` and `projectId`, takes its locales as `localeConfig`, and no longer reads `GT_API_KEY` or `GT_PROJECT_ID`. Its formatting and locale methods moved to [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor), and `setConfig` is removed.
+</Callout>
+
+## `GTProjectConfig` [#configuration]
+
+**Type** object · **Required**
+
+Import the type from `generaltranslation/runtime`. It is the same [`GTProjectConfig`](/docs/platform/core/reference/types/gt-project-config) a project-scoped `GT` takes: API key, required project ID, locale configuration, and base URL. It does not accept `fetch`, `timeoutMs`, `retryPolicy`, or `apiVersion`.
+
+## `LocaleConfig` [#locale-config]
 
 **Type** object · **Optional** · **Default** `{}`
 
-Import the type from `generaltranslation/runtime`. It is the same [constructor configuration](/docs/platform/core/reference/types/gt-constructor-params) used by the root class: API keys, project ID, base URL, locales, and custom mapping. It does not accept `fetch`, `timeoutMs`, `retryPolicy`, or `apiVersion`.
-
-Use [`setConfig`](/docs/platform/core/reference/gt-class/set-config) to reconfigure an instance.
+Import the type from `generaltranslation/runtime`. It is the plain [`LocaleConfig`](/docs/platform/core/reference/types/locale-config) object passed as `localeConfig`: `{ defaultLocale?, locales?, customMapping? }`.

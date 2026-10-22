@@ -5,11 +5,11 @@ description: Translate one string or structured content entry into a target loca
 
 ---
 
-`translate` is the primary translation method on a [GT](/docs/platform/core/reference/gt-class/constructor) instance, for translating one string or structured content entry at a time.
+`translate` is the primary runtime translation method of `GT` and `GTRuntime`, for translating one string or structured content entry at a time.
 
 ## Overview [#overview]
 
-Call `translate` on a configured [`GT`](/docs/platform/core/reference/gt-class/constructor) instance to translate one entry. Pass the content to translate and either a target locale string (shorthand) or an options object. It returns a promise that resolves to a [`TranslationResult`](/docs/platform/core/reference/types/translation-result).
+Call `translate` on a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) or a [`GTRuntime`](/docs/platform/core/reference/runtime) instance to translate one entry. Pass the content to translate and either a target locale string (shorthand) or an options object. It returns a promise that resolves to a [`TranslationResult`](/docs/platform/core/reference/types/translation-result).
 
 ```typescript
 const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
@@ -27,13 +27,13 @@ translate(
 ): Promise<TranslationResult>
 ```
 
-*Note: `translate` requires `apiKey` and `projectId` on the GT instance. Under the hood it calls [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) with a single entry.*
+*Note: The instance translates for its `projectId` with its API key, base URL, and `localeConfig`. The source locale defaults to `localeConfig.defaultLocale`, then `en`; pass the target locale on every call. Under the hood it calls [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) with a single entry.*
 
 ## How it works [#how-it-works]
 
 - **Content detection.** The `source` is detected as plain text, an ICU message, an i18next-style message, or structured JSX content, based on its shape and the `dataFormat` metadata you provide.
 - **Whole documents.** Set [`metadata.fileFormat`](/docs/platform/core/reference/types/entry-metadata#file-format) to `'MD'` or `'MDX'` to parse and translate a complete document while preserving its structure. The document must be a string with `dataFormat: 'STRING'`, which is the default, and cannot use `maxChars`. A document entry fails instead of returning partial output when a chunk fails or the translated document is invalid.
-- **Locale resolution.** The target locale is validated against BCP 47. Any [`customMapping`](/docs/platform/core/reference/types/custom-mapping) on the instance is applied, and the canonical locale code is sent to the API.
+- **Locale resolution.** The target locale is required; a call without one throws an `Error`. The [`customMapping`](/docs/platform/core/reference/types/custom-mapping) in the instance's `localeConfig` resolves aliases, and the standardized canonical code is sent to the API.
 - **Options shorthand.** Passing a string for `options` is shorthand for `{ targetLocale: string }`, so `gt.translate('Hello', 'es')` and `gt.translate('Hello', { targetLocale: 'es' })` are equivalent.
 
 ## Parameters [#parameters]
@@ -59,7 +59,7 @@ A target locale string such as `'es'`, or an options object:
 ```typescript
 type TranslateOptions = {
   targetLocale: string; // locale to translate into
-  sourceLocale?: string; // overrides the instance sourceLocale
+  sourceLocale?: string; // overrides localeConfig.defaultLocale
   modelProvider?: string; // validated before fetch
 };
 ```

@@ -1,0 +1,74 @@
+---
+
+title: account.project
+description: Scope an account-scoped GT instance to one project. API reference for account.project.
+
+---
+
+Returns a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle) for one project from an account-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (one constructed without `projectId`). Use it to work on several projects with one Organization API key; for a single project, pass `projectId` to the constructor instead.
+
+## Overview [#overview]
+
+```typescript
+import { GT } from 'generaltranslation';
+
+const account = new GT({ apiKey: 'your-org-api-key' });
+const project = account.project('your-project-id');
+
+const { items: branches } = await project.listBranches();
+```
+
+Signature:
+
+```typescript
+project(projectId: string): ProjectHandle
+```
+
+*Note: `project` is synchronous and sends no request. An API key without access to the project is reported by the first method you call on the handle.*
+
+## How it works [#how-it-works]
+
+- **Same methods as the project-scoped form.** The handle has the same methods as `new GT({ apiKey, projectId })`, and both have the type [`ProjectHandle`](/docs/platform/core/reference/types/project-handle).
+- **ID check.** `project` throws an `Error` with a diagnostic message when `projectId` is not a non-empty string (an empty or blank string, for example).
+- **Configuration at creation.** The handle uses the API key, base URL, and `localeConfig` of the instance that created it. Returned locale codes follow the [constructor rules](/docs/platform/core/reference/gt-class/constructor#how-it-works).
+- **Read-only handle.** The handle is frozen, and its `projectId` property is read-only. For another project, call `project` again.
+- **Errors.** A failed API request throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error) with the HTTP status.
+- **Organization operations.** Font uploads and project creation belong to the Organization. Use [`account.org()`](/docs/platform/core/reference/gt-class/org) for them; with only a project, read the project's `orgId` with [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project) first.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`projectId`](#project-id) | ID of the project to work on. | `string` | No | — |
+
+### `projectId` [#project-id]
+
+**Type** `string` · **Required**
+
+ID of the project to work on, such as the ID shown in the Dashboard or returned by [`listProjects`](/docs/platform/core/reference/gt-class-methods/projects/list-projects). An empty or blank string throws.
+
+## Returns [#returns]
+
+**Type** [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)
+
+A frozen handle with the project's methods and a read-only `projectId` property.
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const account = new GT({ apiKey: process.env.GT_ORG_API_KEY! });
+
+// Work on every project of the Organization with one instance.
+for (const { id } of await account.listProjects()) {
+  const { defaultLocale } = await account.project(id).get();
+  console.log(id, defaultLocale);
+}
+```
+
+## Notes [#notes]
+
+- `project` checks only that the ID is a non-empty string; it does not check that the project exists.
+- For a different API key or base URL, construct a new [`GT`](/docs/platform/core/reference/gt-class/constructor) instance.
+- The project-scoped form, `new GT({ apiKey, projectId })`, has no `project` method.

@@ -1,11 +1,11 @@
 ---
 
 title: createBranch
-description: Create a branch in a project, or return the existing branch with the same name. API reference for createBranch.
+description: Create a branch in a project. API reference for createBranch.
 
 ---
 
-Creates a branch in the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance. Branches keep separate file versions and translations, so you can translate work in progress without changing the default branch.
+Creates a branch in the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project. Branches keep separate file versions and translations, so you can translate work in progress without changing the default branch.
 
 ## Overview [#overview]
 
@@ -24,11 +24,12 @@ createBranch(body: {
 }): Promise<CreateBranchResponse>
 ```
 
-*Note: `createBranch` requires `apiKey` and `projectId` on the GT instance, and an API key with the `project:files:write` permission. Free Organizations can create only the default branch.*
+*Note: `createBranch` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:files:write` permission. Free Organizations can create only the default branch.*
 
 ## How it works [#how-it-works]
 
-- **Existing name.** When the project already has a branch with this name, the method looks it up with [`listBranches`](/docs/platform/core/reference/gt-class-methods/branches/list-branches) and returns it instead of failing. The lookup needs `project:files:read`; without it, the original `409` [`ApiError`](/docs/platform/core/reference/api-client#api-error) is thrown.
+- **One request.** `createBranch` sends only the create request. When the project already has a branch with this name, it throws a `409` [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+- **Create or reuse.** To reuse a branch that may exist, look it up by name with [`listBranches`](/docs/platform/core/reference/gt-class-methods/branches/list-branches) first and call `createBranch` only when none is returned (see [Examples](#examples)). The lookup needs `project:files:read`.
 - **Default branch.** `isDefault: true` creates the project's default branch. If the project already has a default branch under another name, the request fails with `409`. Change the default with [`updateBranch`](/docs/platform/core/reference/gt-class-methods/branches/update-branch) instead.
 
 ## Parameters [#parameters]
@@ -56,7 +57,7 @@ type CreateBranchResponse = {
 };
 ```
 
-The created branch, or the existing branch with the same name.
+The created branch.
 
 ## Examples [#examples]
 
@@ -64,12 +65,16 @@ The created branch, or the existing branch with the same name.
 import { GT } from 'generaltranslation';
 
 const gt = new GT({
-  apiKey: process.env.GT_API_KEY,
-  projectId: process.env.GT_PROJECT_ID,
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
 });
 
-// Safe to run on every CI build: an existing branch is returned.
-const { branch } = await gt.createBranch({ name: 'feature/checkout' });
+// Safe to run on every CI build: reuse the branch when it exists.
+const {
+  items: [existing],
+} = await gt.listBranches({ name: ['feature/checkout'] });
+const branch =
+  existing ?? (await gt.createBranch({ name: 'feature/checkout' })).branch;
 
 await gt.uploadSourceFiles(
   [

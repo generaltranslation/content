@@ -5,14 +5,15 @@ description: Upload TrueType or OpenType fonts that Lottie translations use acro
 
 ---
 
-Uploads fonts to the Organization that owns the project set by `projectId` on the [GT](/docs/platform/core/reference/gt-class/constructor) instance. Lottie translation jobs in every project of that Organization use the stored fonts during layout processing.
+Uploads fonts to the Organization scoped by [`account.org()`](/docs/platform/core/reference/gt-class/org). Lottie translation jobs in every project of that Organization use the stored fonts during layout processing.
 
 ## Overview [#overview]
 
 ```typescript
-const gt = new GT({ apiKey: 'your-org-api-key', projectId: 'your-project-id' });
+const account = new GT({ apiKey: 'your-org-api-key' });
+const org = account.org('your-org-id');
 
-const { summary, results } = await gt.upsertAssets([
+const { summary, results } = await org.upsertAssets([
   { assetType: 'FONT', fileName: 'Inter-Bold.ttf', content: base64Font },
 ]);
 ```
@@ -26,11 +27,11 @@ upsertAssets(
 ): Promise<UpsertAssetsResponse>
 ```
 
-*Note: `upsertAssets` requires `apiKey` and `projectId` on the GT instance, and an Organization API key with the `org:assets:write` permission. Project API keys cannot hold this permission.*
+*Note: `upsertAssets` is an [`OrgHandle`](/docs/platform/core/reference/types/org-handle) method and requires an Organization API key with the `org:assets:write` permission. Project API keys cannot hold this permission.*
 
 ## How it works [#how-it-works]
 
-- **Organization from the project.** The method reads the project with [`getProject`](/docs/platform/core/reference/gt-class-methods/projects/get-project) to find its Organization, then uploads to `POST /v2/orgs/{orgId}/assets`. The Organization ID is cached until the next [`setConfig`](/docs/platform/core/reference/gt-class/set-config) call.
+- **Organization from the handle.** The method uploads to `POST /v2/orgs/{orgId}/assets` with the ID passed to [`account.org()`](/docs/platform/core/reference/gt-class/org) and makes no other request. To find the Organization of a project, read `orgId` from [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project).
 - **Identity and replacement.** A font is identified by family, weight, and italic style. Uploading a font with the same identity replaces it for the whole Organization.
 - **Per-font results.** A font can fail on its own while the others are stored. The method resolves with a result for every font instead of throwing; check `summary.failed` and each result's `status`. Retrying a failed font is safe.
 - **Batches.** The method sends at most 10 fonts per request and combines the summaries and results in request order.
@@ -93,12 +94,15 @@ type UpsertAssetsResponse = {
 import fs from 'node:fs';
 import { GT } from 'generaltranslation';
 
-const gt = new GT({
-  apiKey: process.env.GT_ORG_API_KEY, // Organization key with org:assets:write
-  projectId: process.env.GT_PROJECT_ID,
+const account = new GT({
+  apiKey: process.env.GT_ORG_API_KEY!, // Organization key with org:assets:write
 });
 
-const { results } = await gt.upsertAssets([
+// With only a project ID, read the Organization that owns the project.
+const { orgId } = await account.project(process.env.GT_PROJECT_ID!).get();
+const org = account.org(orgId);
+
+const { results } = await org.upsertAssets([
   {
     assetType: 'FONT',
     fileName: 'Inter-Bold.ttf',
