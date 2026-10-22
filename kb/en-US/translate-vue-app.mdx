@@ -1,0 +1,54 @@
+---
+title: How do I translate a Vue app?
+summary: Translating a Vue app means putting each template string behind a lookup for the active language and translating it into every target language. General Translation's gt-vue plugin translates content wrapped in the <T> component, and npx gt translate writes one catalog per target language.
+description: Put each template string behind a lookup for the active language and translate it into each target language. General Translation's gt-vue translates content in <T>, and the CLI writes the catalogs.
+date: 2026-10-21
+category: internationalization
+authors: [kevin, kevin-wu]
+related: [translate-react-app, add-i18n-to-nextjs, i18n-without-translation-files, translations-in-ci]
+---
+
+Translating a Vue app means internationalizing it (preparing it to show each string, plural, number, and date in the active language) and then translating every string into each target language. Each copy edit changes the source text, so translations fall behind with every release unless they are regenerated. Languages also differ in grammar (English has 2 plural forms, Arabic has 6), and the page must rerender when a user switches language.
+
+## Ways to translate a Vue app
+
+| Approach | What it does well | What it leaves to you |
+| --- | --- | --- |
+| An internationalization (i18n) library alone ([`vue-i18n`](/kb/general-translation-vs-vue-i18n)) | Looks up messages by key with `$t`, switches locale in place, selects plural forms, and formats numbers and dates per locale | Inventing a key for every string, moving text into a message file per language, custom `pluralRules` for languages such as Russian, and writing every translation |
+| `@nuxtjs/i18n` (Nuxt) | Builds on `vue-i18n` and adds locale-prefixed routes, browser-language detection, lazy-loaded translations, and hreflang tags | The same keys, message files, and translations that `vue-i18n` leaves to you |
+| A translation management system ([Crowdin](/kb/general-translation-vs-crowdin), [Lokalise](/kb/general-translation-vs-lokalise)) | A web editor where translators work with a glossary and translation memory, synced with your message files | Keys and message files in the code, the sync setup, and waiting on translators before each release |
+| General Translation (`gt-vue` and the `gt` CLI) | [`<T>`](/docs/vue/reference/components/t) translates template content in place, with no keys; [`<Plural>`](/docs/vue/reference/components/plural) inside [`<T>`](/docs/vue/reference/components/t) picks each locale's plural form by CLDR rules; [`npx gt translate`](/docs/cli/reference/commands/translate) writes a catalog per target language; [`useSetLocale()`](/docs/vue/reference/composables/use-set-locale) switches language without a reload | Wrapping template content in [`<T>`](/docs/vue/reference/components/t) and a one-time setup (config, loader, and plugin); rerunning [`npx gt translate`](/docs/cli/reference/commands/translate) when source content changes; tracking API changes between 0.x releases |
+
+Use `vue-i18n` alone when your strings are few and stable, or already translated in message files, and add `@nuxtjs/i18n` in a Nuxt app that needs localized routes. Use a translation management system when a localization team translates each release by hand. Use `gt-vue` when templates change every release and you want translations generated from the code, with no keys to keep in sync.
+
+## Translate a Vue app with gt-vue
+
+General Translation's `gt-vue` package runs as a Vue plugin, and the `gt` CLI generates the translations.
+
+1. In `gt.config.json`, set your source language as `defaultLocale`, your target languages as `locales`, and the catalog path as `files.gt.output`.
+2. Register the [`createGT()`](/docs/vue/reference/functions/create-gt) plugin before you mount the app.
+3. Wrap template content in the [`<T>`](/docs/vue/reference/components/t) component. Standalone strings, such as an input placeholder, use the function from [`useGT()`](/docs/vue/reference/composables/use-gt).
+
+   ```vue
+   <script setup lang="ts">
+   import { T } from 'gt-vue';
+   </script>
+
+   <template>
+     <T>
+       <section>
+         <h1>Welcome back</h1>
+         <p>Your order is on its way.</p>
+       </section>
+     </T>
+   </template>
+   ```
+
+4. Sign in with [`npx gt login`](/docs/cli/reference/commands/login) and set your project ID.
+5. Run [`npx gt translate`](/docs/cli/reference/commands/translate), which scans your Vue source and writes one JSON catalog per target language to the `files.gt.output` path.
+
+The CLI extracts the template structure, so text, nested elements, and formatting are translated as one unit. The `context` prop on [`<T>`](/docs/vue/reference/components/t) says whether "Open" is a verb or an adjective.
+
+## Translate on every build
+
+Put [`npx gt translate`](/docs/cli/reference/commands/translate) before `vite build` in your build script, with `GT_PROJECT_ID` and `GT_API_KEY` set in the build environment, so every deployment ships current catalogs. The [Vue Quickstart](/docs/vue/quickstart) has the full steps, including the translation loader and a language switcher.

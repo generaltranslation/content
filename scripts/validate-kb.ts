@@ -18,7 +18,9 @@
  *   period and has no backticks or Markdown links.
  * - `authors` is optional (the site credits the team without it); every
  *   listed author has a file in authors/.
- * - `date` is a real YYYY-MM-DD date, not in the future.
+ * - `date` is a real YYYY-MM-DD date, not in the future. `updated`, when
+ *   set, is the date the article last changed (shown as "Last updated"): a
+ *   real date from `date` to today.
  * - The body parses as MDX, has at least MIN_BODY_WORDS words of text or a
  *   code block, starts headings at ##, never skips a heading level, tags
  *   every code block with a language, and has no filler, hand-written
@@ -73,6 +75,7 @@ const KNOWN_FIELDS = new Set([
   ...REQUIRED_FIELDS,
   "description",
   "authors",
+  "updated",
   "redirectFrom",
   "related",
   "noindex",
@@ -241,14 +244,37 @@ function authorProblems(
     );
 }
 
+function isRealDate(value: unknown): value is string {
+  if (typeof value !== "string" || !ISO_DATE.test(value)) return false;
+  // a month or day out of range is an invalid Date, and toISOString throws
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+}
+
 function dateProblems(path: string, date: unknown, today: string): string[] {
   if (date === undefined || date === null) return [];
-  const real =
-    typeof date === "string" &&
-    ISO_DATE.test(date) &&
-    new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
-  if (!real) return [`${path}: date must be a real YYYY-MM-DD date.`];
+  if (!isRealDate(date)) return [`${path}: date must be a real YYYY-MM-DD date.`];
   return date > today ? [`${path}: date ${date} is in the future.`] : [];
+}
+
+function updatedProblems(
+  path: string,
+  updated: unknown,
+  date: unknown,
+  today: string
+): string[] {
+  if (updated === undefined || updated === null) return [];
+  if (!isRealDate(updated)) {
+    return [`${path}: updated must be a real YYYY-MM-DD date.`];
+  }
+  if (updated > today) return [`${path}: updated ${updated} is in the future.`];
+  if (isRealDate(date) && updated < date) {
+    return [`${path}: updated ${updated} is before date ${date}.`];
+  }
+  return [];
 }
 
 function headingProblems(
@@ -574,6 +600,12 @@ export function findKbProblems(
       ...categoryProblems(path, frontmatter.category, categoryList.slugs),
       ...authorProblems(path, frontmatter.authors, authors),
       ...dateProblems(path, frontmatter.date, context.today),
+      ...updatedProblems(
+        path,
+        frontmatter.updated,
+        frontmatter.date,
+        context.today
+      ),
       ...bodyProblems(path, entry.body ?? "", entry.bodyStartLine ?? 1),
       ...redirectProblems(path, frontmatter.redirectFrom, live, claimedBy),
       ...relatedProblems(path, slug, frontmatter.related, kbSlugs)
