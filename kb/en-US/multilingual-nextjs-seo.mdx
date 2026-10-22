@@ -1,61 +1,50 @@
 ---
 title: How do I set up SEO for a multilingual Next.js app?
-summary: Give every language its own URL, set the html lang attribute, point each page's canonical URL at itself, add hreflang alternates for every language, translate titles and descriptions, and list every language version in your sitemap.
-description: Give every language its own URL, set html lang, use self-referencing canonical URLs and hreflang alternates, translate titles and descriptions, and list every language in your sitemap.
+summary: Give each language its own URL, such as /es/about, then publish an html lang attribute, a self-referencing canonical URL, hreflang alternates with x-default, a translated title and description, and a sitemap entry for every language. General Translation's gt-next routes each language to its own URL and translates titles and descriptions with getGT.
+description: Give each language its own URL, html lang, self-referencing canonical, hreflang with x-default, translated titles, and a sitemap entry. General Translation's gt-next handles the URLs and titles.
 date: 2026-02-17
+updated: 2026-10-21
 category: multilingual-seo
 redirectFrom: [multilingual-nextjs-seo]
 related: [i18n-without-translation-files, best-localization-software]
 ---
 
-## Why multilingual SEO needs special attention
+Multilingual SEO in Next.js means giving each language version of a page its own URL and telling search engines how those URLs relate. A page that picks its language from a cookie or the `Accept-Language` header has one URL, so search engines usually index it in one language only. Every language version needs the six requirements in this table, and routing, metadata, and the sitemap must agree on each language's URL.
 
-Most developers who add i18n to their Next.js app focus on translating the UI and call it done.
-But if search engines can't find, index, and properly associate your language versions,
-all that translation work is invisible.
+| Requirement | What it tells search engines | Where it goes in Next.js |
+| --- | --- | --- |
+| A URL per language | Each version is a separate page to crawl and index | A `[locale]` route segment and locale routing middleware |
+| `<html lang>` | The language of the page | The root layout, `app/[locale]/layout.tsx` |
+| Canonical URL | This URL is the primary version for its own language, not a duplicate of another language | `alternates.canonical` in `generateMetadata` |
+| `hreflang` alternates | Every language version of the page, including this one, plus an `x-default` fallback | `alternates.languages` in `generateMetadata` |
+| Translated title and description | The text search results show in that language | `title` and `description` in `generateMetadata` |
+| Sitemap entry | Every language URL of every page, with its alternates | `app/sitemap.ts` |
 
-A multilingual site without proper SEO setup has problems:
+General Translation's `gt-next` routes each language to a URL such as `/es/about` and translates titles and descriptions with [`getGT`](/docs/react/nextjs/reference/functions/get-gt). The canonical URL, `hreflang` alternates, and sitemap come from the Next.js [Metadata API](https://nextjs.org/docs/app/api-reference/functions/generate-metadata#alternates).
 
-- Google may index only one language version and ignore the rest
-- Users searching in Spanish get served the English page
-- Duplicate content penalties because Google sees `/en/about` and `/fr/about` as the same page
-- Incorrect language shown in search result snippets
+## Why does Google index only one language of my Next.js site?
 
-**The good news:** getting multilingual SEO right in Next.js isn't complicated.
-There are six things you need to get right, and this guide covers all of them using [`gt-next`](/docs/react/nextjs-quickstart).
+Google indexes one language when every language shares one URL. Googlebot [sends requests without an `Accept-Language` header](https://developers.google.com/search/docs/specialty/international/locale-adaptive-pages) and [does not keep cookies between page loads](https://developers.google.com/search/docs/crawling-indexing/javascript/fix-search-javascript), so a page that picks its language from either one shows Google its default language every time. The other languages have no URL for Google to crawl.
 
----
+The fix is a separate URL for each language, listed in `hreflang` alternates and the sitemap. Google [recommends separate URLs for each language version](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) over cookies or browser settings. A General Translation `gt-next` app without middleware has the same problem: its locale selector stores the choice in a cookie and keeps URLs unprefixed until you add [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware).
 
-## 1. Locale-based URL routing
+## Should language versions use subdirectories, subdomains, or separate domains?
 
-The foundation of multilingual SEO is having distinct URLs for each language.
-Search engines need separate, crawlable URLs to index each language version independently.
+Use subdirectories, such as `example.com/es/about`, unless each market needs its own server location or its own site. Google's guide to [managing multi-regional and multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) lists subdirectories as easy to set up and low maintenance, because every language stays on one host, and does not recommend URL parameters.
 
-This means **locale-in-the-URL** — not cookies, not query parameters, not `Accept-Language` detection alone.
+| Structure | Example | Google's assessment | In a Next.js app |
+| --- | --- | --- | --- |
+| Subdirectories | `example.com/es/about` | Easy to set up, low maintenance (same host), one server location | General Translation's `gt-next` middleware serves this structure by default |
+| Subdomains | `es.example.com/about` | Easy to set up, allows different server locations | Host-based routing you write; [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) routes by path |
+| Country domains | `example.es/about` | Clear geotargeting, but expensive, more infrastructure, and one country per domain | A deployment or host-based routing for each domain |
+| URL parameters | `example.com/about?lang=es` | Not recommended | Avoid |
+| Cookie or header only | `example.com/about` | Separate URLs recommended instead | Indexed in one language only |
 
-```text
-✅ generaltranslation.com/en/about
-✅ generaltranslation.com/fr/about
-✅ generaltranslation.com/es/about
+Use subdomains or country domains when markets need separate hosting or country targeting. For a single Next.js deployment, subdirectories need the least code: General Translation's `gt-next` middleware serves `/es/about` by default, while subdomains and country domains need host-based routing you write.
 
-❌ generaltranslation.com/about?lang=fr
-❌ generaltranslation.com/about (with locale in a cookie)
-```
+## How do I give each language its own URL in Next.js?
 
-### Setting up locale routing with gt-next
-
-First, nest your pages under a `[locale]` dynamic segment:
-
-```text
-app/
-└── [locale]/
-    ├── layout.tsx
-    ├── page.tsx
-    └── about/
-        └── page.tsx
-```
-
-Then create middleware in your project root (`proxy.ts` for Next.js 16+, or `middleware.ts` for Next.js 15 and below):
+Add locale routing middleware and an `app/[locale]` route segment. With General Translation's `gt-next`, create `proxy.ts` in the project root (`middleware.ts` on Next.js 15 and earlier):
 
 ```ts title="proxy.ts"
 import { createNextMiddleware } from 'gt-next/middleware';
@@ -67,248 +56,208 @@ export const config = {
 };
 ```
 
-This gives you locale-prefixed URLs automatically.
-By default, the default locale (e.g., English) doesn't get a prefix — `/about` stays clean,
-while Spanish users see `/es/about` and French users see `/fr/about`.
+Then move your pages under `app/[locale]`:
 
----
+```text
+proxy.ts
+app/
+├── sitemap.ts
+└── [locale]/
+    ├── layout.tsx
+    ├── page.tsx
+    └── about/
+        └── page.tsx
+```
 
-## 2. Setting the HTML `lang` attribute
+The middleware serves the default locale without a prefix (`/about`) and every other locale with one (`/es/about`). A locale prefix in the URL outranks the visitor's saved locale cookie and `Accept-Language` header, so a crawler that requests `/es/about` gets the Spanish page. Three settings change this behavior:
 
-The `lang` attribute on your `<html>` tag tells browsers and search engines which language the page is in.
-It's one of the simplest and most impactful things you can do for accessibility and SEO.
+- [`prefixDefaultLocale: true`](/docs/react/nextjs/reference/functions/create-next-middleware#prefix-default-locale) prefixes the default locale too, as in `/en/about`.
+- [`pathConfig`](/docs/react/nextjs/reference/functions/create-next-middleware#path-config) translates paths, for example `/fr/a-propos` for `/about`.
+- [`ignoreBrowserLocales: true`](/docs/react/nextjs/config#ignore-browser-locales) in `withGTConfig` stops the middleware from picking a locale from the `Accept-Language` header. Google [advises against redirecting](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) visitors based on a guess about their language.
 
-Without it, screen readers guess the language (often wrong), and search engines have less confidence in their language classification.
+If you prerender pages with `generateStaticParams`, also add `getLocale.ts` at the project root, because middleware does not run during static generation. The [App Router middleware guide](/docs/react/nextjs/app-router-middleware#root-locale) has the file and the full routing steps.
 
-{/* useLocale works in both client and server rendered components, just not in async components */}
-gt-next provides the [`useLocale`](/docs/react/reference/hooks/use-locale) hook that makes this trivial in your root layout:
+## How do I set the html lang attribute for each locale?
+
+Set `lang` from the `[locale]` route parameter in the root layout, `app/[locale]/layout.tsx`. With the [`isLocaleSupported`](/docs/react/nextjs/reference/functions/is-locale-supported) check, a locale you haven't configured returns a 404 instead of falling back to the default locale at that URL:
 
 ```tsx title="app/[locale]/layout.tsx"
-import { useLocale, GTProvider } from 'gt-next';
+import { GTProvider, isLocaleSupported } from 'gt-next';
+import { notFound } from 'next/navigation';
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const locale = useLocale();
+export default async function LocaleLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+
+  if (!isLocaleSupported(locale)) {
+    notFound();
+  }
 
   return (
     <html lang={locale}>
       <body>
-        <GTProvider>
-          {children}
-        </GTProvider>
+        <GTProvider>{children}</GTProvider>
       </body>
     </html>
   );
 }
 ```
 
-[`useLocale`](/docs/react/reference/hooks/use-locale) returns the BCP 47 locale code (e.g., `en-US`, `ar`, `zh-Hans`).
+The root layout belongs at `app/[locale]/layout.tsx` when pages are prerendered, because a layout above the `[locale]` segment can't read the locale during static generation. If a URL segment is an alias, such as `/cn` for Chinese, convert it with [`resolveCanonicalLocale`](/docs/react/nextjs/reference/functions/resolve-canonical-locale) so `lang` is `zh`. [Managing locale alias SEO](/docs/react/nextjs/locale-alias-seo) covers aliases in metadata and the sitemap.
 
----
+## How do I add hreflang alternate links and canonical URLs in the Next.js App Router?
 
-## 3. Canonical URLs
+In the Next.js App Router, add `hreflang` alternate links by returning `alternates.languages` from each page's `generateMetadata`, and the canonical URL by returning `alternates.canonical`. Next.js renders each `alternates.languages` entry as a `<link rel="alternate" hreflang>` tag. In a General Translation `gt-next` app, `getLocales` supplies the list of languages.
 
-Canonical tags tell search engines which URL is the "primary" version of a page.
-For multilingual sites, each language version should point to itself as the canonical:
-
-```html
-<!-- On /fr/about -->
-<link rel="canonical" href="https://example.com/fr/about" />
-```
-
-This prevents search engines from treating your French page as a duplicate of your English page.
-
-In Next.js, you set canonicals through the [metadata API](https://nextjs.org/docs/app/api-reference/functions/generate-metadata).
-Combine it with gt-next's [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) to generate the correct canonical for each locale:
-
-```tsx title="app/[locale]/about/page.tsx"
-import { getLocale } from 'gt-next/server';
-
-const BASE_URL = 'https://example.com';
-
-export async function generateMetadata() {
-  const locale = await getLocale();
-
-  return {
-    alternates: {
-      canonical: `${BASE_URL}/${locale}/about`,
-    },
-  };
-}
-
-export default function AboutPage() {
-  return <h1>About Us</h1>;
-}
-```
-
-For the default locale without a prefix, adjust accordingly:
-
-```tsx
-import { getDefaultLocale } from 'gt-next';
-import { getLocale } from 'gt-next/server';
-
-export async function generateMetadata() {
-  const locale = await getLocale();
-  const defaultLocale = getDefaultLocale();
-  const path = '/about';
-
-  const prefix = locale === defaultLocale ? '' : `/${locale}`;
-
-  return {
-    alternates: {
-      canonical: `${BASE_URL}${prefix}${path}`,
-    },
-  };
-}
-```
-
----
-
-## 4. Hreflang tags
-
-Hreflang tags are the most important multilingual SEO signal.
-They tell search engines: "this page exists in these other languages, and here are the URLs."
-
-Without hreflang, Google has to guess which language version to show in search results — and it often gets it wrong.
+Google requires [each language version to list itself and every other version](https://developers.google.com/search/docs/specialty/international/localized-versions), and ignores `hreflang` links that two pages don't both declare, so every version of a page must return the same list. The `x-default` entry is the URL for visitors whose language matches none of the versions. For `/es/about` in an app with English, Spanish, and French, the rendered page contains:
 
 ```html
+<link rel="canonical" href="https://example.com/es/about" />
 <link rel="alternate" hreflang="en" href="https://example.com/about" />
-<link rel="alternate" hreflang="fr" href="https://example.com/fr/about" />
 <link rel="alternate" hreflang="es" href="https://example.com/es/about" />
+<link rel="alternate" hreflang="fr" href="https://example.com/fr/about" />
 <link rel="alternate" hreflang="x-default" href="https://example.com/about" />
 ```
 
-The `x-default` tag tells search engines which URL to show when none of the specified languages match the user.
+Build these URLs in one helper so every page and the sitemap use the same map. `getLocales` and `getDefaultLocale` from `gt-next` return the locales you configured, for example in `gt.config.json`, and the `getLocales` list includes the default locale:
 
-In Next.js, you can add hreflang through the metadata API's `alternates.languages` property.
-Here's a reusable helper that works with gt-next:
+```ts title="lib/seo.ts"
+import { getDefaultLocale, getLocales } from 'gt-next';
 
-```tsx title="lib/i18n-metadata.ts"
-import { getDefaultLocale } from 'gt-next';
-import { getLocale } from 'gt-next/server';
+export const BASE_URL = 'https://example.com';
 
-const BASE_URL = 'https://example.com';
-const SUPPORTED_LOCALES = ['en', 'fr', 'es'];
+// The default locale has no prefix: /about, /es/about, /fr/about.
+export function localeUrl(locale: string, path: string) {
+  const prefix = locale === getDefaultLocale() ? '' : `/${locale}`;
+  return `${BASE_URL}${prefix}${path === '/' ? '' : path}`;
+}
 
-export async function getI18NMetadata(path: string) {
-  const locale = await getLocale();
-  const defaultLocale = getDefaultLocale();
-
-  const getUrl = (loc: string) => {
-    const prefix = loc === defaultLocale ? '' : `/${loc}`;
-    return `${BASE_URL}${prefix}${path}`;
-  };
-
+export function languageAlternates(path: string) {
   const languages: Record<string, string> = {};
-  for (const loc of SUPPORTED_LOCALES) {
-    languages[loc] = getUrl(loc);
+  for (const locale of getLocales()) {
+    languages[locale] = localeUrl(locale, path);
   }
-  languages['x-default'] = getUrl(defaultLocale);
+  languages['x-default'] = localeUrl(getDefaultLocale(), path);
+  return languages;
+}
+```
+
+Call the helper from each page's `generateMetadata`. The `locale` route parameter is the locale the middleware resolved, including the default locale for an unprefixed URL such as `/about`:
+
+```tsx title="app/[locale]/about/page.tsx"
+import type { Metadata } from 'next';
+import { languageAlternates, localeUrl } from '@/lib/seo';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
 
   return {
     alternates: {
-      canonical: getUrl(locale),
-      languages,
+      canonical: localeUrl(locale, '/about'),
+      languages: languageAlternates('/about'),
     },
   };
 }
 ```
 
-Then use it in any page:
+With `prefixDefaultLocale: true`, drop the default-locale check so every URL gets a prefix. With translated paths from `pathConfig`, build each locale's URL from the same path map, so `fr` points to `/fr/a-propos`.
+
+## How do I translate page titles and meta descriptions for each locale in Next.js?
+
+Translate the strings that `generateMetadata` returns. Search results usually show a page's title and description, so a Spanish page with an English title shows English text in Spanish search results. General Translation's [`getGT`](/docs/react/nextjs/reference/functions/get-gt) from `gt-next/server` returns a translation function for the current request's locale, and it works inside `generateMetadata`:
 
 ```tsx title="app/[locale]/about/page.tsx"
-import { getI18NMetadata } from '@/lib/i18n-metadata';
-
-export async function generateMetadata() {
-  return await getI18NMetadata('/about');
-}
-```
-
-This generates both the canonical and all hreflang tags in one call.
-
----
-
-## 5. Translated metadata
-
-Search engines display your page title and description in results.
-If these are in English for a French page, users are less likely to click — and Google may demote the result.
-
-Use gt-next's [`getGT`](/docs/react/nextjs/reference/functions/get-gt) function to translate metadata strings:
-
-```tsx title="app/[locale]/about/page.tsx"
+import type { Metadata } from 'next';
 import { getGT } from 'gt-next/server';
-import { getI18NMetadata } from '@/lib/i18n-metadata';
 
-export async function generateMetadata() {
-  const t = await getGT();
-  const i18nMeta = await getI18NMetadata('/about');
+export async function generateMetadata(): Promise<Metadata> {
+  const gt = await getGT();
 
   return {
-    title: t('About Us'),
-    description: t('Learn about our mission and team.'),
-    ...i18nMeta,
+    title: gt('About us'),
+    description: gt('Meet the team that builds our product.'),
   };
 }
 ```
 
-This gives you localized titles and descriptions in search results,
-which significantly improves click-through rates for non-English queries.
+Pass string literals, as above, so the build step can find them. Production translations for [`getGT`](/docs/react/nextjs/reference/functions/get-gt) are prepared before deployment, so run [`npx gt translate`](/docs/cli/reference/commands/translate) before `next build`:
 
----
+```json title="package.json"
+{
+  "scripts": {
+    "build": "npx gt translate && next build"
+  }
+}
+```
 
-## 6. Multilingual sitemaps
+Return the translated title and description together with the `alternates` object from the same `generateMetadata` function. When the English title changes, General Translation translates the new text into every locale on the next build, with no message files to update.
 
-A sitemap helps search engines discover all your pages, including every language version.
-For multilingual sites, you should include hreflang annotations in your sitemap as well.
+## How do I add every language to a Next.js sitemap?
 
-Next.js supports [programmatic sitemaps](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap) through a `sitemap.ts` file:
+List one entry per page per locale in `app/sitemap.ts`, and give each entry the same `alternates.languages` map the page metadata returns. Next.js 14.2 and later writes that map as `xhtml:link` alternates inside each sitemap `<url>`, and Google treats [`hreflang` in a sitemap](https://developers.google.com/search/docs/specialty/international/localized-versions) the same as `hreflang` in HTML. With General Translation's `gt-next`, `getLocales` and `getDefaultLocale` supply the locales from `gt.config.json`:
 
 ```ts title="app/sitemap.ts"
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
+import { getDefaultLocale, getLocales } from 'gt-next';
 
 const BASE_URL = 'https://example.com';
-const LOCALES = ['en', 'fr', 'es'];
-const DEFAULT_LOCALE = 'en';
-const PAGES = ['/', '/about', '/blog', '/contact'];
+const PAGES = ['/', '/about', '/pricing'];
+
+// The default locale has no prefix: /about, /es/about, /fr/about.
+function localeUrl(locale: string, path: string) {
+  const prefix = locale === getDefaultLocale() ? '' : `/${locale}`;
+  return `${BASE_URL}${prefix}${path === '/' ? '' : path}`;
+}
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return PAGES.flatMap((path) => {
-    const getUrl = (locale: string) => {
-      const prefix = locale === DEFAULT_LOCALE ? '' : `/${locale}`;
-      return `${BASE_URL}${prefix}${path === '/' ? '' : path}`;
-    };
-
     const languages: Record<string, string> = {};
-    for (const locale of LOCALES) {
-      languages[locale] = getUrl(locale);
+    for (const locale of getLocales()) {
+      languages[locale] = localeUrl(locale, path);
     }
+    languages['x-default'] = localeUrl(getDefaultLocale(), path);
 
-    return LOCALES.map((locale) => ({
-      url: getUrl(locale),
-      lastModified: new Date(),
+    return getLocales().map((locale) => ({
+      url: localeUrl(locale, path),
       alternates: { languages },
     }));
   });
 }
 ```
 
-This generates a sitemap with one entry per page per locale,
-and each entry includes hreflang annotations pointing to all language versions.
+For the Spanish About page, the sitemap contains:
 
----
+```xml
+<url>
+  <loc>https://example.com/es/about</loc>
+  <xhtml:link rel="alternate" hreflang="en" href="https://example.com/about" />
+  <xhtml:link rel="alternate" hreflang="es" href="https://example.com/es/about" />
+  <xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr/about" />
+  <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/about" />
+</url>
+```
 
-## Checklist
+List a language only when the page exists in it. If page metadata already uses a shared URL helper, such as `lib/seo.ts` above, import `localeUrl` from it here so the sitemap and the `hreflang` links never disagree. The Next.js [sitemap reference](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap#generate-a-localized-sitemap) documents the `alternates` field.
 
-Here's a quick summary of everything covered:
+## Which Next.js i18n library handles locale routes and hreflang for SEO?
 
-| SEO requirement         | Implementation                                                      |
-| ----------------------- | ------------------------------------------------------------------- |
-| Locale in URL           | [`createNextMiddleware()`](/docs/react/nextjs/reference/functions/create-next-middleware) with `[locale]` dynamic segment            |
-| HTML `lang` attribute   | [`useLocale()`](/docs/react/reference/hooks/use-locale) in root layout                                        |
-| Canonical URLs          | [`getLocale()`](/docs/react/nextjs/reference/functions/get-locale) + Next.js metadata API `alternates.canonical`         |
-| Hreflang tags           | Next.js metadata API `alternates.languages` with all supported locales |
-| Translated metadata     | [`getGT()`](/docs/react/nextjs/reference/functions/get-gt) for page titles and descriptions                         |
-| Multilingual sitemap    | `sitemap.ts` with per-locale entries and hreflang alternates        |
+For SEO, a Next.js i18n library has to give every language its own URL. General Translation's `gt-next` and next-intl both do this with App Router middleware; i18next and react-intl leave routing to you. next-intl's middleware also sends `hreflang` alternates in an HTTP header, and `gt-next` translates titles and descriptions in the build without message files. None of these libraries writes the canonical URL or the sitemap for you.
 
----
+| Approach | Language URLs | `hreflang` | Translated titles and descriptions | Canonical URL and sitemap |
+| --- | --- | --- | --- | --- |
+| next-intl | Middleware with locale prefixes (`/en/about` by default), localized pathnames, or a domain per locale | Middleware [sends alternates, including `x-default`, in a `Link` HTTP header](https://next-intl.dev/docs/routing/configuration#alternate-links) by default | Messages your team or a translation service writes in each language's JSON catalog | You write them |
+| i18next or react-intl | No Next.js routing; you write the middleware | You write them | Messages in each language's catalog | You write them |
+| Google Translate in the visitor's browser | One URL per page | None | Translated in the browser only; search results show the source language | One URL, so nothing to list |
+| A raw AI API (OpenAI API, Claude API) | Routes you build | You write them | A script you run again after every copy change | You write them |
+| General Translation (`gt-next` and the `gt` CLI) | [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) serves `/about`, `/es/about`, and translated paths such as `/fr/a-propos` | You return `alternates.languages` from `generateMetadata`, built from `getLocales` | [`getGT`](/docs/react/nextjs/reference/functions/get-gt) strings, translated by [`npx gt translate`](/docs/cli/reference/commands/translate) before `next build` | You write them in `generateMetadata` and `app/sitemap.ts` from one URL helper |
 
-Use the [`gt-next` Quickstart](/docs/react/nextjs-quickstart) to set up the full internationalization stack. Then configure routing with the [middleware guide](/docs/react/nextjs/app-router-middleware), generate multilingual pages with [static site generation](/docs/react/nextjs/app-router-static-site-generation), and add [right-to-left support](/docs/react/guides/managing-locales).
+Use next-intl when your team already maintains message catalogs and wants `hreflang` sent from middleware. Use i18next or react-intl when you have translators, copy that rarely changes, and time to write the routing. Use browser translation only for pages that need no search traffic in other languages, such as an app behind a login, which search engines can't crawl. Use General Translation's `gt-next` when the app ships new copy often and every language version needs its own indexed page and translated title: copy stays inline in your components, and the build translates pages and titles together. Profound's platform and docs ship in 47+ locales with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
