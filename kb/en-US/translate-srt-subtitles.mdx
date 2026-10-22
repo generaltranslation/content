@@ -1,7 +1,7 @@
 ---
 title: How do I translate SRT subtitles without breaking timing?
-summary: "Translate only the cue text in an SRT file; keep cue numbers, timecodes, blank-line separators, and formatting tags exactly as in the source. Then check line length and reading speed: Netflix's English guide allows 42 characters per line and 20 characters per second for adult programs (17 for children's)."
-description: Translate only the cue text in an SRT file, keep cue numbers and timecodes unchanged, then check line length and reading speed against Netflix limits.
+summary: "Translate only the cue text in an SRT file; keep cue numbers, timecodes, blank-line separators, and formatting tags as in the source. Then check line length and reading speed against your destination's requirements: Netflix's English guide, for example, allows 42 characters per line and 20 characters per second for adult programs."
+description: Translate only the cue text in an SRT file, keep cue numbers and timecodes unchanged, then check line length and reading speed for your platform.
 date: 2026-10-20
 category: translation
 authors: [kevin-wu, jackie]
@@ -52,15 +52,14 @@ Dialogue often runs across two or three cues. Translating each cue on its own ke
 
 | Approach | Handles SRT structure | Machine translation | Reading speed checks | Fits when |
 | --- | --- | --- | --- | --- |
-| YouTube Studio | Accepts basic `.srt` uploads, one per language; markup isn't recognized | YouTube's auto-translated subtitles | None | The video lives only on YouTube |
 | Subtitle Edit (free, open source) | Parses and writes SRT | Google Translate, DeepL, LLM APIs, and local models | Netflix-style checks for characters per second, line length, and line count | One person translates and polishes a file by hand |
 | DeepL document translation | Accepts `.srt` uploads | DeepL | None | You want a quick first draft of one file |
 | Google Translate | No SRT upload in the consumer app or Cloud document translation | Text API only; you rebuild the file | None | You'll script it and own the file handling |
 | Prompt an LLM with the file | Reads the file as plain text; nothing guarantees the structure survives | Any model you choose | Only if you ask, and unverified | A one-off file you'll check line by line |
 
-A few details behind the table. In YouTube Studio, you open **Subtitles**, select the video, click **Add language**, choose the language, and upload the file under **Subtitles** ([add subtitles and captions](https://support.google.com/youtube/answer/2734796)). [Subtitle Edit](https://github.com/SubtitleEdit/subtitleedit) (MIT-licensed, for Windows, macOS, and Linux) has a **Translate > Auto-translate** dialog with engines including Google Translate, DeepL, ChatGPT, Claude, Gemini, and local models through Ollama, plus a **Tools > Check and fix Netflix errors** checker. DeepL's [document API](https://developers.deepl.com/api-reference/document) lists `srt` among its supported formats. Google's [document translation](https://docs.cloud.google.com/translate/docs/advanced/translate-documents) takes Office files and PDFs, and the [consumer site](https://support.google.com/translate/answer/2534559?co=GENIE.Platform%3DDesktop) takes only `.docx`, `.pdf`, `.pptx`, and `.xlsx`.
+A few details behind the table. YouTube Studio isn't in it because it publishes subtitles rather than translating them: once you have a translated file, open **Subtitles**, select the video, click **Add language**, choose the language, and upload the file ([add subtitles and captions](https://support.google.com/youtube/answer/2734796)). That upload assumes the translation already exists. [Subtitle Edit](https://github.com/SubtitleEdit/subtitleedit) (MIT-licensed, for Windows, macOS, and Linux) has a **Translate > Auto-translate** dialog with engines including Google Translate, DeepL, ChatGPT, Claude, Gemini, and local models through Ollama, plus a **Tools > Check and fix Netflix errors** checker. DeepL's [document API](https://developers.deepl.com/api-reference/document) lists `srt` among its supported formats. Google's [document translation](https://docs.cloud.google.com/translate/docs/advanced/translate-documents) takes Office files and PDFs, and the [consumer site](https://support.google.com/translate/answer/2534559?co=GENIE.Platform%3DDesktop) takes only `.docx`, `.pdf`, `.pptx`, and `.xlsx`.
 
-Use YouTube Studio when the video lives only on YouTube. Use Subtitle Edit when one person translates and polishes a file by hand, because it pairs machine translation with timing and reading speed checks. Use DeepL's document translation for a quick first draft of a single file.
+Use Subtitle Edit when one person translates and polishes a file by hand, because it pairs machine translation with timing and reading speed checks. Use DeepL's document translation for a quick first draft of a single file.
 
 ## Check the translated file
 
@@ -105,7 +104,36 @@ console.log(problems.length ? problems.join('\n') : `OK: ${source.length} cues, 
 process.exitCode = problems.length ? 1 : 0;
 ```
 
-Run on the example file, a Spanish translation passes the structure check, and a German translation that merged two cues and used a dot in a timecode fails:
+Here are two translations of the example file. The Spanish one keeps every cue. The German one squeezes three cues into two and types a dot into a timecode:
+
+```text title="subtitles/es/intro.srt"
+1
+00:00:01,000 --> 00:00:03,500
+Bienvenidos de nuevo al canal.
+
+2
+00:00:03,600 --> 00:00:06,200
+Hoy veremos
+<i>cómo se sincronizan los subtítulos</i>.
+
+3
+00:00:06,400 --> 00:00:08,000
+¡Empecemos!
+```
+
+```text title="subtitles/de/intro.srt"
+1
+00:00:01,000 --> 00:00:03,500
+Willkommen zurück auf dem Kanal.
+Heute sehen wir uns an,
+
+2
+00:00:03,600 --> 00:00:06.200
+<i>wie Untertitel getimt werden</i>.
+Los geht's!
+```
+
+Run with Node.js 24, the script passes the Spanish file and fails the German one. Cue 1 now holds 56 characters in 2.5 seconds:
 
 ```bash
 $ node check-srt.mjs subtitles/en/intro.srt subtitles/es/intro.srt 20

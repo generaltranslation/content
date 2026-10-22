@@ -1,6 +1,6 @@
 ---
 title: How do I translate i18n JSON files?
-summary: "Translate only the string values in a JSON locale file and keep every key, placeholder such as {{name}}, and tag unchanged. Add the plural keys each language needs, such as inbox_few and inbox_many for Polish, using a format-aware tool or API, then parse and validate the output before review."
+summary: "Translate only the string values in a JSON locale file. Keep nonplural keys, placeholders such as {{name}}, and tags unchanged, but expect plural keys to differ by language: Polish needs inbox_few and inbox_many. Use a format-aware tool or API, then parse and validate the output before review."
 description: Translate JSON locale files while preserving placeholders and markup, and validate i18next plural forms and ICU messages before release.
 date: 2026-10-20
 category: translation
@@ -86,7 +86,29 @@ Validate the output with the same message format and locale rules your applicati
 - **Preserve placeholders and tags in every translated form.** Check newly added plural forms too. `{{name}}` must still refer to `name`, and numbered tags must still identify the intended components, even when their order changes.
 - **Parse ICU messages and compare their arguments.** Use a parser such as the [FormatJS ICU message parser](https://formatjs.github.io/docs/icu-messageformat-parser/), rather than a regular expression for nested braces. Parsing alone is insufficient: changing the plural argument from `count` to `total` produces valid syntax but no longer matches the value the application supplies. Check argument names and types, rich-text tags, select cases, exact-number selectors such as `=0`, and plural offsets. Allow locale-specific plural categories; ICU's required `other` branch provides a fallback, so ICU messages need not contain every CLDR category.
 
-Finally, load the messages through your application's i18n library and review them in context. Exercise counts that select each plural form, including zero and decimals where relevant. Syntax checks cannot establish whether a translation is accurate or whether its text fits the interface. Custom interpolation rules and vue-i18n's pipe syntax need checks adapted to those formats.
+Missing plural keys don't fail loudly. This Polish file has all four categories; a key-by-key translation would have stopped at `inbox_one` and `inbox_other`:
+
+```json title="locales/pl/common.json"
+{
+  "inbox_one": "Masz {{count}} nową wiadomość",
+  "inbox_few": "Masz {{count}} nowe wiadomości",
+  "inbox_many": "Masz {{count}} nowych wiadomości",
+  "inbox_other": "Masz {{count}} nowej wiadomości"
+}
+```
+
+Loaded with i18next 26.5.3 and `fallbackLng: 'en'`, the key-by-key file falls back to English for every count that needs `few` or `many`, not to the Polish `other` form:
+
+```text title="Output"
+count  category  key-by-key file              complete file
+1      one       Masz 1 nową wiadomość        Masz 1 nową wiadomość
+2      few       You have 2 new messages      Masz 2 nowe wiadomości
+5      many      You have 5 new messages      Masz 5 nowych wiadomości
+22     few       You have 22 new messages     Masz 22 nowe wiadomości
+1.5    other     Masz 1.5 nowej wiadomości    Masz 1.5 nowej wiadomości
+```
+
+The decimal prints as `1.5` because the value isn't number-formatted; format it for the locale if fractions can occur. Finally, load the messages through your application's i18n library and review them in context. Exercise counts that select each plural form, including zero and decimals where relevant. Syntax checks cannot establish whether a translation is accurate or whether its text fits the interface. Custom interpolation rules and vue-i18n's pipe syntax need checks adapted to those formats.
 
 ## Key takeaways
 
