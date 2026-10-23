@@ -100,6 +100,41 @@ const config: NextConfig = {
         destination: '/docs/integrations/rrweb/:path*',
         permanent: true,
       },
+      {
+        source: '/docs/react/tanstack-start/reference/functions/gt-middleware',
+        destination: '/docs/react/tanstack-start/setup',
+        permanent: true,
+      },
+      {
+        source:
+          '/:locale/docs/react/tanstack-start/reference/functions/gt-middleware',
+        destination: '/docs/react/tanstack-start/setup',
+        permanent: true,
+      },
+      {
+        source:
+          '/docs/react/tanstack-start/reference/functions/gt-middleware.md',
+        destination: '/docs/react/tanstack-start/setup.md',
+        permanent: true,
+      },
+      {
+        source:
+          '/docs/react/tanstack-start/reference/functions/gt-middleware.mdx',
+        destination: '/docs/react/tanstack-start/setup.mdx',
+        permanent: true,
+      },
+      {
+        source:
+          '/:locale/docs/react/tanstack-start/reference/functions/gt-middleware.md',
+        destination: '/docs/react/tanstack-start/setup.md',
+        permanent: true,
+      },
+      {
+        source:
+          '/:locale/docs/react/tanstack-start/reference/functions/gt-middleware.mdx',
+        destination: '/docs/react/tanstack-start/setup.mdx',
+        permanent: true,
+      },
     ];
   },
 };
