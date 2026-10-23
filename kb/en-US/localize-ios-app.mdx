@@ -1,6 +1,6 @@
 ---
 title: How do I localize an iOS app with String Catalogs?
-summary: Add your languages in Xcode, write user-facing text with localizable APIs such as SwiftUI Text and String(localized:), and build so Xcode collects those strings into a String Catalog (.xcstrings). Then translate each language in the catalog editor, through an exported XLIFF file, or with Xcode 27's agents.
+summary: Add your languages in Xcode, write user-facing text with localizable APIs such as SwiftUI Text and String(localized:), and build so Xcode collects those strings into a String Catalog (.xcstrings). Translate in Xcode, through XLIFF, or with General Translation's CLI when catalogs should update with releases and share terminology with your website and Android app.
 description: Add languages in Xcode, build to collect localizable strings into a String Catalog (.xcstrings), then translate it with a service or Xcode 27 agents.
 date: 2026-10-20
 category: internationalization
@@ -132,20 +132,21 @@ To convert an existing project, choose **Edit > Convert > To String Catalog** (o
 
 ## Choose how to translate
 
-Four approaches put translations into the catalog:
+These approaches put translations into the catalog:
 
 | Approach | Who translates | Context the translator gets | Repeatable on every release | What it leaves to you |
 | --- | --- | --- | --- | --- |
 | Type in the catalog editor | You or a bilingual teammate | The whole app | No | Every string in every language, by hand |
 | Xcode coding agent (Xcode 27) | The agent you enable in Xcode | Where each string is used, similar strings, plural needs, Apple's language style guides | Run per request in Xcode | Agent setup, reviewing machine-translated strings, keeping terms in sync with your web and Android apps |
 | Export `.xcloc` and XLIFF to translators or a translation management system (TMS) | Professional translators | Comments, plus screenshots you add to the `Notes` folder | Scriptable with `xcodebuild` | A round trip per release, and waiting on it |
+| General Translation CLI | GT's translation service | Catalog comments plus shared Glossary and Custom Prompts | Run [`gt translate`](/docs/cli/reference/commands/translate) before the build | Review in the Dashboard or Xcode, then test the app |
 | Script machine translation or an LLM over the JSON | A model or translation API | Whatever your script sends | Yes | Variations, substitutions, plural categories per language, format specifiers, states, and review |
 
 **Exporting.** **Product > Export Localizations** creates one Xcode Localization Catalog (a `.xcloc` folder) per language, with an XLIFF file inside ([Apple: Exporting localizations](https://developer.apple.com/documentation/xcode/exporting-localizations)). Turn on the **Use Compiler to Extract Swift Strings** build setting so the export includes every Swift string. Bring translations back with **Product > Import Localizations**, or script both directions with `xcodebuild -exportLocalizations` and `xcodebuild -importLocalizations` ([Apple: Importing localizations](https://developer.apple.com/documentation/xcode/importing-localizations)).
 
 **What changed in Xcode 27.** Agents in Xcode can now translate String Catalogs: Xcode adds the languages, creates any missing String Catalogs, and gives the agent context for each string ([Xcode 27 release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes), [WWDC26: Translate your app using agents in Xcode](https://developer.apple.com/videos/play/wwdc2026/213/)). The catalog editor gains a **Generate Translations** button, agent output gets the **Machine Translated** state, and exported XLIFF marks it with `state-qualifier="leveraged-mt"`. A localization comment of "do not translate" now marks a string **Don't Translate** in the catalog and `translate="no"` in XLIFF. You can point `AGENTS.md` or `CLAUDE.md` at a `TRANSLATION.md` file with a glossary and a list of strings the agent shouldn't translate ([Apple: Localizing your app using agents](https://developer.apple.com/documentation/xcode/localizing-your-app-using-agents)).
 
-Use the catalog editor for one or two languages you speak. Use Xcode's agent when you want machine translation inside Xcode and the iOS app is your only surface. Use an XLIFF export when professional translators or an existing [TMS](/kb/what-is-a-translation-management-system) own the work.
+Use the catalog editor for one or two languages you speak. Use Xcode's agent when you want machine translation inside Xcode. Choose General Translation when a repeatable repository command and shared terminology across products matter; you keep using Xcode and Apple's native localization APIs. Use an XLIFF export when professional translators or an existing [TMS](/kb/what-is-a-translation-management-system) own the work.
 
 ## Test every language
 
@@ -169,11 +170,13 @@ When translation should run as a repeatable command and terminology should match
 }
 ```
 
-Every locale lives in the same file, so the `include` paths have no `[locale]` placeholder, and the catalog's `sourceLanguage` must match `defaultLocale` or the run stops before uploading. Sign in with [`npx gt login`](/docs/cli/reference/commands/login), set `GT_PROJECT_ID` ([CLI credentials](/docs/cli/guides/configuring#credentials)), and run [`npx gt translate`](/docs/cli/reference/commands/translate). In CI, store a project API key with **Files > Write** and **Translation queue > Enabled** as `GT_API_KEY`.
+Every locale lives in the same file, so the `include` paths have no `[locale]` placeholder, and the catalog's `sourceLanguage` must match `defaultLocale` or the run stops before uploading. Sign in with [`npx gt login`](/docs/cli/reference/commands/login), set `GT_PROJECT_ID` ([CLI credentials](/docs/cli/guides/configuring#credentials)), and, for an existing app, import the source and reviewed translations with [`npx gt upload`](/docs/cli/reference/commands/upload). Then run [`npx gt translate`](/docs/cli/reference/commands/translate) to generate updates. In CI, store a project API key with **Files > Write** and **Translation queue > Enabled** as `GT_API_KEY`.
 
-The CLI uploads only the source-language slice and merges each target locale back into the file, leaving other locales, comments, substitutions, and variations as they are. (See the [`.xcstrings` reference](/docs/cli/reference/formats/xcstrings-files).) For the legacy layout, the `dotStrings` and `dotStringsdict` keys translate `.strings` and [`.stringsdict`](/docs/cli/reference/formats/dot-stringsdict-files) files instead.
+The CLI uploads only the source-language slice and merges each target locale back into the file, preserving unrelated locales and catalog structure. Its String Catalog processing uses the target language's plural categories when translating variations and preserves format specifiers and substitutions. (See the [`.xcstrings` reference](/docs/cli/reference/formats/xcstrings-files).) For the legacy layout, the `dotStrings` and `dotStringsdict` keys translate `.strings` and [`.stringsdict`](/docs/cli/reference/formats/dot-stringsdict-files) files instead.
 
-If you edit translations in Xcode, run [`npx gt save-local`](/docs/cli/reference/commands/save-local) so later runs keep them. Assign one [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) to your iOS, web, and [Android](/docs/cli/reference/formats/android-strings-files) projects, and a Glossary term like your plan names stays the same on every surface.
+Review the catalog in Xcode or use the Dashboard's [raw file editor](/docs/platform/dashboard/guides/reviewing-translations). If you edit translations in Xcode, run [`npx gt save-local`](/docs/cli/reference/commands/save-local) so later runs keep them. Assign one [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) to your iOS, web, and [Android](/docs/cli/reference/formats/android-strings-files) projects, and a Glossary term like your plan names stays the same on every surface.
+
+Ramp uses GT for 11+ locales across its dashboard, landing page, and iOS app, an example of the same translation platform serving web and native products. (See [production deployments](https://generaltranslation.com/enterprise).)
 
 ## Key takeaways
 
@@ -181,4 +184,4 @@ If you edit translations in Xcode, run [`npx gt save-local`](/docs/cli/reference
 - Use **Vary by Plural** for counts; Xcode adds each language's categories, such as four for Russian.
 - Translated strings removed from code become **Stale** instead of disappearing, so clean them up on purpose.
 - Xcode 27 adds agent translation, a **Machine Translated** state, and `leveraged-mt` in exported XLIFF.
-- General Translation's CLI translates the catalog in place with `"xcstrings": { "include": [...] }` and [`npx gt translate`](/docs/cli/reference/commands/translate), keeping other locales, comments, and variations intact.
+- General Translation's CLI translates the catalog in place with `"xcstrings": { "include": [...] }` and [`npx gt translate`](/docs/cli/reference/commands/translate), preserving unrelated locales and the catalog's structure while producing target-language variations.

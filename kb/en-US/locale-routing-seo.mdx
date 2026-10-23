@@ -66,105 +66,58 @@ Locale-in-the-URL lets the translated content be cached by URL. That only makes 
 
 ## A framework-neutral example
 
-This example demonstrates routing precedence for four configured locales: it redirects only from the root and returns a suggestion when the visitor prefers another language. The seven requests below were checked with Node.js 24.
-
-Its short matcher is intentionally limited: it falls back by language, does not distinguish scripts, ignores wildcard ranges, and does not enforce all exclusions expressed with `q=0`. Use your framework’s language negotiator for general browser input, especially when supporting multiple scripts or regional variants. The [language-detection guide](/kb/detect-user-language) explains matching choices.
+This function separates routing from language negotiation. Resolve a saved choice first, then the browser preferences, using the [language-detection guide](/kb/detect-user-language). Pass that supported locale as `preferredLocale`; the function decides whether to redirect, serve, or suggest another version.
 
 ```ts title="routeLocale.ts"
 const LOCALES = ['en', 'de', 'fr', 'es-MX'];
 const DEFAULT_LOCALE = 'en';
-const COOKIE = 'locale';
 
 type Decision =
   | { action: 'serve'; locale: string; suggest?: string }
   | { action: 'redirect'; status: 302; location: string; headers: Record<string, string> }
   | { action: 'not-found' };
 
-// Match a tag like "de-AT" to a supported locale: exact first, then by language.
-function match(tag: string): string | undefined {
-  const lower = tag.toLowerCase();
-  return (
-    LOCALES.find((l) => l.toLowerCase() === lower) ??
-    LOCALES.find((l) => l.toLowerCase().split('-')[0] === lower.split('-')[0])
-  );
-}
+export function routeLocale(pathname: string, preferredLocale?: string): Decision {
+  const preferred = LOCALES.includes(preferredLocale ?? '') ? preferredLocale : undefined;
 
-// Parse "fr-CH, fr;q=0.9, en;q=0.8" into tags ordered by quality value.
-function fromAcceptLanguage(header: string | undefined): string | undefined {
-  if (!header) return undefined;
-  const tags = header
-    .split(',')
-    .map((part) => {
-      const [tag, ...params] = part.trim().split(';');
-      const q = params.find((p) => p.trim().startsWith('q='));
-      return { tag: tag.trim(), q: q ? Number(q.trim().slice(2)) : 1 };
-    })
-    .filter(({ tag, q }) => tag && tag !== '*' && q > 0)
-    .sort((a, b) => b.q - a.q);
-  for (const { tag } of tags) {
-    const locale = match(tag);
-    if (locale) return locale;
-  }
-}
-
-function fromCookie(cookieHeader: string | undefined): string | undefined {
-  const value = cookieHeader
-    ?.split(';')
-    .map((c) => c.trim().split('='))
-    .find(([name]) => name === COOKIE)?.[1];
-  return value ? match(value) : undefined;
-}
-
-export function routeLocale(
-  pathname: string,
-  headers: { cookie?: string; 'accept-language'?: string }
-): Decision {
-  // A saved choice beats the browser header; both are only preferences.
-  const preferred = fromCookie(headers.cookie) ?? fromAcceptLanguage(headers['accept-language']);
-
-  // 1. The neutral root (the x-default URL) is the only place we redirect.
   if (pathname === '/') {
     return {
       action: 'redirect',
-      status: 302, // temporary: the target depends on who is asking
+      status: 302,
       location: `/${preferred ?? DEFAULT_LOCALE}/`,
       headers: { Vary: 'Accept-Language, Cookie', 'Cache-Control': 'private' },
     };
   }
 
-  // 2. A locale in the URL always wins. Never redirect away from it.
   const segment = pathname.split('/')[1];
   const urlLocale = LOCALES.find((l) => l.toLowerCase() === segment.toLowerCase());
   if (!urlLocale) return { action: 'not-found' };
 
-  // 3. If the visitor seems to prefer another language, offer it in a banner.
   return preferred && preferred !== urlLocale
     ? { action: 'serve', locale: urlLocale, suggest: preferred }
     : { action: 'serve', locale: urlLocale };
 }
 ```
 
-Running it against seven requests, the first of which looks like Googlebot (no header, no cookie):
+| Path | Resolved preference | Decision |
+| --- | --- | --- |
+| `/` | None | Temporary redirect to `/en/` |
+| `/` | `de` | Temporary redirect to `/de/` |
+| `/` | `fr`, from a saved choice | Temporary redirect to `/fr/` |
+| `/de/preise` | None | Serve German |
+| `/de/preise` | `fr` | Serve German; suggest French |
+| `/en/pricing` | `de` | Serve English; suggest German |
+| `/pt/precos` | None | Not found: Portuguese isn't configured |
 
-```text title="Output"
-/ {} -> {"action":"redirect","status":302,"location":"/en/","headers":{"Vary":"Accept-Language, Cookie","Cache-Control":"private"}}
-/ {"accept-language":"de-AT,de;q=0.9,en;q=0.8"} -> {"action":"redirect","status":302,"location":"/de/","headers":{"Vary":"Accept-Language, Cookie","Cache-Control":"private"}}
-/ {"accept-language":"es-MX","cookie":"locale=fr"} -> {"action":"redirect","status":302,"location":"/fr/","headers":{"Vary":"Accept-Language, Cookie","Cache-Control":"private"}}
-/de/preise {} -> {"action":"serve","locale":"de"}
-/de/preise {"accept-language":"fr-CH, fr;q=0.9"} -> {"action":"serve","locale":"de","suggest":"fr"}
-/en/pricing {"cookie":"session=abc; locale=de"} -> {"action":"serve","locale":"en","suggest":"de"}
-/pt/precos {} -> {"action":"not-found"}
-```
-
-The saved `fr` cookie beats the `es-MX` header at the root, `de-AT` falls back to `de`, and a German page stays German for a visitor whose browser prefers French. The function returns a routing decision; it does not itself send a redirect or render a page. A production integration must use suitable language negotiation, apply the returned headers, and persist explicit choices through its language switcher.
+The function returns a routing decision; it does not send a redirect or render a page. Apply its status and cache headers in the server integration, and only offer a suggested version if that page is published in the destination language. This root-only pattern is one implementation; other unprefixed paths can also be neutral entry points if the actual content lives at stable localized URLs.
 
 ## How General Translation's gt-next decides the language
 
 In `gt-next`, [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) checks the locale in the URL before the saved locale cookie and the `Accept-Language` header, so a localized URL serves its own language. The full resolution order and cookie name are in [how to detect a user's browser language](/kb/detect-user-language).
 
-The SEO-relevant choice is the default locale's prefix. By default it's unprefixed, so English lives at `/about` and French at `/fr/about`. A crawler with no header or cookie gets English at `/about`, and every prefixed URL stays reachable. Unprefixed URLs, though, are locale-adaptive: the middleware redirects a visitor whose locale cookie or `Accept-Language` header prefers French from `/about` to `/fr/about`, the content-URL redirect this article warns against.
+For public sites, set `prefixDefaultLocale: true` in [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware). English lives at `/en/about`, French at `/fr/about`, and each content URL keeps its language regardless of the visitor's preference. Unprefixed paths such as `/about` act as neutral entry points with temporary redirects. The [Next.js SEO guide](/kb/multilingual-nextjs-seo) connects this configuration to canonical URLs, metadata, and sitemaps.
 
-For public sites you want indexed per language, set `prefixDefaultLocale: true` in [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware). English then moves to `/en/about`, every content URL keeps its language, and unprefixed paths act only as neutral entry points that redirect. To stop header-based detection entirely, set [`ignoreBrowserLocales`](/docs/react/nextjs/config#ignore-browser-locales) to `true` in `withGTConfig`.
+The default configuration leaves English unprefixed and may redirect `/about` according to the saved cookie or browser header. Explicitly enabling the prefix avoids using that URL as both English content and a preference-based entry point. To ignore browser-header preferences, set [`ignoreBrowserLocales`](/docs/react/nextjs/config#ignore-browser-locales) to `true` in `withGTConfig`; the URL and saved choice still apply.
 
 ## Key takeaways
 

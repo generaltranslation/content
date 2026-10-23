@@ -55,11 +55,12 @@ Dialogue often runs across two or three cues. Translating each cue on its own ke
 | Subtitle Edit (free, open source) | Parses and writes SRT | Google Translate, DeepL, LLM APIs, and local models | Netflix-style checks for characters per second, line length, and line count | One person translates and polishes a file by hand |
 | DeepL document translation | Accepts `.srt` uploads | DeepL | None | You want a quick first draft of one file |
 | Google Translate | No SRT upload in the consumer app or Cloud document translation | Text API only; you rebuild the file | None | You'll script it and own the file handling |
+| General Translation CLI | Dedicated SRT processing preserves cue timing and protected markup | GT's service with shared Glossary and Custom Prompts | Run the checks below and review against video | Subtitles versioned with recurring product or docs releases |
 | Prompt an LLM with the file | Reads the file as plain text; nothing guarantees the structure survives | Any model you choose | Only if you ask, and unverified | A one-off file you'll check line by line |
 
 A few details behind the table. YouTube Studio isn't in it because it publishes subtitles rather than translating them: once you have a translated file, open **Subtitles**, select the video, click **Add language**, choose the language, and upload the file ([add subtitles and captions](https://support.google.com/youtube/answer/2734796)). That upload assumes the translation already exists. [Subtitle Edit](https://github.com/SubtitleEdit/subtitleedit) (MIT-licensed, for Windows, macOS, and Linux) has a **Translate > Auto-translate** dialog with engines including Google Translate, DeepL, ChatGPT, Claude, Gemini, and local models through Ollama, plus a **Tools > Check and fix Netflix errors** checker. DeepL's [document API](https://developers.deepl.com/api-reference/document) lists `srt` among its supported formats. Google's [document translation](https://docs.cloud.google.com/translate/docs/advanced/translate-documents) takes Office files and PDFs, and the [consumer site](https://support.google.com/translate/answer/2534559?co=GENIE.Platform%3DDesktop) takes only `.docx`, `.pdf`, `.pptx`, and `.xlsx`.
 
-Use Subtitle Edit when one person translates and polishes a file by hand, because it pairs machine translation with timing and reading speed checks. Use DeepL's document translation for a quick first draft of a single file.
+Use Subtitle Edit when one person translates and polishes a file by hand, because it pairs machine translation with timing and reading speed checks. Use DeepL's document translation for a quick first draft of a single file. Choose General Translation when the same subtitle files change with releases and need terminology shared with your app and docs; use a subtitle editor for the final review against the video.
 
 ## Check the translated file
 
@@ -69,7 +70,7 @@ This Node.js script checks that a translated file has the same cue count, cue nu
 // Usage: node check-srt.mjs <source.srt> <translated.srt> [max characters per second]
 import { readFileSync } from 'node:fs';
 
-const TIMING = /^(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/;
+const TIMING = /^(\d{2}:[0-5]\d:[0-5]\d,\d{3}) --> (\d{2}:[0-5]\d:[0-5]\d,\d{3})$/;
 const cues = (file) =>
   readFileSync(file, 'utf8')
     .replace(/^﻿/, '')
@@ -79,9 +80,13 @@ const cues = (file) =>
     .map(([number, timing = '', ...text]) => ({ number, timing, text }));
 
 const [srcFile, outFile, maxCps] = process.argv.slice(2);
+if (!srcFile || !outFile || (maxCps !== undefined && !(Number(maxCps) > 0 && Number.isFinite(Number(maxCps))))) {
+  throw new Error('Provide source and translated files, and an optional positive reading-speed limit.');
+}
 const [source, target] = [srcFile, outFile].map(cues);
 const seconds = (tc) => tc.split(/[:,]/).reduce((acc, n, i) => acc + n * [3600, 60, 1, 0.001][i], 0);
 const problems = [];
+if (!source.length) problems.push('source has no cues');
 if (source.length !== target.length) problems.push(`cue count: ${source.length} in source, ${target.length} translated`);
 
 source.forEach((cue, i) => {
@@ -92,10 +97,12 @@ source.forEach((cue, i) => {
   else if (cue.timing !== t.timing) problems.push(`cue ${cue.number}: timing changed to "${t.timing}"`);
   if (!t.text.join('').trim()) problems.push(`cue ${cue.number}: empty text`);
   const [, start, end] = TIMING.exec(t.timing) ?? [];
-  if (maxCps && start) {
+  const duration = start ? seconds(end) - seconds(start) : 0;
+  if (start && duration <= 0) problems.push(`cue ${cue.number}: end must be after start`);
+  if (maxCps && duration > 0) {
     // Count spaces and punctuation, not markup such as <i> or {\an8}
     const chars = t.text.join(' ').replace(/<[^>]+>|\{\\an\d\}/g, '').length;
-    const cps = chars / (seconds(end) - seconds(start));
+    const cps = chars / duration;
     if (cps > maxCps) problems.push(`cue ${cue.number}: ${cps.toFixed(1)} characters per second`);
   }
 });
@@ -145,7 +152,7 @@ cue 1: 22.4 characters per second
 cue 2: invalid timing line "00:00:03,600 --> 00:00:06.200"
 ```
 
-The script exits with code 1 on any problem, so it can run in CI after translation. It checks structure and speed, not wording, so a person who speaks the language still watches the result.
+The script exits with code 1 on any problem, so it can run in CI after translation. It accepts the plain timing lines shown here, without optional position coordinates. It checks cue correspondence, valid timing, nonempty text, and an optional speed limit. It does not check tag preservation, line length, line count, or meaning; use the destination's subtitle checker and watch the result with a reviewer who speaks the language. Its JavaScript character count is a screening check, not a substitute for a platform's own counting rules.
 
 ## How to translate SRT files with General Translation
 
