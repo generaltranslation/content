@@ -1,0 +1,217 @@
+---
+title: "Language switcher best practices: UX, SEO, and accessibility"
+summary: Name each language in its own language, such as Deutsch or 日本語, and don't use flags, which represent countries. Link each option to the same page in that language with a crawlable link, remember the choice in a cookie, and never auto-redirect a localized URL.
+description: Label languages in their own names, skip flags, keep users on the same page, use crawlable links with hreflang, and remember the choice.
+date: 2026-10-20
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [detect-user-language, locale-routing-seo, what-is-hreflang, make-website-multilingual]
+---
+
+The person who most needs your language switcher is the one who can't read the page they landed on. So every decision below follows one rule: the control has to make sense to someone who doesn't read your default language.
+
+## What makes a language switcher good?
+
+### 1. Label each language in its own name
+
+A Japanese reader on an English page scans for 日本語, not "Japanese," and a German reader for "Deutsch." The W3C's [guidance on language menus](https://www.w3.org/International/questions/qa-navigation-select) says to write "français" instead of "French." These self-names are called endonyms, and JavaScript's [`Intl.DisplayNames`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DisplayNames) produces them from the locale code:
+
+```js
+const locales = ['en', 'fr', 'de', 'ja', 'ar', 'pt-BR', 'zh-Hant'];
+
+for (const code of locales) {
+  // Name each language in its own language (its endonym)
+  const own = new Intl.DisplayNames([code], { type: 'language' }).of(code);
+  // The same name in English, for comparison
+  const english = new Intl.DisplayNames(['en'], { type: 'language' }).of(code);
+  console.log(`${code}: ${own} (${english})`);
+}
+```
+
+Output on Node.js 24 (ICU 78.3, CLDR 48.0):
+
+```text
+en: English (English)
+fr: français (French)
+de: Deutsch (German)
+ja: 日本語 (Japanese)
+ar: العربية (Arabic)
+pt-BR: português (Brasil) (Brazilian Portuguese)
+zh-Hant: 繁體中文 (Traditional Chinese)
+```
+
+French and Portuguese don't capitalize language names mid-sentence, so CLDR returns "français." In a menu, where each name stands alone, capitalize the first letter. Add a region only when you offer two variants of one language, as in "Português (Brasil)" next to "Português (Portugal)."
+
+### 2. Don't use flags for languages
+
+The W3C's [best practices for language declarations](https://www.w3.org/TR/i18n-html-tech-lang/) say plainly: "Do not use flag icons to indicate languages." Its [reasoning](https://www.w3.org/International/questions/qa-link-lang): "Flags represent countries, not languages." One language spans many countries (Spanish in Spain, Mexico, and Argentina), one country can have several official languages (Switzerland), and a flag can carry national connotations unwelcome to other speakers of the same language. A flag fits a country or store selector, where the choice is about region; pair it with the language names available there.
+
+### 3. Put it where users look, with a recognizable trigger
+
+The W3C [recommends](https://www.w3.org/International/questions/qa-navigation-select) placing the control "at or near the top of the page" and, because a text label is language-specific, using a recognizable image beside it. No symbol is universally recognized yet, though the W3C observes that globe icons are becoming more popular. A globe icon next to the current language's name works for readers of any language. Many sites repeat the switcher in the footer as a second entry point, but don't make the footer the only one.
+
+### 4. Switch to the same page, not the homepage
+
+Someone reading your pricing page in English who switches to French wants the French pricing page. Sending them to the French homepage loses their place and makes them navigate again in a language they may only now be able to read. Link each option to the translated equivalent of the current URL, and if a page has no translation yet, link to its closest translated parent and say so.
+
+### 5. Use crawlable links with `hreflang` and `lang`
+
+Google can generally [crawl a link only if it's an `<a>` element with an `href`](https://developers.google.com/search/docs/crawling-indexing/links-crawlable), and it asks multilingual sites to [add hyperlinks to other language versions](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites) so users can click to choose one. A `<select>` whose change handler sets `window.location` isn't a link, so it gives crawlers nothing to follow.
+
+Add two attributes to each link. The `hreflang` attribute on `<a>` [hints at the language of the linked page](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a); it has no built-in browser behavior, and it is separate from the `<link rel="alternate" hreflang>` annotations search engines read (see [What is hreflang](/kb/what-is-hreflang)). The `lang` attribute marks the link text's language, so a screen reader reading the page can pronounce "Deutsch" with German rules. WCAG's [Language of Parts](https://www.w3.org/WAI/WCAG22/Understanding/language-of-parts.html) criterion uses language links named in their own languages as an example. It also notes a limit: when assistive technology announces a link by its accessible name alone, such as in a list of the page's links, it doesn't switch pronunciation.
+
+### 6. Remember the explicit choice
+
+Once a user picks a language, store it in a cookie or their account and use it on later visits: to choose a destination from a neutral root such as `/`, and to show the current choice in the switcher. Don't let the cookie override a localized URL the user opened. The W3C [recommends](https://www.w3.org/International/questions/qa-accept-lang-locales) that you "store the results in a database or a cookie for later visits," and [MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Language) states that a server "should never override an explicit user language choice."
+
+### 7. Don't auto-switch on every visit
+
+Redirecting by browser language on each request traps travelers, people on shared computers, and anyone who opened a link in a specific language. Use the browser's preference only to show a dismissible suggestion ("Diese Seite gibt es auch auf Deutsch") and let the user decide. [Locale routing and SEO](/kb/locale-routing-seo) covers which signal should win and the one place a redirect is safe.
+
+### 8. Keep it keyboard and screen-reader accessible
+
+A list of plain links, or a native `<select>`, works with the keyboard and assistive technology out of the box. If you build a dropdown, follow the WAI-ARIA [disclosure pattern](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/): a `<button>` toggles the list, Enter and Space open and close it, and `aria-expanded` reports its state. Give the control an accessible name in the page's language (`aria-label="Sprache"` on a German page), and mark the current language with `aria-current="page"`.
+
+## How do you build a language switcher?
+
+### Plain HTML
+
+This menu applies all eight practices: endonyms, a globe icon instead of flags, links to the same page, `hreflang` and `lang` on each link, a disclosure button, and a cookie for the explicit choice.
+
+```html title="On /de/pricing"
+<nav aria-label="Sprache">
+  <button type="button" aria-expanded="false" aria-controls="language-menu">
+    <svg aria-hidden="true" width="16" height="16"><!-- globe icon --></svg>
+    Deutsch
+  </button>
+  <ul id="language-menu" hidden>
+    <li><a href="/en/pricing" hreflang="en" lang="en">English</a></li>
+    <li><a href="/fr/pricing" hreflang="fr" lang="fr">Français</a></li>
+    <li><a href="/de/pricing" hreflang="de" lang="de" aria-current="page">Deutsch</a></li>
+    <li><a href="/ja/pricing" hreflang="ja" lang="ja">日本語</a></li>
+  </ul>
+</nav>
+```
+
+```js title="switcher.js"
+const button = document.querySelector('[aria-controls="language-menu"]');
+const menu = document.getElementById('language-menu');
+
+// Open and close the menu (Enter and Space activate a <button> natively)
+button.addEventListener('click', () => {
+  const open = button.getAttribute('aria-expanded') === 'true';
+  button.setAttribute('aria-expanded', String(!open));
+  menu.hidden = open;
+});
+
+// Escape closes the disclosure and returns focus to its button.
+button.closest('nav').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !menu.hidden) {
+    menu.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    button.focus();
+  }
+});
+
+// Remember an explicit choice for later visits
+menu.addEventListener('click', (event) => {
+  const link = event.target.closest('a[hreflang]');
+  if (link) {
+    document.cookie = `locale=${link.hreflang}; path=/; max-age=31536000; samesite=lax`;
+  }
+});
+```
+
+### React
+
+This component uses plain links. Pass the current path, query string, and fragment as `currentHref`, along with the current locale. It assumes every locale has a URL prefix, every page exists in every listed locale, and slugs are identical across languages. For translated slugs or missing pages, resolve each destination from your route or CMS data instead of replacing a prefix.
+
+```jsx title="LanguageSwitcher.jsx"
+const LOCALES = ['en', 'fr', 'de', 'ja'];
+
+// Preserve path, trailing slash, query, and fragment while swapping the locale.
+function hrefForLocale(currentHref, locale) {
+  const url = new URL(currentHref, 'https://example.invalid');
+  const trailingSlash = url.pathname.endsWith('/');
+  const segments = url.pathname.split('/').filter(Boolean);
+  if (LOCALES.includes(segments[0])) segments.shift();
+  url.pathname = `/${[locale, ...segments].join('/')}${trailingSlash ? '/' : ''}`;
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+// The language's name in that language, capitalized for a menu
+function endonym(locale) {
+  const name = new Intl.DisplayNames([locale], { type: 'language' }).of(locale);
+  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
+}
+
+function rememberChoice(locale) {
+  document.cookie = `locale=${locale}; path=/; max-age=31536000; samesite=lax`;
+}
+
+export function LanguageSwitcher({ currentHref, currentLocale, label }) {
+  return (
+    <nav aria-label={label}>
+      <ul>
+        {LOCALES.map((locale) => (
+          <li key={locale}>
+            <a
+              href={hrefForLocale(currentHref, locale)}
+              hrefLang={locale}
+              lang={locale}
+              aria-current={locale === currentLocale ? 'page' : undefined}
+              onClick={() => rememberChoice(locale)}
+            >
+              {endonym(locale)}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+```
+
+With `currentHref="/fr/pricing/?plan=pro#faq"`, `currentLocale="fr"`, and `label="Langue"`, the German link is `/de/pricing/?plan=pro#faq`; the French link is marked `aria-current="page"`. Keep query parameters and fragments only when they mean the same thing on the destination page. For translated anchor IDs, resolve the equivalent fragment too.
+
+### With General Translation
+
+For public Next.js pages, GT's [`<Link>`](/docs/react/nextjs/link) builds locale-aware links. With `prefixDefaultLocale: true`, these links point to `/en/pricing` and `/de/pricing`. This example assumes English and German pricing are published. Pass the current locale and a localized navigation label:
+
+```tsx
+import Link from 'gt-next/link';
+
+export function PricingLanguages({ currentLocale, label }: { currentLocale: string; label: string }) {
+  return (
+    <nav aria-label={label}>
+      <Link href="/pricing" locale="en" hrefLang="en" lang="en" aria-current={currentLocale === 'en' ? 'page' : undefined}>English</Link>
+      {' · '}
+      <Link href="/pricing" locale="de" hrefLang="de" lang="de" aria-current={currentLocale === 'de' ? 'page' : undefined}>Deutsch</Link>
+    </nav>
+  );
+}
+```
+
+Localize the navigation label for the current page. For a compact native control, such as inside an authenticated app, use the locale selector:
+
+[`<LocaleSelector>`](/docs/react/reference/components/locale-selector), available in `gt-react`, `gt-next`, and the experimental `gt-tanstack-start`, renders a native `<select>` of your configured locales, labels each one in its own language, and saves the choice in a cookie. Standard `<select>` attributes are forwarded, so you can pass an `aria-label` translated with [`useGT`](/docs/react/reference/hooks/use-gt):
+
+```tsx
+'use client';
+import { LocaleSelector, useGT } from 'gt-next';
+
+export function Header() {
+  const gt = useGT();
+  return <LocaleSelector aria-label={gt('Language')} />;
+}
+```
+
+For public pages, use the links above for crawlable navigation and declare hreflang alternates in the page head, as [multilingual Next.js SEO](/kb/multilingual-nextjs-seo) shows. For a custom design, [`useLocaleSelector`](/docs/react/reference/hooks/use-locale-selector) returns the active locale, the locale list, and `setLocale`. In Vue, build a switcher with [`useLocale`](/docs/vue/reference/composables/use-locale) and [`useSetLocale`](/docs/vue/reference/composables/use-set-locale), following the [Vue locale guide](/docs/vue/guides/managing-locales#switcher).
+
+## Key takeaways
+
+- Label options with endonyms such as Français and 日本語; `Intl.DisplayNames` generates them, lowercase for French and Portuguese.
+- Use a globe icon, not flags: the W3C says "Do not use flag icons to indicate languages."
+- Link to the same page in each language with plain `<a href>` links carrying `hreflang` and `lang`, so crawlers can follow them and screen readers pronounce each name correctly.
+- Store the explicit choice, and never redirect away from a localized URL by browser language.
+- General Translation's [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) renders a native `<select>` with native-language labels and saves the choice in a cookie; add plain links for crawlers.

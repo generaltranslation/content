@@ -1,0 +1,187 @@
+---
+title: How do I find hardcoded strings that aren't translated?
+summary: Run a linter that flags user-facing string literals in CI, such as eslint-plugin-i18next's no-literal-string rule for JSX, Android Lint's HardcodedText check, or erb_lint's HardCodedString linter for Rails. Then click through the app in a pseudo-locale to catch text that static checks can't trace.
+description: Lint for hardcoded UI strings with ESLint no-literal-string, Android Lint, Xcode, or erb_lint, fail CI on new ones, and pseudo-localize to catch the rest.
+date: 2026-10-20
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [pseudo-localization, general-translation-vs-i18n-tasks, multilingual-app-launch-checklist, i18n-without-translation-files, translate-conditional-jsx]
+---
+
+A hardcoded string is user-facing text written directly in code instead of passed through your i18n library, so it shows up in the source language in every locale. Nothing breaks when you add one: the app looks finished in English, tests pass, and the gap only appears when someone opens the French build.
+
+## Why do hardcoded strings slip through?
+
+- **The source language hides it.** A missing translation looks exactly like a correct one until you switch locales.
+- **Text lives outside JSX children.** `placeholder`, `title`, `alt`, and `aria-label` attributes, toast and validation messages built in JavaScript, and labels stored in config objects are easy to miss in review.
+- **Every feature adds copy.** The quickest way to write a button is with a literal, and nobody wraps it later unless a check fails.
+
+So the fix is a check that fails: a linter in CI for code, plus a visual pass for whatever the linter can't reach.
+
+## How do you find hardcoded strings in each stack?
+
+| Stack | Check | What it flags | What it misses |
+| --- | --- | --- | --- |
+| React and JSX | [`eslint-plugin-i18next`](https://github.com/edvardchen/eslint-plugin-i18next) `no-literal-string` | JSX text by default; attributes and `{'...'}` children in `jsx-only` mode; every literal in `all` mode | Text that reaches the UI from constants, unless you accept `all` mode's noise |
+| React and JSX | [`eslint-plugin-react`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-literals.md) `jsx-no-literals` | Unwrapped JSX text by default; wrapped strings and props with `noStrings` | Strings outside JSX |
+| Android | Android Lint [`HardcodedText`](https://googlesamples.github.io/android-custom-lint-rules/checks/HardcodedText.md.html) and [`SetTextI18n`](https://googlesamples.github.io/android-custom-lint-rules/checks/SetTextI18n.md.html) | Literal text in layout XML; `TextView.setText` with literals, concatenation, or `Number.toString()` | Jetpack Compose `Text("...")` calls |
+| iOS and macOS | Xcode String Catalog extraction and the **Show non-localized strings** scheme option | Strings missing from the catalog after a build; nonlocalized text in all caps at run time | Screens nobody opens |
+| Rails | [erb_lint](https://github.com/Shopify/erb-lint) `HardCodedString` | Visible text in ERB markup | Strings inside JavaScript tags |
+| Any codebase | ripgrep | Text between tags on one line | Multi-line text; can't tell wrapped from unwrapped |
+| Any running app | [Pseudo-localization](/kb/pseudo-localization) | Any rendered text that skipped the i18n layer | Screens nobody opens |
+
+Use a linter in CI when you want new hardcoded strings to fail the build. Use ripgrep for a one-time audit of a codebase you're about to internationalize. Use [pseudo-localization](/kb/pseudo-localization) before a launch: text that skipped the i18n layer stays plain while everything else is accented, including text from APIs, constants, and server responses that static analysis can't trace.
+
+## Lint JSX with ESLint
+
+`eslint-plugin-i18next` has one rule, `no-literal-string`. Its default mode, `jsx-text-only`, flags only text between JSX tags. Set `mode: 'jsx-only'` to also flag string attributes and string expressions in JSX. This flat config works with ESLint 9 and 10 and covers TypeScript files:
+
+```bash
+npm install --save-dev eslint eslint-plugin-i18next typescript typescript-eslint
+```
+
+```js title="eslint.config.mjs"
+import i18next from 'eslint-plugin-i18next';
+import tseslint from 'typescript-eslint';
+
+export default [
+  {
+    files: ['src/**/*.{js,jsx,ts,tsx}'],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    plugins: { i18next },
+    rules: {
+      // Flag JSX text, string attributes, and {'string'} children
+      'i18next/no-literal-string': ['error', { mode: 'jsx-only' }],
+    },
+  },
+];
+```
+
+Here's the component we linted:
+
+```jsx title="src/Checkout.jsx"
+export function Checkout({ total, user }) {
+  const error = 'Payment failed';
+  return (
+    <section className="checkout">
+      <h2>Order summary</h2>
+      <p>Hello, {user.name}</p>
+      <input placeholder="Promo code" type="text" />
+      <button title="Pay now" onClick={() => alert(error)}>Pay</button>
+      <p>{'Free shipping on orders over $50'}</p>
+      <p>{`Total: ${total}`}</p>
+      <span>+ 2</span>
+    </section>
+  );
+}
+```
+
+```text title="npx eslint src (eslint-plugin-i18next 6.1.5, ESLint 10.13.0)"
+src/Checkout.jsx
+   5:11  error  disallow literal string: <h2>Order summary</h2>                                             i18next/no-literal-string
+   6:10  error  disallow literal string: <p>Hello, {user.name}</p>                                          i18next/no-literal-string
+   7:26  error  disallow literal string: placeholder="Promo code"                                           i18next/no-literal-string
+   8:21  error  disallow literal string: title="Pay now"                                                    i18next/no-literal-string
+   8:60  error  disallow literal string: <button title="Pay now" onClick={() => alert(error)}>Pay</button>  i18next/no-literal-string
+   9:11  error  disallow literal string: {'Free shipping on orders over $50'}                               i18next/no-literal-string
+  11:13  error  disallow literal string: <span>+ 2</span>                                                   i18next/no-literal-string
+
+✖ 7 problems (7 errors, 0 warnings)
+```
+
+What the run shows:
+
+- **The default mode reports 4 issues.** With the plugin's `flat/recommended` config, the attributes and the `{'...'}` child pass; `jsx-only` adds those 3 findings.
+- **Some literals still pass.** `className` and `type` are excluded by default, which is what you want. The template literal on line 10 passes unless you add `'should-validate-template': true`, and the `'Payment failed'` constant passes unless you use `mode: 'all'`, which also flags every non-UI string in the file.
+- **Expect false positives.** `+ 2` is flagged because the default ignore patterns cover symbol-only strings without spaces. Add a pattern under `words.exclude`, and copy the defaults from the plugin's `lib/options/defaults.js` into it: an option you pass replaces that option's defaults.
+
+`eslint-plugin-react`'s `jsx-no-literals` is the alternative if you already use that plugin. With no options it only requires JSX text to sit in an expression container, so `<h2>Order summary</h2>` fails but `<h2>{'Order summary'}</h2>` passes. Set `{ noStrings: true, ignoreProps: true }` to flag wrapped strings and template literals in children too; drop `ignoreProps` and it also flags every string prop, including `className="checkout"`.
+
+## Other stacks
+
+**Android.** Run `./gradlew lint`, or in Android Studio choose **Code > Inspect Code**, and look under the Internationalization category. Both checks are warnings by default; [`lint.xml`](https://developer.android.com/studio/write/lint) can make them errors with `<issue id="HardcodedText" severity="error" />`. Neither check flags Compose's `Text("...")` calls, so search Compose files for string literals passed to `Text(`.
+
+**iOS and macOS.** Xcode works from the other direction. When you build, Xcode adds strings passed to [localizable APIs](https://developer.apple.com/documentation/xcode/preparing-your-apps-text-for-translation) to your String Catalog. A string literal in SwiftUI's `Text("Title")`, `Button("Checkout")`, or `String(localized:)` is extracted. A `String` variable passed to `Text` is [displayed without localization](https://developer.apple.com/documentation/swiftui/text), and so is `Text(verbatim:)`. So after a build, check the catalog for the screens you expect: a missing entry means the text never went through a localizable API, often because it was stored as a plain `String` instead of `LocalizedStringResource`. To catch the same text on screen, turn on **Show non-localized strings** under **Product > Scheme > Edit Scheme > Run > Options**, and nonlocalized text renders in all caps when the app runs ([Apple: Preparing your interface for localization](https://developer.apple.com/documentation/xcode/preparing-your-interface-for-localization)).
+
+**Rails.** erb_lint's `HardCodedString` linter is off by default; enable it under `linters:` in `.erb_lint.yml`. i18n-tasks covers a different gap: its `missing` command reports keys your code calls that a locale file lacks, but it doesn't flag literal text in views. (See [General Translation vs. i18n-tasks](/kb/general-translation-vs-i18n-tasks) for how it fits a translation pipeline.) Setting `config.i18n.raise_on_missing_translations = true` in the test environment makes missing keys [raise errors](https://guides.rubyonrails.org/i18n.html) instead of rendering a "Translation missing" message.
+
+**Any codebase, with ripgrep.** For a quick audit before adopting a linter, search for text between tags and for text-bearing attributes:
+
+```bash
+# Text that starts with a letter between > and < on one line
+rg -n --glob '*.{jsx,tsx}' '>\s*[A-Za-z][^<>]*<'
+
+# Text-bearing attributes with literal values
+rg -n --glob '*.{jsx,tsx}' '\b(placeholder|title|alt|aria-label)="[^"]*[A-Za-z]'
+```
+
+On the sample component, the first search found the heading, the greeting, and the button, and the second found both attributes. It misses text on its own line, and it also matches text that's already wrapped for translation, so treat the results as a list to review, not a gate.
+
+## Ask a coding agent to find and wrap strings
+
+Cursor, Claude Code, and similar agents are good at the mechanical part: reading a component, deciding what's user-facing, and rewriting it with your i18n API. Give the agent the decisions it can't infer, and make the linter the definition of done:
+
+```text
+Find hardcoded user-facing strings in src/features/checkout and wrap them.
+
+- User-facing means: JSX text, placeholder/title/alt/aria-label values,
+  toast and validation messages, and labels in constants that render in the UI.
+- Not user-facing: class names, test IDs, URLs, log messages, analytics
+  event names, and the product name "Acme".
+- Wrap JSX text with the project's i18n component, and string props and
+  callbacks with the function its i18n Hook returns. Call Hooks only at the
+  top level of a React component or custom Hook, never from a helper or
+  event handler.
+- For module-level messages or non-React utilities, follow the documented
+  API for that framework. Use src/features/cart/CartSummary.tsx as a reference.
+- Keep names, prices, and counts as variables, not part of the text.
+- Don't disable lint rules or add eslint-disable comments.
+- When done, run `npx eslint src/features/checkout` and fix every
+  i18next/no-literal-string error, then list any strings you left
+  unwrapped and why.
+```
+
+Then verify it yourself: rerun ESLint, including your React Hooks rules, read the diff for strings that were wrapped but shouldn't be (identifiers, enum values sent to an API), and open the changed screens in a pseudo-locale or a second language. A clean lint run covers only the patterns the enabled rules detect; check constants and template literals separately. React's [Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks) apply to i18n Hooks too.
+
+## Lint and wrap React strings with General Translation
+
+General Translation's ESLint plugin, [`@generaltranslation/react-core-linter`](/docs/react/guides/linting-your-code), checks `gt-react`, `gt-next`, and `gt-react-native` code that's already wrapped: [`static-jsx`](/docs/react/reference/lint-rules#static-jsx) requires dynamic content inside [`<T>`](/docs/react/reference/components/t) to sit in a variable component such as [`<Var>`](/docs/react/reference/components/var), and [`static-string`](/docs/react/reference/lint-rules#static-string) requires static strings in translation functions. It doesn't look for unwrapped text, so pair it with `no-literal-string` and exclude [`<T>`](/docs/react/reference/components/t) from that rule. The plugin's peer range is ESLint 8 or 9, so install `eslint@9` with `eslint-plugin-i18next`, `@generaltranslation/react-core-linter`, `typescript`, and `typescript-eslint` as dev dependencies:
+
+```js title="eslint.config.mjs"
+import i18next from 'eslint-plugin-i18next';
+import gtLint from '@generaltranslation/react-core-linter';
+import tseslint from 'typescript-eslint';
+
+export default [
+  {
+    files: ['src/**/*.{js,jsx,ts,tsx}'],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    plugins: { i18next },
+    rules: {
+      // Text that isn't inside <T> yet
+      'i18next/no-literal-string': [
+        'error',
+        { mode: 'jsx-only', 'jsx-components': { exclude: ['T'] } },
+      ],
+    },
+  },
+  // Content that is already inside <T>
+  gtLint.configs.recommended,
+];
+```
+
+`npx eslint src --fix` wraps a dynamic value such as `{user.name}` inside [`<T>`](/docs/react/reference/components/t) in [`<Var>`](/docs/react/reference/components/var) and leaves unwrapped text flagged for you to wrap. [Automatic JSX injection](/docs/cli/guides/using-auto-jsx), off until you set `enableAutoJsxInjection` under `files.gt.parsingFlags` in `gt.config.json`, wraps translatable JSX text in [`<T>`](/docs/react/reference/components/t) when the GT compiler runs. Follow the linked build setup: Next.js uses the Babel compiler with `next dev --webpack` and `next build --webpack`; React apps configure the compiler for their bundler. String props still go through [`useGT`](/docs/react/reference/hooks/use-gt). For a whole repository, Locadex, General Translation's AI agent, runs a **Generate code** automation that wraps untranslated UI content and opens a pull request for review. (See [Configuring Locadex automations](/docs/platform/locadex/guides/configuring-automations).)
+
+## Key takeaways
+
+- `no-literal-string` reported 4 issues in its default mode and 7 in `jsx-only` mode for this fixture. The template literal and constant still need additional settings or a review.
+- Android Lint's `HardcodedText` covers layout XML and `SetTextI18n` covers `TextView.setText`; neither flags Compose `Text` calls.
+- Xcode extracts strings passed to localizable APIs, so a string missing from the String Catalog after a build is the sign of hardcoded text.
+- Give a coding agent a scope, a definition of user-facing, and the lint command it must pass, then check the running app.
+- In `gt-react` and `gt-next` code, `@generaltranslation/react-core-linter` checks content inside [`<T>`](/docs/react/reference/components/t), so pair it with `no-literal-string` to catch text that isn't wrapped yet.
