@@ -18,7 +18,7 @@ The generated helpers reflect the installed package version. Use the [public Ope
 | [`API_VERSION`](#api-version) | API contract version the client sends. |
 | [Endpoint helpers](#endpoint-helpers) | Typed functions for the public operations listed below. |
 | [`paginate`](#pagination) | Iterate every item of a list operation. |
-| [`awaitJobs`](#job-polling), [`queryJobsInBatches`](#job-polling), and [`pollJobs`](#job-polling) | Read and poll translation and context generation jobs. |
+| [`awaitJobs`](#job-polling) and [`queryJobsInBatches`](#job-polling) | Read and poll translation and context generation jobs. |
 | [`processBatches`](#batch-processing) and [`DEFAULT_BATCH_SIZE`](#batch-processing) | Process an input array in configurable batches. |
 | [`ApiError`](#api-error) | Error thrown for a failed HTTP response. |
 | [Generated types](#types-errors) | Describe endpoint data, responses, errors, and client contracts. |
@@ -107,7 +107,7 @@ Class runtime translation disables these transport retries, including `429`. The
 
 Timeout in milliseconds for each request attempt. Omission selects 60000; `0` is literal zero. Set it to `false` to disable the built-in timer, not caller or custom-fetch cancellation. This is not a whole-operation deadline covering retries and response processing. Fetch implementations must honor the supplied signal.
 
-These settings are not [`GT`](/docs/platform/core/reference/gt-class/constructor) constructor options. (See [Translation configuration](/docs/platform/core/reference/types/translation-config)).
+These settings are not [`GT`](/docs/platform/core/reference/gt-class/constructor) constructor options.
 
 ## `API_VERSION` [#api-version]
 
@@ -321,7 +321,9 @@ type JobResult = {
 type UnpolledJobResult = { id: string; status: 'unknown' };
 ```
 
-Passing an empty array resolves immediately with `{ complete: true, jobs: [] }`. An API or status-loader error before the overall deadline rejects the polling promise. If the request fails after the deadline has elapsed, polling returns the latest results with `complete: false`.
+Passing an empty array resolves immediately with `{ complete: true, jobs: [] }`. An API error before the overall deadline rejects the polling promise. If the request fails after the deadline has elapsed, polling returns the latest results with `complete: false`.
+
+Polls are sequential and request only pending IDs, in batches of 100. A poll whose response has no result for a pending ID rejects. Each poll is aborted at the overall deadline or after 60 seconds, whichever comes first. A batch that settles after the deadline keeps its jobs' last known statuses instead of rejecting. Timeout returns the latest statuses, which can still be `queued`, `processing`, or `unknown`.
 
 `queryJobsInBatches` makes one status read without polling. It sends at most 100 job IDs per [`queryJobs`](/docs/platform/openapi/reference/jobs/query-jobs) request and returns the results in `jobIds` order. Each job ID may appear once.
 
@@ -333,23 +335,6 @@ function queryJobsInBatches(
   signal?: AbortSignal
 ): Promise<JobResult[]>;
 ```
-
-`pollJobs` exposes the same polling loop with an injected status loader:
-
-```ts
-function pollJobs(
-  jobIds: readonly string[],
-  getJobStatuses: GetJobStatuses,
-  options?: AwaitJobsOptions
-): Promise<AwaitJobsResult>;
-
-type GetJobStatuses = (
-  jobIds: string[],
-  signal: AbortSignal
-) => Promise<JobResult[]>;
-```
-
-Use it when you need custom request or error normalization. Polls are sequential and request only pending IDs. The loader must return a result for every requested ID; a missing ID rejects polling. The loader receives an abort signal capped by the remaining overall deadline and a 60-second per-poll limit. [`awaitJobs`](#job-polling) loads each batch of 100 on its own: when a poll ends after the deadline, the batches that loaded are kept and a failed batch does not reject. Timeout returns the latest statuses, which can still be `queued`, `processing`, or `unknown`. A loader that ignores the signal can delay resolution.
 
 `complete: true` means no pending jobs, not that every job succeeded. Inspect each status before using results. No polling option exposes a caller signal, and stopping local polling does not cancel remote jobs.
 
@@ -408,7 +393,7 @@ const results = await processBatches(files, async (batch) => {
 
 ## Types and errors [#types-errors]
 
-The package exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `UnpolledJobResult`, `BatchOptions`, and the generated OpenAPI types for the public operations listed above.
+The package exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `JobResult`, `UnpolledJobResult`, `BatchOptions`, and the generated OpenAPI types for the public operations listed above.
 
 For each public operation listed above, the package exports:
 
@@ -422,10 +407,10 @@ With the default `throwOnError: false`, a generated operation returns either `da
 
 ### `ApiError` [#api-error]
 
-With a `createApiClient` client, failed HTTP responses from `throwOnError` calls, [`paginate`](#pagination), [`awaitJobs`](#job-polling), and [`GT`](/docs/platform/core/reference/gt-class/constructor) class methods throw `ApiError`, with `name: 'ApiError'`, the HTTP status as numeric `code`, and `message`. Import it from `@generaltranslation/api` or `generaltranslation/errors`. Calls without `throwOnError` still return the decoded response body in `error`. Network, configuration, cancellation, and timeout failures can reject the entire class call; they are not necessarily per-item translation failures. Problems `GT` finds before sending a request, such as an empty project ID, a project API key without `projectId`, or a repeated move or publish entry, throw an `Error` with a diagnostic message instead of an `ApiError`.
+With a `createApiClient` client, failed HTTP responses from `throwOnError` calls, [`paginate`](#pagination), [`awaitJobs`](#job-polling), and [`GT`](/docs/platform/core/reference/gt-class/constructor) class methods throw `ApiError`, with `name: 'ApiError'`, the HTTP status as numeric `code`, and `message`. Import it from `@generaltranslation/api` or `generaltranslation/api`. Calls without `throwOnError` still return the decoded response body in `error`. Network, configuration, cancellation, and timeout failures can reject the entire class call; they are not necessarily per-item translation failures. Problems `GT` finds before sending a request, such as an empty project ID, a project API key without `projectId`, or a repeated move or publish entry, throw an `Error` with a diagnostic message instead of an `ApiError`.
 
 ```ts
-import { ApiError } from 'generaltranslation/errors';
+import { ApiError } from 'generaltranslation/api';
 
 export function describeFailure(error: unknown): string {
   return error instanceof ApiError
