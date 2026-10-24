@@ -155,7 +155,7 @@ function pathToUrl(path: string): string {
 
 function isDedicatedApiReference(path: string): boolean {
   const normalizedPath = path.replace(/\\/g, '/');
-  return /\/reference\/(?:components|composables|hooks|functions|classes|types|commands|gt-class(?:-methods)?|utility-functions)(?:\/|$)/.test(
+  return /\/reference\/(?:components|composables|hooks|functions|classes|types|commands|gt-(?:class|intl)(?:-methods)?|utility-functions)(?:\/|$)/.test(
     normalizedPath
   );
 }
