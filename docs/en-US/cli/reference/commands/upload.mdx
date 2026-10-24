@@ -20,7 +20,7 @@ npx gt upload
 3. Hashes each file to generate a `fileId` (from its path) and `versionId` (from its content).
 4. Queries the API to determine which files are new or changed.
 5. Detects file moves — same content, different path — and preserves existing translations.
-6. Uploads new and changed source files, along with any local translation files.
+6. Uploads new and changed source files, along with any local translation files, to the resolved branch.
 7. Applies configured CDN publish and unpublish rules. `--publish` sets publishing as the global default, while explicit per-file `publish: false` rules still opt files out.
 
 ## Flags [#flags]
@@ -35,6 +35,8 @@ npx gt upload
 | `--locales <locales...>` | Extra target locales, appended to config locales. | `string[]` | Yes | — |
 | `--default-locale <locale>` | Source locale for the project. | `string` | Yes | `en` |
 | `--publish` | Use publishing as the global default; explicit per-file opt-outs still apply. | `boolean` | Yes | `false` |
+| `--enable-branching` | Track the upload on a git branch. | `boolean` | Yes | — |
+| `--branch <branch>` | Branch name instead of auto-detecting. Implies `--enable-branching`. | `string` | Yes | — |
 
 <Callout type="warn">
   In `gt` 2.20.1, `upload` accepts `--dry-run` but still uploads files. Its shared `--timeout` flag controls translation waiting and has no effect on this command. To inspect collected files without uploading them, use [`gt stage --dry-run`](/docs/cli/reference/commands/stage).
@@ -56,6 +58,7 @@ npx gt download
 ## Other notes [#notes]
 
 - `upload` collects translatable source files of every configured type (JSON, YAML, Markdown, MDX, and more) and any local translation files.
-- Existing translations whose content still matches `gt-lock.json` are skipped. Other local translations are uploaded and can replace the stored translations; without a lock file, all local translations are uploaded.
+- Existing translations whose content still matches `gt-lock.json` are skipped. Other local translations are uploaded and can replace the stored translations. Without a lock file, local translations are uploaded.
+- Since `gt` 2.26.7, JSON and YAML translation files that do not parse are skipped with a warning, and the rest of the batch still uploads. Local translations are stored on the branch this command resolves: the project's default branch when branching is off, or the branch from `--branch <name>` or git detection when branching is on.
 - Because it hashes each file by path and content, moved files (same content, new path) keep their existing translations instead of being re-translated.
 - Enable the CDN in your project settings before publishing. If publishing fails, the upload remains successful and the CLI emits a warning.
