@@ -1,0 +1,127 @@
+---
+title: generaltranslation@10.0.0
+headline: Separate GT, GTRuntime, and GTIntl classes
+date: 2026-10-21
+authors: [cyan]
+tags: ['generaltranslation', '10.0.0', 'api', 'major']
+---
+
+## Overview
+
+`generaltranslation` v10 splits the library into three classes and moves the API client to canonical API methods:
+
+- [`GT`](/docs/platform/core/reference/gt-class/constructor) is the API client. With `projectId`, every project, file, job, and runtime translation method is on the instance. Without it, the instance lists Organizations and projects and scopes work with [`account.project()`](/docs/platform/core/reference/gt-class/project) and [`account.org()`](/docs/platform/core/reference/gt-class/org).
+- [`GTRuntime`](/docs/platform/core/reference/runtime) only translates at runtime, without the project and file management client.
+- [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) formats values and works with locale codes. It takes no API key.
+
+All three take their locales as one plain [`LocaleConfig`](/docs/platform/core/reference/types/locale-config) object. Every `GT` method calls one canonical [API](/docs/platform/core/reference/api-client) operation.
+
+Installed 9.x versions keep working, so you can upgrade when convenient.
+
+## Classes and configuration
+
+```ts
+// Before
+const gt = new GT({ apiKey, projectId, sourceLocale: 'en', targetLocale: 'es', locales, customMapping });
+await gt.uploadSourceFiles(files, { sourceLocale: 'en' });
+await gt.translate('Hello', 'es');
+gt.formatNum(1234.5);
+await gt.uploadFonts(fonts);
+
+// After
+const localeConfig = { defaultLocale: 'en', locales, customMapping };
+const gt = new GT({ apiKey: process.env.GT_API_KEY!, projectId, localeConfig });
+await gt.uploadSourceFiles(files);
+await gt.translate('Hello', 'es');
+new GTIntl(localeConfig, { locale: 'es' }).formatNum(1234.5);
+await new GT({ apiKey: orgApiKey }).org(orgId).upsertAssets(fonts);
+```
+
+- **Project-scoped `GT`.** `new GT({ apiKey, projectId })` has every project, branch, file, job, and runtime translation method, and its type is [`ProjectHandle`](/docs/platform/core/reference/types/project-handle). `getProject` and `updateProject` are named [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project) and [`gt.update`](/docs/platform/core/reference/gt-class-methods/projects/update-project). The new [`createApiKey`](/docs/platform/core/reference/gt-class-methods/projects/create-api-key) creates a project API key.
+- **Account-scoped `GT`.** Without `projectId`, `GT` has [`listOrgs`](/docs/platform/core/reference/gt-class-methods/organizations/list-orgs), [`listProjects`](/docs/platform/core/reference/gt-class-methods/projects/list-projects), [`account.project(projectId)`](/docs/platform/core/reference/gt-class/project), which returns a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle), and [`account.org(orgId)`](/docs/platform/core/reference/gt-class/org), which returns an [`OrgHandle`](/docs/platform/core/reference/types/org-handle) with [`upsertAssets`](/docs/platform/core/reference/gt-class-methods/organizations/upsert-assets) and the new [`createProject`](/docs/platform/core/reference/gt-class-methods/organizations/create-project). [`upsertAssets`](/docs/platform/core/reference/gt-class-methods/organizations/upsert-assets) no longer looks up the project's Organization; with only a project, use `account.org((await project.get()).orgId)`. Use an Organization API key: a project API key without `projectId` throws.
+- **`GTRuntime` translates only.** `new GTRuntime({ apiKey, projectId, localeConfig })` has [`translate`](/docs/platform/core/reference/gt-class-methods/translation/translate) and [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many), and `projectId` is required. Pass the target locale on every call; the source locale defaults to `localeConfig.defaultLocale`.
+- **[`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) formats.** The formatting and locale methods of `GT` and `GTRuntime` moved to [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor), with the signature changes under [GTIntl methods](#gtintl-methods). Import it from `generaltranslation` or `@generaltranslation/format`.
+- **Locales as `localeConfig`.** The `sourceLocale`, `targetLocale`, `locales`, and `customMapping` constructor options are replaced by `localeConfig: { defaultLocale, locales, customMapping }`. Locale codes are no longer validated at construction.
+- **API key required, no environment variables.** `GT` and `GTRuntime` require `apiKey` and read neither `GT_API_KEY` nor `GT_PROJECT_ID`. Pass them yourself, such as `apiKey: process.env.GT_API_KEY!`.
+- **Two checks at construction.** `projectId`, `account.project(id)`, and `account.org(id)` throw when the ID is not a non-empty string, and the account-scoped `GT` throws for a project API key. API failures throw [`ApiError`](/docs/platform/core/reference/api-client#api-error); these local checks and other invalid arguments throw an `Error` with a diagnostic message.
+- **Fixed configuration.** `setConfig()` is removed, and the configuration properties are read-only. `GT`, `GTRuntime`, their handles, and [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) keep a frozen copy of `localeConfig`, including the `locales` array and each `customMapping` entry, so later changes to the object you passed have no effect. `GT` and `GTRuntime` instances are frozen. Construct a new instance for a different configuration.
+- **Types.** `GTConstructorParams` is replaced by [`GTProjectConfig`](/docs/platform/core/reference/types/gt-project-config), with a required `projectId`, for a project-scoped `GT` and `GTRuntime`, and [`GTAccountConfig`](/docs/platform/core/reference/types/gt-account-config), without `projectId`, for an account-scoped `GT`. A `projectId` typed `string | undefined` matches neither; check it first. [`ProjectHandle`](/docs/platform/core/reference/types/project-handle), [`OrgHandle`](/docs/platform/core/reference/types/org-handle), and [`LocaleConfig`](/docs/platform/core/reference/types/locale-config) are type-only exports from `generaltranslation`. The `GT` type is the account-scoped instance.
+
+## GTIntl methods
+
+Each [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) method takes the values it acts on positionally and an options object last. The target locale is `options.locale`, then the instance `locale`, then `defaultLocale`.
+
+| Before, on `GT` | After, on [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) |
+| --- | --- |
+| `gt.formatNum(value, { locales: ['fr'] })` | `intl.formatNum(value, { locale: 'fr' })`; `locales` still replaces the whole fallback list |
+| `gt.requiresTranslation(source, target, approved)` | `intl.requiresTranslation({ sourceLocale: source, locale: target, approvedLocales: approved })` |
+| `gt.determineLocale(candidates, approved)` | `intl.determineLocale(candidates, { approvedLocales: approved })` |
+| `gt.getRegionProperties(region, mapping)` | `intl.getRegionProperties(region, { locale })`, with names and emojis from the `regionCode` entries of `customMapping` |
+| `gt.getLocaleName()` / `gt.getLocaleName(locale)` | `intl.getLocaleName()` / `intl.getLocaleName(locale)`, named in the target locale instead of the source locale; pass `{ locale: 'en' }` to name it in English. Likewise [`getLocaleProperties`](/docs/platform/core/reference/gt-intl-methods/locales/get-locale-properties); [`getLocaleEmoji`](/docs/platform/core/reference/gt-intl-methods/locales/get-locale-emoji) and [`getLocaleDirection`](/docs/platform/core/reference/gt-intl-methods/locales/get-locale-direction) also default to the target locale |
+| `gt.standardizeLocale(locale)`, `gt.resolveCanonicalLocale(locale)` | The same calls on `intl`; [`isValidLocale`](/docs/platform/core/reference/gt-intl-methods/locales/is-valid-locale), [`standardizeLocale`](/docs/platform/core/reference/gt-intl-methods/locales/standardize-locale), and [`resolveCanonicalLocale`](/docs/platform/core/reference/gt-intl-methods/locales/resolve-canonical-locale) require the locale |
+| `gt.isValidLocale(locale, mapping)` | `intl.isValidLocale(locale)`; no method takes a per-call `customMapping` |
+
+- [`requiresTranslation`](/docs/platform/core/reference/gt-intl-methods/locales/requires-translation) without a target locale no longer throws. The target defaults to `defaultLocale`, so the result is `false` when the source also defaults to it. Omitted `locales` mean no restriction, and `locales: []` or `approvedLocales: []` approve no locale.
+- `customMapping` aliases are resolved in the formatting, locale description, comparison, and matching methods, including the target locale of [`getRegionProperties`](/docs/platform/core/reference/gt-intl-methods/locales/get-region-properties). [`standardizeLocale`](/docs/platform/core/reference/gt-intl-methods/locales/standardize-locale) only normalizes spelling.
+- In `@generaltranslation/format` 1.0, its locale configuration class is renamed [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor), and `LocaleConfigConstructorParams` is replaced by the plain [`LocaleConfig`](/docs/platform/core/reference/types/locale-config) type. Its formatters take the target locale in the options: `config.formatNum(value, 'es', options)` is `intl.formatNum(value, { ...options, locale: 'es' })`.
+- `generaltranslation` no longer exports the standalone function for each [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) method, so `import { formatNum } from 'generaltranslation'` fails. Call the method on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor), or import the standalone function, with its existing signature, from `@generaltranslation/format`.
+
+## Removed methods
+
+The replacements are on the project-scoped `GT` unless the table names another object.
+
+| Removed | Use instead |
+| --- | --- |
+| `getProjectInfo`, `getProjectData` | [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project) |
+| `queryBranchData` | [`listBranches`](/docs/platform/core/reference/gt-class-methods/branches/list-branches) |
+| `createTag` | [`setTag`](/docs/platform/core/reference/gt-class-methods/branches/set-tag) |
+| `getOrphanedFiles` | [`listBranchFiles`](/docs/platform/core/reference/gt-class-methods/branches/list-branch-files) |
+| `processFileMoves` | [`moveFiles`](/docs/platform/core/reference/gt-class-methods/files/move-files) |
+| `queryFileData` | [`queryFiles`](/docs/platform/core/reference/gt-class-methods/files/query-files) |
+| `querySourceFile` | [`getFileStatus`](/docs/platform/core/reference/gt-class-methods/files/get-file-status) |
+| `downloadFile` | [`getFileContent`](/docs/platform/core/reference/gt-class-methods/files/get-file-content) |
+| `downloadFileBatch` | [`queryFilesContent`](/docs/platform/core/reference/gt-class-methods/files/query-files-content) |
+| `submitUserEditDiffs` | [`overwriteTranslations`](/docs/platform/core/reference/gt-class-methods/files/overwrite-translations) |
+| `setupProject` | [`generateProjectContext`](/docs/platform/core/reference/gt-class-methods/translation/generate-project-context) |
+| `enqueueFiles` | [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files) |
+| `checkJobStatus` | [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs) |
+| `uploadFonts` | [`account.org(orgId).upsertAssets`](/docs/platform/core/reference/gt-class-methods/organizations/upsert-assets) on an account-scoped `GT` |
+
+Types that only described these methods are removed from `generaltranslation/types`, including `CheckFileTranslationsOptions`, `DownloadFileOptions`, `DownloadFileBatchOptions`, `CreateBranchQuery`, `ProcessMovesOptions`, and `TranslationResultReference`. `PublishFilesResult` is replaced by `PublishFilesResponse` from `generaltranslation/api`.
+
+## Changed methods
+
+- [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs) takes an array of job IDs and returns the [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs) job shape: read `job.id` instead of `job.jobId`, and `job.error` (a string) instead of `job.error.message`. A missing job is `not_found`; `unknown` now means only that the job was not polled before the timeout. The options accept `onPoll`.
+- [`createBranch`](/docs/platform/core/reference/gt-class-methods/branches/create-branch) takes `{ name, isDefault }` instead of `{ branchName, defaultBranch }`. It sends only the create request: a name the project already has throws a `409` `ApiError`. To reuse an existing branch, call [`listBranches`](/docs/platform/core/reference/gt-class-methods/branches/list-branches) with `{ name: [name] }` first.
+- [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs) accepts a `signal` that aborts its in-flight requests.
+- [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files) options are optional. The source locale is `options.sourceLocale`, then `localeConfig.defaultLocale`; with neither, the project's default locale applies.
+- [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files) and [`uploadTranslations`](/docs/platform/core/reference/gt-class-methods/files/upload-translations) return `{ summary, results }` without `uploadedFiles`, `count`, or `message`. Check each result's `status`.
+- [`publishFiles`](/docs/platform/core/reference/gt-class-methods/files/publish-files) results drop `success`; check each result's `status`. Entries no longer take `fileName`.
+- `generaltranslation/api` re-exports [`@generaltranslation/api`](/docs/platform/core/reference/api-client) unchanged. `createApiClient` no longer takes `projectId`; pass the project ID to its [`awaitJobs`](/docs/platform/core/reference/api-client#job-polling) instead. `pollJobs` and the `GetJobStatuses` type are removed; use [`awaitJobs`](/docs/platform/core/reference/api-client#job-polling).
+
+## Removed compatibility options
+
+- **`devApiKey`.** `GT` and `GTRuntime` no longer accept `devApiKey`, expose a `devApiKey` property, or read `GT_DEV_API_KEY`. Pass the key as [`apiKey`](/docs/platform/core/reference/gt-class/constructor#api-key). Framework packages such as `gt-next` keep their own development key settings.
+- **Runtime translation metadata.** [`TranslateOptions`](/docs/platform/core/reference/types/translation-config) no longer accepts arbitrary extra keys. Runtime translation sends `modelProvider` as its only metadata.
+- **Zero timeout.** A `timeout` of `0` on [`translate`](/docs/platform/core/reference/gt-class-methods/translation/translate#timeout) and [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many#timeout) is a zero timeout. Omit `timeout` to use the 60000 ms default. A runtime translation that times out rejects with the [API client](/docs/platform/core/reference/api-client#types-errors) timeout error, whose message gives the timeout in milliseconds.
+- **Logger.** The library no longer logs. A missing target locale throws without logging, and `_GT_LOG_LEVEL` has no effect.
+- **Upload options.** [`uploadTranslations`](/docs/platform/core/reference/gt-class-methods/files/upload-translations) takes only `{ timeout }` and no longer requires a source locale. [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files) no longer accepts `modelProvider`; set the provider on [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files).
+- **`hashSource` `id`.** `hashSource` no longer accepts `id`. Callers that passed one get a content-based hash, so those entries hash differently.
+- **`reverseCustomMapping`.** The unused `GTRuntime.reverseCustomMapping` property is removed.
+- **`generaltranslation/internal` duplicates.** Import `createDiagnosticMessage` and `formatDiagnosticErrorDetails` from `generaltranslation/diagnostics`, `API_VERSION` from `generaltranslation/api`, and `derive`, `declareVar`, and `decodeVars` from `generaltranslation`. `generaltranslation/internal` no longer exports the API adapter; use `GT`.
+- **Other `generaltranslation/internal` exports.** `pluralForms`, `encodeFileContent`, `decodeFileContent`, and `unwrapApiResult` are removed, along with type duplicates; import those types from `generaltranslation/types`.
+- **`generaltranslation/errors`.** The entry is removed. Import [`ApiError`](/docs/platform/core/reference/api-client#api-error) from `generaltranslation/api`.
+- **Request configuration types.** `generaltranslation/types` drops `TranslateConfig`, `TranslationRequestConfig`, `BINARY_FILE_FORMATS` (use [`isBinaryFileFormat`](/docs/platform/core/reference/types/file-format#is-binary-file-format)), and `Metadata`.
+- **`ApiError` constructor.** [`ApiError`](/docs/platform/core/reference/api-client#api-error) takes `(message, code)` instead of `(error, code, message)`.
+- **Config types.** `GTConfig` drops `devApiKey`, the top-level `files.gt.includeSourceCodeContext`, and `files.gt.parsingFlags.legacyGtReactImportSource`, matching `gt` 3.
+
+## Upgrading
+
+1. Install the new version: `npm install generaltranslation@10`.
+2. Pass `apiKey` and `projectId` to `GT` and `GTRuntime` explicitly, for example `process.env.GT_API_KEY!`, and replace `sourceLocale`, `targetLocale`, `locales`, and `customMapping` with `localeConfig: { defaultLocale, locales, customMapping }`.
+3. Move formatting and locale calls to a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) built from the same `localeConfig`, pass the target locale as `{ locale }`, and update the arguments listed under [GTIntl methods](#gtintl-methods). Import any standalone formatting or locale function from `@generaltranslation/format` instead of `generaltranslation`.
+4. Call [`listOrgs`](/docs/platform/core/reference/gt-class-methods/organizations/list-orgs), [`listProjects`](/docs/platform/core/reference/gt-class-methods/projects/list-projects), [`createProject`](/docs/platform/core/reference/gt-class-methods/organizations/create-project), and [`upsertAssets`](/docs/platform/core/reference/gt-class-methods/organizations/upsert-assets) on an account-scoped `GT` built with an Organization API key and no `projectId`.
+5. Replace each removed method with the method in the table above, and replace `setConfig()` calls with a new instance.
+6. Update code that reads [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs), upload, or publish results to the new fields.
+7. Replace `devApiKey` with `apiKey`, remove `sourceLocale` from [`uploadTranslations`](/docs/platform/core/reference/gt-class-methods/files/upload-translations) calls, and import `ApiError` from `generaltranslation/api` instead of `generaltranslation/errors`.
+8. Run your type checker; it reports every remaining call to a removed method or option.

@@ -1,0 +1,107 @@
+---
+
+title: determineLocale
+description: Find the best matching locale from a list of approved locales. API reference for determineLocale.
+
+---
+
+General Translation implements locale negotiation to find the most suitable locale when an exact match is not available.
+
+## Overview [#overview]
+
+Call `determineLocale` on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance with one or more preferred locales, in preference order. It returns the best matching approved locale, or `undefined` when none matches.
+
+```typescript
+const intl = new GTIntl({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'es-ES', 'fr-FR', 'de-DE'],
+});
+
+// Exact match
+console.log(intl.determineLocale('en-US')); // 'en-US'
+
+// Language fallback
+console.log(intl.determineLocale('en-GB')); // 'en-US' (likely-region fallback)
+
+// Multiple preferences (preference order wins)
+console.log(intl.determineLocale(['fr-CA', 'es-MX', 'en-US'])); // 'fr-FR' (closest to first preference)
+
+// No match
+console.log(intl.determineLocale('it-IT')); // undefined
+```
+
+Signature:
+
+```typescript
+determineLocale(
+  locales: string | string[],
+  options?: { approvedLocales?: readonly string[] }
+): string | undefined
+```
+
+*Note: `determineLocale` runs locally and does not require an API key. It matches against the instance's `locales` unless `options.approvedLocales` is passed, and resolves aliases with the instance's `customMapping`. For matching without a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, import the standalone `determineLocale` function from `@generaltranslation/format`.*
+
+## How it works [#how-it-works]
+
+- **Exact match first.** Returns an exact approved-locale match for the current user preference, in its approved spelling.
+- **Derived locale matching.** Checks language-region, language-script, and minimized forms before using the language's likely region and script.
+- **Preference order.** Respects the order of the input array, so a higher-preference language match is chosen over a lower-preference exact match.
+- **Approved locales.** Treats the approved locales as the set of eligible results. Their array order does not choose between same-language candidates.
+- **No match.** Returns `undefined` when no suitable match is found.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locales`](#locales) | A single locale or array of locales in preference order. | `string \| string[]` | No | — |
+| [`options`](#options) | Approved locales for this call. | `{ approvedLocales?: readonly string[] }` | Yes | `{}` |
+
+### `locales` [#locales]
+
+**Type** `string | string[]` · **Required**
+
+A single locale or an array of locales in preference order (for example, a browser `Accept-Language` list).
+
+### `options` [#options]
+
+**Type** `{ approvedLocales?: readonly string[] }` · **Optional** · **Default** `{}`
+
+`approvedLocales` lists the locales eligible for matching, and defaults to the instance's `locales`. Array order does not determine which same-language locale wins.
+
+## Returns [#returns]
+
+**Type** `string | undefined`
+
+The best matching locale, or `undefined` if no match is found.
+
+## Examples [#examples]
+
+```typescript
+// User locale negotiation
+const intl = new GTIntl({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'en-GB', 'es-ES', 'fr-FR'],
+});
+
+// Simulate a browser Accept-Language header
+const userPreferences = ['fr-CA', 'en-GB', 'en'];
+const bestMatch = intl.determineLocale(userPreferences);
+console.log(bestMatch); // 'fr-FR' based on preference order
+```
+
+```typescript
+// Match against another list for one call
+const match = intl.determineLocale(['it-IT', 'de'], {
+  approvedLocales: ['de-DE', 'it-CH'],
+});
+console.log(match); // 'de-DE'
+```
+
+## Notes [#notes]
+
+- Checks exact and derived locale codes for each user preference.
+- Uses likely-region and likely-script fallbacks, not arbitrary same-language dialect matching.
+- Respects preference order in the input array.
+- Does not use approved-locale array order as a tie-breaker.
+- Returns `undefined` when no suitable match is found.
+- Essential for implementing locale negotiation in web applications.

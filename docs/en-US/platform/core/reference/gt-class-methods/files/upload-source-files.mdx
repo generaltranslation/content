@@ -1,0 +1,148 @@
+---
+
+title: uploadSourceFiles
+description: Upload source files to a project before queueing translation. API reference for uploadSourceFiles.
+
+---
+
+Uploads source files to the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project. This is the first step of a file translation workflow, before generating project context or queueing translation jobs.
+
+## Overview [#overview]
+
+Call `uploadSourceFiles` with an array of files. Each result carries the file references you use in later steps.
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const result = await gt.uploadSourceFiles(files);
+```
+
+Signature:
+
+```typescript
+uploadSourceFiles(
+  files: { source: FileUpload }[],
+  options?: { sourceLocale?: string; timeout?: number }
+): Promise<UploadSourceFilesResponse>
+```
+
+*Note: `uploadSourceFiles` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:files:write` permission.*
+
+## How it works [#how-it-works]
+
+- **File encoding.** Text content is base64-encoded for you. Pass binary `LOTTIE` content as a base64-encoded `.lottie` ZIP file.
+- **Per-file results.** A file can fail to save while the others are saved. The method resolves with a result for every file instead of throwing; check `summary.failed` and each result's `status`. Retrying with the same content and identifiers is safe.
+- **Batches.** The method sends at most 100 files per request and combines the summaries and results in request order.
+- **Source locale.** The upload's source locale is `options.sourceLocale`, then the instance's `localeConfig.defaultLocale`. With neither, the request omits it and the project's default locale applies. A `customMapping` alias is sent as its standard code.
+- **Project default locale.** Uploading never changes the project's default locale. Use [`gt.update`](/docs/platform/core/reference/gt-class-methods/projects/update-project) to change it.
+- **Request errors.** Content that is not valid in its `fileFormat`, or an unknown `branchId`, rejects the request with an [`ApiError`](/docs/platform/core/reference/api-client#api-error) and saves nothing in that batch. A `fileId` longer than 64 or a `versionId` longer than 255 characters rejects its whole batch with a `400` `ApiError`; other batches may already be saved.
+- **Typical workflow.** Upload source files, then call [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files) → [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs) → [`queryFilesContent`](/docs/platform/core/reference/gt-class-methods/files/query-files-content).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Array of source files to upload. | `{ source: FileUpload }[]` | No | — |
+| [`options`](#options) | Source locale and request timeout. | `{ sourceLocale?: string; timeout?: number }` | Yes | `{}` |
+
+### `files`
+
+**Type** `{ source: FileUpload }[]` · **Required**
+
+The source files to upload. Each entry wraps a `FileUpload` (`import type { FileUpload } from 'generaltranslation/types'`) under a `source` key, and each branch and file may appear once:
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `content` | Raw text content, or base64-encoded binary content for `LOTTIE`. | `string` | No |
+| `fileName` | Unique file identifier, typically the file path plus name. | `string` | No |
+| `fileFormat` | Format of the file. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | No |
+| `dataFormat` | Format of the data within the file (`ICU`, `I18NEXT`, `JSX`, or `STRING`). | [`DataFormat`](/docs/platform/core/reference/types/data-format) | Yes |
+| `locale` | Locale of the source file content. | `string` | No |
+| `branchId` | Branch to upload the file into. Uses the default branch when omitted. | `string` | Yes |
+| `incomingBranchId` | Incoming branch used by branch-aware translation tracking. | `string` | Yes |
+| `checkedOutBranchId` | Checked-out branch used by branch-aware translation tracking. | `string` | Yes |
+| `formatMetadata` | Format-specific metadata stored with the source file. | `FormatMetadata` | Yes |
+| `versionId` | Version ID, for advanced use cases. At most 255 characters. | `string` | Yes |
+| `fileId` | File ID, for advanced use cases. At most 64 characters. | `string` | Yes |
+
+*Note: set the output format with `transformFormat` on the file passed to [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files), not on the upload.*
+
+### `options`
+
+**Type** `{ sourceLocale?: string; timeout?: number }` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `sourceLocale` | Locale of the uploaded files. Defaults to `localeConfig.defaultLocale`, then to the project's default locale. | `string` | Yes |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<UploadSourceFilesResponse>`
+
+Resolves with a summary and one result per file, in request order:
+
+```typescript
+type UploadSourceFilesResponse = {
+  summary: { total: number; succeeded: number; failed: number };
+  results: {
+    branchId: string;
+    fileId: string;
+    versionId: string;
+    fileName: string;
+    fileFormat: FileFormat;
+    dataFormat?: DataFormat;
+    status: 'succeeded' | 'failed';
+    error?: string; // why the file failed
+  }[];
+};
+```
+
+Pass the `succeeded` results to [`translateFiles`](/docs/platform/core/reference/gt-class-methods/translation/translate-files).
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import fs from 'node:fs';
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+  localeConfig: { defaultLocale: 'en' },
+});
+
+const files = [
+  {
+    source: {
+      content: fs.readFileSync('./locales/en/common.json', 'utf8'),
+      fileName: 'common.json',
+      fileFormat: 'JSON' as const,
+      locale: 'en',
+    },
+  },
+  {
+    source: {
+      content: '{"welcome": "Welcome, {name}!"}',
+      fileName: 'messages.json',
+      fileFormat: 'JSON' as const,
+      dataFormat: 'ICU' as const, // ICU message format
+      locale: 'en',
+    },
+  },
+];
+
+// The source locale defaults to localeConfig.defaultLocale ('en').
+const { summary, results } = await gt.uploadSourceFiles(files, {
+  timeout: 60000, // 60 second timeout for large uploads
+});
+
+// Report files that were not saved, and continue with the rest.
+for (const file of results) {
+  if (file.status === 'failed') console.error(`${file.fileName}: ${file.error}`);
+}
+const uploaded = results.filter((file) => file.status === 'succeeded');
+console.log(`Uploaded ${summary.succeeded} of ${summary.total} files`);
+```
+
+(See the [Upload source files](/docs/platform/openapi/reference/files/upload-source-files) endpoint for the HTTP contract and size limits).

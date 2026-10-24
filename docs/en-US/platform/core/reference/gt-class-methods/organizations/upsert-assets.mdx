@@ -1,0 +1,125 @@
+---
+
+title: upsertAssets
+description: Upload TrueType or OpenType fonts that Lottie translations use across an Organization. API reference for upsertAssets.
+
+---
+
+Uploads fonts to the Organization scoped by [`account.org()`](/docs/platform/core/reference/gt-class/org). Lottie translation jobs in every project of that Organization use the stored fonts during layout processing.
+
+## Overview [#overview]
+
+```typescript
+const account = new GT({ apiKey: 'your-org-api-key' });
+const org = account.org('your-org-id');
+
+const { summary, results } = await org.upsertAssets([
+  { assetType: 'FONT', fileName: 'Inter-Bold.ttf', content: base64Font },
+]);
+```
+
+Signature:
+
+```typescript
+upsertAssets(
+  assets: AssetInput[],
+  options?: { timeout?: number }
+): Promise<UpsertAssetsResponse>
+```
+
+*Note: `upsertAssets` is an [`OrgHandle`](/docs/platform/core/reference/types/org-handle) method and requires an Organization API key with the `org:assets:write` permission. Project API keys cannot hold this permission.*
+
+## How it works [#how-it-works]
+
+- **Organization from the handle.** The method uploads to `POST /v2/orgs/{orgId}/assets` with the ID passed to [`account.org()`](/docs/platform/core/reference/gt-class/org) and makes no other request. To find the Organization of a project, read `orgId` from [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project).
+- **Identity and replacement.** A font is identified by family, weight, and italic style. Uploading a font with the same identity replaces it for the whole Organization.
+- **Per-font results.** A font can fail on its own while the others are stored. The method resolves with a result for every font instead of throwing; check `summary.failed` and each result's `status`. Retrying a failed font is safe.
+- **Batches.** The method sends at most 10 fonts per request and combines the summaries and results in request order.
+- **Empty input.** An empty array resolves with an empty summary and sends no request.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`assets`](#assets) | Fonts to upload. | `AssetInput[]` | No | — |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `assets`
+
+**Type** `AssetInput[]` · **Required**
+
+```typescript
+type AssetInput = {
+  assetType: 'FONT';
+  content: string; // base64-encoded font bytes
+  fileName: string;
+  family?: string;
+  style?: string;
+};
+```
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `assetType` | Asset type. Only `FONT` is supported. | `'FONT'` | No |
+| `content` | Base64-encoded TrueType or OpenType font bytes. | `string` | No |
+| `fileName` | Font file name. | `string` | No |
+| `family` | Family name that Lottie files reference the font by. When set, `family` and `style` alone set the font's identity. When absent, the identity comes from the font's own tables, then its file name, and `style` is ignored. | `string` | Yes |
+| `style` | Weight and italic style, such as `Bold Italic` or `350`. Read only with `family`; a `family` without `style` is regular weight (400), not italic. | `string` | Yes |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<UpsertAssetsResponse>`
+
+```typescript
+type UpsertAssetsResponse = {
+  summary: { total: number; succeeded: number; failed: number };
+  results: (
+    | { fileName: string; status: 'succeeded'; id: string; assetKey: string }
+    | { fileName: string; status: 'failed'; error: string }
+  )[];
+};
+```
+
+`results` has one entry per font, in request order. `assetKey` is the normalized family, weight, and italic style.
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import fs from 'node:fs';
+import { GT } from 'generaltranslation';
+
+const account = new GT({
+  apiKey: process.env.GT_ORG_API_KEY!, // Organization key with org:assets:write
+});
+
+// With only a project ID, read the Organization that owns the project.
+const { orgId } = await account.project(process.env.GT_PROJECT_ID!).get();
+const org = account.org(orgId);
+
+const { results } = await org.upsertAssets([
+  {
+    assetType: 'FONT',
+    fileName: 'Inter-Bold.ttf',
+    content: fs.readFileSync('./fonts/Inter-Bold.ttf').toString('base64'),
+  },
+  {
+    assetType: 'FONT',
+    fileName: 'brand.otf',
+    content: fs.readFileSync('./fonts/brand.otf').toString('base64'),
+    family: 'Brand Sans', // the family name the Lottie file uses
+    style: 'Bold Italic',
+  },
+]);
+
+for (const font of results) {
+  if (font.status === 'failed') console.error(`${font.fileName}: ${font.error}`);
+}
+```
+
+(See the [Upsert Organization assets](/docs/platform/openapi/reference/organizations/upsert-assets) endpoint for validation and size limits).

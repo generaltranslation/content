@@ -1,0 +1,99 @@
+---
+
+title: createApiKey
+description: Create a project API key with the permissions you select. API reference for createApiKey.
+
+---
+
+Creates an API key for the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project. Use it to provision a least-privilege project key for a deployment, a CI job, or another service.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-org-api-key', projectId: 'your-project-id' });
+
+const { apiKey } = await gt.createApiKey({
+  name: 'Runtime translation',
+  permissions: ['project:translations:generate'],
+});
+```
+
+Signature:
+
+```typescript
+createApiKey(body: {
+  name: string;
+  permissions?: ProjectApiKeyPermission[];
+}): Promise<CreateProjectApiKeyResponse>
+```
+
+*Note: `createApiKey` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an Organization API key with the `project:api_keys:write` permission. Project API keys cannot create other keys.*
+
+## How it works [#how-it-works]
+
+- **Not idempotent.** Each successful call creates a new key. Do not retry a call whose result you did not receive without checking the project's keys in the Dashboard.
+- **Least privilege.** Select only the `permissions` the key needs. Omitting `permissions` grants every project permission you can delegate. You must hold every permission you select, and write permissions do not include read.
+- **Secret shown once.** The response is the only time the key's secret, `apiKey.key`, is returned. Store it securely and never log it.
+- **Errors.** A failed request throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error) with the HTTP status as `code`: `403` when the caller cannot create keys for the project or cannot grant a selected permission, in which case no key is created.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`body`](#body) | The new key's name and permissions. | `{ name: string; permissions?: ProjectApiKeyPermission[] }` | No | — |
+
+### `body` [#body]
+
+**Type** `{ name: string; permissions?: ProjectApiKeyPermission[] }` · **Required**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `name` | Key name, 1–255 characters after trimming. | `string` | No |
+| `permissions` | Project permissions to grant. Duplicates are ignored. Omit to grant every project permission you can delegate. | `ProjectApiKeyPermission[]` | Yes |
+
+`ProjectApiKeyPermission` is one of `project:write`, `project:context:read`, `project:context:write`, `project:files:read`, `project:files:write`, `project:translations:generate`, or `project:translations:enqueue`.
+
+## Returns [#returns]
+
+**Type** `Promise<CreateProjectApiKeyResponse>`
+
+```typescript
+type CreateProjectApiKeyResponse = {
+  apiKey: {
+    id: string;
+    name: string;
+    key: string;
+    projectId: string;
+    type: 'production';
+  };
+};
+```
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `apiKey.id` | ID of the new key. | `string` |
+| `apiKey.name` | Key name. | `string` |
+| `apiKey.key` | The key's secret. Returned only in this response. | `string` |
+| `apiKey.projectId` | ID of the project the key belongs to. | `string` |
+| `apiKey.type` | Compatibility field; every project API key works in any environment. | `'production'` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_ORG_API_KEY!, // Organization key with project:api_keys:write
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+// A key that can upload source files and read their translations.
+const { apiKey } = await gt.createApiKey({
+  name: 'CI file sync',
+  permissions: ['project:files:read', 'project:files:write'],
+});
+
+// Store apiKey.key in your secret manager now; it is not returned again.
+```
+
+(See the [Create a Project API key](/docs/platform/openapi/reference/projects/create-project-api-key) endpoint for the HTTP contract).

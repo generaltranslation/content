@@ -1,0 +1,120 @@
+---
+
+title: formatListToParts
+description: Format a list into locale-aware parts for custom rendering. API reference for formatListToParts.
+
+---
+
+Formats an array into locale-specific parts on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, inserting string separators between items while preserving the original type of each element. General Translation uses the built-in `Intl.ListFormat` API. Unlike [`formatList`](/docs/platform/core/reference/gt-intl-methods/formatting/format-list), which returns a flat list string, this method returns an `Array<T | string>`, making it ideal for mixed-type arrays containing strings, numbers, objects, or JSX elements.
+
+## Overview [#overview]
+
+Call `formatListToParts` on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance with an array and an optional options object. It returns an array of the original items interleaved with locale-aware string separators.
+
+```typescript
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'en' });
+
+const parts = intl.formatListToParts(['apple', 42, { type: 'fruit' }]);
+// ['apple', ', ', 42, ', and ', { type: 'fruit' }]
+```
+
+Signature:
+
+```typescript
+formatListToParts<T>(
+  array: Array<T>,
+  options?: { locale?: string; locales?: string | string[] } & Intl.ListFormatOptions
+): Array<T | string>
+```
+
+*Note: `formatListToParts` runs locally using `Intl.ListFormat` and does not require an API key. By default it formats for the target locale (`options.locale`, then the instance `locale`), falling back to `defaultLocale` and then the library default (`en`); pass `locales` to replace that list. For formatting without a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, import the standalone `formatListToParts` function from `@generaltranslation/format`.*
+
+## How it works [#how-it-works]
+
+- **Type preservation.** Only string separators are inserted between elements; the original item types are kept, which is the key differentiator from a flat list string.
+- **Locale resolution.** The method formats for `options.locale`, then the instance `locale`, falling back to `defaultLocale` and then the library default (`en`). The `locales` array of the [`LocaleConfig`](/docs/platform/core/reference/types/locale-config) is not used. Pass `locale` to change the target for one call, or `locales` to replace the whole fallback list.
+- **Intl-backed.** Formatting is delegated to the browser-native [`Intl.ListFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/ListFormat).
+- **List type.** `type: 'conjunction'` produces "and" lists, `'disjunction'` produces "or" lists, and `'unit'` produces unit-style lists.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`array`](#array) | The array of items to format. | `Array<T>` | No | — |
+| [`options`](#options) | Formatting configuration, extending `Intl.ListFormatOptions` with `locale` and `locales` overrides. | `object` | Yes | — |
+
+### `array` [#array]
+
+**Type** `Array<T>` · **Required**
+
+The array of items to format. Items may be any type; non-string items are preserved as-is in the output.
+
+### `options` [#options]
+
+**Type** `{ locale?: string; locales?: string | string[] } & Intl.ListFormatOptions` · **Optional**
+
+Formatting configuration. The table lists common options exposed by the published Core types and their effective Core defaults. (See the [`Intl.ListFormat` constructor options](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/ListFormat/ListFormat#options) for supplemental standard and runtime-specific details).
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locale` | Target locale for this call. | `string` | Yes | instance `locale` → `defaultLocale` |
+| `locales` | Replaces the whole fallback list for this call. | `string \| string[]` | Yes | `[locale, defaultLocale, 'en']` |
+| `localeMatcher` | Locale matching algorithm. | `'lookup' \| 'best fit'` | Yes | `'best fit'` |
+| `type` | List formatting type. | `'conjunction' \| 'disjunction' \| 'unit'` | Yes | `'conjunction'` |
+| `style` | List formatting style. | `'long' \| 'short' \| 'narrow'` | Yes | `'long'` |
+
+## Returns [#returns]
+
+**Type** `Array<T | string>`
+
+An array of the original items interleaved with locale-specific string separators.
+
+## Examples [#examples]
+
+```typescript
+import { GTIntl } from 'generaltranslation';
+
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'en' });
+
+// Conjunction (default) — "and" list
+console.log(intl.formatListToParts(['A', 'B', 'C']));
+// Output: ['A', ', ', 'B', ', and ', 'C']
+
+// Disjunction — "or" list
+console.log(intl.formatListToParts(['A', 'B', 'C'], { type: 'disjunction' }));
+// Output: ['A', ', ', 'B', ', or ', 'C']
+```
+
+```typescript
+// Mixed-type arrays — numbers and objects are preserved
+console.log(intl.formatListToParts(['apple', 42, { type: 'fruit' }]));
+// Output: ['apple', ', ', 42, ', and ', { type: 'fruit' }]
+```
+
+```typescript
+// Style variations
+
+// Short style
+console.log(intl.formatListToParts(['first', 'second'], { style: 'short' }));
+// Output: ['first', ' & ', 'second']
+
+// Unit style
+console.log(intl.formatListToParts(['1km', '2mi'], { type: 'unit' }));
+// Output: ['1km', ', ', '2mi']
+```
+
+```typescript
+// Locale-specific formatting — Spanish disjunction
+console.log(intl.formatListToParts(['red', 'green', 'blue'], {
+  locale: 'es',
+  type: 'disjunction',
+}));
+// Output: ['red', ', ', 'green', ' o ', 'blue']
+```
+
+## Notes [#notes]
+
+- Original item types are preserved — only string separators are inserted between elements.
+- This is the key differentiator from a flat list string.
+- Particularly useful for rendering mixed-type arrays in UI frameworks like React.
+- The method uses browser-native `Intl.ListFormat` under the hood.

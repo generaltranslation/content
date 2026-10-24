@@ -1,0 +1,81 @@
+---
+
+title: account.org
+description: Scope font uploads and project creation to one Organization. API reference for account.org.
+
+---
+
+Returns an [`OrgHandle`](/docs/platform/core/reference/types/org-handle) for one Organization from an account-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (one constructed without `projectId`). Organization methods, [`upsertAssets`](/docs/platform/core/reference/gt-class-methods/organizations/upsert-assets) and [`createProject`](/docs/platform/core/reference/gt-class-methods/organizations/create-project), are called on the handle.
+
+## Overview [#overview]
+
+```typescript
+import { GT } from 'generaltranslation';
+
+const account = new GT({ apiKey: 'your-org-api-key' });
+const org = account.org('your-org-id');
+
+const { project } = await org.createProject({ name: 'Docs', defaultLocale: 'en' });
+```
+
+Signature:
+
+```typescript
+org(orgId: string): OrgHandle
+```
+
+*Note: `org` is synchronous and sends no request. Organization methods need an Organization API key with the permission each method lists.*
+
+## How it works [#how-it-works]
+
+- **ID check.** `org` throws an `Error` with a diagnostic message when `orgId` is not a non-empty string (an empty or blank string, for example).
+- **No lookup.** The handle uses the ID you pass. It does not read a project to find its Organization.
+- **Finding the ID.** [`listOrgs`](/docs/platform/core/reference/gt-class-methods/organizations/list-orgs) returns the Organization of the API key. With only a project ID, read `orgId` from [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project).
+- **Configuration at creation.** The handle uses the API key, base URL, and `localeConfig` of the instance that created it.
+- **Errors.** A failed API request throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error) with the HTTP status.
+- **Read-only handle.** The handle is frozen. For another Organization, call `org` again.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`orgId`](#org-id) | ID of the Organization to work on. | `string` | No | — |
+
+### `orgId` [#org-id]
+
+**Type** `string` · **Required**
+
+ID of the Organization, as returned by [`listOrgs`](/docs/platform/core/reference/gt-class-methods/organizations/list-orgs), [`listProjects`](/docs/platform/core/reference/gt-class-methods/projects/list-projects), or [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project). An empty or blank string throws.
+
+## Returns [#returns]
+
+**Type** [`OrgHandle`](/docs/platform/core/reference/types/org-handle)
+
+A frozen handle with the Organization's methods.
+
+## Examples [#examples]
+
+```typescript title="sync-fonts.ts"
+import fs from 'node:fs';
+import { GT } from 'generaltranslation';
+
+const account = new GT({ apiKey: process.env.GT_ORG_API_KEY! });
+
+// Read the Organization that owns the project.
+const { orgId } = await account.project(process.env.GT_PROJECT_ID!).get();
+
+const { summary } = await account.org(orgId).upsertAssets([
+  {
+    assetType: 'FONT',
+    fileName: 'Inter-Bold.ttf',
+    content: fs.readFileSync('./fonts/Inter-Bold.ttf').toString('base64'),
+  },
+]);
+console.log(`${summary.succeeded} of ${summary.total} fonts stored`);
+```
+
+## Notes [#notes]
+
+- `org` checks only that the ID is a non-empty string; it does not check that the Organization exists.
+- For a different API key or base URL, construct a new [`GT`](/docs/platform/core/reference/gt-class/constructor) instance.
+- The project-scoped form, `new GT({ apiKey, projectId })`, has no `org` method.

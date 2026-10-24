@@ -1,0 +1,117 @@
+---
+
+title: requiresTranslation
+description: Check whether content in the source locale needs translating for a target locale. API reference for requiresTranslation.
+
+---
+
+Determines whether content in a source locale needs translating for a target locale on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance. General Translation compares the locale codes and considers the approved locale list to decide whether content needs to be translated.
+
+## Overview [#overview]
+
+Call `requiresTranslation` on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance with an optional options object. By default it checks the instance `locale` against the `defaultLocale`, within the configured `locales`.
+
+```typescript
+const intl = new GTIntl(
+  { defaultLocale: 'en-US', locales: ['en-US', 'es-ES', 'fr-FR', 'de-DE'] },
+  { locale: 'es-ES' }
+);
+
+console.log(intl.requiresTranslation()); // true
+console.log(intl.requiresTranslation({ locale: 'en' })); // false (same dialect)
+```
+
+Signature:
+
+```typescript
+requiresTranslation(options?: {
+  locale?: string;
+  sourceLocale?: string;
+  approvedLocales?: readonly string[];
+}): boolean
+```
+
+*Note: `requiresTranslation` runs locally and does not require an API key. For checks without a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, import the standalone `requiresTranslation` function from `@generaltranslation/format`.*
+
+## How it works [#how-it-works]
+
+The method compares the source locale (`options.sourceLocale`, then `defaultLocale`) with the target locale (`options.locale`, then the instance `locale`, then `defaultLocale`), after resolving both through the instance [`customMapping`](/docs/platform/core/reference/types/custom-mapping). It resolves in this order:
+
+1. **Validity.** If the source, target, or any approved locale is not a valid locale, returns `false`.
+2. **Same dialect.** If the source and target are the same dialect (for example, `en` and `en-US`), returns `false` — no translation is needed.
+3. **No approved list.** If the instance was created without `locales` and the call passes no `approvedLocales`, returns `true` when the source and target differ.
+4. **Approved scope.** Otherwise, returns `true` only if the target's language matches the language of at least one approved locale; different dialects of the same language are treated as requiring translation (so a closer dialect can serve as a fallback). If the target's language is not represented in the approved locales, returns `false`.
+
+With no target locale on the call or the instance, the target is `defaultLocale`. The method then returns `false` when the source also defaults to `defaultLocale`; an explicit `sourceLocale` in another language can still return `true`.
+
+An empty list approves no locale: with `locales: []` at construction or `approvedLocales: []` on the call, the method returns `false`.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`options`](#options) | Target locale, source locale, and approved locales for this call. | `object` | Yes | `{}` |
+
+### `options` [#options]
+
+**Type** `{ locale?: string; sourceLocale?: string; approvedLocales?: readonly string[] }` · **Optional** · **Default** `{}`
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locale` | The target locale. | `string` | Yes | instance `locale` → `defaultLocale` |
+| `sourceLocale` | The locale the content is in. | `string` | Yes | `defaultLocale` |
+| `approvedLocales` | Locales the content may be translated into. An empty list approves none. | `readonly string[]` | Yes | the configured `locales`; no restriction when `locales` was omitted |
+
+## Returns [#returns]
+
+**Type** `boolean`
+
+`true` if translation is required, `false` otherwise.
+
+## Examples [#examples]
+
+```typescript
+const intl = new GTIntl({
+  defaultLocale: 'en-US',
+  locales: ['en-US', 'es-ES', 'fr-FR', 'de-DE'],
+});
+
+// Different languages require translation
+console.log(intl.requiresTranslation({ locale: 'es-ES' })); // true
+console.log(intl.requiresTranslation({ locale: 'fr-FR' })); // true
+
+// The same dialect does not require translation
+console.log(intl.requiresTranslation({ locale: 'en-US' })); // false
+console.log(intl.requiresTranslation({ locale: 'en' })); // false (same dialect)
+
+// Different dialects of the same language DO require translation
+// (a closer dialect can serve as a fallback)
+console.log(intl.requiresTranslation({ locale: 'en-GB' })); // true
+console.log(intl.requiresTranslation({ locale: 'es-MX', sourceLocale: 'es-ES' })); // true
+
+// Target language not represented in the approved locales
+console.log(intl.requiresTranslation({ locale: 'it-IT' })); // false
+
+// Approve another list for one call
+console.log(intl.requiresTranslation({ locale: 'it-IT', approvedLocales: ['it'] })); // true
+```
+
+```typescript
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'es' });
+
+// Without locales, any valid target differs from the source
+console.log(intl.requiresTranslation()); // true
+
+// An empty list approves no locale
+console.log(intl.requiresTranslation({ approvedLocales: [] })); // false
+console.log(new GTIntl({ defaultLocale: 'en', locales: [] }, { locale: 'es' }).requiresTranslation()); // false
+
+// The target defaults to defaultLocale, but the source can differ
+console.log(new GTIntl({ defaultLocale: 'en' }).requiresTranslation({ sourceLocale: 'es' })); // true
+```
+
+## Notes [#notes]
+
+- Returns `false` only for the exact same dialect, invalid locales, or a target whose language is not represented in the approved locales (none, for an empty list).
+- Different dialects of the same language (for example, `en-US` and `en-GB`) require translation, so a closer dialect can serve as a fallback.
+- Respects the approved locale list: matching is by language, not exact dialect.

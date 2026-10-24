@@ -1,0 +1,101 @@
+---
+
+title: generateProjectContext
+description: Queue generation of glossaries and translation instructions from uploaded source files. API reference for generateProjectContext.
+
+---
+
+Queues a context generation job for the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project. The job analyzes previously uploaded source files and generates glossaries and translation instructions that later translation jobs use.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { job } = await gt.generateProjectContext(files, { locales: ['es', 'fr'] });
+if (job) await gt.awaitJobs([job.id]);
+```
+
+Signature:
+
+```typescript
+generateProjectContext(
+  files: { fileId: string; versionId: string; branchId?: string }[],
+  options?: { locales?: string[]; force?: boolean; timeout?: number }
+): Promise<GenerateProjectContextResponse>
+```
+
+*Note: `generateProjectContext` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:context:write` permission. Upload the files with [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files) first.*
+
+## How it works [#how-it-works]
+
+- **Asynchronous job.** The method returns the queued job. Wait for it with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs) or read it with [`getJob`](/docs/platform/core/reference/gt-class-methods/jobs/get-job).
+- **Already current.** When the project's context is already current and `force` is not set, nothing is queued and `job` is `null`.
+- **Target locales.** `locales` are added to the project's current locales.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Source file versions to generate the context from. | `{ fileId: string; versionId: string; branchId?: string }[]` | No | — |
+| [`options`](#options) | Target locales, `force`, and request settings. | `{ locales?: string[]; force?: boolean; timeout?: number }` | Yes | `{}` |
+
+### `files`
+
+**Type** `{ fileId: string; versionId: string; branchId?: string }[]` · **Required**
+
+The `fileId`, `versionId`, and `branchId` of uploaded source files, such as the succeeded results of [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files). Other fields on each entry are ignored. Omitting `branchId` selects the default branch.
+
+### `options`
+
+**Type** `{ locales?: string[]; force?: boolean; timeout?: number }` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `locales` | Target locales to generate context for. | `string[]` | Yes |
+| `force` | Queue generation even when the context is already current. | `boolean` | Yes |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<GenerateProjectContextResponse>`
+
+```typescript
+type GenerateProjectContextResponse = {
+  job: {
+    id: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    subject: JobSubject; // { type: 'context_generation' } for this job
+  } | null;
+};
+```
+
+`job` is `null` when nothing was queued. `JobSubject` is described in [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs#returns).
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+const { results } = await gt.uploadSourceFiles(files, { sourceLocale: 'en' });
+const uploaded = results.filter((file) => file.status === 'succeeded');
+
+// Generate context before the first translation of a new project.
+const { job } = await gt.generateProjectContext(uploaded, {
+  locales: ['es', 'fr'],
+});
+
+if (job) {
+  const { jobs } = await gt.awaitJobs([job.id]);
+  console.log(jobs[0].status);
+}
+
+await gt.translateFiles(uploaded, { targetLocales: ['es', 'fr'] });
+```
+
+(See the [Generate translation context](/docs/platform/openapi/reference/translation/generate-project-context) endpoint for the HTTP contract).

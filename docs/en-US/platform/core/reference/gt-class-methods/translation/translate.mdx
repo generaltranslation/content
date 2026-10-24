@@ -5,11 +5,11 @@ description: Translate one string or structured content entry into a target loca
 
 ---
 
-`translate` is the primary translation method on a [GT](/docs/platform/core/reference/gt-class/constructor) instance, for translating one string or structured content entry at a time.
+`translate` is the primary runtime translation method of `GT` and `GTRuntime`, for translating one string or structured content entry at a time.
 
 ## Overview [#overview]
 
-Call `translate` on a configured [`GT`](/docs/platform/core/reference/gt-class/constructor) instance to translate one entry. Pass the content to translate and either a target locale string (shorthand) or an options object. It returns a promise that resolves to a [`TranslationResult`](/docs/platform/core/reference/types/translation-result).
+Call `translate` on a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) or a [`GTRuntime`](/docs/platform/core/reference/runtime) instance to translate one entry. Pass the content to translate and either a target locale string (shorthand) or an options object. It returns a promise that resolves to a [`TranslationResult`](/docs/platform/core/reference/types/translation-result).
 
 ```typescript
 const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
@@ -27,13 +27,13 @@ translate(
 ): Promise<TranslationResult>
 ```
 
-*Note: `translate` requires an API key (including the deprecated `devApiKey` alias), plus `projectId` on the GT instance. Under the hood it calls [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) with a single entry.*
+*Note: The instance translates for its `projectId` with its API key, base URL, and `localeConfig`. The source locale defaults to `localeConfig.defaultLocale`, then `en`; pass the target locale on every call. Under the hood it calls [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) with a single entry.*
 
 ## How it works [#how-it-works]
 
 - **Content detection.** The `source` is detected as plain text, an ICU message, an i18next-style message, or structured JSX content, based on its shape and the `dataFormat` metadata you provide.
 - **Whole documents.** Set [`metadata.fileFormat`](/docs/platform/core/reference/types/entry-metadata#file-format) to `'MD'` or `'MDX'` to parse and translate a complete document while preserving its structure. The document must be a string with `dataFormat: 'STRING'`, which is the default, and cannot use `maxChars`. A document entry fails instead of returning partial output when a chunk fails or the translated document is invalid.
-- **Locale resolution.** The target locale is validated against BCP 47. Any [`customMapping`](/docs/platform/core/reference/types/custom-mapping) on the instance is applied, and the canonical locale code is sent to the API.
+- **Locale resolution.** The target locale is required; a call without one throws an `Error`. The [`customMapping`](/docs/platform/core/reference/types/custom-mapping) in the instance's `localeConfig` resolves aliases, and the standardized canonical code is sent to the API.
 - **Options shorthand.** Passing a string for `options` is shorthand for `{ targetLocale: string }`, so `gt.translate('Hello', 'es')` and `gt.translate('Hello', { targetLocale: 'es' })` are equivalent.
 
 ## Parameters [#parameters]
@@ -59,19 +59,22 @@ A target locale string such as `'es'`, or an options object:
 ```typescript
 type TranslateOptions = {
   targetLocale: string; // locale to translate into
-  sourceLocale?: string; // overrides the instance sourceLocale
+  sourceLocale?: string; // overrides localeConfig.defaultLocale
   modelProvider?: string; // validated before fetch
-  [key: string]: unknown; // extension metadata, not transport options
 };
 ```
 
-Import [`TranslateOptions`](/docs/platform/core/reference/types/translation-config#translate-options) from `generaltranslation/types`. Unsupported `modelProvider` values reject before fetch. (See [accepted providers and entitlements](/docs/platform/core/reference/types/enqueue-files-options#modelprovider)).
+Import [`TranslateOptions`](/docs/platform/core/reference/types/translation-config) from `generaltranslation/types`. Unsupported `modelProvider` values reject before fetch. (See [accepted providers and entitlements](/docs/platform/core/reference/gt-class-methods/translation/translate-files#model-provider)).
 
 ### `timeout` [#timeout]
 
 **Type** `number` · **Optional**
 
-Request timeout in milliseconds; omission or `0` selects 60000 ms. Only numbers are accepted, not `false`. This is separate from [request transport configuration](/docs/platform/core/reference/types/translation-config).
+Request timeout in milliseconds; omission selects 60000 ms, and `0` is a zero timeout. Only numbers are accepted, not `false`.
+
+| Version | Changes |
+| --- | --- |
+| `10.0.0` | `0` is a zero timeout instead of selecting the 60000 ms default. |
 
 ## Returns [#returns]
 
