@@ -1,0 +1,28 @@
+---
+title: gt-i18n@2.0.0
+headline: Narrower runtime translation types
+date: 2026-10-22
+authors: [cyan]
+tags: ['gt-i18n', '2.0.0', 'runtime-translation', 'major']
+---
+
+## Overview
+
+`gt-i18n` v2 removes deprecated runtime translation types and picks up the [`generaltranslation` 10](/devlog/generaltranslation_v10) changes. It ships with [`gt-react` 12](/devlog/gt-react_v12_0_0) and [`gt-node` 2](/devlog/gt-node_v2_0_0).
+
+## Breaking changes
+
+- **`TranslationMetadata.$_source` is removed**, and `RuntimeTranslationOptions` no longer has it. Encoded options from [`decodeOptions()`](/docs/node/reference/functions/decode-options) still carry `$_source`.
+- **`runtimeTranslation.metadata` accepts only `sourceLocale` and `modelProvider`.** Other keys are rejected by the type, and the runtime sends only `modelProvider` as request metadata.
+- **`runtimeTranslation.timeout: 0` is a zero timeout.** Omit `timeout` to use the default.
+- **The re-exported `GTConfig` is narrower.** It drops `devApiKey`, `files.gt.includeSourceCodeContext` (use `files.gt.parsingFlags.includeSourceCodeContext`), and `parsingFlags.legacyGtReactImportSource`. gt-i18n's own `devApiKey` option is unchanged; it is used only when neither `apiKey` nor `GT_API_KEY` is set.
+- **Runtime translation needs a configured `projectId`.** gt-i18n translates through a [`GTRuntime`](/docs/platform/core/reference/runtime) from `generaltranslation` 10, created for each request from its `projectId` option and API key. gt-i18n reads `GT_API_KEY` itself, so the key is still `apiKey`, then `GT_API_KEY`, then `devApiKey`. A project ID set only through `GT_PROJECT_ID` is no longer picked up, so pass `projectId`. Without a project ID or an API key, each runtime translation request rejects with gt-i18n's configuration guidance. [`gt-node`](/docs/node/reference/config#project-id) still reads `GT_PROJECT_ID` itself.
+- **Formatting uses [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor).** Formatting and locale helpers run on [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor), and their output is unchanged. In `gt-i18n/internal`, `getI18nConfig()` returns a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor), so its helpers take the target locale in the options object, such as `formatNum(value, { locale })` and `requiresTranslation({ locale })`. Its `determineLocale(candidates)` takes no approved locales and matches against the configured locales. `getGTClass()` is replaced by `getTranslationRuntime()`, which returns a `GTRuntime` and throws when no `projectId` or API key resolves.
+
+## Upgrading
+
+1. Remove `$_source` from runtime translation options.
+2. Remove keys other than `sourceLocale` and `modelProvider` from `runtimeTranslation.metadata`.
+3. Replace `runtimeTranslation.timeout: 0` with no `timeout` if you relied on the default.
+4. Pass `projectId` explicitly if you relied on `GT_PROJECT_ID` without `gt-node`.
+5. If you import from `gt-i18n/internal`, move `getGTClass()` calls to `getTranslationRuntime()`, pass target locales to `getI18nConfig()` helpers as `{ locale }`, and drop the approved locales argument from its [`determineLocale()`](/docs/platform/core/reference/gt-intl-methods/locales/determine-locale) calls.
