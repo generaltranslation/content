@@ -1,0 +1,106 @@
+---
+
+title: moveFiles
+description: Move or rename files so their source content and translations carry over to new file IDs. API reference for moveFiles.
+
+---
+
+Moves files on a branch of the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project. Each move clones the latest source file and its translations under the new file ID and makes the new file ID current in place of the old one, so a renamed file keeps its translations.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { summary, results } = await gt.moveFiles([
+  { oldFileId: 'old-file-id', newFileId: 'new-file-id', newFileName: 'docs/intro.mdx' },
+]);
+```
+
+Signature:
+
+```typescript
+moveFiles(
+  moves: { oldFileId: string; newFileId: string; newFileName: string }[],
+  options?: { branchId?: string; timeout?: number }
+): Promise<MoveFilesResponse>
+```
+
+*Note: `moveFiles` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:files:write` permission.*
+
+## How it works [#how-it-works]
+
+- **Per-move results.** A move can fail on its own while the others succeed. The method resolves with a result for every move instead of throwing; check `summary.failed` and each result's `status`.
+- **Batches.** The method sends at most 25 moves per request and combines the summaries and results in request order.
+- **Disjoint IDs.** Each old and each new file ID may appear once, and no file ID may be both an old and a new file ID, as in a swap, cycle, or chain. The method checks the whole list before sending anything and throws when it overlaps. Move through an unused file ID in separate calls instead.
+- **Errors.** A malformed request or an unknown branch rejects the call with an [`ApiError`](/docs/platform/core/reference/api-client#api-error). A `newFileId` longer than 64 characters rejects its whole batch with a `400` `ApiError`. With more than 25 moves, other batches may already be applied.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`moves`](#moves) | The moves to apply. | `{ oldFileId: string; newFileId: string; newFileName: string }[]` | No | — |
+| [`options`](#options) | Branch and request settings. | `{ branchId?: string; timeout?: number }` | Yes | `{}` |
+
+### `moves`
+
+**Type** `{ oldFileId: string; newFileId: string; newFileName: string }[]` · **Required**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `oldFileId` | Current file ID. | `string` | No |
+| `newFileId` | File ID to move the file to. At most 64 characters. | `string` | No |
+| `newFileName` | File name stored with the new file ID. | `string` | No |
+
+### `options`
+
+**Type** `{ branchId?: string; timeout?: number }` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `branchId` | Branch the files are on. | `string` | Yes | Default branch |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes | — |
+
+## Returns [#returns]
+
+**Type** `Promise<MoveFilesResponse>`
+
+```typescript
+type MoveFilesResponse = {
+  summary: { total: number; succeeded: number; failed: number };
+  results: {
+    oldFileId: string;
+    newFileId: string;
+    newSourceFileId?: string;
+    clonedTranslationsCount?: number;
+    status: 'succeeded' | 'failed';
+    error?: string; // why the move failed
+  }[];
+};
+```
+
+`results` has one entry per move, in request order.
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+const { summary, results } = await gt.moveFiles(
+  [{ oldFileId: 'file-a', newFileId: 'file-b', newFileName: 'guides/setup.mdx' }],
+  { branchId: 'branch-id' }
+);
+
+if (summary.failed > 0) {
+  for (const move of results.filter((result) => result.status === 'failed')) {
+    console.error(`${move.oldFileId} → ${move.newFileId}: ${move.error}`);
+  }
+}
+```
+
+(See the [Move files](/docs/platform/openapi/reference/files/move-files) endpoint for the HTTP contract).

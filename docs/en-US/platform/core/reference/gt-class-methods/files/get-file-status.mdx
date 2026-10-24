@@ -1,0 +1,113 @@
+---
+
+title: getFileStatus
+description: Read a source file's metadata and the translation state of each of its locales. API reference for getFileStatus.
+
+---
+
+Reads one source file in the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project, with the completion, approval, and publication dates of each of its translations.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { sourceFile, translations } = await gt.getFileStatus('file-123');
+```
+
+Signature:
+
+```typescript
+getFileStatus(
+  fileId: string,
+  query?: { branchId?: string; versionId?: string },
+  options?: { timeout?: number }
+): Promise<GetFileStatusResponse>
+```
+
+*Note: `getFileStatus` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:files:read` permission.*
+
+## How it works [#how-it-works]
+
+- **Version.** Without `query`, the method reads the head version of the file on the project's default branch.
+- **Translations.** `translations` has one entry per translation locale. A translation whose `completedAt` is `null` is not completed: it is queued, processing, or not translated yet.
+- **Errors.** An unknown file, branch, or version fails with `404` and throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`fileId`](#file-id) | The source file. | `string` | No | — |
+| [`query`](#query) | Branch and source version. | `{ branchId?: string; versionId?: string }` | Yes | `{}` |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `fileId` [#file-id]
+
+**Type** `string` · **Required**
+
+ID of the source file.
+
+### `query`
+
+**Type** `{ branchId?: string; versionId?: string }` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `branchId` | Branch of the file. | `string` | Yes | Default branch |
+| `versionId` | Source version. | `string` | Yes | Branch head |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<GetFileStatusResponse>`
+
+```typescript
+type GetFileStatusResponse = {
+  sourceFile: {
+    id: string;
+    branchId: string;
+    fileId: string;
+    versionId: string;
+    fileName: string;
+    sourceLocale: string;
+    fileFormat: FileFormat;
+    dataFormat: string | null;
+    createdAt: string;
+    updatedAt: string;
+    locales: string[]; // translation locales
+  };
+  translations: {
+    locale: string;
+    completedAt: string | null;
+    approvedAt: string | null;
+    publishedAt: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  }[];
+};
+```
+
+Returned locales follow the [constructor rules](/docs/platform/core/reference/gt-class/constructor#how-it-works).
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+const { sourceFile, translations } = await gt.getFileStatus('file-123', {
+  versionId: 'version-1',
+});
+
+const pending = translations.filter((t) => t.completedAt === null);
+console.log(`${sourceFile.fileName}: ${pending.length} translations in progress`);
+```

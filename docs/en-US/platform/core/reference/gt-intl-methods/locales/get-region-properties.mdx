@@ -1,0 +1,101 @@
+---
+
+title: getRegionProperties
+description: Return the localized name and emoji of a region code. API reference for getRegionProperties.
+
+---
+
+Retrieves details about a region code on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, including its name in the target locale and its emoji flag. Use it to label regions in an internationalized user interface, such as a region selector.
+
+## Overview [#overview]
+
+Call `getRegionProperties` on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance with a region code and an optional options object. The name is in the target locale: `options.locale`, then the instance `locale`, then `defaultLocale`.
+
+```typescript
+const intl = new GTIntl({ defaultLocale: 'en-US' }, { locale: 'fr-FR' });
+
+console.log(intl.getRegionProperties('US'));
+// { code: 'US', name: 'États-Unis', emoji: '🇺🇸' }
+
+console.log(intl.getRegionProperties('US', { locale: 'de' }));
+// { code: 'US', name: 'Vereinigte Staaten', emoji: '🇺🇸' }
+```
+
+Signature:
+
+```typescript
+getRegionProperties(
+  region: string,
+  options?: { locale?: string }
+): { code: string; name: string; emoji: string; locale?: string }
+```
+
+*Note: `getRegionProperties` runs locally using `Intl.DisplayNames` and does not require an API key. For lookups without a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, import the standalone `getRegionProperties` function from `@generaltranslation/format`.*
+
+## How it works [#how-it-works]
+
+- **Region codes.** Accepts ISO 3166-1 alpha-2 or UN M.49 region codes (for example, `"US"`, `"FR"`, `"419"`).
+- **Localized names.** Uses `Intl.DisplayNames` to name the region in the target locale, falling back to the library default locale (`en`). A target locale that is a `customMapping` alias is resolved to its code first, so `{ locale: 'brand-fr' }` with `brand-fr` mapped to `fr-FR` names the region in French.
+- **Custom mapping priority.** An entry of the instance [`customMapping`](/docs/platform/core/reference/types/custom-mapping) whose `regionCode` is the region supplies its `regionName` as `name` and its `emoji` when they are set, and its key as `locale`. When several entries share a region, the first one is used.
+- **Fallbacks.** Falls back to the region code as `name` if display name resolution fails, and to a default emoji if no emoji mapping is found.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`region`](#region) | ISO 3166-1 alpha-2 or UN M.49 region code. | `string` | No | — |
+| [`options`](#options) | Target locale for this call. | `{ locale?: string }` | Yes | `{}` |
+
+### `region` [#region]
+
+**Type** `string` · **Required**
+
+ISO 3166-1 alpha-2 or UN M.49 region code, such as the `regionCode` of [`getLocaleProperties`](/docs/platform/core/reference/gt-intl-methods/locales/get-locale-properties).
+
+### `options` [#options]
+
+**Type** `{ locale?: string }` · **Optional** · **Default** `{}`
+
+`locale` is the locale to name the region in, and defaults to the instance `locale`, then `defaultLocale`.
+
+## Returns [#returns]
+
+**Type** `{ code: string; name: string; emoji: string; locale?: string }`
+
+An object containing:
+
+- `code`: the input region code.
+- `name`: the localized (or custom) region name.
+- `emoji`: the associated emoji flag or symbol.
+- `locale`: the `customMapping` key that supplied the region, when one did.
+
+## Examples [#examples]
+
+```typescript
+// Region names in English
+const intl = new GTIntl({ defaultLocale: 'en-US' });
+
+console.log(intl.getRegionProperties('US')); // { code: 'US', name: 'United States', emoji: '🇺🇸' }
+console.log(intl.getRegionProperties('GB')); // { code: 'GB', name: 'United Kingdom', emoji: '🇬🇧' }
+console.log(intl.getRegionProperties('419')); // { code: '419', name: 'Latin America', emoji: '🌎' }
+```
+
+```typescript
+// The custom mapping overrides the name and emoji of its region
+const intl = new GTIntl({
+  defaultLocale: 'en',
+  customMapping: {
+    'en-US': { regionCode: 'US', regionName: 'USA', emoji: '🗽' },
+  },
+});
+
+console.log(intl.getRegionProperties('US'));
+// { code: 'US', name: 'USA', emoji: '🗽', locale: 'en-US' }
+```
+
+## Notes [#notes]
+
+- Uses the `Intl.DisplayNames` API for localized region names.
+- Supports both ISO 3166-1 alpha-2 and UN M.49 region codes.
+- Custom mapping entries override default names and emojis.
+- Falls back to the region code as the name if display name resolution fails.

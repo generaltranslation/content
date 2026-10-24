@@ -1,0 +1,91 @@
+---
+
+title: createProject
+description: Create a project in an Organization with a name and default locale. API reference for createProject.
+
+---
+
+Creates a project in the Organization scoped by [`account.org()`](/docs/platform/core/reference/gt-class/org). Pass the returned project ID as `projectId` to the [`GT`](/docs/platform/core/reference/gt-class/constructor) constructor, or to [`account.project()`](/docs/platform/core/reference/gt-class/project), to upload files and translate.
+
+## Overview [#overview]
+
+```typescript
+const account = new GT({ apiKey: 'your-org-api-key' });
+const org = account.org('your-org-id');
+
+const { project } = await org.createProject({ name: 'Storefront', defaultLocale: 'en' });
+```
+
+Signature:
+
+```typescript
+createProject(body: {
+  name: string;
+  defaultLocale: string;
+  cdnEnabled?: boolean;
+}): Promise<CreateProjectResponse>
+```
+
+*Note: `createProject` is an [`OrgHandle`](/docs/platform/core/reference/types/org-handle) method and requires an Organization API key with the `org:projects:create` permission. Project API keys cannot create projects.*
+
+## How it works [#how-it-works]
+
+- **Not idempotent.** Each successful call creates a new project, even with a name that already exists. Check [`listProjects`](/docs/platform/core/reference/gt-class-methods/projects/list-projects) before retrying a call whose result you did not receive.
+- **Locale spelling.** `defaultLocale` is resolved through the [`customMapping`](/docs/platform/core/reference/types/custom-mapping) in the instance's `localeConfig` and sent as a standard code. The returned `defaultLocale` is the locale you passed, as with [`gt.get`](/docs/platform/core/reference/gt-class-methods/projects/get-project).
+- **Errors.** A failed request throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error) with the HTTP status as `code`: `403` when the key lacks `org:projects:create` in the Organization, and `409` when the plan's project limit is reached.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`body`](#body) | The new project's settings. | `{ name: string; defaultLocale: string; cdnEnabled?: boolean }` | No | — |
+
+### `body`
+
+**Type** `{ name: string; defaultLocale: string; cdnEnabled?: boolean }` · **Required**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `name` | Project name, 1–64 characters after trimming. Accepts ASCII letters, digits, spaces, dashes, underscores, apostrophes, parentheses, and periods. | `string` | No |
+| `defaultLocale` | The project's source locale. | `string` | No |
+| `cdnEnabled` | Enable CDN delivery. Defaults to `false`. | `boolean` | Yes |
+
+## Returns [#returns]
+
+**Type** `Promise<CreateProjectResponse>`
+
+```typescript
+type CreateProjectResponse = {
+  project: {
+    id: string;
+    name: string;
+    orgId: string;
+    defaultLocale: string;
+  };
+};
+```
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `project.id` | ID of the new project. | `string` |
+| `project.name` | Project name. | `string` |
+| `project.orgId` | ID of the Organization that owns the project. | `string` |
+| `project.defaultLocale` | The project's source locale, as you passed it. | `string` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const account = new GT({ apiKey: process.env.GT_ORG_API_KEY! }); // Organization key with org:projects:create
+
+const { project: created } = await account.org(process.env.GT_ORG_ID!).createProject({
+  name: 'Storefront',
+  defaultLocale: 'en',
+  cdnEnabled: true,
+});
+
+const project = account.project(created.id);
+```
+
+The [`gt project create`](/docs/cli/reference/commands/project-create) command creates a project from the command line. (See the [Create a Project](/docs/platform/openapi/reference/projects/create-project) endpoint for the HTTP contract).

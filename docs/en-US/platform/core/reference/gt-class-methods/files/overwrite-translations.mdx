@@ -1,0 +1,120 @@
+---
+
+title: overwriteTranslations
+description: Replace translations with locally edited content so future generations keep the edits. API reference for overwriteTranslations.
+
+---
+
+Replaces existing translations in the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project with full local content. Send the diff of each edit with it, so later translation generations preserve what the editor changed.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { summary, results } = await gt.overwriteTranslations([
+  {
+    fileId: 'file-123',
+    versionId: 'version-1',
+    locale: 'es',
+    diff: editDiff, // the edit, as a diff
+    localContent: editedFile, // the full translated file content
+  },
+]);
+```
+
+Signature:
+
+```typescript
+overwriteTranslations(
+  diffs: TranslationOverwrite[],
+  options?: { timeout?: number }
+): Promise<OverwriteTranslationsResponse>
+```
+
+*Note: `overwriteTranslations` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:files:write` permission.*
+
+## How it works [#how-it-works]
+
+- **Per-translation results.** A translation fails on its own when its source file or translation does not exist, the content does not apply to its format, or the save fails. The method resolves with a result for every translation instead of throwing; check `summary.failed` and each result's `status`. Retrying with the same content is safe.
+- **Unique entries.** Each branch, file, version, and locale may appear once per request.
+- **Batches.** The method sends at most 100 translations per request and combines the summaries and results in request order.
+- **Locale spelling.** Each result's `locale` is the locale you passed for that entry.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`diffs`](#diffs) | One entry per translation. | `TranslationOverwrite[]` | No | — |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `diffs`
+
+**Type** `TranslationOverwrite[]` · **Required**
+
+```typescript
+type TranslationOverwrite = {
+  fileId: string;
+  versionId: string;
+  branchId?: string;
+  locale: string;
+  diff: string;
+  localContent: string;
+};
+```
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `fileId` | Source file ID. | `string` | No |
+| `versionId` | Source version ID. | `string` | No |
+| `branchId` | Branch of the file. Uses the default branch when omitted. | `string` | Yes |
+| `locale` | Locale of the translation. | `string` | No |
+| `diff` | The edit, as a diff against the stored translation. | `string` | No |
+| `localContent` | The full translated file content. | `string` | No |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<OverwriteTranslationsResponse>`
+
+```typescript
+type OverwriteTranslationsResponse = {
+  summary: { total: number; succeeded: number; failed: number };
+  results: {
+    branchId: string;
+    fileId: string;
+    versionId: string;
+    locale: string;
+    status: 'succeeded' | 'failed';
+    error?: string; // why the translation failed
+  }[];
+};
+```
+
+`results` has one entry per translation, in request order.
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+const { summary, results } = await gt.overwriteTranslations(edits);
+
+if (summary.failed > 0) {
+  for (const result of results.filter((r) => r.status === 'failed')) {
+    console.error(`${result.fileId} (${result.locale}): ${result.error}`);
+  }
+}
+```
+
+(See the [Overwrite translations](/docs/platform/openapi/reference/files/overwrite-translations) endpoint for the HTTP contract).

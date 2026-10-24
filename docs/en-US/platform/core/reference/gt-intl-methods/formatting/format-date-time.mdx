@@ -1,0 +1,174 @@
+---
+
+title: formatDateTime
+description: Format dates and times by locale. API reference for formatDateTime.
+
+---
+
+Formats a date and time according to locale-specific conventions on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance. General Translation uses the built-in `Intl.DateTimeFormat` API to handle date formats, time formats, calendars, and time zones automatically for the target locale.
+
+## Overview [#overview]
+
+Call `formatDateTime` on a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance with a `Date` and an optional options object. It returns the formatted date and time as a string.
+
+```typescript
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'de-DE' });
+
+const formatted = intl.formatDateTime(new Date(), {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+// "25.09.2025, 18:06" (German date/time formatting)
+```
+
+Signature:
+
+```typescript
+formatDateTime(
+  date: Date,
+  options?: { locale?: string; locales?: string | string[] } & Intl.DateTimeFormatOptions
+): string
+```
+
+*Note: `formatDateTime` runs locally using `Intl.DateTimeFormat` and does not require an API key. By default it formats for the target locale (`options.locale`, then the instance `locale`), falling back to `defaultLocale` and then the library default (`en`); pass `locales` to replace that list. For formatting without a [`GTIntl`](/docs/platform/core/reference/gt-intl/constructor) instance, import the standalone `formatDateTime` function from `@generaltranslation/format`.*
+
+## How it works [#how-it-works]
+
+- **Locale resolution.** The method formats for `options.locale`, then the instance `locale`, falling back to `defaultLocale` and then the library default (`en`). The `locales` array of the [`LocaleConfig`](/docs/platform/core/reference/types/locale-config) is not used. Pass `locale` to change the target for one call, or `locales` to replace the whole fallback list.
+- **Intl-backed.** Formatting is delegated to the browser-native [`Intl.DateTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat), so all standard `Intl.DateTimeFormatOptions` are supported.
+- **Time zones.** Time zones are handled correctly when a `timeZone` is specified; otherwise the runtime's local time zone is used.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`date`](#date) | The date object to format. | `Date` | No | — |
+| [`options`](#options) | Formatting configuration, extending `Intl.DateTimeFormatOptions` with `locale` and `locales` overrides. | `object` | Yes | — |
+
+### `date` [#date]
+
+**Type** `Date` · **Required**
+
+The `Date` object to format.
+
+### `options` [#options]
+
+**Type** `{ locale?: string; locales?: string | string[] } & Intl.DateTimeFormatOptions` · **Optional**
+
+Formatting configuration. The table lists common options exposed by the published Core types and their effective Core defaults. (See the [`Intl.DateTimeFormat` constructor options](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#options) for supplemental standard and runtime-specific details).
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locale` | Target locale for this call. | `string` | Yes | instance `locale` → `defaultLocale` |
+| `locales` | Replaces the whole fallback list for this call. | `string \| string[]` | Yes | `[locale, defaultLocale, 'en']` |
+| `localeMatcher` | Locale matching algorithm. | `'lookup' \| 'best fit'` | Yes | `'best fit'` |
+| `dateStyle` | Overall date formatting style. | `'full' \| 'long' \| 'medium' \| 'short'` | Yes | — |
+| `timeStyle` | Overall time formatting style. | `'full' \| 'long' \| 'medium' \| 'short'` | Yes | — |
+| `weekday` | Weekday representation. | `'long' \| 'short' \| 'narrow'` | Yes | — |
+| `era` | Era representation. | `'long' \| 'short' \| 'narrow'` | Yes | — |
+| `year` | Year representation. | `'numeric' \| '2-digit'` | Yes | `'numeric'` when no styles or components are set |
+| `month` | Month representation. | `'numeric' \| '2-digit' \| 'long' \| 'short' \| 'narrow'` | Yes | `'numeric'` when no styles or components are set |
+| `day` | Day representation. | `'numeric' \| '2-digit'` | Yes | `'numeric'` when no styles or components are set |
+| `dayPeriod` | Day period formatting (morning, afternoon, etc.). | `'narrow' \| 'short' \| 'long'` | Yes | — |
+| `hour` | Hour representation. | `'numeric' \| '2-digit'` | Yes | — |
+| `minute` | Minute representation. | `'numeric' \| '2-digit'` | Yes | — |
+| `second` | Second representation. | `'numeric' \| '2-digit'` | Yes | — |
+| `fractionalSecondDigits` | Number of fractional second digits. | `1 \| 2 \| 3` | Yes | — |
+| `timeZoneName` | Time zone name format. | `'long' \| 'short' \| 'longOffset' \| 'shortOffset' \| 'longGeneric' \| 'shortGeneric'` | Yes | — |
+| `timeZone` | IANA time zone name or supported UTC offset identifier. | `string` | Yes | runtime time zone |
+| `hour12` | Whether to use 12-hour time format. | `boolean` | Yes | locale-dependent |
+| `hourCycle` | Hour cycle preference. | `'h11' \| 'h12' \| 'h23' \| 'h24'` | Yes | locale-dependent |
+| `calendar` | Calendar system to use. | `string` | Yes | `'gregory'` |
+| `numberingSystem` | Numbering system for digits. | `string` | Yes | `'latn'` |
+| `formatMatcher` | Format matching algorithm. | `'basic' \| 'best fit'` | Yes | `'best fit'` |
+
+`dateStyle` and `timeStyle` can be combined with each other, but not with individual date-time component options such as `year`, `month`, or `hour`. `hour12` overrides `hourCycle`, and `dayPeriod` only affects 12-hour cycles. Core sets `calendar: 'gregory'` and `numberingSystem: 'latn'`; upstream `Intl.DateTimeFormat` otherwise chooses both from the locale.
+
+## Returns [#returns]
+
+**Type** `string`
+
+The formatted date and time, following the target locale's conventions.
+
+## Examples [#examples]
+
+*Note: examples without an explicit `timeZone` render in the runtime's local time zone; the time-of-day outputs below assume `America/Los_Angeles` (UTC−7 on this date).*
+
+```typescript
+import { GTIntl } from 'generaltranslation';
+
+const intl = new GTIntl({ defaultLocale: 'en' }, { locale: 'en-US' });
+const date = new Date('2024-03-14T14:30:45Z');
+
+// Basic date formatting (uses default options)
+console.log(intl.formatDateTime(date));
+// Output: "3/14/2024"
+
+// German locale formatting
+console.log(intl.formatDateTime(date, { locale: 'de-DE' }));
+// Output: "14.3.2024"
+
+// Japanese locale formatting
+console.log(intl.formatDateTime(date, { locale: 'ja-JP' }));
+// Output: "2024/3/14"
+```
+
+```typescript
+// Date and time styles
+const date = new Date('2024-03-14T14:30:45Z');
+
+// Full date style
+console.log(intl.formatDateTime(date, { dateStyle: 'full' }));
+// Output: "Thursday, March 14, 2024"
+
+// Long date with short time
+console.log(intl.formatDateTime(date, {
+  dateStyle: 'long',
+  timeStyle: 'short',
+}));
+// Output: "March 14, 2024 at 7:30 AM"
+
+// Custom date components
+console.log(intl.formatDateTime(date, {
+  weekday: 'long',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+}));
+// Output: "Thursday, March 14, 2024"
+```
+
+```typescript
+// Time zone and hour format
+const date = new Date('2024-03-14T14:30:45Z');
+
+// Force 12-hour format
+console.log(intl.formatDateTime(date, {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+}));
+// Output: "7:30 AM"
+
+// Force 24-hour format
+console.log(intl.formatDateTime(date, {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: false,
+}));
+// Output: "07:30"
+
+// Specific time zone
+console.log(intl.formatDateTime(date, {
+  timeZone: 'America/New_York',
+  dateStyle: 'medium',
+  timeStyle: 'short',
+}));
+// Output: "Mar 14, 2024, 10:30 AM"
+```
+
+## Notes [#notes]
+
+- Date formatting follows locale-specific conventions automatically.
+- The method uses browser-native `Intl.DateTimeFormat` for performance and accuracy.
+- Time zones are handled correctly when specified.

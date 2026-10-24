@@ -1,0 +1,177 @@
+---
+
+title: translateFiles
+description: Queue uploaded source files for translation into one or more target locales. API reference for translateFiles.
+
+---
+
+Queues background translation jobs for source files already uploaded to the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project. It creates one job for each file and target locale that still needs translating.
+
+## Overview [#overview]
+
+Call `translateFiles` with the succeeded results of [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files) and the target locales, then wait for the returned jobs.
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const { jobs } = await gt.translateFiles(uploadedFiles, {
+  sourceLocale: 'en',
+  targetLocales: ['es', 'fr', 'de'],
+});
+await gt.awaitJobs(jobs.map((job) => job.id));
+```
+
+Signature:
+
+```typescript
+translateFiles(
+  files: TranslateFileInput[],
+  options?: TranslateFilesOptions
+): Promise<TranslateFilesResponse>
+```
+
+*Note: `translateFiles` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:translations:enqueue` permission.*
+
+## How it works [#how-it-works]
+
+- **Asynchronous jobs.** Jobs run in the background. Wait for them with [`awaitJobs`](/docs/platform/core/reference/gt-class-methods/jobs/await-jobs) or read them with [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs).
+- **Only missing work.** A file already translated into a locale gets no job for that locale unless `force` is set, so `jobs` can be empty. An empty result means the translations already exist, not that nothing will be available.
+- **Project locales.** `targetLocales` are added to the project's current locales; the project's default locale is unchanged. Without `targetLocales`, the project's current locales are used.
+- **Batches.** The method sends at most 100 files per request and returns the jobs of every batch.
+- **Local checks.** An unsupported `modelProvider`, a `transformFormat` on an entry without its source `fileFormat`, or an unsupported `fileFormat` → `transformFormat` conversion throws before any request.
+- **Request errors.** A file version that does not exist on its branch fails with `404` and queues nothing in that batch. An Organization whose billing does not cover the request fails with `402`. Failures throw an [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`files`](#files) | Uploaded source file versions to translate. | `TranslateFileInput[]` | No | — |
+| [`options`](#options) | Locales and job settings. | `TranslateFilesOptions` | Yes | `{}` |
+
+### `files`
+
+**Type** `TranslateFileInput[]` · **Required**
+
+```typescript
+type TranslateFileInput = {
+  fileId: string;
+  versionId: string;
+  branchId?: string;
+  fileName?: string;
+  transformFormat?: FileFormat; // output format requested for the translations
+};
+```
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `fileId` | Source file ID. | `string` | No |
+| `versionId` | Source version ID. | `string` | No |
+| `branchId` | Branch of the source file. Uses the default branch when omitted. | `string` | Yes |
+| `fileName` | File name. | `string` | Yes |
+| `transformFormat` | Output format for the translations, when it differs from the source format. | [`FileFormat`](/docs/platform/core/reference/types/file-format) | Yes |
+
+Each branch, file, and version may appear once. The method sends only the fields above.
+
+When an entry sets `transformFormat`, it must also carry the source file's `fileFormat`. That field is checked locally against `transformFormat` and is not sent; a missing `fileFormat` throws before any request. Results from [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/files/upload-source-files#returns) already include it, so spread them to keep it:
+
+```typescript
+// A POT template uploaded with fileFormat 'POT' produces PO catalogs
+const { jobs } = await gt.translateFiles(
+  uploaded.map((file) => ({ ...file, transformFormat: 'PO' as const })),
+  { targetLocales: ['es'] }
+);
+```
+
+### `options`
+
+**Type** `TranslateFilesOptions` · **Optional** · **Default** `{}`
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `targetLocales` | Locales to translate into. | `string[]` | Yes | The project's current locales |
+| `sourceLocale` | Source locale of the files. | `string` | Yes | The project's default locale |
+| `force` | Queue files already translated into a locale. | `boolean` | Yes | `false` |
+| [`modelProvider`](#model-provider) | Translation model provider. | `ModelProvider` | Yes | — |
+| `publish` | Publish the translations on the CDN. Requires CDN delivery enabled for the project; otherwise the request fails with `400`. | `boolean` | Yes | — |
+| `timeout` | Request timeout in milliseconds. | `number` | Yes | — |
+
+### `modelProvider` [#model-provider]
+
+**Type** `ModelProvider` · **Optional**
+
+One of `ANTHROPIC`, `OPENAI`, `XAI`, `GOOGLE`, or `HYPERCLOVA`. Other values, including lowercase names, throw before any request. Selecting a provider requires an Enterprise plan; other plans receive a `403` response.
+
+## Returns [#returns]
+
+**Type** `Promise<TranslateFilesResponse>`
+
+```typescript
+type TranslateFilesResponse = {
+  jobs: {
+    id: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    subject: {
+      type: 'file_translation';
+      branchId: string;
+      fileId: string;
+      versionId: string;
+      locale: string; // target locale
+    };
+  }[];
+};
+```
+
+One job per file and target locale that needs translating; empty when every file is already translated into every target locale. (See [`queryJobs`](/docs/platform/core/reference/gt-class-methods/jobs/query-jobs#returns) for every job subject type).
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+// (1) Upload the source file
+const { results } = await gt.uploadSourceFiles(
+  [
+    {
+      source: {
+        content: '{"greeting":"Hello"}',
+        fileName: 'en.json',
+        fileFormat: 'JSON',
+        locale: 'en',
+      },
+    },
+  ],
+  { sourceLocale: 'en' }
+);
+const [uploaded] = results;
+if (uploaded.status === 'failed') {
+  throw new Error(`Upload failed: ${uploaded.error}`);
+}
+
+// (2) Queue translation jobs
+const targetLocales = ['es', 'fr', 'de'];
+const { jobs } = await gt.translateFiles([uploaded], {
+  sourceLocale: 'en',
+  targetLocales,
+});
+
+// (3) Wait for the jobs; no jobs means the translations already exist
+const result = await gt.awaitJobs(jobs.map((job) => job.id), {
+  timeoutSeconds: 300,
+});
+if (!result.complete || result.jobs.some((job) => job.status !== 'completed')) {
+  throw new Error('Translations are not ready to download');
+}
+
+// (4) Download the translations
+const { fileId, versionId, branchId } = uploaded;
+const content = await gt.queryFilesContent(
+  targetLocales.map((locale) => ({ fileId, versionId, branchId, locale }))
+);
+```
+
+(See the [Translate files](/docs/platform/openapi/reference/translation/translate-files) endpoint for the HTTP contract).

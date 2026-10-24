@@ -1,0 +1,91 @@
+---
+
+title: updateBranch
+description: Rename a branch or make it the project's default branch. API reference for updateBranch.
+
+---
+
+Updates one branch of the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project and returns it. Omitted fields stay unchanged.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const branch = await gt.updateBranch('branch-id', { name: 'main', isDefault: true });
+```
+
+Signature:
+
+```typescript
+updateBranch(
+  branchId: string,
+  body: { name?: string; isDefault?: true },
+  options?: { timeout?: number }
+): Promise<UpdateBranchResponse>
+```
+
+*Note: `updateBranch` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)) and requires an API key with the `project:files:write` permission.*
+
+## How it works [#how-it-works]
+
+- **Rename.** `name` renames the branch. A name another branch already uses fails with `409`.
+- **Change the default.** `isDefault: true` makes this branch the default; the previous default branch stops being the default. There is no `false` value: make another branch the default instead.
+- **Errors.** An unknown `branchId` fails with `404`. A concurrent default-branch change fails with `409`. Failures throw an [`ApiError`](/docs/platform/core/reference/api-client#api-error).
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`branchId`](#branch-id) | The branch to update. | `string` | No | — |
+| [`body`](#body) | The fields to change. | `{ name?: string; isDefault?: true }` | No | — |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `branchId` [#branch-id]
+
+**Type** `string` · **Required**
+
+ID of the branch, as returned by [`listBranches`](/docs/platform/core/reference/gt-class-methods/branches/list-branches) or [`createBranch`](/docs/platform/core/reference/gt-class-methods/branches/create-branch).
+
+### `body`
+
+**Type** `{ name?: string; isDefault?: true }` · **Required**
+
+| Field | Description | Type | Optional |
+| --- | --- | --- | --- |
+| `name` | New branch name. | `string` | Yes |
+| `isDefault` | Make this the default branch. | `true` | Yes |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<UpdateBranchResponse>`
+
+```typescript
+type UpdateBranchResponse = { id: string; name: string; isDefault: boolean };
+```
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+// Rename the default branch to match the repository's default branch.
+const {
+  items: [primaryBranch],
+} = await gt.listBranches({ isDefault: 'true' });
+
+if (primaryBranch && primaryBranch.name !== 'main') {
+  await gt.updateBranch(primaryBranch.id, { name: 'main' });
+}
+```

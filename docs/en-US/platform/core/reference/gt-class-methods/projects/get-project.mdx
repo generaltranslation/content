@@ -1,0 +1,89 @@
+---
+
+title: gt.get
+description: Read a project's name, Organization, locales, and delivery settings. API reference for gt.get.
+
+---
+
+Reads the [`GT`](/docs/platform/core/reference/gt-class/constructor) instance's project. Use it to check the project's default locale, current locales, or the Organization that owns it before you upload files or change settings.
+
+## Overview [#overview]
+
+```typescript
+const gt = new GT({ apiKey: 'your-api-key', projectId: 'your-project-id' });
+
+const settings = await gt.get();
+console.log(settings.defaultLocale, settings.currentLocales);
+```
+
+Signature:
+
+```typescript
+get(options?: { timeout?: number }): Promise<GetProjectResponse>
+```
+
+*Note: `get` is a method of a project-scoped [`GT`](/docs/platform/core/reference/gt-class/constructor) instance (a [`ProjectHandle`](/docs/platform/core/reference/types/project-handle)). It calls `GET /v2/projects/{projectId}`, which needs no permission beyond access to the project.*
+
+## How it works [#how-it-works]
+
+- **Project from the instance.** The method reads the project whose ID was passed as `projectId` to the [`GT`](/docs/platform/core/reference/gt-class/constructor) constructor or to [`account.project()`](/docs/platform/core/reference/gt-class/project).
+- **Organization ID.** Pass the returned `orgId` to [`account.org()`](/docs/platform/core/reference/gt-class/org) on an account-scoped `GT` instance for Organization operations such as [`upsertAssets`](/docs/platform/core/reference/gt-class-methods/organizations/upsert-assets).
+- **Locale spelling.** Returned locales follow the [constructor rules](/docs/platform/core/reference/gt-class/constructor#how-it-works): a locale with a custom mapping is returned under its configured alias.
+- **Errors.** A failed request throws an [`ApiError`](/docs/platform/core/reference/api-client#api-error) with the HTTP status as `code`.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`options`](#options) | Request settings. | `{ timeout?: number }` | Yes | `{}` |
+
+### `options`
+
+**Type** `{ timeout?: number }` · **Optional** · **Default** `{}`
+
+`timeout` sets the request timeout in milliseconds.
+
+## Returns [#returns]
+
+**Type** `Promise<GetProjectResponse>`
+
+```typescript
+type GetProjectResponse = {
+  id: string;
+  name: string;
+  orgId: string;
+  defaultLocale: string;
+  currentLocales: string[];
+  autoApprove: boolean;
+  cdnEnabled: boolean;
+};
+```
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `id` | Project ID. | `string` |
+| `name` | Project name. | `string` |
+| `orgId` | ID of the Organization that owns the project. | `string` |
+| `defaultLocale` | The project's source locale. | `string` |
+| `currentLocales` | The project's target locales. | `string[]` |
+| `autoApprove` | Whether translations are approved without review. | `boolean` |
+| `cdnEnabled` | Whether CDN delivery is enabled. | `boolean` |
+
+## Examples [#examples]
+
+```typescript title="index.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY!,
+  projectId: process.env.GT_PROJECT_ID!,
+});
+
+// Align the project's source locale with your configuration.
+const settings = await gt.get();
+if (settings.defaultLocale !== 'en') {
+  await gt.update({ defaultLocale: 'en' });
+}
+```
+
+The [`gt.update`](/docs/platform/core/reference/gt-class-methods/projects/update-project) method changes the default locale and CDN setting. (See the [Get a project](/docs/platform/openapi/reference/projects/get-project) endpoint for the HTTP contract).
