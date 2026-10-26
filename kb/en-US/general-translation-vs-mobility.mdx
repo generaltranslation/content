@@ -42,7 +42,7 @@ That's the right behavior for a storage layer: Mobility saved the English values
 
 ## Filling Mobility attributes with General Translation
 
-General Translation's runtime translation endpoint, `POST https://api.gtx.dev/v2/translate`, translates strings on demand. It takes a project API key with **Runtime translation** permission as a bearer token, and a body with a `requests` object keyed by your own IDs, each with a `source` string and optional `metadata` such as a `context` note, plus `sourceLocale`, `targetLocale`, and a top-level `metadata` object (it can be empty). The response is keyed by the same IDs. A small Ruby method covers it:
+General Translation's runtime translation endpoint, `POST https://api.gtx.dev/v2/projects/{projectId}/translate`, translates strings on demand. It takes a project API key with **Runtime translation** permission as a bearer token, your project ID in the path, and a body with a `requests` object keyed by your own IDs, each with a `source` string and optional `metadata` such as a `context` note, plus `sourceLocale`, `targetLocale`, and a top-level `metadata` object (it can be empty). The response's `translations` object is keyed by the same IDs. A small Ruby method covers it:
 
 ```ruby title="app/services/gt_translate.rb"
 require "net/http"
@@ -51,7 +51,7 @@ require "json"
 # Translates a hash of { field => text } with General Translation's runtime API.
 # Returns every requested translation, or raises before any database write.
 def gt_translate(fields, from:, to:, context: nil)
-  uri = URI("https://api.gtx.dev/v2/translate")
+  uri = URI("https://api.gtx.dev/v2/projects/#{ENV.fetch("GT_PROJECT_ID")}/translate")
   requests = fields.to_h do |field, text|
     [field.to_s, { source: text, metadata: { dataFormat: "STRING", context: context }.compact }]
   end
@@ -59,14 +59,14 @@ def gt_translate(fields, from:, to:, context: nil)
   request = Net::HTTP::Post.new(uri)
   request["Authorization"] = "Bearer #{ENV.fetch("GT_API_KEY")}" # project key with Runtime translation permission
   request["Content-Type"] = "application/json"
-  request["gt-api-version"] = "2026-03-06.v1"
+  request["gt-api-version"] = "2026-10-08.v1"
   request.body = { requests:, sourceLocale: from.to_s, targetLocale: to.to_s, metadata: {} }.to_json
 
   response = Net::HTTP.start(uri.host, uri.port, use_ssl: true,
                             open_timeout: 5, read_timeout: 30) { |http| http.request(request) }
   raise "Translation request failed (#{response.code})" unless response.is_a?(Net::HTTPSuccess)
 
-  results = JSON.parse(response.body)
+  results = JSON.parse(response.body).fetch("translations")
   requests.keys.to_h do |field|
     result = results.fetch(field)
     unless result["success"] == true && result["translation"].is_a?(String)
@@ -100,7 +100,7 @@ The example saves directly to the model. For content your editors approve before
 | --- | --- | --- |
 | What it is | Ruby gem for storing translated model attributes | Translation platform with an HTTP API, CLI, libraries for JavaScript and Python, and a Dashboard |
 | Stores translations in your database | Yes, with eight storage backends | Supplies translations to those same model attributes |
-| Produces translations | No | Yes, through `POST /v2/translate` |
+| Produces translations | No | Yes, through `POST /v2/projects/{projectId}/translate` |
 | Ruby integration | Model attributes and locale accessors | HTTP API called from Ruby |
 | Consistent terms and tone | Up to your translators | Glossary and Custom Prompts applied to every request |
 | Cost | Free, MIT | [Usage-based](https://generaltranslation.com/pricing) |
@@ -112,5 +112,5 @@ Keep Mobility on its own when people already write your translations: editors wh
 ## Key takeaways
 
 - Mobility stores and retrieves translated model attributes across eight backends, with fallbacks and querying. It doesn't produce translations.
-- A Rails app calls General Translation's `POST /v2/translate` endpoint and saves the translated attributes through Mobility.
+- A Rails app calls General Translation's `POST /v2/projects/{projectId}/translate` endpoint and saves the translated attributes through Mobility.
 - General Translation applies your Glossary, Custom Prompts, and content-specific context while your existing models and publication workflow stay in place.
