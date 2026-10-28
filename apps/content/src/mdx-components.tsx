@@ -159,6 +159,7 @@ const customComponents = {
   FumadocsArchitecture: StubComponent,
   GitHub,
   IntroFeature,
+  OpenSourceGrants: StubComponent,
   SupportedLocales: StubComponent,
   Tweet,
   Video,
