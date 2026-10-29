@@ -102,6 +102,24 @@ After translation, layout processing keeps the animation's font sizes, reflows t
 
 The top-level [`fonts`](/docs/cli/reference/config#fonts) setting uploads your `.ttf` and `.otf` files so layout processing can use the animation's real fonts; when the animation embeds glyphs, General Translation adds outlines for the characters each translation needs, drawn from your uploaded fonts where they cover them. Fonts are Organization assets, so uploading needs a saved login or an Organization API key with `org:assets:write`; a project API key can't upload them, and translation continues with fallback fonts and a warning. Files with After Effects expressions are rejected, because expressions are executable code; re-export with expressions removed or baked into keyframes.
 
+### What layout processing changed in a test
+
+We built a 480 × 160 animation of a pill button: an 18px icon, then the label "Download invoice" in 22px Arial Bold, with 16 to 18px of padding. We translated it into German, French, and Japanese with `gt` 2.26.11 and a project API key, so no fonts were uploaded and layout processing used its fallback fonts. We measured each label in lottie-web 5.13's SVG renderer with the browser's fonts. The full-translation rows put the usual, unshortened label into the original button for comparison:
+
+| Version | Label text | Label width | Button width | Result |
+| --- | --- | --- | --- | --- |
+| English source | Download invoice | 187px | 251px | Fits, 11px from the icon |
+| German, full translation | Rechnung herunterladen | 260px | 251px | Covers the icon by 25px and runs 18px past the edge |
+| German, General Translation | Rechnung laden | 171px | 251px | Fits |
+| French, full translation | Télécharger la facture | 229px | 251px | Covers the icon by 9px and runs 2px past the edge |
+| French, General Translation | Télécharger facture | 204px | 273px | Fits; the button grew 22px to the right, and the label sits 3px from the icon |
+| Japanese, full translation | 請求書をダウンロード | 220px | 251px | Covers the icon by 5px |
+| Japanese, General Translation | 請求書取得 | 111px | 251px | Fits |
+
+Every label kept its 22px size and fit. German and Japanese got shorter wordings instead of a wider button: _Rechnung laden_ ("load invoice") and 請求書取得 ("get invoice") are terser than the usual labels. French kept its verb, dropped the article, and got a wider button, but the label ended up closer to the icon than in the source. Whether a shorter wording or a tighter gap is acceptable is a reviewer's call, and results can differ between runs.
+
+A second animation in the same test had a 180px "Save changes" button. It came back as _Speichern_, _Enregistrer_, and 保存, the standard short labels, which fit without any layout change. The same run translated its heading, "Your changes are ready," into Japanese as 変更内容を保存できます ("You can save your changes"), a change in meaning that only a person reading the result would catch.
+
 Lottie translation adds a Layout Processing charge, priced separately from the translation itself and based on the animation's number of animated properties ([usage metering](/docs/platform/dashboard/guides/managing-billing#usage-metering), [pricing](https://generaltranslation.com/pricing)). Glossary terms and Custom Prompts from your [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) apply to animation text too, so a feature name in an onboarding animation matches your app and your [JSON locale files](/kb/translate-json-files).
 
 ## Common questions
@@ -124,4 +142,5 @@ No. Shapes have no string to replace, so recreate the text layer in After Effect
 - Glyph exports contain outlines only for the source text's characters, and iOS doesn't render glyphs; check fonts for every script you add.
 - Runtime APIs (`TextDelegate`, `DictionaryTextProvider`, `updateDocumentData`, `setTextSlot`) swap strings; lottie-web's `canResizeFont` can shrink box text to fit, but none of them moves the surrounding layers.
 - General Translation's CLI translates dotLottie 1.0 `.lottie` files through [`gt stage`](/docs/cli/reference/commands/stage) and [`gt download`](/docs/cli/reference/commands/download), refits layouts with your uploaded fonts, and rejects files with expressions.
+- In our test, layout processing kept font sizes and fit every label, by widening a button or by shortening the wording; review each download for wording and spacing.
 - Layout Processing for Lottie is priced separately, based on the animation's animated properties.
