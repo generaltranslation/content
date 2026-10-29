@@ -1,6 +1,6 @@
 ---
 title: How do I translate PO and POT files?
-summary: Fill every msgstr in each language's PO file, including every plural form its Plural-Forms header asks for, and leave msgid, msgctxt, and placeholders untouched. Then compile with msgfmt --check, which rejects broken placeholders and missing plural forms. General Translation's CLI writes a translated PO file for each language from your POT template.
+summary: Fill every msgstr, including each plural form the Plural-Forms header asks for, and keep msgid, msgctxt, and placeholders unchanged. Run msgfmt --check for headers, plural counts, and placeholders on entries with a format flag, and check separately that no msgstr is empty. General Translation's CLI writes a translated PO file for each language from your POT template.
 description: Translate PO files by filling each msgstr and every plural form while keeping msgid, msgctxt, and placeholders, then check with msgfmt. Tools compared, plus General Translation's CLI.
 date: 2026-10-28
 category: translation
@@ -85,7 +85,7 @@ An English source has two forms, so translating it entry by entry into two Polis
 These all compile or run without a crash, which is why they reach production:
 
 - **Fuzzy entries never reach users.** `msgfmt` leaves them out of the `.mo` file unless you pass `--use-fuzzy`, which the manual calls "usually wrong." After marking the plural entry fuzzy, the Polish build printed "You have 5 unread messages." in English. Review each fuzzy entry, then remove the flag.
-- **An empty plural slot can print nothing.** Without `--check`, `msgfmt` compiled an entry with an empty `msgstr[2]` and counted it as translated, and Python printed an empty line for a count of 5.
+- **An empty plural slot can print nothing.** `msgfmt` compiled an entry with an empty `msgstr[2]` and counted it as translated, and Python printed an empty line for a count of 5. `--check` rejects it only when the entry has a format flag, because the empty slot then lacks the placeholder; without a flag, the entry passes.
 - **Placeholders get dropped or renamed.** A translation without `%(num)d` loses the count. `msgfmt --check` catches it only on entries with a format flag.
 - **Quotes and escapes are C-style.** A `"` inside `msgstr` must be written `\"`; an unescaped quote is a syntax error, and a line break inside a string is written `\n`.
 - **The charset is a placeholder in templates.** `xgettext` writes `charset=CHARSET` in the POT header, and `msgfmt --check` refuses a PO file that still says that. `msginit` and `pybabel` write UTF-8; if a tool translates a copy of the template directly, run `msgconv --to-code=UTF-8` on the template first.
@@ -107,6 +107,32 @@ $ msgfmt --check --statistics -o inbox.mo fuzzy.po
 ```
 
 Run it in CI on every PO file, and treat any fuzzy count above zero as unfinished work.
+
+No gettext tool reports a plural entry with one empty slot: `msgfmt --check` passes it when the entry has no format flag, and `msgattrib --untranslated` skips it. A short script with [Babel](https://babel.pocoo.org/) (`pip install babel`) fails the build on any empty translation:
+
+```python title="check_po.py"
+import sys
+
+from babel.messages.pofile import read_po
+
+failed = False
+for path in sys.argv[1:]:
+    with open(path, "rb") as f:
+        catalog = read_po(f)
+    for message in catalog:
+        if not message.id or message.fuzzy:
+            continue  # the header, and fuzzy entries msgfmt already skips
+        forms = message.string if isinstance(message.string, tuple) else (message.string,)
+        if not all(forms):
+            print(f"{path}:{message.lineno}: empty translation for {message.id!r}")
+            failed = True
+sys.exit(1 if failed else 0)
+```
+
+```text title="Output"
+$ python check_po.py po/pl.po
+po/pl.po:17: empty translation for ('You have %(num)d unread message.', 'You have %(num)d unread messages.')
+```
 
 ## Ways to translate PO files
 
@@ -179,5 +205,5 @@ Usually one of three things: the entry is still marked `fuzzy`, the `.mo` file w
 
 - Translate only `msgstr`; `msgid`, `msgid_plural`, and `msgctxt` are lookup keys and stay as extracted.
 - Write as many `msgstr[n]` slots as the header's `nplurals` says: one for Japanese, two for German, three for Polish, six for Arabic.
-- `msgfmt` drops fuzzy entries, and without `--check` it compiles an empty plural slot that prints nothing, so run `msgfmt --check --statistics` on every PO file.
+- `msgfmt` drops fuzzy entries, and it compiles an empty plural slot that prints nothing; `--check` catches that only on entries with a format flag, so run `msgfmt --check --statistics` and a separate check for empty translations on every PO file.
 - General Translation's CLI translates a POT template into a PO file per locale with `"pot"`, `"transformationFormat": "PO"`, and a `transform`, filling every plural slot for the target language.

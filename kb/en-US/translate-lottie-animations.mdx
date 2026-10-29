@@ -1,6 +1,6 @@
 ---
 title: How do I translate Lottie animations?
-summary: Translate the strings in the animation's text layers, stored in the Lottie JSON at t.d.k[].s.t, then check that each translation fits its box, that the fonts cover the new script, and that no text was exported as shapes. Re-export per language, swap text at run time, or script the JSON; General Translation's CLI translates .lottie files and refits the layout.
+summary: Translate the strings in the animation's text layers, stored in the Lottie JSON at t.d.k[].s.t, then check that each translation fits its box, fonts cover the new script, and no text was exported as shapes. Re-export per language, swap text at run time, or script the JSON; General Translation's CLI translates dotLottie 1.0 .lottie files and refits the layout.
 description: Lottie text lives in text layers (ty 5) at t.d.k[].s.t. Translate it by re-exporting, swapping text at run time, or editing the JSON, then check fit, fonts, and glyphs.
 date: 2026-10-28
 category: translation
@@ -58,7 +58,7 @@ Test the source animation with longer, accented text before translating. (See [W
 | Approach | Where the text changes | Handles fit and fonts | Repeatable on every release | What it leaves to you |
 | --- | --- | --- | --- | --- |
 | Re-export per language from After Effects | A designer duplicates the composition, edits each text layer, and exports one file per language | A designer adjusts each version by eye | No; every copy change repeats per language | One file per language and designer time for each |
-| Swap text at run time | The player replaces strings as the animation renders | No; text keeps the original box, font, and glyphs | Yes; strings come from your app's translations | Fit, font coverage, and glyphs in every language, plus stable keys (source text or layer names) |
+| Swap text at run time | The player replaces strings as the animation renders | Partly; lottie-web can shrink box text to fit, but the font, glyphs, and surrounding layers stay as they are | Yes; strings come from your app's translations | Fit, font coverage, and glyphs in every language, plus stable keys (source text or layer names) |
 | Script edits to the JSON | A script replaces each `s.t` value, often with machine translation or an LLM | No | Yes | Line breaks, fit, fonts, glyphs, and re-zipping `.lottie` files |
 | General Translation CLI | [`gt stage`](/docs/cli/reference/commands/stage) and [`gt download`](/docs/cli/reference/commands/download) produce a translated `.lottie` file per language | Layout processing refits text and nearby layers using fonts you upload | Yes | Reviewing each animation, removing expressions, and Layout Processing usage |
 
@@ -71,7 +71,7 @@ textDelegate.setText("Start your free trial", getString(R.string.trial_cta))
 animationView.setTextDelegate(textDelegate)
 ```
 
-In lottie-ios, set `animationView.textProvider` to a `DictionaryTextProvider` keyed by the text layer's keypath ([lottie-ios source](https://github.com/airbnb/lottie-ios/blob/master/Sources/Public/TextProvider/AnimationTextProvider.swift)). In lottie-web, call `updateDocumentData` on the text layer element. The dotLottie web player's `setTextSlot` replaces text the designer exposed as a slot ([dotLottie slots](https://docs.lottiefiles.com/en/runtimes/distributions/js/v0.x/core-concepts/slots)). None of them refits the layout: the new string goes into the original box.
+In lottie-ios, set `animationView.textProvider` to a `DictionaryTextProvider` keyed by the text layer's keypath ([lottie-ios source](https://github.com/airbnb/lottie-ios/blob/master/Sources/Public/TextProvider/AnimationTextProvider.swift)). In lottie-web, call `updateDocumentData` on the text layer element. The dotLottie web player's `setTextSlot` replaces text the designer exposed as a slot ([dotLottie slots](https://docs.lottiefiles.com/en/runtimes/distributions/js/v0.x/core-concepts/slots)). lottie-web can also shrink box text to fit: [`canResizeFont(true)`](https://github.com/airbnb/lottie-web/wiki/TextLayer.canResizeFont) reduces a text layer's font size until the string fits its box, down to a floor you set with [`setMinimumFontSize`](https://github.com/airbnb/lottie-web/wiki/TextLayer.setMinimumFontSize). None of these APIs moves or resizes the layers around the text, such as a button shape behind a label.
 
 Re-export from After Effects when an animation ships in one or two languages and a designer wants to tune every frame. Swap text at run time when the words come from your app, such as a user's name, and the box has room for the longest translation. Choose General Translation when animations ship in many languages, change with releases, and need layouts refit for each language. Script the JSON yourself only if you'll own the fit and font checks.
 
@@ -122,6 +122,6 @@ No. Shapes have no string to replace, so recreate the text layer in After Effect
 
 - Lottie text lives in text layers (`ty` 5) at `t.d.k[].s.t`, including text layers inside precomps under `assets`.
 - Glyph exports contain outlines only for the source text's characters, and iOS doesn't render glyphs; check fonts for every script you add.
-- Runtime APIs (`TextDelegate`, `DictionaryTextProvider`, `updateDocumentData`, `setTextSlot`) swap strings without refitting the layout.
+- Runtime APIs (`TextDelegate`, `DictionaryTextProvider`, `updateDocumentData`, `setTextSlot`) swap strings; lottie-web's `canResizeFont` can shrink box text to fit, but none of them moves the surrounding layers.
 - General Translation's CLI translates dotLottie 1.0 `.lottie` files through [`gt stage`](/docs/cli/reference/commands/stage) and [`gt download`](/docs/cli/reference/commands/download), refits layouts with your uploaded fonts, and rejects files with expressions.
 - Layout Processing for Lottie is priced separately, based on the animation's animated properties.
