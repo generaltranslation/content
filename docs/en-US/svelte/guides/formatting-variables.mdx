@@ -1,0 +1,102 @@
+---
+
+title: Formatting variables
+description: How to insert names, numbers, prices, dates, and relative times into translated Svelte content.
+related:
+  links:
+    - /docs/svelte/guides/translating-content
+    - /docs/svelte/guides/handling-plurals-and-branches
+    - /docs/svelte/guides/translating-strings
+    - /docs/svelte/guides/managing-locales
+
+---
+
+Variable components mark the runtime values inside [`<T>`](/docs/svelte/reference/components/t). Translators see a placeholder, the translation decides where it goes, and the value is formatted for the active locale when the page renders.
+
+## Choose a component [#choose]
+
+- **[`<Var>`](/docs/svelte/reference/components/var)** for values shown as they are: names, emails, IDs, or markup.
+- **[`<Num>`](/docs/svelte/reference/components/num)** for numbers, with locale digit grouping and decimals.
+- **[`<Currency>`](/docs/svelte/reference/components/currency)** for amounts of money.
+- **[`<DateTime>`](/docs/svelte/reference/components/datetime)** for dates and times.
+- **[`<RelativeTime>`](/docs/svelte/reference/components/relative-time)** for phrases such as "3 days ago" or "in 2 hours".
+
+The formatting components also work outside [`<T>`](/docs/svelte/reference/components/t), where they simply format a value for the active locale.
+
+## Show a value as-is with `<Var>` [#var]
+
+[`<Var>`](/docs/svelte/reference/components/var) renders its children unchanged wherever the translation places them:
+
+```svelte
+<script lang="ts">
+  import { T, Var } from 'gt-svelte';
+
+  let { user } = $props();
+</script>
+
+<T>
+  Signed in as <Var><strong>{user.email}</strong></Var>.
+</T>
+```
+
+The children of [`<Var>`](/docs/svelte/reference/components/var) are not sent for translation, so keep private data, such as names and email addresses, inside it.
+
+## Format numbers and money [#numbers]
+
+Pass a value with the `value` prop, or as the only child:
+
+```svelte
+<script lang="ts">
+  import { Currency, Num, T } from 'gt-svelte';
+
+  let { count, total } = $props();
+</script>
+
+<T>
+  You have <Num value={count} /> items in your cart.
+  Total: <Currency value={total} currency="EUR" />
+</T>
+```
+
+- `<Num>{count}</Num>` is the same as `<Num value={count} />`. Inside [`<T>`](/docs/svelte/reference/components/t), passing both is a build error.
+- [`<Currency>`](/docs/svelte/reference/components/currency) defaults to `USD`. Set `currency` to an ISO 4217 code.
+- Pass `Intl.NumberFormat` settings through `options`, such as `options={{ maximumFractionDigits: 0 }}`.
+
+## Format dates and relative times [#dates]
+
+```svelte
+<script lang="ts">
+  import { DateTime, RelativeTime, T } from 'gt-svelte';
+
+  let { post } = $props();
+</script>
+
+<T>
+  Published <DateTime value={post.publishedAt} options={{ dateStyle: 'long' }} />,
+  updated <RelativeTime value={post.updatedAt} />.
+</T>
+```
+
+- [`<DateTime>`](/docs/svelte/reference/components/datetime) takes a `Date` and `Intl.DateTimeFormat` settings in `options`.
+- [`<RelativeTime>`](/docs/svelte/reference/components/relative-time) measures a `Date` from now, or from `baseDate`. For a number, also set `unit`: `<RelativeTime value={-3} unit="day" />` renders "3 days ago".
+
+## Control the formatting locale [#locales]
+
+Values format in the locale their content renders in:
+
+- Inside a translated [`<T>`](/docs/svelte/reference/components/t), and outside [`<T>`](/docs/svelte/reference/components/t), they use the active locale.
+- Inside a [`<T>`](/docs/svelte/reference/components/t) that has no translation yet, they use the default locale, so the source sentence stays consistent.
+
+In a target locale, set `locales` to try other locales first, for example to format a price for the buyer's region. Content in the default locale ignores `locales` and always formats in the default locale.
+
+```svelte
+<Currency value={total} currency="CAD" locales={['fr-CA']} />
+```
+
+## Name a variable [#name]
+
+Each variable gets a generated key. Set a static `name` to give translators a meaningful placeholder:
+
+```svelte
+<T>Hello, <Var name="firstName">{user.firstName}</Var>!</T>
+```

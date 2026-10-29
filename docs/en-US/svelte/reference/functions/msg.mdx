@@ -1,0 +1,113 @@
+---
+
+title: msg
+description: Register strings declared outside components so they can be translated where they render. API reference for msg.
+
+---
+
+`msg` marks strings in modules, constants, and data for extraction without translating them. Resolve its result inside a component with [`useMessages()`](/docs/svelte/reference/functions/use-messages).
+
+## Overview [#overview]
+
+```ts
+function msg<T extends string | string[]>(message: T): T;
+function msg<T extends string | string[]>(
+  message: T,
+  options?: GTTranslationOptions
+): T extends string ? string : string[];
+```
+
+Declare messages at module scope:
+
+```ts title="src/lib/statuses.ts"
+import { msg } from 'gt-svelte';
+
+export const STATUSES = {
+  draft: msg('Draft'),
+  published: msg('Published', { $context: 'Status of a blog post' }),
+};
+```
+
+Then resolve them in a component:
+
+```svelte
+<script lang="ts">
+  import { useMessages } from 'gt-svelte';
+  import { STATUSES } from '#lib/statuses.ts';
+
+  const m = useMessages();
+</script>
+
+<span>{m(STATUSES.published)}</span>
+```
+
+## How it works [#how-it-works]
+
+- **No options.** `msg` returns the message, or the array, unchanged. The CLI still extracts it.
+- **With options.** `msg` returns the message with its variables filled in, followed by encoded data that holds the source, the options, and the translation hash. [`useMessages()`](/docs/svelte/reference/functions/use-messages) decodes it. Do not render an encoded value directly or compare it to other strings.
+- **Arrays.** Each entry is registered separately. With an `$id`, entries get the ids `<id>.0`, `<id>.1`, and so on.
+- **No runtime state.** `msg` does not read the locale or translations, so it is safe in any module, including server-only code and module scope.
+
+### Extraction rules
+
+The CLI extracts calls to `msg` imported from `gt-svelte`:
+
+- Pass a string literal, a `+` concatenation of literals, or an array of literals. Put dynamic values in variables.
+- Call `msg` directly. A wrapper such as `const label = (text) => msg(text)` hides the string from extraction, so it is never translated.
+- Write `$context`, `$id`, `$maxChars`, `$requiresReview`, and `$format` as static values in an inline options object.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | Source message or array of messages. | `string \| string[]` | No | — |
+| [`options`](#options) | Variables and translation options. | [`GTTranslationOptions`](/docs/svelte/reference/types/gt-translation-options) | Yes | — |
+
+### `message`
+
+**Type** `string | string[]` · **Required**
+
+The source text in the default locale, written as a literal. Messages are ICU MessageFormat by default.
+
+### `options`
+
+**Type** [`GTTranslationOptions`](/docs/svelte/reference/types/gt-translation-options) · **Optional**
+
+Variables and `$`-prefixed options such as `$context`, encoded with the message. (See [`GTTranslationOptions`](/docs/svelte/reference/types/gt-translation-options)).
+
+## Returns [#returns]
+
+| Input | Return type | Value |
+| --- | --- | --- |
+| String without options | Same as input | The message, unchanged |
+| Array without options | Same as input | The array, unchanged |
+| String with options | `string` | The interpolated message plus encoded data |
+| Array with options | `string[]` | A new array of encoded messages |
+
+## Example [#example]
+
+Declare built-in content once and translate it wherever it renders:
+
+```ts title="src/lib/builtins.ts"
+import { msg } from 'gt-svelte';
+
+export const INGREDIENTS = {
+  gin: msg('Gin'),
+  'lime-juice': msg('Lime juice'),
+  'simple-syrup': msg('Simple syrup'),
+};
+
+export const LABELS = msg(['Save', 'Cancel'], { $id: 'form' });
+```
+
+```svelte title="src/lib/Ingredient.svelte"
+<script lang="ts">
+  import { useMessages } from 'gt-svelte';
+  import { INGREDIENTS } from '#lib/builtins.ts';
+
+  let { slug }: { slug: keyof typeof INGREDIENTS } = $props();
+  const m = useMessages();
+</script>
+
+<li>{m(INGREDIENTS[slug])}</li>
+```

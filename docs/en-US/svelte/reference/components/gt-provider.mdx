@@ -1,0 +1,92 @@
+---
+
+title: "<GTProvider>"
+description: Provide the active locale and its translations to the components below it. API reference for the <GTProvider> component.
+
+---
+
+`<GTProvider>` holds the reactive locale state that [`<T>`](/docs/svelte/reference/components/t), [`useGT()`](/docs/svelte/reference/functions/use-gt), the variable components, and the locale functions read. Render it once in the root layout, with the result of [`loadTranslations()`](/docs/svelte/reference/functions/load-translations) from a `load` function.
+
+## Overview [#overview]
+
+```svelte title="src/routes/+layout.svelte"
+<script lang="ts">
+  import '#lib/gt.ts';
+  import { GTProvider } from 'gt-svelte';
+
+  let { data, children } = $props();
+</script>
+
+<GTProvider locale={data.gt.locale} translations={data.gt.translations}>
+  {@render children()}
+</GTProvider>
+```
+
+```ts title="src/routes/+layout.server.ts"
+import '#lib/gt.ts';
+import { loadTranslations } from 'gt-svelte';
+import type { LayoutServerLoad } from './$types';
+
+export const load: LayoutServerLoad = async ({ locals }) => ({
+  gt: await loadTranslations(locals.locale),
+});
+```
+
+Call [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) before the provider renders, from a module both the server and the browser import. The provider adds no HTML element.
+
+## How it works [#how-it-works]
+
+- **First render.** The server render and hydration must match, so the first render trusts only the `translations` prop, which both sides receive. With `translations`, the provider adds them to the shared translation cache and renders `locale` immediately.
+- **Without `translations`.** If `locale` is the default locale, it renders directly. Any other locale renders in the default locale first, then loads its translations in the browser after mount and switches. In development, the server logs a warning once per locale when this happens.
+- **Prop changes.** When `locale` or `translations` changes later, for example after a navigation reruns the `load` function, the provider follows: with `translations`, it switches at once; without them, it loads the locale first. If that load fails, it keeps the current locale and logs a warning.
+- **Locale switching.** [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) changes the provider's locale. It loads the new locale's translations before switching, so the current content stays on screen until the next locale is ready. When changes overlap, the most recent one wins.
+- **Scope.** Components read the nearest `<GTProvider>` through Svelte context. Without a provider, content renders in the default locale, and the function returned by [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) returns a rejected promise.
+
+Translations already in the cache, such as the [`loadTranslations()`](/docs/svelte/reference/functions/load-translations) result rendered on the server, are not copied again, so large catalogs are not re-cloned on every request.
+
+## Props [#props]
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | The locale to render. | `string` | Yes | Default locale |
+| [`translations`](#translations) | Preloaded translations for `locale`. | `Record<string, Content>` | Yes | — |
+| [`children`](#children) | The content that uses translations. | `Snippet` | Yes | — |
+
+### `locale`
+
+**Type** `string` · **Optional** · **Default** Default locale
+
+The locale to render. It is resolved with [`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale), so an unsupported locale falls back to the default locale. Pass `data.gt.locale` from [`loadTranslations()`](/docs/svelte/reference/functions/load-translations), which is already resolved.
+
+### `translations`
+
+**Type** `Record<string, Content>` · **Optional**
+
+The translations for `locale`, keyed by hash. Pass `data.gt.translations` from [`loadTranslations()`](/docs/svelte/reference/functions/load-translations) (see [`GTTranslationsData`](/docs/svelte/reference/types/gt-translations-data)). Omitting it makes non-default locales render source content on the server and switch after hydration.
+
+### `children`
+
+**Type** `Snippet` · **Optional**
+
+The content rendered inside the provider.
+
+## Example [#example]
+
+The root layout passes the request's locale and translations. A language switcher anywhere below the provider changes the locale:
+
+```svelte title="src/routes/+layout.svelte"
+<script lang="ts">
+  import '#lib/gt.ts';
+  import LocaleSwitcher from '#lib/LocaleSwitcher.svelte';
+  import { GTProvider } from 'gt-svelte';
+
+  let { data, children } = $props();
+</script>
+
+<GTProvider locale={data.gt.locale} translations={data.gt.translations}>
+  <LocaleSwitcher />
+  {@render children()}
+</GTProvider>
+```
+
+(See [Managing locales](/docs/svelte/guides/managing-locales) for the switcher and server hook).

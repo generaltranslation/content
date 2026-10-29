@@ -1,0 +1,99 @@
+---
+
+title: Translating content
+description: How to translate Svelte markup with <T>, including nested elements, components, context, and whitespace.
+related:
+  links:
+    - /docs/svelte/guides/formatting-variables
+    - /docs/svelte/guides/handling-plurals-and-branches
+    - /docs/svelte/guides/translating-strings
+    - /docs/svelte/guides/generating-translations
+
+---
+
+[`<T>`](/docs/svelte/reference/components/t) translates a block of markup as one unit, so translators see whole sentences with their links and emphasis instead of fragments. The preprocessor reads its children at build time, and the CLI extracts the same content for translation.
+
+## Wrap markup in `<T>` [#wrap]
+
+Put the text and the elements that belong to it inside one [`<T>`](/docs/svelte/reference/components/t):
+
+```svelte title="src/routes/+page.svelte"
+<script lang="ts">
+  import { T } from 'gt-svelte';
+</script>
+
+<T>
+  <h1>Plan your week</h1>
+  <p>Read the <a href="/docs" title="Documentation">getting started guide</a> to <strong>save time</strong>.</p>
+</T>
+```
+
+- A translation can reorder, add, or drop the elements inside [`<T>`](/docs/svelte/reference/components/t), so each language keeps its natural word order.
+- Element attributes stay as written. Static `placeholder`, `title`, `alt`, `aria-label`, `aria-labelledby`, and `aria-describedby` values are translated with the content.
+- [`<T>`](/docs/svelte/reference/components/t) adds no wrapper element.
+- Until a translation exists, [`<T>`](/docs/svelte/reference/components/t) renders its children unchanged.
+
+Prefer one [`<T>`](/docs/svelte/reference/components/t) per sentence or paragraph. Larger blocks give translators more context; smaller ones change less often.
+
+## Keep `<T>` content static [#static]
+
+Everything inside [`<T>`](/docs/svelte/reference/components/t) is fixed at build time. The preprocessor fails the build, with the file, line, and a code frame, when it finds something it cannot translate:
+
+- A runtime value such as `{user.name}`. Wrap it in [`<Var>`](/docs/svelte/reference/components/var) or a formatting component. (See [Formatting variables](/docs/svelte/guides/formatting-variables)).
+- Logic blocks and tags: `{#if}`, `{#each}`, `{#await}`, `{#key}`, `{@html}`, `{@const}`, `{@render}`, and `{@debug}`. Move them outside [`<T>`](/docs/svelte/reference/components/t), or wrap the dynamic part in [`<Var>`](/docs/svelte/reference/components/var).
+- A `{#snippet}` declared directly inside [`<T>`](/docs/svelte/reference/components/t).
+- A [`<T>`](/docs/svelte/reference/components/t) nested inside another [`<T>`](/docs/svelte/reference/components/t).
+- Spread props or non-static `context`, `id`, `maxChars`, or `requiresReview` props on [`<T>`](/docs/svelte/reference/components/t).
+
+Static expressions are text, so `{'&'}` and `{' '}` are allowed.
+
+```svelte
+<!-- ❌ The name is a runtime value -->
+<T>Welcome back, {user.name}!</T>
+
+<!-- ✅ The translation places the name wherever the language needs it -->
+<T>Welcome back, <Var>{user.name}</Var>!</T>
+```
+
+For conditional wording, use [`<Branch>`](/docs/svelte/reference/components/branch) or [`<Plural>`](/docs/svelte/reference/components/plural) instead of `{#if}`. (See [Handling plurals and branches](/docs/svelte/guides/handling-plurals-and-branches)).
+
+## Translate through components [#components]
+
+Components inside [`<T>`](/docs/svelte/reference/components/t) are part of the translation, like elements. The translation can move them, and their children are translated with the surrounding text:
+
+```svelte
+<T>
+  Read the <DocsLink href="/docs">documentation</DocsLink> before you start.
+</T>
+```
+
+- Only the children you pass are translated. Text inside the component's own implementation needs its own [`<T>`](/docs/svelte/reference/components/t).
+- Pass children as regular content. A component inside [`<T>`](/docs/svelte/reference/components/t) cannot declare an explicit `{#snippet children()}`.
+- `let:` and `animate:` directives are not supported inside [`<T>`](/docs/svelte/reference/components/t).
+
+## Add context for translators [#context]
+
+The same words can need different translations. Set `context` to describe the use, and to give the entry its own translation:
+
+```svelte
+<button><T context="Verb: open the settings panel">Open</T></button>
+<span><T context="Adjective: the store is open">Open</T></span>
+```
+
+`context` is part of the entry's identity, so changing it creates a new entry to translate. `maxChars` asks for a translation no longer than a character count, and `requiresReview` marks the entry for human review. (See [`<T>`](/docs/svelte/reference/components/t#props)).
+
+## Write whitespace as you would without `<T>` [#whitespace]
+
+[`<T>`](/docs/svelte/reference/components/t) renders and extracts the same text that its markup renders without [`<T>`](/docs/svelte/reference/components/t), following Svelte's whitespace rules. Formatter line-wrapping is safe: a line break between words or next to a tag renders as a space.
+
+```svelte
+<T>
+  You can make <Num value={made} /> of
+  <Num value={total} />
+  recipes
+</T>
+```
+
+This renders "You can make 7 of 50 recipes".
+
+Whitespace inside one run of text is kept as written in the source text sent for translation. Re-wrapping a paragraph changes that text, so the entry gets a new identity and needs to be translated again. Whitespace inside `<pre>` and `<textarea>` is preserved exactly.

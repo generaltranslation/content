@@ -1,0 +1,92 @@
+---
+
+title: gtPreprocess
+description: Prepare <T> components for translation at build time. API reference for gtPreprocess.
+
+---
+
+`gtPreprocess` is a Svelte preprocessor exported from `gt-svelte/preprocess`. [`<T>`](/docs/svelte/reference/components/t) cannot read its children at runtime, so the preprocessor rewrites each one while the component compiles.
+
+## Overview [#overview]
+
+```ts
+import { gtPreprocess } from 'gt-svelte/preprocess';
+
+function gtPreprocess(): PreprocessorGroup;
+```
+
+Add it to the `preprocess` option for your SvelteKit version:
+
+<Tabs items={['SvelteKit 3', 'SvelteKit 2']}>
+  <Tab value="SvelteKit 3">
+    ```ts title="vite.config.ts"
+    import adapter from '@sveltejs/adapter-node';
+    import { sveltekit } from '@sveltejs/kit/vite';
+    import { gtPreprocess } from 'gt-svelte/preprocess';
+    import { defineConfig } from 'vite';
+
+    export default defineConfig({
+      plugins: [sveltekit({ preprocess: [gtPreprocess()], adapter: adapter() })],
+    });
+    ```
+
+    `vitePreprocess()` is not needed on SvelteKit 3.
+  </Tab>
+
+  <Tab value="SvelteKit 2">
+    ```js title="svelte.config.js"
+    import adapter from '@sveltejs/adapter-node';
+    import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+    import { gtPreprocess } from 'gt-svelte/preprocess';
+
+    /** @type {import('@sveltejs/kit').Config} */
+    const config = {
+      preprocess: [vitePreprocess(), gtPreprocess()],
+      kit: { adapter: adapter() },
+    };
+
+    export default config;
+    ```
+
+    Place it last, so it sees the markup other preprocessors produce.
+  </Tab>
+</Tabs>
+
+## How it works [#how-it-works]
+
+The preprocessor is named `gt-svelte` and runs a `markup` step on each `.svelte` file:
+
+- **Skips unrelated files.** A component that does not import [`<T>`](/docs/svelte/reference/components/t) or a variable component from `gt-svelte` is returned unchanged. Top-level `<style>` contents are never parsed, so Sass and PostCSS syntax is safe.
+- **Hashes each [`<T>`](/docs/svelte/reference/components/t).** It computes the translation hash from the children and the `context`, `id`, `maxChars`, and `requiresReview` props, the same way the CLI does, so lookups match the generated files.
+- **Turns children into snippets.** Each element, variable, and branch inside [`<T>`](/docs/svelte/reference/components/t) becomes a snippet, so a translation can reorder them while keeping their attributes, event handlers, and bindings.
+- **Normalizes variable children.** A variable component written with a single child expression, such as `<Num>{count}</Num>`, receives that expression as its `value` prop.
+- **Keeps source maps.** It returns a source map, so errors and debugging point at your original code.
+
+Calls to [`useGT()`](/docs/svelte/reference/functions/use-gt) functions and [`msg()`](/docs/svelte/reference/functions/msg) are not rewritten; they are hashed at runtime and extracted by the CLI.
+
+Without the preprocessor, [`<T>`](/docs/svelte/reference/components/t) renders its children untranslated and logs a development warning that it has no translation hash.
+
+## Parameters [#parameters]
+
+`gtPreprocess` takes no parameters.
+
+## Returns [#returns]
+
+**Type** `PreprocessorGroup`
+
+A Svelte preprocessor group with a `name` of `gt-svelte` and a `markup` function.
+
+## Errors [#errors]
+
+When a component breaks a [`<T>`](/docs/svelte/reference/components/t) rule, the build fails with one error that lists every problem in the file. Each entry gives the file, line, and column, what happened, and how to fix it. The error points at the first problem, so Vite shows its code frame. Locations refer to the file as written, even when earlier preprocessors changed it.
+
+Common causes:
+
+- Dynamic content inside [`<T>`](/docs/svelte/reference/components/t) that is not wrapped in a variable component
+- `{#if}`, `{#each}`, `{#await}`, `{#key}`, `{@html}`, `{@const}`, `{@render}`, or `{@debug}` inside [`<T>`](/docs/svelte/reference/components/t)
+- A [`<T>`](/docs/svelte/reference/components/t) nested inside another [`<T>`](/docs/svelte/reference/components/t), or a `{#snippet}` declared directly inside [`<T>`](/docs/svelte/reference/components/t)
+- Spread props on [`<T>`](/docs/svelte/reference/components/t), or on [`<Plural>`](/docs/svelte/reference/components/plural) or [`<Branch>`](/docs/svelte/reference/components/branch) inside [`<T>`](/docs/svelte/reference/components/t), or non-static [`<T>`](/docs/svelte/reference/components/t) props
+- A variable component with both a `value` prop and children
+- Identifiers that start with `__gt_`, which are reserved for the preprocessor
+
+(See [`<T>`](/docs/svelte/reference/components/t) for the complete rules).

@@ -1,0 +1,69 @@
+---
+
+title: initializeGT
+description: Set the supported locales and translation loading for a Svelte application. API reference for initializeGT.
+
+---
+
+`initializeGT` configures the locale list and translation cache that every other `gt-svelte` function and component reads. Call it once per process, before any component renders and before [`loadTranslations()`](/docs/svelte/reference/functions/load-translations) runs.
+
+## Overview [#overview]
+
+```ts
+function initializeGT(config?: GTSvelteConfig): void;
+```
+
+Call it in a module that both the server and the browser import, such as `src/lib/gt.ts`:
+
+```ts title="src/lib/gt.ts"
+import { initializeGT } from 'gt-svelte';
+import gtConfig from '../../gt.config.json';
+
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+  loadTranslations: async (locale) =>
+    (await import(`../_gt/${locale}.json`)).default,
+});
+```
+
+Then import that module for its side effect wherever translations are used first: the root `+layout.svelte`, the root `+layout.server.ts`, and `hooks.server.ts`.
+
+## How it works [#how-it-works]
+
+- **Global state.** It sets the process-wide locale configuration and translation cache. On the server, every request shares them, so the configuration must not depend on the request.
+- **Both environments.** The server needs it to resolve locales and load translations. The browser needs it to render, and to load another locale's translations when [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) switches. Importing the module from the root `+layout.svelte` runs it in both.
+- **Cache expiry.** When `cacheExpiryTime` is not set, server translations expire after 60 seconds and reload on the next request, and browser translations never expire. (See [`cacheExpiryTime`](/docs/svelte/reference/types/gt-svelte-config#cache-expiry)).
+- **First call wins.** Later calls in the same process are ignored, so the configuration cannot change after startup. Keep the call in one module that is imported, not called, from other files.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`config`](#config) | Locale and loading options. | [`GTSvelteConfig`](/docs/svelte/reference/types/gt-svelte-config) | Yes | `{}` |
+
+### `config`
+
+**Type** [`GTSvelteConfig`](/docs/svelte/reference/types/gt-svelte-config) · **Optional** · **Default** `{}`
+
+`defaultLocale`, `locales`, and `customMapping` set the supported locales. [`loadTranslations`](/docs/svelte/reference/functions/load-translations), `projectId`, `cacheUrl`, and `cacheExpiryTime` control how translations load. With no options, the app supports only `en` and renders source content.
+
+## Returns [#returns]
+
+**Type** `void`
+
+## Example [#example]
+
+Load translations published to the CDN instead of bundled files:
+
+```ts title="src/lib/gt.ts"
+import { initializeGT } from 'gt-svelte';
+import gtConfig from '../../gt.config.json';
+
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+  // Requires translations published with `gt translate --publish`
+  projectId: gtConfig.projectId,
+});
+```

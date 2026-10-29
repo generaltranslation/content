@@ -1,0 +1,149 @@
+---
+
+title: Configuration
+description: Configure translation extraction, the build-time preprocessor, and runtime initialization for a Svelte application. Reference for Svelte configuration.
+
+---
+
+A `gt-svelte` app is configured in three places. The CLI reads `gt.config.json`, SvelteKit runs the preprocessor from its build config, and your application passes runtime options to [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt).
+
+`gt-svelte` does not read `gt.config.json` on its own. Import the values you share, such as `defaultLocale` and `locales`, into the module that calls [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt).
+
+## Overview [#overview]
+
+| Surface | Purpose | Configuration |
+| --- | --- | --- |
+| [`gt.config.json`](#config-file) | Extract source content and write translation files. | CLI keys such as `defaultLocale`, `locales`, `src`, `files`, and `projectId` |
+| [Build config](#build-config) | Run [`gtPreprocess()`](/docs/svelte/reference/functions/gt-preprocess) on every component and let Vite serve `gt.config.json`. | `vite.config.ts` on SvelteKit 3; `svelte.config.js` and `vite.config.ts` on SvelteKit 2 |
+| [Runtime options](#runtime-options) | Set supported locales and how translations load. | [`GTSvelteConfig`](/docs/svelte/reference/types/gt-svelte-config), passed to [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) |
+
+## `gt.config.json` [#config-file]
+
+Place `gt.config.json` at the project root. This configuration writes one translation file per locale into `src/_gt/`:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+The CLI detects a Svelte project from the `gt-svelte` dependency in `package.json`. Svelte projects use these keys the same way every framework does:
+
+- [`defaultLocale`](/docs/cli/reference/config#default-locale) is the language of your source content.
+- [`locales`](/docs/cli/reference/config#locales) lists the target languages.
+- [`files.gt.output`](/docs/cli/reference/config#files) is the path of each locale's translation file. Keep the `[locale]` placeholder. [`gt generate`](/docs/cli/reference/commands/generate) also writes the default locale's file at this path.
+- [`src`](/docs/cli/reference/config#src) lists glob patterns of files to scan. When omitted, the CLI scans `.svelte` files and JavaScript and TypeScript modules under `src`.
+- [`projectId`](/docs/cli/reference/config#project-id) identifies the project for [`gt translate`](/docs/cli/reference/commands/translate). You can set `GT_PROJECT_ID` instead.
+- [`customMapping`](/docs/cli/reference/config#custom-mapping) defines custom locale codes and names. Pass the same mapping to [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt).
+
+[`gt translate`](/docs/cli/reference/commands/translate) writes a `_versionId` into this file after each run unless you pass `--omit-config-ids`. (See the [CLI configuration reference](/docs/cli/reference/config) for every key).
+
+## Build config [#build-config]
+
+[`gtPreprocess()`](/docs/svelte/reference/functions/gt-preprocess) must run on every component that uses [`<T>`](/docs/svelte/reference/components/t) or a variable component inside it. Where it goes depends on the SvelteKit version.
+
+<Tabs items={['SvelteKit 3', 'SvelteKit 2']}>
+  <Tab value="SvelteKit 3">
+    SvelteKit 3 has no `svelte.config.js`. Pass Svelte and Kit options to the `sveltekit()` plugin. `vitePreprocess()` is not needed.
+
+    ```ts title="vite.config.ts"
+    import adapter from '@sveltejs/adapter-node';
+    import { sveltekit } from '@sveltejs/kit/vite';
+    import { gtPreprocess } from 'gt-svelte/preprocess';
+    import { defineConfig } from 'vite';
+
+    export default defineConfig({
+      plugins: [sveltekit({ preprocess: [gtPreprocess()], adapter: adapter() })],
+      // Lets the browser import gt.config.json during development
+      server: { fs: { allow: ['gt.config.json'] } },
+    });
+    ```
+  </Tab>
+
+  <Tab value="SvelteKit 2">
+    Add the preprocessor last, after `vitePreprocess()`, so it sees the final Svelte markup:
+
+    ```js title="svelte.config.js"
+    import adapter from '@sveltejs/adapter-node';
+    import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+    import { gtPreprocess } from 'gt-svelte/preprocess';
+
+    /** @type {import('@sveltejs/kit').Config} */
+    const config = {
+      preprocess: [vitePreprocess(), gtPreprocess()],
+      kit: { adapter: adapter() },
+    };
+
+    export default config;
+    ```
+
+    ```ts title="vite.config.ts"
+    import { sveltekit } from '@sveltejs/kit/vite';
+    import { defineConfig } from 'vite';
+
+    export default defineConfig({
+      plugins: [sveltekit()],
+      // Lets the browser import gt.config.json during development
+      server: { fs: { allow: ['gt.config.json'] } },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+`server.fs.allow` is needed only when browser code imports `gt.config.json` from the project root, as the module that calls [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) usually does. Without it, Vite's development server refuses to serve the file.
+
+### SvelteKit 2 and SvelteKit 3 differences
+
+| Setting | SvelteKit 3 | SvelteKit 2 |
+| --- | --- | --- |
+| Svelte and Kit options | `sveltekit({ ... })` in `vite.config.ts` | `svelte.config.js` |
+| Preprocessors | `[gtPreprocess()]` | `[vitePreprocess(), gtPreprocess()]` |
+| Shared modules in `src/lib` | `#lib/*` subpath import in `package.json`, imported with the extension (`#lib/gt.ts`) | `$lib` alias (`$lib/gt`) |
+| Hook types (`Handle`, `ServerInit`, `sequence`) | `@sveltejs/kit/hooks` | `@sveltejs/kit` |
+
+SvelteKit 3 declares the subpath import in `package.json`:
+
+```json title="package.json"
+{
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  }
+}
+```
+
+TypeScript resolves a subpath import only when the import includes the file extension, so write `#lib/gt.ts` rather than `#lib/gt`.
+
+## Runtime options [#runtime-options]
+
+Call [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) once, in a module that both the server and the browser import:
+
+```ts title="src/lib/gt.ts"
+import { initializeGT } from 'gt-svelte';
+import gtConfig from '../../gt.config.json';
+
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  // Supported locales, including the default locale
+  locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+  loadTranslations: async (locale) =>
+    (await import(`../_gt/${locale}.json`)).default,
+});
+```
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`defaultLocale`](/docs/svelte/reference/types/gt-svelte-config#default-locale) | Locale of your source content. | `string` | Yes | `'en'` |
+| [`locales`](/docs/svelte/reference/types/gt-svelte-config#locales) | Supported locales. | `string[]` | Yes | `[]` |
+| [`customMapping`](/docs/svelte/reference/types/gt-svelte-config#custom-mapping) | Custom locale codes and names. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | — |
+| [`loadTranslations`](/docs/svelte/reference/types/gt-svelte-config#load-translations) | Returns one locale's translations. | `(locale: string) => Promise<unknown>` | Yes | — |
+| [`projectId`](/docs/svelte/reference/types/gt-svelte-config#project-id) | Project whose published translations load from the CDN. | `string` | Yes | — |
+| [`cacheUrl`](/docs/svelte/reference/types/gt-svelte-config#cache-url) | Remote store that translations load from. | `string \| null` | Yes | General Translation CDN |
+| [`cacheExpiryTime`](/docs/svelte/reference/types/gt-svelte-config#cache-expiry) | How long loaded translations stay cached, in milliseconds. | `number \| null` | Yes | `60000` on the server; `null` in the browser |
+
+(See [`GTSvelteConfig`](/docs/svelte/reference/types/gt-svelte-config) for each option).

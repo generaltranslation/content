@@ -74,6 +74,7 @@ const MACHINE_DOC_SCOPES = [
   'cli',
   'react',
   'vue',
+  'svelte',
   'node',
   'python',
   'integrations',

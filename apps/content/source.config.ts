@@ -5,7 +5,7 @@ import {
   frontmatterSchema,
   metaSchema,
 } from 'fumadocs-mdx/config';
-import { remarkGfm, remarkHeading } from 'fumadocs-core/mdx-plugins';
+import { rehypeCode, remarkGfm, remarkHeading } from 'fumadocs-core/mdx-plugins';
 import { z } from 'zod';
 
 const contentFrontmatterSchema = frontmatterSchema.extend({
@@ -65,5 +65,6 @@ export default defineConfig({
   mdxOptions: {
     preset: 'minimal',
     remarkPlugins: [remarkGfm, remarkHeading],
+    rehypePlugins: [[rehypeCode, { fallbackLanguage: 'plaintext' }]],
   },
 });

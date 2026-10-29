@@ -1,0 +1,89 @@
+---
+
+title: "<Plural>"
+description: Render the plural form that matches a count in the active locale. API reference for the <Plural> component.
+
+---
+
+`<Plural>` picks one of its forms from a number and the active locale's plural rules. Inside [`<T>`](/docs/svelte/reference/components/t), every form is part of the translation, so translators can supply the forms their language needs.
+
+## Overview [#overview]
+
+Pass the count as `n`. Give each form as a string prop or as a `{#snippet}` named after the form:
+
+```svelte
+<Plural n={count} one="One item">
+  {#snippet other()}<Num value={count} /> items{/snippet}
+</Plural>
+```
+
+`n` only selects the form. Show the number with [`<Num>`](/docs/svelte/reference/components/num) inside a form.
+
+## How it works [#how-it-works]
+
+Selection runs in this order, using only the forms you provide:
+
+1. `zero` when the absolute value of `n` is `0`.
+2. `singular`, then `one`, when the absolute value is `1`. `singular` also matches when the locale's rule returns `one`.
+3. `dual`, then `two`, when the absolute value is `2`. `dual` also matches when the locale's rule returns `two`.
+4. The locale's CLDR plural category, such as `few` or `many`.
+5. `plural`, then `other`.
+6. If nothing matches, or `n` is not a number, the children render.
+
+The plural rules come from the locale the content renders in, then the default locale. Inside a [`<T>`](/docs/svelte/reference/components/t) with no translation, that is the default locale.
+
+- **Forms.** A string prop renders as text; a snippet renders its markup. Snippet forms take no parameters.
+- **No wrapper.** `<Plural>` adds no HTML element.
+- **Inside [`<T>`](/docs/svelte/reference/components/t).** The extractor records every form. Forms must be static strings or snippets, snippet names must be plural forms, a form cannot be declared twice, and spread props are not allowed. Any of these mistakes fails the build.
+
+## Props [#props]
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`n`](#n) | The count that selects the form. | `number \| null` | Yes | — |
+| [`[form]`](#forms) | Content for one plural form. | `string \| Snippet` | Yes | — |
+| [`children`](#children) | Fallback when no form matches. | `Snippet` | Yes | — |
+
+### `n`
+
+**Type** `number | null` · **Optional**
+
+The count used to select a form. When it is not a number, the children render.
+
+### Forms
+
+**Type** `string | Snippet` · **Optional**
+
+The content for one form. Accepted form names: `zero`, `one`, `two`, `few`, `many`, `other`, and the aliases `singular`, `dual`, and `plural`. Provide `other` so every count has a match.
+
+```svelte
+<Plural n={count} zero="No messages" one="One message">
+  {#snippet other()}<Num value={count} /> messages{/snippet}
+</Plural>
+```
+
+### `children`
+
+**Type** `Snippet` · **Optional**
+
+Rendered when no provided form matches.
+
+## Example [#example]
+
+```svelte title="src/lib/Inbox.svelte"
+<script lang="ts">
+  import { Num, Plural, T } from 'gt-svelte';
+
+  let { count }: { count: number } = $props();
+</script>
+
+<T>
+  <Plural n={count}>
+    {#snippet zero()}Your inbox is empty.{/snippet}
+    {#snippet one()}You have <b>one</b> message.{/snippet}
+    {#snippet other()}You have <b><Num value={count} /></b> messages.{/snippet}
+  </Plural>
+</T>
+```
+
+(See [Handling plurals and branches](/docs/svelte/guides/handling-plurals-and-branches)).

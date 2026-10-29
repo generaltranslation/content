@@ -1,0 +1,70 @@
+---
+
+title: getLocaleDirection
+description: Get whether a locale is written left to right or right to left. API reference for getLocaleDirection.
+
+---
+
+`getLocaleDirection` returns the value for a `dir` attribute. Unlike [`useLocaleDirection()`](/docs/svelte/reference/functions/use-locale-direction), it does not need a component, so it works in `hooks.server.ts` and in event handlers.
+
+## Overview [#overview]
+
+```ts
+function getLocaleDirection(locale: string): 'ltr' | 'rtl';
+```
+
+```ts
+getLocaleDirection('ar'); // 'rtl'
+getLocaleDirection('fr'); // 'ltr'
+```
+
+## How it works [#how-it-works]
+
+The direction comes from the browser's or runtime's `Intl.Locale` text information when available. Otherwise it falls back to the locale's script, then its language, against known right-to-left scripts and languages. Unknown locales are `'ltr'`.
+
+Call it after [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) has run.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | Locale code to check. | `string` | No | — |
+
+### `locale`
+
+**Type** `string` · **Required**
+
+Any locale code. It does not need to be a supported locale.
+
+## Returns [#returns]
+
+**Type** `'ltr' | 'rtl'`
+
+## Example [#example]
+
+Set `<html dir>` for each request. `src/app.html` contains `<html lang="%gt.lang%" dir="%gt.dir%">`:
+
+```ts title="src/hooks.server.ts"
+import type { Handle } from '@sveltejs/kit/hooks';
+import { getLocaleDirection, resolveLocale } from 'gt-svelte';
+import { LOCALE_COOKIE } from '#lib/gt.ts';
+
+export const handle: Handle = ({ event, resolve }) => {
+  const locale = resolveLocale(event.cookies.get(LOCALE_COOKIE));
+  return resolve(event, {
+    transformPageChunk: ({ html }) =>
+      html
+        .replace('%gt.lang%', locale)
+        .replace('%gt.dir%', getLocaleDirection(locale)),
+  });
+};
+```
+
+On SvelteKit 2, import `Handle` from `@sveltejs/kit` and the module from `$lib/gt`.
+
+Update the document after a client-side switch, since [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) does not:
+
+```ts
+await setLocale(next);
+document.documentElement.dir = getLocaleDirection(next);
+```

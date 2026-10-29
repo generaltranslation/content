@@ -303,6 +303,7 @@ function targetContexts(target: ReferenceTarget): string[] {
     return ['react', 'gt-react'];
   }
   if (path.includes('/vue/')) return ['vue', 'gt-vue'];
+  if (path.includes('/svelte/')) return ['svelte', 'gt-svelte'];
   if (path.includes('/rrweb/')) return ['rrweb', 'gt-rrweb'];
   if (path.includes('/node/')) return ['node', 'gt-node'];
   if (path.includes('/python/')) {
@@ -329,6 +330,7 @@ function sourceContexts(path: string): string[] {
   }
   if (normalizedPath.includes('devlog/en-US/gt-react_')) return ['react'];
   if (normalizedPath.includes('devlog/en-US/gt-vue_')) return ['vue'];
+  if (normalizedPath.includes('devlog/en-US/gt-svelte_')) return ['svelte'];
   if (normalizedPath.includes('devlog/en-US/gt-rrweb_')) return ['rrweb'];
   if (normalizedPath.includes('devlog/en-US/gt-node_')) return ['node'];
   if (
@@ -368,6 +370,7 @@ function sourceContexts(path: string): string[] {
   }
   if (normalizedPath.includes('/react/')) return ['react'];
   if (normalizedPath.includes('/vue/')) return ['vue'];
+  if (normalizedPath.includes('/svelte/')) return ['svelte'];
   if (normalizedPath.includes('/rrweb/')) return ['rrweb'];
   if (normalizedPath.includes('/node/')) return ['node'];
   if (normalizedPath.includes('/python/')) return ['python'];
@@ -389,6 +392,7 @@ function targetIsApplicable(
       context
     );
   const hasVueContext = /\b(?:vue|gt-vue)\b/.test(context);
+  const hasSvelteContext = /\b(?:svelte|sveltekit|gt-svelte)\b/.test(context);
 
   if (path.includes('/platform/core/')) return true;
   if (path.includes('/cli/reference/commands/')) {
@@ -421,11 +425,12 @@ function targetIsApplicable(
     );
   }
   if (path.includes('/react/')) {
-    if (sourceTags.includes('vue')) return false;
-    if (hasVueContext && !hasReactContext) return false;
+    if (sourceTags.includes('vue') || sourceTags.includes('svelte')) return false;
+    if ((hasVueContext || hasSvelteContext) && !hasReactContext) return false;
     if (sourceTags.includes('react') || sourceTags.includes('cli')) return true;
     if (
       !hasVueContext &&
+      !hasSvelteContext &&
       /^<\/?[$A-Z][\w$.-]*\s*\/?>$/.test(symbol)
     ) {
       return true;
@@ -441,10 +446,17 @@ function targetIsApplicable(
   }
 
   if (path.includes('/vue/')) {
-    if (sourceTags.includes('react')) return false;
-    if (hasReactContext && !hasVueContext) return false;
+    if (sourceTags.includes('react') || sourceTags.includes('svelte')) return false;
+    if ((hasReactContext || hasSvelteContext) && !hasVueContext) return false;
     if (sourceTags.includes('vue')) return true;
     return hasVueContext;
+  }
+
+  if (path.includes('/svelte/')) {
+    if (sourceTags.includes('react') || sourceTags.includes('vue')) return false;
+    if ((hasReactContext || hasVueContext) && !hasSvelteContext) return false;
+    if (sourceTags.includes('svelte')) return true;
+    return hasSvelteContext;
   }
 
   if (path.includes('/node/')) {
@@ -500,7 +512,7 @@ function scoreTarget(
   }
 
   for (const targetTag of targetTags) {
-    if (['react', 'vue', 'rrweb', 'node', 'python', 'cli', 'core'].includes(targetTag)) {
+    if (['react', 'vue', 'svelte', 'rrweb', 'node', 'python', 'cli', 'core'].includes(targetTag)) {
       continue;
     }
     if (context.includes(targetTag)) score += targetTag.includes('-') ? 40 : 20;
@@ -522,6 +534,12 @@ function scoreTarget(
     score += 30;
   }
   if (target.path.includes('/vue/') && /\b(?:vue|gt-vue)\b/.test(context)) {
+    score += 30;
+  }
+  if (
+    target.path.includes('/svelte/') &&
+    /\b(?:svelte|sveltekit|gt-svelte)\b/.test(context)
+  ) {
     score += 30;
   }
 

@@ -1,0 +1,75 @@
+---
+
+title: useMessages
+description: Get a function that translates strings registered with msg in the active locale. API reference for useMessages.
+
+---
+
+`useMessages` returns the function that resolves values created by [`msg()`](/docs/svelte/reference/functions/msg). It works like [`useGT()`](/docs/svelte/reference/functions/use-gt), but reads the source and options that [`msg()`](/docs/svelte/reference/functions/msg) encoded.
+
+## Overview [#overview]
+
+```ts
+function useMessages(): MFunctionType;
+
+// The returned function
+type MFunctionType = <T extends string | null | undefined>(
+  encodedMsg: T,
+  options?: GTTranslationOptions
+) => T extends string ? string : T;
+```
+
+```svelte
+<script lang="ts">
+  import { msg, useMessages } from 'gt-svelte';
+
+  const label = msg('Save');
+  const m = useMessages();
+</script>
+
+<button>{m(label)}</button>
+```
+
+## How it works [#how-it-works]
+
+- **Encoded messages.** When the value came from [`msg()`](/docs/svelte/reference/functions/msg) with options, the function translates the encoded source with the encoded options. Options passed at the call site are ignored for these values.
+- **Plain messages.** Any other string, including [`msg()`](/docs/svelte/reference/functions/msg) output without options, is translated as a message with the call-site options.
+- **Empty values.** `null` and `undefined` are returned unchanged, so optional fields need no guard.
+- **Reactivity and context.** Like [`useGT()`](/docs/svelte/reference/functions/use-gt), call `useMessages` during component initialization. Calls in the template or `$derived` rerun when the locale changes.
+
+Only strings registered with [`msg()`](/docs/svelte/reference/functions/msg), or extracted elsewhere, have translations. Passing an arbitrary runtime string, such as a value from a database, returns it untranslated.
+
+## Returns [#returns]
+
+**Type** [`MFunctionType`](/docs/svelte/reference/types/m-function-type)
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`encodedMsg`](#encodedmsg) | Value returned by [`msg()`](/docs/svelte/reference/functions/msg), or `null` or `undefined`. | `string \| null \| undefined` | No | — |
+| [`options`](#options) | Variables and options for messages without encoded options. | [`GTTranslationOptions`](/docs/svelte/reference/types/gt-translation-options) | Yes | `{}` |
+
+### `encodedMsg`
+
+**Type** `string | null | undefined` · **Required**
+
+The value to translate. The return type follows the input: a string returns a string, and `null` or `undefined` returns the same value.
+
+### `options`
+
+**Type** [`GTTranslationOptions`](/docs/svelte/reference/types/gt-translation-options) · **Optional** · **Default** `{}`
+
+Variables and options used when `encodedMsg` carries no encoded options.
+
+## Example [#example]
+
+```svelte title="src/lib/StatusBadge.svelte"
+<script lang="ts">
+  import { useMessages } from 'gt-svelte';
+  import { STATUSES } from '#lib/statuses.ts';
+
+  let { status }: { status: keyof typeof STATUSES } = $props();
+  const m = useMessages();
+</script>
+
+<span class="badge">{m(STATUSES[status])}</span>
+```

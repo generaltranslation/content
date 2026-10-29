@@ -1,0 +1,89 @@
+---
+
+title: Handling plurals and branches
+description: How to translate count-dependent and conditional wording with <Plural> and <Branch>.
+related:
+  links:
+    - /docs/svelte/guides/formatting-variables
+    - /docs/svelte/guides/translating-content
+    - /docs/svelte/guides/translating-strings
+    - /docs/svelte/guides/managing-locales
+
+---
+
+`{#if}` blocks cannot go inside [`<T>`](/docs/svelte/reference/components/t), because each translation has to contain every alternative. [`<Plural>`](/docs/svelte/reference/components/plural) and [`<Branch>`](/docs/svelte/reference/components/branch) declare the alternatives up front, so they are translated together and the right one renders at runtime.
+
+## Choose a component [#choose]
+
+- **[`<Plural>`](/docs/svelte/reference/components/plural)** when wording depends on a number. Each language uses its own plural rules, so a translation can add forms such as `few` or `many` that English does not need.
+- **[`<Branch>`](/docs/svelte/reference/components/branch)** when wording depends on a named value, such as a status or role.
+
+## Pluralize with `<Plural>` [#plural]
+
+Pass the number as `n`, and each form as a string prop or a snippet named after the form. Snippets can contain markup and variable components:
+
+```svelte
+<script lang="ts">
+  import { Num, Plural, T } from 'gt-svelte';
+
+  let { count }: { count: number } = $props();
+</script>
+
+<T>
+  <Plural n={count}>
+    {#snippet one()}You have <b>one</b> message.{/snippet}
+    {#snippet other()}You have <b><Num value={count} /></b> messages.{/snippet}
+  </Plural>
+</T>
+```
+
+- The forms are the CLDR categories `zero`, `one`, `two`, `few`, `many`, and `other`, plus the aliases `singular`, `dual`, and `plural`. Provide the forms your source language uses; `other` is the usual catch-all.
+- `zero` matches `0`, `one` and `singular` match `1` or `-1`, and `two` and `dual` match `2` or `-2`, even in languages whose plural rules group those numbers differently. Other numbers use the locale's rules, then fall back to `plural`, then `other`.
+- Use string props for plain text: `<Plural n={count} one="One item" other="Several items" />`.
+- Children outside a snippet render when no form matches.
+- Form snippets cannot take parameters.
+
+## Branch on a value with `<Branch>` [#branch]
+
+Pass the value as `branch`, and each alternative as a prop or snippet with a matching name:
+
+```svelte
+<script lang="ts">
+  import { Branch, T } from 'gt-svelte';
+
+  let { status }: { status: 'active' | 'paused' } = $props();
+</script>
+
+<T>
+  Your subscription is
+  <Branch branch={status} paused="paused until you resume it">
+    {#snippet active()}<strong>active</strong>{/snippet}
+    in an unknown state
+  </Branch>.
+</T>
+```
+
+- The value is converted to a string to find the branch, so numbers and booleans work too.
+- The children render when no branch matches, or when `branch` is `null`, `undefined`, or an empty string.
+- Branch names cannot be `branch`, `children`, `__proto__`, or start with `data-`.
+
+## Replace conditionals inside `<T>` [#conditionals]
+
+Rewrite an `{#if}` that switches wording as a [`<Branch>`](/docs/svelte/reference/components/branch), so the translation has both sentences:
+
+```svelte
+<!-- ❌ Logic blocks are not allowed inside <T> -->
+<T>
+  {#if isOwner}You own this list.{:else}You can view this list.{/if}
+</T>
+
+<!-- ✅ -->
+<T>
+  <Branch branch={isOwner ? 'owner' : 'viewer'}>
+    {#snippet owner()}You own this list.{/snippet}
+    {#snippet viewer()}You can view this list.{/snippet}
+  </Branch>
+</T>
+```
+
+When the alternatives are unrelated content rather than different wording, put the `{#if}` outside and give each branch its own [`<T>`](/docs/svelte/reference/components/t).

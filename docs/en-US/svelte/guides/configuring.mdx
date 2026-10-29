@@ -1,0 +1,102 @@
+---
+
+title: Configuring gt-svelte
+description: How to set up gt-svelte in SvelteKit 3 or SvelteKit 2, share locale settings with the CLI, and load translation files.
+related:
+  links:
+    - /docs/svelte/guides/managing-locales
+    - /docs/svelte/guides/generating-translations
+    - /docs/svelte/guides/translating-content
+    - /docs/svelte/guides/translating-strings
+
+---
+
+A SvelteKit app configures `gt-svelte` in three places: the preprocessor in the build config, runtime settings in a shared module, and CLI settings in `gt.config.json`. The [Quickstart](/docs/svelte/quickstart) wires all three; this guide explains each choice and the differences between SvelteKit versions.
+
+## Set up for your SvelteKit version [#sveltekit]
+
+SvelteKit 3 moved several settings, so the same setup lives in different files depending on your version.
+
+### a) SvelteKit 3
+
+SvelteKit 3 has no `svelte.config.js`. Svelte and Kit options, including `preprocess` and `adapter`, go to the `sveltekit()` plugin:
+
+```ts title="vite.config.ts"
+import adapter from '@sveltejs/adapter-node';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { gtPreprocess } from 'gt-svelte/preprocess';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [sveltekit({ preprocess: [gtPreprocess()], adapter: adapter() })],
+  server: { fs: { allow: ['gt.config.json'] } },
+});
+```
+
+- `vitePreprocess()` is not needed.
+- `$lib` is replaced by a `#lib/*` subpath import declared in `package.json` (`"imports": { "#lib/*": "./src/lib/*" }`).
+- Import from `#lib` with the file extension, such as `#lib/gt.ts`. TypeScript does not add extensions to subpath imports.
+- Hook types such as `Handle`, `ServerInit`, and `sequence` come from `@sveltejs/kit/hooks`.
+
+### b) SvelteKit 2
+
+SvelteKit 2 reads Svelte options from `svelte.config.js`. Add [`gtPreprocess()`](/docs/svelte/reference/functions/gt-preprocess) last, so it sees the markup other preprocessors produce:
+
+```js title="svelte.config.js"
+import adapter from '@sveltejs/adapter-node';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import { gtPreprocess } from 'gt-svelte/preprocess';
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+  preprocess: [vitePreprocess(), gtPreprocess()],
+  kit: { adapter: adapter() },
+};
+
+export default config;
+```
+
+Keep `server.fs.allow` in `vite.config.ts`, import your modules through `$lib` (`$lib/gt`), and import hook types from `@sveltejs/kit`.
+
+<Callout type="info">
+  The preprocessor must run on every component that contains [`<T>`](/docs/svelte/reference/components/t). A component it skipped renders its source content and logs a development warning. Restart the development server after changing the preprocessor list.
+</Callout>
+
+## Share settings with the CLI [#shared-config]
+
+The CLI reads `gt.config.json`. The runtime does not read it on its own, so import it into the module that calls [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt):
+
+```ts title="src/lib/gt.ts"
+import { initializeGT } from 'gt-svelte';
+import gtConfig from '../../gt.config.json';
+
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+  loadTranslations: async (locale) =>
+    (await import(`../_gt/${locale}.json`)).default,
+});
+```
+
+- In `gt.config.json`, `locales` lists only target languages. The runtime `locales` option is every supported locale, so include the default locale.
+- The browser imports the file too. SvelteKit limits the files Vite's dev server may serve to the browser to `src`, `node_modules`, and a few generated directories, so add `gt.config.json` to `server.fs.allow`.
+- The CLI also writes `_versionId` into `gt.config.json` when it translates. The runtime ignores it. (See [`omitConfigIds`](/docs/cli/reference/config#omit-config-ids) to turn this off).
+
+## Initialize on the server and in the browser [#initialize]
+
+[`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) sets up one shared configuration and translation cache per JavaScript runtime. Both the server and the browser need it before anything renders or loads translations, so import `src/lib/gt.ts` from code that runs in each:
+
+- `src/hooks.server.ts` and `+layout.server.ts` for the server
+- the root `+layout.svelte`, which runs on the server and in the browser
+
+Importing the module more than once is safe: JavaScript evaluates it once per runtime.
+
+## Load translation files [#load]
+
+[`loadTranslations`](/docs/svelte/reference/functions/load-translations) receives a resolved locale code and returns that locale's translations. The dynamic `import()` in the example lets Vite bundle each `src/_gt/*.json` file as its own chunk, so the browser downloads only the languages a visitor uses.
+
+- Translations are part of your build. Run the CLI and redeploy whenever content or translations change.
+- On the server, loaded translations expire from the cache after 60 seconds and are loaded again. In the browser, they do not expire, because nothing would reload them. Set [`cacheExpiryTime`](/docs/svelte/reference/types/gt-svelte-config) to change this.
+- When [`loadTranslations`](/docs/svelte/reference/functions/load-translations) throws in development, the error propagates and a locale switch keeps the current locale. In production, the error is logged and the locale renders its source content.
+
+To serve translations from the General Translation CDN instead of your bundle, omit [`loadTranslations`](/docs/svelte/reference/functions/load-translations), set `projectId`, and publish translations with the CLI's [`publish`](/docs/cli/reference/config#publish) setting. (See [GTSvelteConfig](/docs/svelte/reference/types/gt-svelte-config) for the loading options).

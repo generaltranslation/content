@@ -1,0 +1,91 @@
+---
+
+title: useSetLocale
+description: Get a function that switches the page to another locale without a reload. API reference for useSetLocale.
+
+---
+
+`useSetLocale` returns an async function that loads a locale's translations and then re-renders the nearest [`<GTProvider>`](/docs/svelte/reference/components/gt-provider) subtree in it. It changes only what is on screen: it does not save the choice or update the document.
+
+## Overview [#overview]
+
+```ts
+function useSetLocale(): (locale: string) => Promise<void>;
+```
+
+```svelte
+<script lang="ts">
+  import { useSetLocale } from 'gt-svelte';
+
+  const setLocale = useSetLocale();
+</script>
+
+<button onclick={() => setLocale('fr')}>Français</button>
+```
+
+## How it works [#how-it-works]
+
+1. Resolves the requested locale with [`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale), so an unsupported locale becomes the default locale.
+2. Loads its translations through the configured [`loadTranslations`](/docs/svelte/reference/types/gt-svelte-config#load-translations) option, unless they are already cached. The current content stays on screen while it loads.
+3. Switches the provider's locale. [`<T>`](/docs/svelte/reference/components/t), [`useGT()`](/docs/svelte/reference/functions/use-gt), [`useLocale()`](/docs/svelte/reference/functions/use-locale), and the variable components re-render.
+
+When calls overlap, the most recent call wins, even if an earlier one finishes loading later.
+
+### Persistence and document attributes
+
+- **It does not save the locale.** The next server render uses whatever your server hook resolves. To keep the choice, write the `generaltranslation.locale` cookie, or whatever your hook reads, before or after calling it.
+- **It does not update `<html lang dir>`.** Set `document.documentElement.lang` and `dir` yourself, with [`getLocaleDirection()`](/docs/svelte/reference/functions/get-locale-direction).
+- **It does not rerun `load` functions.** Data loaded on the server for the old locale stays as it was until the next navigation that reruns it.
+
+### Errors
+
+The returned promise rejects when the component is not under a [`<GTProvider>`](/docs/svelte/reference/components/gt-provider).
+
+When the translation loader fails, the result depends on the environment. In development, the promise rejects and the locale does not change. In production, the error is logged, the locale switches, and its content renders as source text.
+
+## Parameters [#parameters]
+
+`useSetLocale` takes no parameters. Call it during component initialization.
+
+## Returns [#returns]
+
+**Type** `(locale: string) => Promise<void>`
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | Locale to switch to. | `string` | No | — |
+
+### `locale`
+
+**Type** `string` · **Required**
+
+The requested locale code. The promise resolves once the page renders in the resolved locale, or once a later call has superseded this one.
+
+## Example [#example]
+
+Save the choice for the server and update the document:
+
+```svelte title="src/lib/LocaleSwitcher.svelte"
+<script lang="ts">
+  import { getLocaleDirection, useLocale, useLocales, useSetLocale } from 'gt-svelte';
+  import { LOCALE_COOKIE } from '#lib/gt.ts';
+
+  const locale = useLocale();
+  const setLocale = useSetLocale();
+
+  async function change(event: Event) {
+    const next = (event.currentTarget as HTMLSelectElement).value;
+    // Remember the choice for the next server render
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    await setLocale(next);
+    document.documentElement.lang = next;
+    document.documentElement.dir = getLocaleDirection(next);
+  }
+</script>
+
+<select value={locale.current} onchange={change}>
+  {#each useLocales() as code (code)}
+    <option value={code}>{code}</option>
+  {/each}
+</select>
+```

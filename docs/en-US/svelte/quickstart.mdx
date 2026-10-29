@@ -1,0 +1,485 @@
+---
+
+title: Quickstart
+description: Add multiple languages to a SvelteKit application with server-rendered translations.
+related:
+  links:
+    - /docs/svelte/guides/translating-content
+    - /docs/svelte/guides/translating-strings
+    - /docs/svelte/guides/managing-locales
+    - /docs/svelte/guides/generating-translations
+
+---
+
+By the end of this guide, your SvelteKit app will render pages in the visitor's language on the server and let them switch languages without a reload.
+
+`gt-svelte` is a Svelte 5 library. A preprocessor prepares each [`<T>`](/docs/svelte/reference/components/t) at build time, a `load` function reads the request's translations, and [`<GTProvider>`](/docs/svelte/reference/components/gt-provider) renders them on the server and in the browser.
+
+**Requirements:**
+
+- Svelte 5
+- SvelteKit 3 or SvelteKit 2. Steps that differ between them have a tab for each.
+
+<Callout type="info">
+  **Beta:** `gt-svelte` is in beta and published under the `samsara` dist-tag. Its API may change between 0.x releases.
+</Callout>
+
+## Quickstart [#quickstart]
+
+The steps add five files to a SvelteKit app: a translation config, a shared initialization module, a server hook, a root layout load function, and a language switcher.
+
+### 1. Install the packages
+
+`gt-svelte` renders translations in your app. [`gt`](/docs/cli/quickstart) is the CLI that extracts your content and writes translation files. Install both from the `samsara` dist-tag:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm install gt-svelte@samsara
+    npm install --save-dev gt@samsara
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn add gt-svelte@samsara
+    yarn add --dev gt@samsara
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun add gt-svelte@samsara
+    bun add --dev gt@samsara
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm add gt-svelte@samsara
+    pnpm add --save-dev gt@samsara
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Add the preprocessor
+
+[`gtPreprocess()`](/docs/svelte/reference/functions/gt-preprocess) hashes each [`<T>`](/docs/svelte/reference/components/t) and turns its children into snippets the translation can rearrange. It must run on every component that uses [`<T>`](/docs/svelte/reference/components/t).
+
+Your app also imports `gt.config.json` from the project root in the next steps, so allow Vite's dev server to read it with `server.fs.allow`.
+
+<Tabs items={['SvelteKit 3', 'SvelteKit 2']}>
+  <Tab value="SvelteKit 3">
+    SvelteKit 3 has no `svelte.config.js`. Pass the preprocessor to the `sveltekit()` plugin in `vite.config.ts`. `vitePreprocess()` is not needed.
+
+    ```ts title="vite.config.ts"
+    import adapter from '@sveltejs/adapter-node';
+    import { sveltekit } from '@sveltejs/kit/vite';
+    import { gtPreprocess } from 'gt-svelte/preprocess'; // [!code ++]
+    import { defineConfig } from 'vite';
+
+    export default defineConfig({
+      plugins: [
+        sveltekit({
+          preprocess: [gtPreprocess()], // [!code ++]
+          adapter: adapter(),
+        }),
+      ],
+      server: { fs: { allow: ['gt.config.json'] } }, // [!code ++]
+    });
+    ```
+  </Tab>
+
+  <Tab value="SvelteKit 2">
+    Add the preprocessor last in `svelte.config.js`, after `vitePreprocess()`, so it sees the final markup:
+
+    ```js title="svelte.config.js"
+    import adapter from '@sveltejs/adapter-node';
+    import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+    import { gtPreprocess } from 'gt-svelte/preprocess'; // [!code ++]
+
+    /** @type {import('@sveltejs/kit').Config} */
+    const config = {
+      preprocess: [vitePreprocess(), gtPreprocess()], // [!code ++]
+      kit: { adapter: adapter() },
+    };
+
+    export default config;
+    ```
+
+    Then allow the config file in `vite.config.ts`:
+
+    ```ts title="vite.config.ts"
+    import { sveltekit } from '@sveltejs/kit/vite';
+    import { defineConfig } from 'vite';
+
+    export default defineConfig({
+      plugins: [sveltekit()],
+      server: { fs: { allow: ['gt.config.json'] } }, // [!code ++]
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### 3. Create a translation config file
+
+Create `gt.config.json` in your project root. The CLI reads it, and your app imports the same locale list in the next step.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr", "ja"],
+  "files": {
+    "gt": {
+      "output": "src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+- `defaultLocale` is the language your source content is written in.
+- `locales` lists the target languages. Choose any locale from the [supported locales list](/docs/platform/dashboard/reference/supported-locales).
+- `files.gt.output` is where the CLI writes one translation file per locale. Keep the `[locale]` placeholder.
+
+The CLI scans `.svelte` files and JavaScript and TypeScript modules under `src` by default. (See [Configuration](/docs/svelte/reference/config) to change the scanned files).
+
+### 4. Initialize the library
+
+Call [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) in a module that both the server and the browser import. Its [`loadTranslations`](/docs/svelte/reference/functions/load-translations) function returns one locale's translation file:
+
+```ts title="src/lib/gt.ts"
+import { initializeGT } from 'gt-svelte';
+import gtConfig from '../../gt.config.json';
+
+/** The cookie the language switcher writes and the server reads. */
+export const LOCALE_COOKIE = 'generaltranslation.locale';
+
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  // Supported locales, including the default locale
+  locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+  loadTranslations: async (locale) =>
+    (await import(`../_gt/${locale}.json`)).default,
+});
+```
+
+<Tabs items={['SvelteKit 3', 'SvelteKit 2']}>
+  <Tab value="SvelteKit 3">
+    SvelteKit 3 replaces `$lib` with a `#lib/*` subpath import. Add it to `package.json` if your project does not have it:
+
+    ```json title="package.json"
+    {
+      "imports": {
+        "#lib/*": "./src/lib/*"
+      }
+    }
+    ```
+
+    Import the module with its file extension, `#lib/gt.ts`. TypeScript resolves subpath imports only when the extension is written out.
+  </Tab>
+
+  <Tab value="SvelteKit 2">
+    Import the module as `$lib/gt` wherever the steps below show `#lib/gt.ts`, and other `#lib/...` modules through `$lib/...` without the extension.
+  </Tab>
+</Tabs>
+
+### 5. Resolve the locale on the server
+
+A server hook picks each request's locale and writes it into `<html lang dir>`, so the first byte of HTML is already correct for right-to-left languages and screen readers.
+
+First, replace the static attributes in `src/app.html` with placeholders:
+
+```html title="src/app.html"
+<!doctype html>
+<html lang="%gt.lang%" dir="%gt.dir%"> <!-- [!code highlight] -->
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>
+```
+
+Then resolve the locale in `src/hooks.server.ts`. The saved cookie wins, followed by the browser's `Accept-Language` preferences. [`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale) returns the first supported match, or the default locale:
+
+<Tabs items={['SvelteKit 3', 'SvelteKit 2']}>
+  <Tab value="SvelteKit 3">
+    ```ts title="src/hooks.server.ts"
+    import type { Handle } from '@sveltejs/kit/hooks';
+    import { getLocaleDirection, resolveLocale } from 'gt-svelte';
+    import { LOCALE_COOKIE } from '#lib/gt.ts';
+
+    export const handle: Handle = ({ event, resolve }) => {
+      // "fr-CA,fr;q=0.9,en;q=0.8" -> ["fr-CA", "fr", "en"]
+      const preferred = (event.request.headers.get('accept-language') ?? '')
+        .split(',')
+        .map((part) => part.split(';')[0].trim())
+        .filter(Boolean);
+      const cookie = event.cookies.get(LOCALE_COOKIE);
+      const locale = resolveLocale(cookie ? [cookie, ...preferred] : preferred);
+      event.locals.locale = locale;
+
+      return resolve(event, {
+        transformPageChunk: ({ html }) =>
+          html
+            .replace('%gt.lang%', locale)
+            .replace('%gt.dir%', getLocaleDirection(locale)),
+      });
+    };
+    ```
+  </Tab>
+
+  <Tab value="SvelteKit 2">
+    ```ts title="src/hooks.server.ts"
+    import type { Handle } from '@sveltejs/kit';
+    import { getLocaleDirection, resolveLocale } from 'gt-svelte';
+    import { LOCALE_COOKIE } from '$lib/gt';
+
+    export const handle: Handle = ({ event, resolve }) => {
+      // "fr-CA,fr;q=0.9,en;q=0.8" -> ["fr-CA", "fr", "en"]
+      const preferred = (event.request.headers.get('accept-language') ?? '')
+        .split(',')
+        .map((part) => part.split(';')[0].trim())
+        .filter(Boolean);
+      const cookie = event.cookies.get(LOCALE_COOKIE);
+      const locale = resolveLocale(cookie ? [cookie, ...preferred] : preferred);
+      event.locals.locale = locale;
+
+      return resolve(event, {
+        transformPageChunk: ({ html }) =>
+          html
+            .replace('%gt.lang%', locale)
+            .replace('%gt.dir%', getLocaleDirection(locale)),
+      });
+    };
+    ```
+  </Tab>
+</Tabs>
+
+Declare the new `locals` field in `src/app.d.ts`:
+
+```ts title="src/app.d.ts"
+declare global {
+  namespace App {
+    interface Locals {
+      locale: string;
+    }
+  }
+}
+
+export {};
+```
+
+### 6. Load translations in the root layout
+
+Load the request's translations in the root layout's server `load` function with [`loadTranslations()`](/docs/svelte/reference/functions/load-translations):
+
+```ts title="src/routes/+layout.server.ts"
+import '#lib/gt.ts';
+import { loadTranslations } from 'gt-svelte';
+import type { LayoutServerLoad } from './$types';
+
+export const load: LayoutServerLoad = async ({ locals }) => ({
+  gt: await loadTranslations(locals.locale),
+});
+```
+
+Then wrap the app in [`<GTProvider>`](/docs/svelte/reference/components/gt-provider). Import the initialization module here too, so the browser runs [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) before anything renders:
+
+```svelte title="src/routes/+layout.svelte"
+<script lang="ts">
+  import '#lib/gt.ts';
+  import { GTProvider } from 'gt-svelte';
+
+  let { data, children } = $props();
+</script>
+
+<GTProvider locale={data.gt.locale} translations={data.gt.translations}>
+  {@render children()}
+</GTProvider>
+```
+
+Because the translations arrive with the page data, the server-rendered HTML is already translated and hydration does not flash source text.
+
+### 7. Mark content for translation
+
+Wrap rich content in [`<T>`](/docs/svelte/reference/components/t), and translate standalone strings such as attributes with [`useGT()`](/docs/svelte/reference/functions/use-gt):
+
+```svelte title="src/routes/+page.svelte"
+<script lang="ts">
+  import { T, Var, useGT } from 'gt-svelte';
+
+  const gt = useGT();
+  const name = 'Ada';
+</script>
+
+<T>
+  <h1>Welcome back, <Var>{name}</Var>!</h1>
+  <p>This content is translated automatically.</p>
+</T>
+
+<input placeholder={gt('Search recipes')} />
+```
+
+Everything inside [`<T>`](/docs/svelte/reference/components/t) must be static, except values wrapped in [`<Var>`](/docs/svelte/reference/components/var) or another [variable component](/docs/svelte/guides/formatting-variables).
+
+### 8. Add a language switcher
+
+[`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) loads a locale's translations and re-renders the page in it. It does not save the choice, so the switcher writes the cookie the server hook reads, and updates `<html lang dir>` itself:
+
+```svelte title="src/lib/LocaleSwitcher.svelte"
+<script lang="ts">
+  import {
+    getLocaleDirection,
+    useLocale,
+    useLocaleProperties,
+    useLocales,
+    useSetLocale,
+  } from 'gt-svelte';
+  import { LOCALE_COOKIE } from '#lib/gt.ts';
+
+  const locale = useLocale();
+  const setLocale = useSetLocale();
+  const options = useLocales().map((code) => ({
+    code,
+    properties: useLocaleProperties(code),
+  }));
+
+  async function change(event: Event) {
+    const next = (event.currentTarget as HTMLSelectElement).value;
+    // Remember the choice for the next server render
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    await setLocale(next);
+    document.documentElement.lang = next;
+    document.documentElement.dir = getLocaleDirection(next);
+  }
+</script>
+
+<select value={locale.current} onchange={change}>
+  {#each options as { code, properties } (code)}
+    <option value={code}>{properties.current.nativeName}</option>
+  {/each}
+</select>
+```
+
+Render it in `src/routes/+layout.svelte`, inside [`<GTProvider>`](/docs/svelte/reference/components/gt-provider):
+
+```svelte title="src/routes/+layout.svelte"
+<script lang="ts">
+  import '#lib/gt.ts';
+  import LocaleSwitcher from '#lib/LocaleSwitcher.svelte'; // [!code ++]
+  import { GTProvider } from 'gt-svelte';
+
+  let { data, children } = $props();
+</script>
+
+<GTProvider locale={data.gt.locale} translations={data.gt.translations}>
+  <LocaleSwitcher /> <!-- [!code ++] -->
+  {@render children()}
+</GTProvider>
+```
+
+### 9. Generate the translation files
+
+Run [`gt generate`](/docs/cli/reference/commands/generate). It extracts your content into `src/_gt/en.json` and creates a file for each target locale, without an account:
+
+```bash
+npx gt generate
+```
+
+The target files start as copies of the source text, so every language still shows English. They let the app load each locale while you develop.
+
+### 10. Run the app
+
+Start the development server:
+
+<Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
+  <Tab value="npm">
+    ```bash
+    npm run dev
+    ```
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash
+    yarn dev
+    ```
+  </Tab>
+
+  <Tab value="bun">
+    ```bash
+    bun run dev
+    ```
+  </Tab>
+
+  <Tab value="pnpm">
+    ```bash
+    pnpm dev
+    ```
+  </Tab>
+</Tabs>
+
+Open the local URL and choose another language. The switcher shows each language's native name and the `<html lang>` attribute changes, while the content stays in English until the next step.
+
+### 11. Translate
+
+Sign in with [`gt login`](/docs/cli/reference/commands/login), then set the ID of the project that will hold this app's translations:
+
+```bash
+npx gt login
+```
+
+```bash title=".env.local"
+GT_PROJECT_ID="your-project-id"
+```
+
+Use [`gt init`](/docs/cli/reference/commands/init) instead if you need to create or select a project. Give each app its own project. (See [Generating translations](/docs/svelte/guides/generating-translations#one-project) for why).
+
+Then translate:
+
+```bash
+npx gt translate
+```
+
+The command uploads your content, waits for the translations, and overwrites the files in `src/_gt/`. Restart the development server, reload the page, and choose a target language to see the translated content.
+
+<Callout type="warn">
+  Keep `.env.local` out of version control. In CI, provide a `GT_API_KEY` from your secret store instead of signing in. (See [CLI credentials](/docs/cli/guides/configuring#credentials)).
+</Callout>
+
+## Troubleshooting [#troubleshooting]
+
+<Accordions>
+  <Accordion title="<T> content is never translated, and the console warns about a missing translation hash">
+
+The preprocessor did not run on that component. Confirm that [`gtPreprocess()`](/docs/svelte/reference/functions/gt-preprocess) is in the `preprocess` array from step 2, and on SvelteKit 2 that it comes after `vitePreprocess()`. Restart the development server after changing the config.
+
+  </Accordion>
+
+  <Accordion title="The page renders in English first, then switches language in the browser">
+
+[`<GTProvider>`](/docs/svelte/reference/components/gt-provider) did not receive `translations`. Pass both `locale` and `translations` from the `load` function's [`loadTranslations()`](/docs/svelte/reference/functions/load-translations) result.
+
+  </Accordion>
+
+  <Accordion title="The dev server cannot load gt.config.json">
+
+Add `gt.config.json` to `server.fs.allow` in `vite.config.ts`. SvelteKit lets Vite's dev server serve only allowed files, and the project root is not on the default list.
+
+  </Accordion>
+
+  <Accordion title="Every language still shows the source text">
+
+[`gt generate`](/docs/cli/reference/commands/generate) seeds target files with source text. Run [`gt translate`](/docs/cli/reference/commands/translate) to replace it with translations, then restart the development server.
+
+  </Accordion>
+
+  <Accordion title="Non-default locales fail with &quot;Vite module runner has been closed&quot;">
+
+This happens after Vite restarts its server in place, for example when you edit an `.env` file. Stop the development process and start it again. ([Issue #2578](https://github.com/generaltranslation/gt/issues/2578) tracks the fix).
+
+  </Accordion>
+</Accordions>

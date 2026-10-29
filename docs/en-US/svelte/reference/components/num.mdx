@@ -1,0 +1,115 @@
+---
+
+title: "<Num>"
+description: Format a number for the active locale. API reference for the <Num> component.
+
+---
+
+`<Num>` formats a number with `Intl.NumberFormat` rules for the active locale. Inside [`<T>`](/docs/svelte/reference/components/t), it is a variable: the translation places it, and the number itself is never sent for translation.
+
+## Overview [#overview]
+
+Pass the number as `value`, or as the only child:
+
+```svelte
+<Num value={1234.5} />
+<!-- en: 1,234.5 · de: 1.234,5 -->
+
+<Num>{count}</Num>
+```
+
+The preprocessor rewrites `<Num>{count}</Num>` to `<Num value={count}></Num>`, so both forms behave the same.
+
+## How it works [#how-it-works]
+
+- **Value.** A number is formatted directly. A string is converted with `parseFloat()`. `null` and `undefined` render nothing.
+- **Children.** The children must be a single `{expression}`, and a component cannot have both `value` and children. Either mistake fails the build.
+- **No wrapper.** The formatted text renders without an HTML element.
+- **Reactivity.** The output updates when `value`, `options`, or the locale changes.
+
+### Formatting locales
+
+`<Num>` formats in the locale its content renders in:
+
+- **In the default locale,** it formats in the default locale only, and [`locales`](#locales) is ignored.
+- **In any other locale,** it tries `locales`, then the active locale, then the default locale.
+- **Inside a [`<T>`](/docs/svelte/reference/components/t) with no translation,** it formats in the default locale, to match the untranslated text around it.
+
+## Props [#props]
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`value`](#value) | The number to format. | `number \| string \| null \| undefined` | Yes | — |
+| [`children`](#children) | The number as a single `{expression}` child. | `Snippet` | Yes | — |
+| [`options`](#options) | Options passed to `Intl.NumberFormat`. | `Intl.NumberFormatOptions` | Yes | `{}` |
+| [`locales`](#locales) | Locales to try before the active locale. | `string[]` | Yes | `[]` |
+| [`name`](#name) | Variable key used in translations. | `string` | Yes | Generated |
+
+### `value`
+
+**Type** `number | string | null | undefined` · **Optional**
+
+The number to format. Strings are parsed with `parseFloat()`, so `"12.5"` formats as `12.5`. A missing or `null` value renders nothing.
+
+### `children`
+
+**Type** `Snippet` · **Optional**
+
+The value written as the only child, `<Num>{count}</Num>`. It must be a single `{expression}`, and it cannot be combined with `value`.
+
+### `options`
+
+**Type** `Intl.NumberFormatOptions` · **Optional** · **Default** `{}`
+
+Options for `Intl.NumberFormat`. Commonly used fields:
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `style` | Decimal, percent, currency, or unit formatting. | `'decimal' \| 'percent' \| 'currency' \| 'unit'` | Yes | `'decimal'` |
+| `currency` | ISO 4217 code, required with `style: 'currency'`. | `string` | Yes | — |
+| `unit` | Unit identifier, required with `style: 'unit'`, such as `kilometer`. | `string` | Yes | — |
+| `unitDisplay` | Width of the unit label. | `'long' \| 'short' \| 'narrow'` | Yes | `'short'` |
+| `minimumFractionDigits` | Minimum fraction digits. | `number` | Yes | Style-dependent |
+| `maximumFractionDigits` | Maximum fraction digits. | `number` | Yes | Style-dependent |
+| `minimumSignificantDigits` | Minimum significant digits. | `number` | Yes | — |
+| `maximumSignificantDigits` | Maximum significant digits. | `number` | Yes | — |
+| `useGrouping` | When to show grouping separators. | `boolean \| 'auto' \| 'always' \| 'min2'` | Yes | `'auto'` |
+| `notation` | Number notation. | `'standard' \| 'scientific' \| 'engineering' \| 'compact'` | Yes | `'standard'` |
+| `compactDisplay` | Label width for compact notation. | `'short' \| 'long'` | Yes | `'short'` |
+| `signDisplay` | When to show a sign. | `'auto' \| 'always' \| 'exceptZero' \| 'negative' \| 'never'` | Yes | `'auto'` |
+| `numberingSystem` | Numbering system, such as `latn` or `arab`. | `string` | Yes | Locale-dependent |
+
+Supported fields can vary by JavaScript runtime. (See [`Intl.NumberFormat` options](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat#options) for the full list).
+
+```svelte
+<Num value={0.42} options={{ style: 'percent' }} />
+```
+
+### `locales`
+
+**Type** `string[]` · **Optional** · **Default** `[]`
+
+Locales to try before the active locale. They are ignored while content renders in the default locale. (See [Formatting locales](#formatting-locales)).
+
+```svelte
+<Num value={1234.5} locales={['de-CH']} />
+```
+
+### `name`
+
+**Type** `string` · **Optional** · **Default** Generated
+
+The key the variable uses in the translation. Inside [`<T>`](/docs/svelte/reference/components/t), it must be a static string.
+
+## Example [#example]
+
+```svelte title="src/lib/Inventory.svelte"
+<script lang="ts">
+  import { Num, T } from 'gt-svelte';
+
+  let { count, completion }: { count: number; completion: number } = $props();
+</script>
+
+<T>There are <Num value={count} /> units in stock.</T>
+<p><Num value={completion} options={{ style: 'percent' }} /></p>
+```
