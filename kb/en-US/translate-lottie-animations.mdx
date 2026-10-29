@@ -1,0 +1,127 @@
+---
+title: How do I translate Lottie animations?
+summary: Translate the strings in the animation's text layers, stored in the Lottie JSON at t.d.k[].s.t, then check that each translation fits its box, that the fonts cover the new script, and that no text was exported as shapes. Re-export per language, swap text at run time, or script the JSON; General Translation's CLI translates .lottie files and refits the layout.
+description: Lottie text lives in text layers (ty 5) at t.d.k[].s.t. Translate it by re-exporting, swapping text at run time, or editing the JSON, then check fit, fonts, and glyphs.
+date: 2026-10-28
+category: translation
+related: [translate-json-files, right-to-left-css, pseudo-localization, translate-google-slides, translate-srt-subtitles]
+---
+
+A Lottie animation is JSON, usually exported from After Effects with the Bodymovin plugin, and its words sit inside text layers, not in a separate string file. Translating one means replacing that text per language without breaking the animation. The words are the easy part; the hard part is the fixed box sizes, embedded fonts and glyphs, and right-to-left scripts around them.
+
+## Where text lives in a Lottie file
+
+Layers are typed by `ty`, and text layers are type `5`. Each text layer has a `t` object whose document, `t.d`, holds keyframes in `k`; each keyframe's `s` is a text document whose `t` is the string itself, with line breaks written as `\r`. A text document also names its font (`f`), size (`s`), and, for box text, the box size (`sz`) and position (`ps`). Text that changes mid-animation has one keyframe per change ([Lottie docs: Text](https://lottiefiles.github.io/lottie-docs/text/), [Layers](https://lottiefiles.github.io/lottie-docs/layers/)):
+
+```json title="animation.json (excerpt)"
+{
+  "fonts": {
+    "list": [
+      { "fName": "Inter-Bold", "fFamily": "Inter", "fStyle": "Bold", "origin": 0 }
+    ]
+  },
+  "layers": [
+    {
+      "ty": 5,
+      "nm": "Headline",
+      "t": {
+        "d": {
+          "k": [
+            { "t": 0, "s": { "t": "Start your free trial", "f": "Inter-Bold", "s": 48, "sz": [600, 80], "ps": [-300, -40] } }
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+Three other places matter:
+
+- **Precomps.** Nested compositions keep their layers in `assets[].layers`, so text layers can sit there too, not only in the top-level `layers` array.
+- **Fonts and glyphs.** `fonts.list` names each font. If the designer turned on Bodymovin's **Glyphs** setting, the file also has a `chars` array with an outline for every character it uses; with it off, the player needs the font file itself ([Lottie: After Effects export settings](https://lottie.airbnb.tech/#/after-effects)). Glyphs render on Android and the web but not on iOS, which needs fonts ([Lottie: Supported features](https://lottie.airbnb.tech/#/supported-features)).
+- **Text converted to shapes.** Text a designer converted to shapes in After Effects becomes a shape layer (`ty` 4), with no string left to translate. It has to go back to a text layer in After Effects.
+
+A `.lottie` file is a dotLottie package: a ZIP archive with a `manifest.json` and one or more animation JSON files, plus optional images and fonts ([dotLottie 2.0 spec](https://dotlottie.io/spec/2.0/)). The text sits in the same place inside each animation JSON.
+
+## What goes wrong when you translate an animation
+
+- **Text expansion.** Translations rarely match the source length. On [General Translation's site](https://generaltranslation.com), "Save changes" measures 63% wider in German than in English. A box text layer has a fixed `sz`, so longer text wraps into extra lines the design never planned for, and point text (no box) can run past the frame.
+- **Missing characters.** A Latin-only font has no Japanese, Chinese, or Arabic characters. With glyphs exported, the file only has outlines for the characters the English text used; lottie-web's maintainers note that all glyphs for new text "must have been exported from AE" ([lottie-web wiki](https://github.com/airbnb/lottie-web/wiki/TextLayer.updateDocumentData)).
+- **Right-to-left text.** Player support is uneven. lottie-android has open issues for right-to-left text ([#1145](https://github.com/airbnb/lottie-android/issues/1145)) and for Arabic letters that render unjoined ([#2279](https://github.com/airbnb/lottie-android/issues/2279)). (See [How do I support RTL (right-to-left) languages in CSS?](/kb/right-to-left-css) for the page around the animation.)
+- **Text driven by expressions.** After Effects expressions are JavaScript stored in the file (the `x` property). A text layer whose content comes from an expression is computed as the animation plays, so there's no fixed string to translate.
+
+Test the source animation with longer, accented text before translating. (See [What is pseudo-localization?](/kb/pseudo-localization).)
+
+## Ways to translate a Lottie animation
+
+| Approach | Where the text changes | Handles fit and fonts | Repeatable on every release | What it leaves to you |
+| --- | --- | --- | --- | --- |
+| Re-export per language from After Effects | A designer duplicates the composition, edits each text layer, and exports one file per language | A designer adjusts each version by eye | No; every copy change repeats per language | One file per language and designer time for each |
+| Swap text at run time | The player replaces strings as the animation renders | No; text keeps the original box, font, and glyphs | Yes; strings come from your app's translations | Fit, font coverage, and glyphs in every language, plus stable keys (source text or layer names) |
+| Script edits to the JSON | A script replaces each `s.t` value, often with machine translation or an LLM | No | Yes | Line breaks, fit, fonts, glyphs, and re-zipping `.lottie` files |
+| General Translation CLI | [`gt stage`](/docs/cli/reference/commands/stage) and [`gt download`](/docs/cli/reference/commands/download) produce a translated `.lottie` file per language | Layout processing refits text and nearby layers using fonts you upload | Yes | Reviewing each animation, removing expressions, and Layout Processing usage |
+
+Runtime swapping is built into the players. In lottie-android, a `TextDelegate` maps source text to replacement text, and `LottieProperty.TEXT` sets it through dynamic properties ([Lottie for Android](https://lottie.airbnb.tech/#/android)):
+
+```kotlin
+// Replace the animation's English text with the localized string resource.
+val textDelegate = TextDelegate(animationView)
+textDelegate.setText("Start your free trial", getString(R.string.trial_cta))
+animationView.setTextDelegate(textDelegate)
+```
+
+In lottie-ios, set `animationView.textProvider` to a `DictionaryTextProvider` keyed by the text layer's keypath ([lottie-ios source](https://github.com/airbnb/lottie-ios/blob/master/Sources/Public/TextProvider/AnimationTextProvider.swift)). In lottie-web, call `updateDocumentData` on the text layer element. The dotLottie web player's `setTextSlot` replaces text the designer exposed as a slot ([dotLottie slots](https://docs.lottiefiles.com/en/runtimes/distributions/js/v0.x/core-concepts/slots)). None of them refits the layout: the new string goes into the original box.
+
+Re-export from After Effects when an animation ships in one or two languages and a designer wants to tune every frame. Swap text at run time when the words come from your app, such as a user's name, and the box has room for the longest translation. Choose General Translation when animations ship in many languages, change with releases, and need layouts refit for each language. Script the JSON yourself only if you'll own the fit and font checks.
+
+## How to translate Lottie files with General Translation
+
+General Translation's CLI, `gt`, translates dotLottie files with the `lottie` file key (`gt` 2.16.0 or later). Add a `lottie` entry with a `[locale]` placeholder in the path:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja"],
+  "files": {
+    "lottie": {
+      "include": ["animations/[locale]/**/*.lottie"]
+    }
+  },
+  "fonts": {
+    "include": ["assets/fonts/**/*.{ttf,otf}"]
+  }
+}
+```
+
+Source animations come from `animations/en/`, and translations land in `animations/es/` and `animations/ja/`. Lottie translation runs asynchronously, so submit with [`npx gt stage`](/docs/cli/reference/commands/stage), then run [`npx gt download`](/docs/cli/reference/commands/download) until every locale is done; locales still processing are skipped and fetched on a later run. [`gt translate`](/docs/cli/reference/commands/translate) can't finish an unstaged Lottie job in one run and tells you to stage it. Downloads are complete `.lottie` files; they aren't published to the CDN.
+
+General Translation reads the animation JSON from the package's `animations/` folder, the dotLottie 1.0 layout. dotLottie 2.0 packages keep it in `a/`, and a plain `.json` animation isn't a package at all. Convert either with [`@dotlottie/dotlottie-js`](https://github.com/dotlottie/dotlottie-js), whose `toDotLottieV1` and `DotLottieV1` produce the 1.0 layout.
+
+After translation, layout processing keeps the animation's font sizes, reflows text, and moves nearby layers to fit each label. When a label still doesn't fit, it may shorten or rephrase it in the target language while keeping the meaning, and an ellipsis is the last resort; monospaced code tokens are never shortened. If the layout changes can't be rendered and verified, you get the plain translated animation instead. Watch each download before publishing it. (See the [Lottie reference](/docs/cli/reference/formats/lottie-files).)
+
+The top-level [`fonts`](/docs/cli/reference/config#fonts) setting uploads your `.ttf` and `.otf` files so layout processing can use the animation's real fonts; when the animation embeds glyphs, General Translation adds outlines for the characters each translation needs, drawn from your uploaded fonts where they cover them. Fonts are Organization assets, so uploading needs a saved login or an Organization API key with `org:assets:write`; a project API key can't upload them, and translation continues with fallback fonts and a warning. Files with After Effects expressions are rejected, because expressions are executable code; re-export with expressions removed or baked into keyframes.
+
+Lottie translation adds a Layout Processing charge, priced separately from the translation itself and based on the animation's number of animated properties ([usage metering](/docs/platform/dashboard/guides/managing-billing#usage-metering), [pricing](https://generaltranslation.com/pricing)). Glossary terms and Custom Prompts from your [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) apply to animation text too, so a feature name in an onboarding animation matches your app and your [JSON locale files](/kb/translate-json-files).
+
+## Common questions
+
+### Why does my translated animation show empty boxes or missing letters?
+
+The font or the embedded glyphs don't cover the new characters. Ship a font that covers the script. With a glyph export, the file needs an outline for every character the translation uses, so re-export that language from After Effects with the translated text in place.
+
+### Do I need a separate file for each language?
+
+With runtime swapping, no: one file serves every language. Re-exporting and the General Translation CLI produce one file per language, which you load by locale.
+
+### Can I translate text that was converted to shapes?
+
+No. Shapes have no string to replace, so recreate the text layer in After Effects and export again.
+
+## Key takeaways
+
+- Lottie text lives in text layers (`ty` 5) at `t.d.k[].s.t`, including text layers inside precomps under `assets`.
+- Glyph exports contain outlines only for the source text's characters, and iOS doesn't render glyphs; check fonts for every script you add.
+- Runtime APIs (`TextDelegate`, `DictionaryTextProvider`, `updateDocumentData`, `setTextSlot`) swap strings without refitting the layout.
+- General Translation's CLI translates dotLottie 1.0 `.lottie` files through [`gt stage`](/docs/cli/reference/commands/stage) and [`gt download`](/docs/cli/reference/commands/download), refits layouts with your uploaded fonts, and rejects files with expressions.
+- Layout Processing for Lottie is priced separately, based on the animation's animated properties.
