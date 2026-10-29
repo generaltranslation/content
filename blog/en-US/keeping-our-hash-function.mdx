@@ -1,0 +1,129 @@
+---
+title: Why we kept our hash function
+summary: A faster way to hash translatable messages looked like a free win. Prototyping it showed a 32-bit bottleneck and no speedup on real messages.
+date: 2026-10-29
+authors: [default]
+tags: ['engineering', 'hashing', 'performance', 'benchmarks', 'i18n']
+---
+
+Every translatable message in a General Translation app has a key: a hash of the source text and the metadata that changes its translation. The key is how a translation is found. **If a key changes, the message is translated again. If two messages share a key, one of them shows the other's translation.**
+
+An internal proposal suggested replacing how we compute that hash with a faster, sort-free approach. The benchmarks in the proposal were convincing. We prototyped it exactly as written, measured it on real messages, and kept the hash function we have. This post walks through why.
+
+## How hashing works today
+
+`hashSource()` in `generaltranslation` builds a small object from the message and hashes a canonical JSON string of it:
+
+```ts
+const data = { source, dataFormat, context, maxChars /* only the fields that are set */ };
+const json = stableStringify(data); // JSON with object keys sorted at every level
+return bytesToHex(sha256(utf8ToBytes(json))).slice(0, 16); // 16 hex chars = 64 bits
+```
+
+Sorting keys makes the hash independent of key order, so `{ a, b }` and `{ b, a }` produce the same key. Taking 16 hex characters of SHA-256 leaves **64 bits** of key.
+
+## The proposal
+
+The proposal replaced key sorting with XOR, which is commutative, so order stops mattering without a sort:
+
+1. Encode every value with a type tag and a length: `"hello"` becomes `s5_hello`, `42` becomes `n2_42`, `true` becomes `b1`.
+2. For each key/value pair in an object, hash `keyLength_key + encodedValue` with 32-bit FNV-1a, a fast non-cryptographic hash.
+3. XOR the pair hashes together and write the object as `o<keyCount>_<hex(xor)>`. Nested objects collapse to that short hex string.
+4. Hash the final encoding once with SHA-256.
+
+Its reasoning: sorting costs `O(k log k)` per object, stable stringification builds a large intermediate string, and FNV-1a is far cheaper than SHA-256 per call. It reported **17–29% faster** hashing on production locale files and **6–10x** on large synthetic objects, and argued the final SHA-256 provides the collision resistance.
+
+It was also candid about the cost: every existing key would change. Customers would face retranslation unless we migrated stored translations to the new keys and kept old clients working, a multi-day project with real risk for teams with large catalogs.
+
+## Prototyping it
+
+We implemented the proposal behind the `hashMode` parameter it described (`'default'`, `'linear'`, `'fnv32'`), sharing `hashSource()`'s sanitization so only the hash strategy differed. FNV-1a ran over UTF-8 bytes without allocating, checked against the reference test vectors. We measured three things on the same inputs: key quality, speed on real messages, and speed on the proposal's own synthetic shapes.
+
+The real corpus was **1,390 unique source strings from our dashboard**: 1,284 plain text, 102 with arguments, 4 with plural or select branches.
+
+## Finding 1: every message is reduced to 32 bits
+
+`hashSource()`'s input is itself an object. In the proposal's encoding, an object is written as its XOR, so the only string the final SHA-256 ever sees is the top-level object's encoding:
+
+```ts
+encodeForHash({ source: 'Cancelled', dataFormat: 'ICU' }, 'fnv32');
+// 'o2_fc40b46f'
+```
+
+That is a key count and 32 bits. SHA-256 cannot add back entropy it never receives, so **two messages collide whenever their 32-bit XORs match**, however strong the final hash is. Every plain string has the same two top-level keys, so they all share one 32-bit space.
+
+We found real collisions. These two messages produce the same key under the proposal and different keys today:
+
+```text
+"Item 1512789 was moved"  ┐
+"Item 1749192 was moved"  ┘ fnv32 → 06f05d6ef2fc826d
+```
+
+With random message-like strings, a run of seven trials hit its first collision after a median of 72,960 messages. That matches the birthday bound for 32 bits, which reaches a 50% chance of at least one collision at about 77,000 entries:
+
+| Entries in a project | Collision chance today (64 bits) | Collision chance with the proposal (32 bits) |
+| -------------------- | -------------------------------: | -------------------------------------------: |
+| 4,000                | 4e-11%                           | 0.19%                                        |
+| 20,000               | 1e-9%                            | 4.55%                                        |
+| 100,000              | 3e-8%                            | 68.78%                                       |
+
+The proposal's own test of 50,000 random objects found no collisions. At 50,000 entries, a 32-bit space has only about a 25% chance of showing one, so the result was consistent with the problem rather than evidence against it.
+
+FNV-1a has a second weakness for this use. Its multiply carries bits upward only, so **the high bits of an input byte never reach the low bits of the output**. Pair hashes are not independent random values, which XOR combination assumes.
+
+## Finding 2: on real messages, it is slower
+
+| `hashSource()` per message, dashboard corpus           | Time    |
+| ------------------------------------------------------ | ------: |
+| Today: sorted JSON + SHA-256 (`@noble/hashes`)         | 1.18 µs |
+| Proposal: `fnv32`                                      | 1.35 µs |
+| Proposal: `linear` (SHA-256 per pair)                  | 3.18 µs |
+| &nbsp;&nbsp;Today's sorted JSON step alone             | 0.22 µs |
+| &nbsp;&nbsp;The proposal's encoding step alone         | 0.54 µs |
+
+**Sorting is not where the time goes.** A plain message has two top-level keys, and sorting two keys is nearly free. SHA-256 is about 80% of the cost. The proposal replaces 0.22 µs of mostly native `JSON.stringify` with 0.54 µs of string encoding and a per-byte JavaScript loop.
+
+On the proposal's synthetic shapes, it does win:
+
+| Synthetic object      | Today    | Proposal | Speedup |
+| --------------------- | -------: | -------: | ------: |
+| 5 keys × 10 chars     | 1.52 µs  | 1.22 µs  | 1.24x   |
+| 100 keys × 10 chars   | 20.42 µs | 8.91 µs  | 2.29x   |
+| 20 keys × 1,000 chars | 69.33 µs | 29.42 µs | 2.36x   |
+| depth 4 × breadth 4   | 39.00 µs | 16.25 µs | 2.40x   |
+
+That is about 2.3x on large objects, not 6–10x. The proposal's baseline was `fast-json-stable-stringify`, which `generaltranslation` had already replaced with a smaller inlined serializer. And none of these shapes resemble what we hash: our largest hash inputs have a handful of keys.
+
+Where the proposal is faster on small inputs, the gain comes from SHA-256 itself. About a third of our messages produce JSON longer than 55 bytes, which takes two 64-byte SHA-256 blocks; an 11-byte `o2_xxxxxxxx` always takes one. **The speedup and the collisions come from the same place**: compressing the message to 32 bits before SHA-256 sees it.
+
+## A benchmarking trap we hit
+
+Our first implementation measured the proposal as slower than it should have been. It converted every pair to UTF-8 with `Buffer.from()`, and the allocation cost more than everything it replaced. At microsecond scale, implementation details decide the result, so we tuned the prototype until its FNV-1a loop ran close to a minimal reference loop (32 against 24 µs per 20 kB).
+
+The second trap was subtler. The same measurement, FNV-1a over a 20-key object of 1,000-character values, took **111–124 µs inside the shared benchmark process and 28.5 µs in a fresh one**. Earlier cases left the JIT in a state that slowed later ones. We moved every timing into its own process, which changed the synthetic results from mostly losing to winning about 2.3x. Had we stopped at the first numbers, we would have rejected it for the wrong reason.
+
+An independent review of the prototype then caught a bug of ours: lone UTF-16 surrogates were encoded as raw bytes instead of U+FFFD, as `TextEncoder` does. It also pushed us to scope claims to what we measured: "slower on this corpus of short strings", since we did not benchmark JSX inputs.
+
+## Could it be repaired?
+
+Wider accumulators (64 or 128 bits) would raise the collision bound. Keeping the top-level object out of the XOR would still leave every nested object collapsed to its accumulator width. Each repair costs speed, and on real messages there is little speed to give back. None of them would justify changing every key our customers have.
+
+## What we did instead
+
+We kept `hashSource()` as it is. If hashing speed matters, there is a change that keeps every key: **`node:crypto`'s SHA-256 produces identical hashes 2.2x faster** (0.54 µs per message) for the CLI and servers, while browsers keep `@noble/hashes`. And where our compiler can compute a message's key at build time, the runtime skips hashing entirely.
+
+## Takeaways
+
+- **Measure where the time goes before removing work.** The step the proposal optimized cost 0.22 µs of a 1.18 µs hash.
+- **Benchmark against the current code, on real inputs.** A stale baseline and synthetic shapes turned a slowdown into a reported 6–10x win.
+- **Isolate microbenchmarks.** Shared JIT state moved one result by 4x.
+- **For a hash, audit what reaches the final function.** A strong final hash cannot recover entropy lost before it.
+- **A key change is a migration.** Even a correct, faster hash has to beat the cost of changing every key in use.
+
+## Appendix: method
+
+Measurements ran on Node 24 on Apple Silicon. Each case ran in a fresh process with warmup, reporting the best of five timed runs; we did not record spread across runs. The prototype, its tests, and the benchmark lived in [generaltranslation/gt#2585](https://github.com/generaltranslation/gt/pull/2585), closed once we decided to keep the current hash. Other details of the specification we noted along the way:
+
+- It hashes `undefined` values (`ud`) that JSON drops, so a server recomputing a key from a JSON payload would get a different key.
+- Lengths count UTF-16 code units and numbers use JavaScript's `String()`, so every other implementation, such as our Python extractor, would have to copy JavaScript's behavior exactly.
+- It leaves the byte encoding and hex padding unspecified.
