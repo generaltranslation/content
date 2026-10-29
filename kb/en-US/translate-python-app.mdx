@@ -89,13 +89,28 @@ def _(message: str) -> str:
     return current.get().gettext(message)
 
 
+def preferred_locales(header: str) -> list[str]:
+    """Accept-Language tags, most preferred first, without q=0 entries."""
+    weighted = []
+    for part in header.split(","):
+        tag, sep, param = part.strip().partition(";")
+        try:
+            q = float(param.strip().removeprefix("q=")) if sep else 1.0
+        except ValueError:
+            q = 0.0
+        # q=0 means "not acceptable", so skip it
+        if tag and q > 0:
+            weighted.append((q, tag.replace("-", "_")))
+    # sorted() is stable, so tags with equal weights keep the header's order
+    return [tag for q, tag in sorted(weighted, key=lambda pair: -pair[0])]
+
+
 app = FastAPI()
 
 
 @app.middleware("http")
 async def select_locale(request: Request, call_next):
-    header = request.headers.get("accept-language", "")
-    preferred = [part.split(";")[0].strip().replace("-", "_") for part in header.split(",") if part.strip()]
+    preferred = preferred_locales(request.headers.get("accept-language", ""))
     current.set(load(negotiate_locale(preferred, SUPPORTED) or "en"))
     return await call_next(request)
 
@@ -109,7 +124,7 @@ def inbox(count: int):
     }
 ```
 
-Run under Uvicorn, `Accept-Language: es-MX,es;q=0.9,en;q=0.8` returned the Spanish strings, and `de,en;q=0.5` fell back to English. `negotiate_locale` matches `es_MX` to `es`. This middleware takes the languages in header order, which browsers send most preferred first; sort by `q` value if clients may send them in another order.
+Run under Uvicorn, `Accept-Language: es-MX,es;q=0.9,en;q=0.8` returned the Spanish strings, `de,en;q=0.5` fell back to English, `en;q=0.5,es` returned Spanish, and `es;q=0,en` returned English. `negotiate_locale` matches `es_MX` to `es`. `preferred_locales` orders the tags by their `q` weight and drops `q=0`, which marks a language the user doesn't accept.
 
 ### What the Babel route leaves to you
 
