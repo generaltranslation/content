@@ -1,0 +1,142 @@
+---
+title: How do I translate .resx files in a .NET app?
+summary: Create a culture-named copy of each neutral .resx file, such as Resources.fr.resx, and translate only each entry's value, keeping names, comments, and placeholders such as {0} unchanged. .NET builds each culture into a satellite assembly and falls back from fr-CA to fr to the neutral file. General Translation's CLI writes those culture files from the neutral source.
+description: Translate .resx files by adding culture-named copies like Resources.fr.resx and translating only values, keeping names and {0} placeholders intact, then check fallback.
+date: 2026-10-28
+category: translation
+related: [translate-json-files, translate-po-files, what-is-a-translation-management-system, general-translation-vs-tms, translations-in-ci]
+---
+
+A .resx file is an XML list of named resources. The neutral file, such as `Resources.resx`, holds your default language, and each translation is a sibling with the culture in its name, such as `Resources.fr.resx`, containing the same names with translated values. At run time, `ResourceManager` picks the file that matches the current UI culture and falls back through parent cultures for anything missing.
+
+## What a .resx file contains
+
+Each resource is a `<data>` element. Its `name` attribute is the key your code looks up, `<value>` holds the text, and an optional `<comment>` tells the translator what the text is for. Here's an excerpt (a real file also starts with a schema block and `<resheader>` entries that Visual Studio writes for you):
+
+```xml title="Resources/SharedResource.resx"
+<data name="Checkout" xml:space="preserve">
+  <value>Checkout</value>
+  <comment>Button that starts payment for the items in the cart.</comment>
+</data>
+<data name="ItemsInCart" xml:space="preserve">
+  <value>You have {0} items in your cart.</value>
+  <comment>{0} is the number of items.</comment>
+</data>
+```
+
+The French file has the same `name` attributes with French values. Only the string values change. Names are lookup keys, and non-string resources such as images, which carry a `type` and often a `mimetype` attribute, usually stay as they are. Microsoft recommends editing .resx files in Visual Studio, not by hand, because the XML must stay well formed and in its predefined format ([Microsoft: Create resource files](https://learn.microsoft.com/en-us/dotnet/core/extensions/create-resource-files)).
+
+## How .NET finds the right translation
+
+Give each translation the same root name as the neutral file, with the culture before the extension: `Resources.fr.resx`, `Resources.fr-CA.resx`. When you build, the neutral resources are embedded in the main assembly, and each culture compiles into a satellite assembly in a folder named for the culture, such as `fr/MyApp.resources.dll`.
+
+When the app asks for a string, .NET looks in the satellite assembly for the requested culture, then its parent, and so on, then uses the neutral resources. For a `fr-CA` request, that's `fr-CA`, then `fr`, then the neutral file. If no resource file exists even for the default culture, it throws `MissingManifestResourceException` or `MissingSatelliteAssemblyException`. On Linux and macOS, the culture folder name must match `CultureInfo.Name` exactly, including case ([Microsoft: Package and deploy resources](https://learn.microsoft.com/en-us/dotnet/core/extensions/package-and-deploy-resources)).
+
+Fallback lets you translate once for a family of regions. Microsoft suggests a single `de` file for users in `de-DE`, `de-AT`, and `de-CH`, with regional files holding only the strings that differ. It also means a missing translation never throws: the user sees the neutral language, and nothing in the build tells you. (See [What are locale codes?](/kb/locale-codes).)
+
+## Use .resx in ASP.NET Core, Windows Forms, and WPF
+
+### ASP.NET Core
+
+Register localization, choose the cultures you support, and add the middleware ([Microsoft: Select language and culture](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/localization/select-language-culture)):
+
+```csharp title="Program.cs"
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    var supportedCultures = new[] { "en-US", "fr" };
+    options.SetDefaultCulture(supportedCultures[0])
+        .AddSupportedCultures(supportedCultures)
+        .AddSupportedUICultures(supportedCultures);
+});
+
+var app = builder.Build();
+
+// Picks the culture from the query string, a cookie, or Accept-Language, in that order.
+app.UseRequestLocalization();
+```
+
+Then inject `IStringLocalizer<T>` and look up strings by name, passing format arguments after it: `localizer["ItemsInCart", count]`. Resource files are named for the class's full type name minus the assembly name, so `Controllers.HomeController` reads `Controllers.HomeController.fr.resx` in the `Resources` folder (or `HomeController.fr.resx` in `Resources/Controllers`), and an empty `SharedResource` marker class groups strings shared across the app. `SupportedUICultures` decides which .resx files are read; `SupportedCultures` decides date and number formatting ([Microsoft: Provide localized resources](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/localization/provide-resources)).
+
+`IStringLocalizer` returns the key itself when no translation exists, so Microsoft documents a workflow with no neutral .resx at all: `localizer["About Title"]` shows "About Title" in English ([Microsoft: Make content localizable](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/localization/make-content-localizable)). That works for display, but it leaves no source file for a translator or tool to read. If you want translations generated from a file, use named keys with a neutral .resx whose values are the English text, the traditional approach Microsoft also documents.
+
+### Windows Forms and WPF
+
+In Windows Forms, set a form's **Localizable** property to `true`, then pick a culture in its **Language** property; when you change text in the designer, Visual Studio writes it to a culture file such as `Form1.es-ES.resx` ([Microsoft: Localizing a hybrid application](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/walkthrough-localizing-a-hybrid-application)). Designer-generated files also hold entries that aren't text, such as names starting with `>>`. WPF apps can load .resx strings through `ResourceManager`; Microsoft's XAML localization walkthrough uses the LocBaml tool, which it calls a sample that "is not a production-ready application" ([Microsoft: Localize a WPF app](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/how-to-localize-an-application)).
+
+### Edit them in Visual Studio
+
+Since Visual Studio 2022 version 17.11, the Resource Explorer shows every .resx file with its cultures side by side. Right-click a .resx file and choose **Open With > Resource Explorer** (or press **Ctrl+Alt+R**). It warns when a translation is missing ("No value") and when placeholders differ from the neutral culture, for example `Hello, {name}!` against `Hola, {nombre}!` ([Microsoft: Manage application resources](https://learn.microsoft.com/en-us/visualstudio/ide/managing-application-resources-dotnet)).
+
+## What breaks when you translate .resx files
+
+- **Placeholders.** .NET composite format items look like `{index[,width][:formatString]}`, such as `{0}`, `{1,-10}`, or `{0:N2}`. A translation may reorder them or use one twice, but a format item that points past the arguments throws `FormatException` at run time, and a dropped one silently loses the value. Literal braces are written `{{` and `}}` ([Microsoft: Composite formatting](https://learn.microsoft.com/en-us/dotnet/standard/base-types/composite-formatting)).
+- **Names.** A translated `name` attribute means the lookup finds nothing, so that string falls back to the neutral language.
+- **XML.** A value containing `&` or `<` must stay escaped as `&amp;` and `&lt;`, or the file won't compile.
+- **Access keys.** In Windows Forms, `&File` underlines the F. The translation needs exactly one `&` before a sensible letter.
+- **Comments.** Comments are context for translators, not text to translate. Microsoft's Windows App SDK guide notes that translators don't need to translate them ([Microsoft: Localize strings](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/mrtcore/localize-strings)).
+- **Drift.** When a developer adds a name to the neutral file, every culture file needs it too. Fallback hides the gap, so check for missing values before each release.
+
+## Ways to translate .resx files
+
+| Approach | Keeps names and non-string resources | Placeholder checks | Keeping cultures in sync | Fits when |
+| --- | --- | --- | --- | --- |
+| Visual Studio Resource Explorer, by hand | Yes | Warns on mismatches | Shows missing values per culture | One or two languages someone on the team speaks |
+| Translators or a translation management system (TMS) | Yes, if the TMS parses .resx | Depends on its QA checks | Through the TMS's repository sync | Professional translators or a vendor own the work |
+| Script a machine translation API or an LLM | Only if your script parses the XML and sends values | You write them | You rerun and diff | You'll own the script and its validation |
+| Paste the file into a chat assistant | Nothing guarantees it | None | Manual | A one-off file you'll check line by line |
+| General Translation CLI | Translates string values only; names, comments, and non-string resources are kept | A translation that changes or drops a placeholder is left out, so .NET falls back for that entry | Reuses translations for unchanged entries; run [`gt translate`](/docs/cli/reference/commands/translate) each release | Resource files live in the repository and change with every release |
+
+Use the Resource Explorer for one or two languages a teammate can review. Use a [TMS](/kb/what-is-a-translation-management-system) when professional translators work outside the codebase. Choose General Translation when .resx files change with every release and the translated files should be committed alongside the code. (See [General Translation vs. a TMS](/kb/general-translation-vs-tms).)
+
+## How to translate .resx files with General Translation
+
+General Translation's CLI, `gt`, translates .resx files, and `.resw` files with the same schema, through the `resx` file key (`gt` 2.23.1 or later). The neutral file has no culture in its name, so point `include` at it, exclude the translated siblings, and use `transform` to add the culture before the extension:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "es-MX"],
+  "files": {
+    "resx": {
+      "include": ["Resources/*.resx"],
+      "exclude": ["Resources/*.[locales].resx"],
+      "transform": {
+        "match": "\\.resx$",
+        "replace": ".{locale}.resx"
+      }
+    }
+  }
+}
+```
+
+In the `Resources` folder, this config reads `Controllers.HomeController.resx` and writes `Controllers.HomeController.fr.resx` and `Controllers.HomeController.es-MX.resx`, keeping ASP.NET Core's dotted names intact. List every culture you already ship in `locales`: the `[locales]` exclude skips translated files only for configured locales, so a `Resources.de.resx` outside the list would be read as a source file. For UWP and WinUI projects that keep `.resw` files in a folder per language, use `"include": ["Strings/[locale]/Resources.resw"]` with no `transform`.
+
+The CLI runs on Node.js 20 or later, even in a .NET repository; install it as the [CLI Quickstart](/docs/cli/quickstart) shows, sign in with [`npx gt login`](/docs/cli/reference/commands/login), and set `GT_PROJECT_ID` ([CLI credentials](/docs/cli/guides/configuring#credentials)). For an app that already has translations, import them first with [`npx gt upload`](/docs/cli/reference/commands/upload). Then run [`npx gt translate`](/docs/cli/reference/commands/translate). In CI, store a project API key with **Files > Write** and **Translation queue > Enabled** as `GT_API_KEY`.
+
+The translated file is a copy of the source with string values replaced, so names, entry order, the schema and `<resheader>` blocks, comments, and non-string resources stay as they were. Entries with a `mimetype`, a type other than `System.String`, a `>>` designer name, or an empty value aren't sent for translation. Each `<comment>` is sent as context, and Microsoft localization instructions such as `{Locked}` in a comment are followed. Placeholders such as `{0}`, `{0:N2}`, `{1,-10}`, `{count}`, and doubled braces are kept, a single `&` access key stays in front of a suitable letter, and the downloaded file keeps the source's encoding and byte order mark. (See the [.resx reference](/docs/cli/reference/formats/resx-files).)
+
+Review translations in the [Dashboard](/docs/platform/dashboard/guides/reviewing-translations) or Visual Studio, and run [`npx gt save-local`](/docs/cli/reference/commands/save-local) after editing files locally so later runs keep your edits. A [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) applies the same Glossary and Custom Prompts to your .NET resources as to your web app's [JSON files](/kb/translate-json-files), so a product name translates the same way in both.
+
+## Common questions
+
+### What's the difference between .resx and .resw?
+
+They share a schema. UWP and WinUI apps use `.resw` files in a folder per language, such as `Strings/en-US/Resources.resw` and `Strings/de-DE/Resources.resw`, instead of a culture in the file name ([Microsoft: Localize strings](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/mrtcore/localize-strings)).
+
+### Do I need a separate file for fr-CA if I have fr?
+
+No. A `fr-CA` request falls back to `fr` for any missing name, so add a `fr-CA` file only for the strings that differ.
+
+### Why does my ASP.NET Core app still show English after I add a French file?
+
+Check that `fr` is in `SupportedUICultures`, that the file name matches the class's type name, and, on Linux or macOS, that the culture folder in the build output, such as `fr`, matches `CultureInfo.Name` exactly, including case.
+
+## Key takeaways
+
+- Each translation is a sibling .resx with the culture in its name, such as `Resources.fr.resx`; translate values, never `name` attributes.
+- .NET falls back from `fr-CA` to `fr` to the neutral resources, so missing translations show the neutral language instead of failing.
+- A format item that points past the supplied arguments throws `FormatException`; check `{0}`-style placeholders in every translation.
+- Visual Studio 2022 17.11's Resource Explorer flags missing values and mismatched placeholders across cultures.
+- General Translation's CLI translates .resx and .resw with the `resx` key (2.23.1+), keeping names, comments, and non-string resources, and leaving out any translation that breaks a placeholder.

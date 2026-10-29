@@ -1,0 +1,296 @@
+---
+title: How do I add i18n to a Next.js Pages Router app?
+summary: Add an i18n block with locales and defaultLocale to next.config.js, and Next.js serves /es and /fr, redirects visitors by browser language, and passes the locale to getStaticProps and getServerSideProps. A library renders the messages; General Translation's gt-next also generates the translations from copy written inline in JSX.
+description: Add an i18n block to next.config.js for locale URLs and detection, then render messages with a library. General Translation's gt-next for the Pages Router also generates the translations.
+date: 2026-10-28
+category: internationalization
+related: [add-i18n-to-nextjs, next-intl-vs-gt-next, multilingual-nextjs-seo, language-switcher, general-translation-vs-i18next]
+---
+
+The Pages Router has had built-in internationalized routing since Next.js 10: list your locales and a default in the `i18n` block of `next.config.js`, and Next.js serves each language at its own URL, redirects first-time visitors by browser language, and hands the active locale to your data functions. It doesn't load, render, or translate any text: Next.js designed the routing to sit alongside an i18n library, so you still pick a library for the messages and a way to produce the translations ([Next.js Pages Router internationalization](https://nextjs.org/docs/pages/guides/internationalization)).
+
+## What the built-in i18n routing does
+
+The whole feature is one config block:
+
+```js title="next.config.js"
+/** @type {import('next').NextConfig} */
+module.exports = {
+  i18n: {
+    // Every locale the site serves, including the default
+    locales: ['en', 'es', 'fr'],
+    // Served without a prefix: /about, /es/about, /fr/about
+    defaultLocale: 'en',
+  },
+};
+```
+
+With that in place, Next.js handles four jobs:
+
+- **URLs.** Sub-path routing keeps the default locale at `/about` and prefixes the rest (`/fr/about`). Add a `domains` list, with a `domain` and `defaultLocale` per entry, to serve locales from separate domains such as `example.fr` instead.
+- **Detection.** On a visit to `/`, Next.js reads the `Accept-Language` header and redirects to the matching prefix or domain. A `NEXT_LOCALE` cookie, set by your language switcher, takes priority over the header. Set `localeDetection: false` to turn the redirect off.
+- **Locale in your code.** `useRouter()` returns `locale`, `locales`, and `defaultLocale`. `getStaticProps` and `getServerSideProps` receive `locale` in their context, and `getStaticPaths` receives `locales`.
+- **`<html lang>`.** Next.js sets the attribute to the active locale, unless your `_document` sets its own.
+
+That's enough to build i18n by hand. This page loads one JSON file per locale at build time:
+
+```tsx title="pages/index.tsx"
+import type { GetStaticProps, InferGetStaticPropsType } from 'next';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+
+export const getStaticProps = (async ({ locale }) => {
+  // Next.js calls this once per configured locale at build time.
+  const messages = (await import(`../messages/${locale}.json`)).default;
+  return { props: { messages } };
+}) satisfies GetStaticProps;
+
+export default function Home({ messages }: InferGetStaticPropsType<typeof getStaticProps>) {
+  const { locales } = useRouter(); // ['en', 'es', 'fr']
+
+  return (
+    <main>
+      <h1>{messages.title}</h1>
+      <nav>
+        {locales?.map((code) => (
+          // The same page in each language: /, /es, /fr
+          <Link key={code} href="/" locale={code} lang={code}>
+            {new Intl.DisplayNames([code], { type: 'language' }).of(code)}
+          </Link>
+        ))}
+      </nav>
+    </main>
+  );
+}
+```
+
+A production build serves `/es` as `<html lang="es">` with the Spanish heading, and a request to `/` with `Accept-Language: fr-CA` gets a 307 redirect to `/fr`. The links name each language in itself (English, español, français), as a [language switcher](/kb/language-switcher) should.
+
+### What it leaves to you
+
+The routing stops at the URL. Plurals, number and date formatting, and string interpolation are a library's job, and so is keeping message files in sync as components change. Next.js also doesn't add `hreflang` links between language versions; you add them with `next/head`. (See [What is hreflang?](/kb/what-is-hreflang).) And none of it produces a translation.
+
+Three limits matter when you plan:
+
+- **No static export.** Internationalized routing doesn't work with `output: 'export'`, because it relies on the Next.js routing layer.
+- **Build time grows per locale.** Each non-dynamic `getStaticProps` page is built once per locale, so 50 locales and 10 pages mean 500 calls. Dynamic routes return each locale from `getStaticPaths`, or Next.js builds only the default.
+- **Caps.** `locales` and `domains` are each limited to 100 entries.
+
+### It doesn't carry over to the App Router
+
+The `i18n` config is a Pages Router feature. In the App Router, `useRouter` from `next/navigation` drops `locale`, `locales`, and `defaultLocale`, and Next.js says its built-in i18n features aren't needed in the `app` directory ([migration guide](https://nextjs.org/docs/app/guides/migrating/app-router-migration#step-5-migrating-routing-hooks)). App Router apps put the locale in a `[locale]` segment or resolve it in middleware instead. (See [How do I add i18n to a Next.js App Router app?](/kb/add-i18n-to-nextjs).)
+
+## Libraries that render the messages
+
+| Library | Pages Router setup | How you write copy | Where translations come from |
+| --- | --- | --- | --- |
+| [next-i18next](https://github.com/i18next/next-i18next#pages-router-setup) | `appWithTranslation` wraps `_app`; `serverSideTranslations(locale, ['common'])` in `getStaticProps` or `getServerSideProps`, from `next-i18next/pages` | Keys in JSON namespaces, rendered with `t('title')` | You, translators, or a translation management system (TMS) such as Locize |
+| [next-intl](https://next-intl.dev/docs/getting-started/pages-router) | `NextIntlClientProvider` in `_app`, with `messages` returned from `getStaticProps` | Keys in one JSON file per locale, rendered with [`useTranslations`](/docs/react/reference/hooks/use-translations) | You or your translators |
+| [react-intl](https://formatjs.github.io/docs/react-intl) | `IntlProvider` in `_app`, given the active locale and its messages | ICU messages inline as `defaultMessage`, extracted with `formatjs extract` | You, translators, or a TMS |
+| General Translation (`gt-next`) | `withGTServerSideProps` or `withGTStaticProps` on each page; [`GTProvider`](/docs/react/reference/components/gt-provider) in `_app` | JSX wrapped in [`<T>`](/docs/react/reference/components/t), strings with [`useGT`](/docs/react/reference/hooks/use-gt) | Generated by [`npx gt translate`](/docs/cli/reference/commands/translate), reviewed in the Dashboard |
+
+next-i18next 16 supports both routers and keeps its familiar Pages Router API under `next-i18next/pages`. next-intl's docs recommend the App Router and still fully support the Pages Router. In the Pages Router, each one pairs with the `i18n` block above for URLs and detection.
+
+Use next-i18next when you already have i18next namespaces or want its plugin ecosystem. Use next-intl when you plan to move to the App Router and want the same API on both sides of the migration. Use react-intl when your messages are ICU strings that translators already work with. Use General Translation when you'd rather keep copy inline in your components and have the translations generated, reviewed, and updated as the code changes. (See [next-intl vs. gt-next](/kb/next-intl-vs-gt-next) for a side-by-side comparison.)
+
+If you're staying on next-i18next or next-intl, General Translation's CLI can still translate their JSON files, including ICU strings, without a migration ([JSON file translation](/docs/cli/reference/formats/json-files)).
+
+## Add General Translation to a Pages Router app
+
+This setup adds Spanish and French to a Pages Router app, with each language at its own URL. It was tested with an app from `create-next-app` 16.4.3 (`--no-app`), Next.js 16.4.3, `gt-next@11.4.16`, and `gt@2.26.11`. `gt-next` supports Next.js 13.0.0 and later, except 15.2.1 and 15.2.2. Its `gt-next/server` entry is App Router-only.
+
+### 1. Install the library and CLI
+
+```bash
+npm install gt-next@11.4.16
+npm install --save-dev gt@2.26.11
+```
+
+### 2. Set your languages
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["en", "es", "fr"],
+  "files": {
+    "gt": {
+      "output": "public/_gt/[locale].json"
+    }
+  }
+}
+```
+
+Keep `en` in `locales`: the same list feeds the Next.js `i18n` block, which requires the default locale.
+
+### 3. Turn on Next.js i18n routing
+
+```ts title="next.config.ts"
+import type { NextConfig } from 'next';
+import { withGTConfig } from 'gt-next/config';
+import gtConfig from './gt.config.json';
+
+const nextConfig: NextConfig = {
+  i18n: {
+    locales: gtConfig.locales,
+    defaultLocale: gtConfig.defaultLocale,
+  },
+};
+
+export default withGTConfig(nextConfig);
+```
+
+Next.js does the routing and detection described above. You don't need `gt-next` middleware or a `pages/[locale]` folder.
+
+`create-next-app` writes `<Html lang="en">` in `pages/_document.tsx`, which overrides the locale: in the test app, `/es` came back as `lang="en"` with Spanish text. Remove the prop so Next.js sets it:
+
+```tsx title="pages/_document.tsx"
+import { Html, Head, Main, NextScript } from 'next/document';
+
+export default function Document() {
+  return (
+    <Html>
+      <Head />
+      <body>
+        <Main />
+        <NextScript />
+      </body>
+    </Html>
+  );
+}
+```
+
+### 4. Load translations from local files
+
+```ts title="loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  try {
+    const translations = await import(`./public/_gt/${locale}.json`);
+    return translations.default;
+  } catch {
+    // Until the files exist, render the source text
+    return {};
+  }
+}
+```
+
+`withGTConfig` finds `loadTranslations.ts` in the project root or `src/`. The translations ship in your build, so the app makes no calls to General Translation at runtime. (See [storing translations](/docs/react/guides/storing-translations).)
+
+### 5. Pass the locale and translations to every page
+
+Wrap each page's data function. The wrapper reads `context.locale` from Next.js and adds `locale` and `translations` to the page props:
+
+```tsx title="pages/about.tsx"
+import { T, withGTStaticProps } from 'gt-next';
+
+// Next.js builds this page once per locale.
+export const getStaticProps = withGTStaticProps();
+
+export default function About() {
+  return (
+    <T>
+      <h1>About us</h1>
+    </T>
+  );
+}
+```
+
+Use `withGTServerSideProps()` the same way on server-rendered pages. Both take your own data function as an argument, such as `withGTStaticProps(async (context) => ({ props: { posts } }))`, and pass a `redirect` or `notFound` result through untouched. Wrap every page that renders translated content.
+
+Then hand those props to [`GTProvider`](/docs/react/reference/components/gt-provider) in `_app`:
+
+```tsx title="pages/_app.tsx"
+import type { AppProps } from 'next/app';
+import Router from 'next/router';
+import { GTProvider, type WithGTServerSideProps } from 'gt-next';
+
+export default function App({ Component, pageProps }: AppProps<WithGTServerSideProps>) {
+  const { locale, translations } = pageProps;
+
+  return (
+    <GTProvider
+      locale={locale}
+      translations={translations}
+      // Switch languages with Next.js navigation: /es, /fr, and back to /
+      _reload={({ locale: nextLocale }) => {
+        void Router.push(Router.pathname, Router.asPath, { locale: nextLocale });
+      }}
+    >
+      <Component {...pageProps} />
+    </GTProvider>
+  );
+}
+```
+
+### 6. Mark content for translation
+
+```tsx title="pages/index.tsx"
+import { LocaleSelector, T, useGT, withGTServerSideProps } from 'gt-next';
+
+export const getServerSideProps = withGTServerSideProps();
+
+export default function Home() {
+  const gt = useGT();
+
+  return (
+    <main>
+      <LocaleSelector />
+      <T>
+        <h1>Find your next project</h1>
+        <p>Explore projects from teams around the world.</p>
+      </T>
+      <input type="search" placeholder={gt('Search projects')} aria-label={gt('Search projects')} />
+    </main>
+  );
+}
+```
+
+[`<T>`](/docs/react/reference/components/t) translates the heading and paragraph together, with their markup as context. [`useGT`](/docs/react/reference/hooks/use-gt) handles attribute strings. [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) lists your locales by their own names. Picking Español saves `NEXT_LOCALE=es`, which Next.js reads on the next visit to `/`, and the `_reload` callback moves the page to `/es`.
+
+### 7. Generate translations and check the build
+
+Sign in with [`npx gt login`](/docs/cli/reference/commands/login), set `GT_PROJECT_ID`, and run [`npx gt translate`](/docs/cli/reference/commands/translate) to write `public/_gt/es.json` and `fr.json`. To try the setup without an account, [`npx gt generate`](/docs/cli/reference/commands/generate) writes the same files with English source text for you to translate by hand.
+
+In the test app, with the Spanish file filled in, `next build` succeeded and `next start` served:
+
+- `/` as `<html lang="en">` with the English heading
+- `/es` as `<html lang="es">` with the Spanish heading and placeholder
+- `/es/about`, built with `withGTStaticProps`, in Spanish
+- `/` with `Accept-Language: es` as a 307 redirect to `/es`
+
+## Ship and keep translations current
+
+Translate before every build so new copy ships in every language:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "gt validate && gt translate && next build"
+  }
+}
+```
+
+In your hosting provider, set `GT_PROJECT_ID` and a project API key as `GT_API_KEY` with **Files > Write** and **Translation queue > Enabled**. Keep the key server-side and never prefix it with `NEXT_PUBLIC_`. If the build regenerates `public/_gt/` every time, add it to `.gitignore`. [`gt validate`](/docs/cli/reference/commands/validate) fails the build on content that would break translation before any API call, and later runs translate only new or changed source.
+
+Reviewers can change any translation in General Translation's [Translation Editor](/docs/platform/dashboard/guides/reviewing-translations), and a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) keeps Glossary terms and tone consistent with your other projects. For indexable language versions, add `hreflang`, canonical URLs, and translated titles; [multilingual SEO for Next.js](/kb/multilingual-nextjs-seo) covers each one.
+
+## Common questions
+
+### Does the next.config.js i18n option work in the App Router?
+
+No. It's a Pages Router feature; App Router apps use a `[locale]` route segment or middleware, and `gt-next` documents a separate App Router setup.
+
+### Can I use getStaticProps with gt-next?
+
+Yes. Wrap it with `withGTStaticProps`, and Next.js generates one version of the page per locale. Dynamic routes still return a path per locale from `getStaticPaths`.
+
+### Do I need middleware for Pages Router i18n?
+
+No. Next.js resolves the locale from the URL, the `NEXT_LOCALE` cookie, and `Accept-Language` before your data functions run.
+
+## Key takeaways
+
+- The `i18n` block in `next.config.js` gives the Pages Router locale URLs, `Accept-Language` redirects at `/`, the `NEXT_LOCALE` cookie, and `locale` in `useRouter()` and data functions.
+- It doesn't render or translate messages, add `hreflang`, work with `output: 'export'`, or apply to the App Router.
+- Remove the hardcoded `lang="en"` from `pages/_document.tsx`, or every locale's HTML declares English.
+- next-i18next, next-intl, and react-intl render translations you supply; General Translation's `gt-next` also generates them, with `withGTStaticProps` or `withGTServerSideProps` on each page and [`GTProvider`](/docs/react/reference/components/gt-provider) in `_app`.
+- Add [`gt validate && gt translate`](/docs/cli/reference/commands/validate) before `next build` so each release ships in every language.

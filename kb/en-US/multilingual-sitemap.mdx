@@ -1,0 +1,262 @@
+---
+title: How do I create a sitemap for a multilingual website?
+summary: List every language version of each page as its own url entry. If the sitemap carries your hreflang, give each entry xhtml:link alternates for every version, including itself, plus an optional x-default, and split files at 50,000 URLs or 50MB. General Translation's gt-next gives each locale its own URL for the sitemap to list.
+description: A multilingual sitemap lists each language version as its own URL, with xhtml:link alternates for every version, including itself. Split files at 50,000 URLs or 50MB.
+date: 2026-10-28
+category: multilingual-seo
+related: [what-is-hreflang, multilingual-nextjs-seo, locale-routing-seo, multilingual-url-structure, translate-seo-metadata]
+---
+
+A multilingual sitemap lists every language version of a page as a separate `<url>` entry, so `/en/pricing`, `/de/preise`, and `/pt-BR/precos` are three entries. If the sitemap also declares hreflang, each entry lists all of that page's versions, including itself, as `xhtml:link` alternates. Google treats hreflang in a sitemap the same as hreflang in HTML, so the sitemap can replace the tags in your pages, as long as it's complete and agrees with your canonical URLs.
+
+## Should hreflang go in the sitemap or in your HTML?
+
+Google's [localized versions guide](https://developers.google.com/search/docs/specialty/international/localized-versions) describes three equivalent ways to declare language versions and says using more than one brings no benefit in Search. Every language URL you want indexed still belongs in the sitemap; the choice is only where the hreflang annotations live.
+
+| Method | Where it lives | Fits when | Watch out for |
+| --- | --- | --- | --- |
+| HTML `<link>` tags | Each page's `<head>` | Your framework renders metadata per page, such as Next.js `alternates.languages` | Every template has to emit the full set |
+| HTTP `Link` header | Response headers | Non-HTML files such as PDFs | Server configuration per file type |
+| Sitemap `xhtml:link` | One sitemap or a set of them | A CMS or build step already knows every page and locale, or you can't edit page templates | Pages missing from the sitemap get no annotations |
+
+Use HTML tags when your framework already renders them per page, and the sitemap when one place in your build knows every page and its locales. Don't maintain both by hand: two lists drift apart. (See [what is hreflang](/kb/what-is-hreflang) for the tag syntax and the HTTP header.)
+
+## How to structure a multilingual sitemap
+
+These rules come from Google's [localized versions guide](https://developers.google.com/search/docs/specialty/international/localized-versions), its [sitemap guide](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap), and the [sitemaps protocol](https://www.sitemaps.org/protocol.html):
+
+- **One `<url>` per version.** A page in three languages is three entries, each with its own `<loc>`.
+- **Each entry lists every version, including itself.** The `xhtml:link` set is identical in all of a page's entries, and Google ignores a pair of pages that don't list each other.
+- **`x-default` is optional.** Add it for a language selector or a default version that serves visitors whose language you don't have.
+- **Declare the namespace.** The `<urlset>` needs an `xmlns:xhtml` attribute set to `http://www.w3.org/1999/xhtml`.
+- **Use final, canonical URLs.** Fully qualified (`https://example.com/de/preise`, not `/de/preise`), returning `200`, and not marked `noindex`.
+- **Valid codes.** An ISO 639-1 language, optionally with an ISO 3166-1 alpha-2 region (`en-GB`) or ISO 15924 script (`zh-Hant`).
+- **Escape and encode.** The file is UTF-8, `&` is written `&amp;`, and non-ASCII paths are percent-encoded, so `/de/über-uns` becomes `/de/%C3%BCber-uns`.
+- **`lastmod` per version.** Google uses it only when it's consistently accurate, as the date of the last significant change to that URL. A German translation updated on a different day than the English page gets its own date.
+
+Each file holds at most 50,000 URLs and 50MB uncompressed. The `xhtml:link` children don't count toward the URL limit, but they do count toward the file size. With URLs around 45 characters, each alternate is about 100 bytes and an entry with 20 languages about 2.2KB. By our estimate, a file reaches 50MB at around 23,700 such entries, well before 50,000.
+
+### Split by locale with a sitemap index
+
+One file per locale keeps each file under the limits, and because you submit each one separately, you can track each language's sitemap in Search Console. A [sitemap index](https://developers.google.com/search/docs/crawling-indexing/sitemaps/large-sitemaps) lists the files:
+
+```xml title="sitemap.xml"
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://example.com/sitemap-en.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://example.com/sitemap-de.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://example.com/sitemap-pt-br.xml</loc>
+  </sitemap>
+</sitemapindex>
+```
+
+Each locale file lists only its own URLs, but every entry still carries the page's full set of alternates:
+
+```xml title="sitemap-de.xml"
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://example.com/de/preise</loc>
+    <lastmod>2026-10-03</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/pricing"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/preise"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://example.com/pt-BR/precos"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/en/pricing"/>
+  </url>
+  <url>
+    <loc>https://example.com/de/ueber-uns</loc>
+    <lastmod>2026-09-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/about"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/ueber-uns"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://example.com/pt-BR/sobre"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/en/about"/>
+  </url>
+</urlset>
+```
+
+`sitemap-en.xml` and `sitemap-pt-br.xml` have the same shape, with their own `<loc>` and `lastmod` values. Keep the files at the site root: Google says a sitemap only covers URLs below its own directory unless you submit it in Search Console, and an index can only reference sitemaps in its own directory or below.
+
+## How to generate one in Next.js
+
+Next.js 14.2 and later write `xhtml:link` alternates from the `alternates.languages` field of each entry in [`app/sitemap.ts`](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap#generate-a-localized-sitemap). This version builds the alternates from one list of locales and localized slugs, so every entry includes itself and `x-default`. `i18n/routing.ts` holds those lists and which pages each locale serves; [the General Translation section](#how-general-translation-fits) shows one that reads `gt.config.json`.
+
+```ts title="app/sitemap.ts"
+import type { MetadataRoute } from 'next';
+import {
+  BASE_URL,
+  DEFAULT_LOCALE,
+  LOCALES,
+  localeRoutes,
+  pathConfig,
+} from '@/i18n/routing';
+
+// Shared paths of the pages you want indexed.
+const PAGES = ['/', '/about', '/pricing'];
+
+// A locale serves a page unless localeRoutes leaves it out.
+const serves = (locale: string, page: string) =>
+  !localeRoutes[locale] || localeRoutes[locale].includes(page);
+
+// The public URL of a page in one locale, with its localized slug if it has one.
+function localeUrl(locale: string, page: string) {
+  const path = pathConfig[page]?.[locale] ?? page;
+  return `${BASE_URL}/${locale}${path === '/' ? '' : path}`;
+}
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  return PAGES.flatMap((page) => {
+    const locales = LOCALES.filter((locale) => serves(locale, page));
+
+    // Every version of the page, including the one in <loc>, plus x-default.
+    const languages: Record<string, string> = Object.fromEntries(
+      locales.map((locale) => [locale, localeUrl(locale, page)]),
+    );
+    languages['x-default'] = localeUrl(DEFAULT_LOCALE, page);
+
+    // One <url> per version, each carrying the same alternates.
+    return locales.map((locale) => ({
+      url: localeUrl(locale, page),
+      alternates: { languages },
+    }));
+  });
+}
+```
+
+Built with Next.js 16.4.3 and `gt-next` 11.4.16, the `/about` page produced four entries like this one, each with the same five links:
+
+```xml title="/sitemap.xml"
+<url>
+<loc>https://example.com/en/about</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/about" />
+<xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/ueber-uns" />
+<xhtml:link rel="alternate" hreflang="fr" href="https://example.com/fr/a-propos" />
+<xhtml:link rel="alternate" hreflang="pt-BR" href="https://example.com/pt-BR/about" />
+<xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/en/about" />
+</url>
+```
+
+Three details the Next.js docs don't spell out:
+
+- **Add the self-reference.** The localized example in the Next.js docs lists only `es` and `de` alternates under the English URL and gives the Spanish and German URLs no entries of their own. Google expects each entry to list itself and each version to have its own `<url>`.
+- **Escape URLs yourself.** In our test, Next.js 16.4.3 wrote URLs into the XML unchanged: a `&` in a query string produced a file `xmllint` rejects, and `ü` stayed unencoded. Keep query strings out of sitemap URLs and build paths with `new URL(path, BASE_URL).href`, which percent-encodes them.
+- **Splitting doesn't create an index.** [`generateSitemaps`](https://nextjs.org/docs/app/api-reference/functions/generate-sitemaps) can return one id per locale, and Next.js serves each file at `/sitemap/en.xml`, `/sitemap/de.xml`, and so on. In our test, `/sitemap.xml` then returned 404, so submit each file in Search Console, which also lifts Google's directory restriction for files inside `/sitemap/`.
+
+## Common errors
+
+- **Missing self-references or return links.** If `/en/pricing` lists `/de/preise` but `/de/preise` doesn't list `/en/pricing`, Google ignores the pair. This usually happens when a locale is added to some pages but not others.
+- **Invalid codes.** `en-UK` has no effect because `UK` is a reserved code; use `en-GB`. `es-419` is valid BCP 47 but unsupported in hreflang; use `es` or specific countries such as `es-MX`.
+- **URLs that redirect.** List the URL your server answers with `200`. With the slugs in the example above, `/de/about` redirects to `/de/ueber-uns`, so only the localized slug belongs in the sitemap.
+- **`noindex` or untranslated pages.** A sitemap is the list of URLs you want in search results. Leave out a locale that isn't published yet, and drop it from the other entries' alternates too.
+- **`lastmod` set to the build time.** Regenerating the sitemap isn't a content change. Use the date each version last changed, or omit the field.
+
+## How to check it before you submit
+
+Run three checks before submitting the sitemap in Search Console's Sitemaps report or adding a `Sitemap:` line to `robots.txt`:
+
+1. **It's well-formed XML:** `xmllint --noout sitemap-de.xml`.
+2. **Every cluster is complete and reciprocal.** This script reads one or more sitemap files and reports entries that don't list themselves, alternates without their own entry, mismatched sets, and malformed codes:
+
+   ```python title="check_sitemap.py"
+   import re
+   import sys
+   import xml.etree.ElementTree as ET
+
+   NS = {
+       's': 'http://www.sitemaps.org/schemas/sitemap/0.9',
+       'x': 'http://www.w3.org/1999/xhtml',
+   }
+   # Language, optional script, optional region: catches es-419, not every invalid code.
+   CODE = re.compile(r'^[a-z]{2}(-[a-z]{4})?(-[a-z]{2})?$', re.IGNORECASE)
+   RESERVED = ('-uk', '-eu', '-un')
+
+   # Read every <url> from every sitemap file: loc -> {hreflang: href}.
+   entries = {}
+   for path in sys.argv[1:]:
+       for url in ET.parse(path).getroot().findall('s:url', NS):
+           loc = url.findtext('s:loc', namespaces=NS).strip()
+           entries[loc] = {
+               link.get('hreflang'): link.get('href')
+               for link in url.findall('x:link', NS)
+               if link.get('rel') == 'alternate'
+           }
+
+   problems = []
+   for loc, alternates in entries.items():
+       if alternates and loc not in alternates.values():
+           problems.append(f'{loc} does not list itself')
+       for lang, href in alternates.items():
+           if lang == 'x-default':
+               continue
+           if not CODE.match(lang) or lang.lower().endswith(RESERVED):
+               problems.append(f'{loc} uses an invalid hreflang code: {lang}')
+           if href not in entries:
+               problems.append(f'{loc} lists {href}, which has no <url> entry')
+           elif entries[href] != alternates:
+               problems.append(f'{href} does not list the same alternates as {loc}')
+
+   print('\n'.join(problems) or f'{len(entries)} URLs, no problems found')
+   sys.exit(1 if problems else 0)
+   ```
+
+   Run it on all the locale files at once, `python3 check_sitemap.py sitemap-en.xml sitemap-de.xml sitemap-pt-br.xml`; for the example above it prints `6 URLs, no problems found`.
+3. **Every URL answers `200`:**
+
+   ```bash
+   curl -s https://example.com/sitemap-de.xml | grep -o '<loc>[^<]*' | sed 's/<loc>//' |
+     while read -r url; do echo "$(curl -s -o /dev/null -w '%{http_code}' "$url") $url"; done
+   ```
+
+## How General Translation fits
+
+General Translation's `gt-next` gives every locale its own URL, which is what a multilingual sitemap lists. [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware) serves `/de/...` and `/pt-BR/...` paths, `prefixDefaultLocale: true` puts the source language under `/en/` too, [`pathConfig`](/docs/react/nextjs/reference/functions/create-next-middleware#path-config) maps a page to a localized slug, and [`localeRoutes`](/docs/react/nextjs/reference/functions/create-next-middleware#locale-routes) limits the pages a locale serves. Keep those settings in one module and import it into both the middleware and the sitemap, so the sitemap lists exactly the URLs the middleware answers:
+
+```ts title="i18n/routing.ts"
+import gtConfig from '../gt.config.json';
+
+export const BASE_URL = 'https://example.com';
+export const DEFAULT_LOCALE = gtConfig.defaultLocale;
+
+// Every locale you serve, from gt.config.json, source language first.
+export const LOCALES = [...new Set([gtConfig.defaultLocale, ...gtConfig.locales])];
+
+// Shared with proxy.ts, so the sitemap lists exactly the URLs the middleware serves.
+export const pathConfig: Record<string, Record<string, string>> = {
+  '/about': { de: '/ueber-uns', fr: '/a-propos' },
+};
+export const localeRoutes: Record<string, string[]> = {
+  'pt-BR': ['/', '/about'], // pricing isn't translated into Brazilian Portuguese yet
+};
+```
+
+```ts title="proxy.ts"
+import { createNextMiddleware } from 'gt-next/middleware';
+import { localeRoutes, pathConfig } from './i18n/routing';
+
+export default createNextMiddleware({
+  prefixDefaultLocale: true,
+  pathConfig,
+  localeRoutes,
+});
+
+export const config = {
+  matcher: ['/((?!api|static|.*\\..*|_next).*)'],
+};
+```
+
+With `gt.config.json` listing `en`, `de`, `fr`, and `pt-BR`, the build produced 11 entries: three pages in four locales, minus Brazilian Portuguese pricing. That URL still works for visitors, because the middleware redirects `/pt-BR/pricing` to `/en/pricing` with a `307`, and a redirecting URL doesn't belong in a sitemap. Every listed URL returned `200`, and the checker above found no problems. The `serves` check compares exact paths, so if your `localeRoutes` use patterns such as `/blog/[[...slug]]`, expand them into the pages you list.
+
+If you route a locale under an alias, such as `/cn` for Chinese, use the canonical code in the hreflang key and the alias in the URL; the [locale alias SEO guide](/docs/react/nextjs/locale-alias-seo#sitemap) converts them with [`resolveCanonicalLocale`](/docs/react/nextjs/reference/functions/resolve-canonical-locale). Translated titles and descriptions for the same pages are covered in [How do I translate SEO titles and meta descriptions?](/kb/translate-seo-metadata).
+
+## Key takeaways
+
+- Give every language version its own `<url>` entry, and list every URL you want indexed whichever hreflang method you use.
+- In a sitemap with hreflang, each entry lists all versions of the page, including itself, with the same set in every entry; `x-default` is optional.
+- Files cap at 50,000 URLs and 50MB; alternates don't count toward the URL limit but do count toward the size, so with many locales the size limit comes first.
+- Split by locale with a sitemap index hosted at the site root, and check reciprocity and status codes before submitting.
+- With `gt-next`, share `pathConfig` and `localeRoutes` between the middleware and `app/sitemap.ts`, so the sitemap lists exactly the URLs your app serves.

@@ -1,0 +1,186 @@
+---
+title: How do I localize an Android app with strings.xml?
+summary: Keep every default string in res/values/strings.xml, add a strings.xml for each language under a locale-qualified folder such as values-es or values-b+zh+Hant+TW, and read text with stringResource or getString. Translate by hand, in Play Console, or with General Translation's CLI, which writes each values folder and rebuilds plurals for every target language.
+description: Put default text in res/values/strings.xml, add values-es and other locale folders, write plurals and placeholders translators can't break, then translate and test.
+date: 2026-10-28
+category: internationalization
+related: [localize-ios-app, translate-react-native-app, pseudo-localization, find-hardcoded-strings, right-to-left-css]
+---
+
+Android picks resources at run time from folders named for the device's locale. Your default text lives in `res/values/strings.xml`, and each translation is another `strings.xml` with the same resource names under a folder such as `res/values-es/`. That leaves you two jobs: getting every user-facing string into `strings.xml`, and getting good translations into each language folder.
+
+## Set up string resources
+
+### Put every string in res/values/strings.xml
+
+The default file must contain every string the app uses: when one is missing, the app "doesn't run and shows an error," according to Android's localization guide. A translated file can hold a subset, and any string it lacks falls back to the default ([Android: Localize your app](https://developer.android.com/guide/topics/resources/localization)).
+
+Here's a default file with the patterns you'll need, each annotated:
+
+```xml title="res/values/strings.xml"
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Button that starts payment for the items in the cart. -->
+    <string name="checkout">Checkout</string>
+
+    <!-- Positional arguments let a translation reorder the values. -->
+    <string name="welcome">Hi %1$s, you have %2$d new messages.</string>
+
+    <!-- Escape apostrophes, or the build fails. -->
+    <string name="cart_empty">Your cart\'s empty</string>
+
+    <!-- xliff:g marks text that must not be translated. -->
+    <string name="countdown"><xliff:g id="time" example="5 days">%1$s</xliff:g> until your trial ends</string>
+
+    <plurals name="items_in_cart">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+
+    <string-array name="sort_options">
+        <item>Newest</item>
+        <item>Price: low to high</item>
+    </string-array>
+</resources>
+```
+
+In Compose, read them with `stringResource`, `pluralStringResource`, and `stringArrayResource`; with Views, use `context.getString` and `resources.getQuantityString` ([Android: String resources](https://developer.android.com/guide/topics/resources/string-resource)). For plurals, pass the count twice: the first selects the form and the second fills `%d`.
+
+```kotlin
+val greeting = stringResource(R.string.welcome, name, count)
+val cart = pluralStringResource(R.plurals.items_in_cart, count, count)
+val sortOptions = stringArrayResource(R.array.sort_options)
+```
+
+React Native apps have this file too: the template's `strings.xml`, under `android/app/src/main/res/values/`, holds `app_name`, the label Android shows under the icon, while the JavaScript UI is translated separately. (See [How do I translate a React Native app?](/kb/translate-react-native-app).)
+
+### Name a folder for each language
+
+A language folder is `values-` plus a resource qualifier. The language is an ISO 639-1 code, a region takes a lowercase `r` prefix, and anything with a script or a numeric region uses the BCP 47 form, `b+` followed by subtags joined with `+`, supported since Android 7.0 (API 24) ([Android: App resources overview](https://developer.android.com/guide/topics/resources/providing-resources)):
+
+| Language | Locale code | Folder |
+| --- | --- | --- |
+| Spanish | `es` | `res/values-es/` |
+| Portuguese (Brazil) | `pt-BR` | `res/values-pt-rBR/` |
+| Spanish (Latin America) | `es-419` | `res/values-b+es+419/` |
+| Chinese (Traditional, Taiwan) | `zh-Hant-TW` | `res/values-b+zh+Hant+TW/` |
+
+Add a regional folder only for the strings that differ. Android's example keeps all English in `values/` and only the UK spellings in `values-en-rGB/`, and everything else falls back. (See [What are locale codes?](/kb/locale-codes).)
+
+### Write strings translators can't break
+
+These rules from Android's [string resources guide](https://developer.android.com/guide/topics/resources/string-resource) keep a translation from breaking the build or the grammar:
+
+- **Plurals follow each language's grammar.** Quantities are `zero`, `one`, `two`, `few`, `many`, and `other`, but a language uses only the ones its grammar needs: English ignores `zero` even for 0, and Chinese and Korean only ever use `other`. Don't use `<plurals>` as an `if` statement for "no items"; write a separate string.
+- **Use positional arguments.** `%1$s` and `%2$d` let a translator move the name after the count when the target language wants that order.
+- **Escape apostrophes and quotes.** Write `\'` or wrap the whole string in double quotes, and write `\"` for a literal quote. Escape a leading `@` or `?` as `\@` and `\?`, or Android reads the value as a resource reference.
+- **Protect what shouldn't change.** Wrap placeholders and URLs in `<xliff:g>` with an `id` and an `example`, as the countdown string does ([Android: Localize your app](https://developer.android.com/guide/topics/resources/localization)).
+- **Mark resources that never change.** Add `translatable="false"` to values such as the app name, or move them to a `donottranslate.xml` file.
+- **Leave a comment.** A comment above a resource tells translators where the text appears and how much room it has. "Checkout" alone could be a noun or a verb.
+
+## Let users choose the app's language
+
+Since Android 13 (API 33), users can set a language per app in system settings, for apps that declare their supported languages. Turn on `generateLocaleConfig` and Android Gradle Plugin (AGP) 8.1 or later generates the list of languages from your `values-*` folders at build time; it needs `compileSdk` 33 or higher and a `res/resources.properties` file naming the default folder's locale, such as `unqualifiedResLocale=en-US`. To list languages by hand instead, add `res/xml/locale_config.xml` and point `android:localeConfig` at it in the manifest. The build fails if you do both ([Android: Per-app language preferences](https://developer.android.com/guide/topics/resources/app-languages)).
+
+```kotlin title="app/build.gradle.kts"
+android {
+    androidResources {
+        generateLocaleConfig = true
+    }
+}
+```
+
+For an in-app language picker, use AppCompat 1.6.0 or later and call `setApplicationLocales` on the main thread. It recreates the activity, and with Compose the activity must extend `AppCompatActivity`:
+
+```kotlin
+// Call on the main thread; it may restart the Activity.
+AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("es"))
+```
+
+On Android 12 and lower, AppCompat can persist the choice for you when you add its `AppLocalesMetadataHolderService` with `autoStoreLocales` set to `true` in the manifest. (See [Language switcher best practices](/kb/language-switcher) for the picker's design.)
+
+## Catch missing and hardcoded strings
+
+Android Studio's **Translations Editor** shows every key in a grid, one column per language, and marks problems in red. Right-click `strings.xml` and choose **Open Translations Editor**. The globe icon adds a language and creates its `values-*` folder, and the **Untranslatable** checkbox writes `translatable="false"` for you ([Android: Translations Editor](https://developer.android.com/studio/write/translations-editor)).
+
+Android Lint checks the same things in CI:
+
+- [`MissingTranslation`](https://googlesamples.github.io/android-custom-lint-rules/checks/MissingTranslation.md.html) (error) flags a string missing from a language. Suppress it per resource with `tools:ignore="MissingTranslation"`, and set `tools:locale` on the default file's `<resources>` element so lint knows its language.
+- [`ExtraTranslation`](https://googlesamples.github.io/android-custom-lint-rules/checks/ExtraTranslation.md.html) (fatal) flags a translated string with no default, which can crash the app in locales that lack it.
+- [`HardcodedText`](https://googlesamples.github.io/android-custom-lint-rules/checks/HardcodedText.md.html) (warning) flags literal text in layout XML. It doesn't see Compose `Text("...")` calls. (See [How do I find hardcoded strings that aren't translated?](/kb/find-hardcoded-strings).)
+
+## Test every language
+
+Android ships two pseudolocales for testing before translations exist. `en-XA` adds accents, lengthens text, and brackets each message, so truncation and concatenated sentences show up. `ar-XB` switches text to right to left. Set `isPseudoLocalesEnabled = true` on the debug build type, enable Developer options on the device, and choose the pseudolocale in its language settings ([Android: Test with pseudolocales](https://developer.android.com/guide/topics/resources/pseudolocales)). (See [What is pseudo-localization?](/kb/pseudo-localization).)
+
+For Arabic, Hebrew, and Persian, set `android:supportsRtl="true"` on the `<application>` element and use `start` and `end` attributes (`paddingStart`, `layout_marginEnd`) in place of `left` and `right`, so layouts mirror. Add `android:autoMirrored="true"` to directional drawables, and wrap any value you insert into a sentence with `BidiFormatter.unicodeWrap()` so a street address or number keeps its direction ([Android: Support different languages and cultures](https://developer.android.com/training/basics/supporting-devices/languages)). In Compose, `@Preview(locale = "ar")` previews a screen right to left. (See [How do I support RTL (right-to-left) languages in CSS?](/kb/right-to-left-css) for the web version.)
+
+Your Google Play store listing is translated separately. In Play Console, open the store listing, click **Manage translations**, and add your own title, short description, full description, and localized graphics per language ([Play Console Help: Translate and localize your app](https://support.google.com/googleplay/android-developer/answer/9844778)).
+
+## Choose how to translate
+
+These approaches fill your `values-*` folders:
+
+| Approach | Who translates | Context the translator gets | Repeatable on every release | What it leaves to you |
+| --- | --- | --- | --- | --- |
+| Type in the Translations Editor | You or a bilingual teammate | The whole app | No | Every string in every language, by hand |
+| Play Console app strings translation | Gemini models in Play Console, at no cost | Your `strings.xml` | Yes, on each bundle uploaded to a draft release | Translations live in Play, not in your repository, and override existing ones for the languages you select |
+| Send files to translators or a translation management system (TMS) | Professional translators | Comments, plus any screenshots you attach | Through the TMS's sync | A round trip per release, and waiting on it |
+| Script machine translation or an LLM over the XML | A model or translation API | Whatever your script sends | Yes | Plural categories per language, escaping, `<xliff:g>` elements, format arguments, and review |
+| General Translation CLI | GT's translation service | Resource comments, plus shared Glossary and Custom Prompts | Run [`gt translate`](/docs/cli/reference/commands/translate) before the build | Review in the Dashboard or Android Studio, then test the app |
+
+Play Console can also translate the app itself: once you turn on app strings translation, each app bundle you upload to a draft release gets translations generated from its latest `strings.xml`, which you can preview in an emulator and edit before publishing. Selecting a language replaces any translations you already have for it, and a **Translate** checkbox excludes individual strings ([Play Console Help](https://support.google.com/googleplay/android-developer/answer/9844778)).
+
+Use the Translations Editor for one or two languages you speak. Use Play Console's translation when you publish through Google Play and don't need the translations in your codebase. Choose General Translation when translated `strings.xml` files should be committed with each release and share terminology with your iOS app and website. Use a [TMS](/kb/what-is-a-translation-management-system) when professional translators or an existing vendor own the work.
+
+## Translate strings.xml with General Translation
+
+General Translation's CLI, `gt`, translates Android string resources with the `androidStrings` file key (`gt` 2.19.0 or later). The default file has no locale in its path, so point `include` at it and use `transform` to route each translation into its language folder:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "pt-BR", "zh-Hant-TW"],
+  "files": {
+    "androidStrings": {
+      "include": ["app/src/main/res/values/strings.xml"],
+      "transform": {
+        "match": "res/values/(.*)",
+        "replace": "res/values-{locale}/$1"
+      }
+    }
+  }
+}
+```
+
+The CLI converts each locale to the qualifier Android expects, so this config writes `values-es/`, `values-pt-rBR/`, and `values-b+zh+Hant+TW/`. Don't use a `values-[locale]` pattern for a standard project: it looks for a `values-en/` folder, matches nothing, and translates nothing.
+
+The CLI runs on Node.js 20 or later; install it as the [CLI Quickstart](/docs/cli/quickstart) shows, sign in with [`npx gt login`](/docs/cli/reference/commands/login), set `GT_PROJECT_ID` ([CLI credentials](/docs/cli/guides/configuring#credentials)), and, for an app that already has translations, import them with [`npx gt upload`](/docs/cli/reference/commands/upload). Then run [`npx gt translate`](/docs/cli/reference/commands/translate). In CI, store a project API key with **Files > Write** and **Translation queue > Enabled** as `GT_API_KEY`.
+
+Translated files keep resource names, `<xliff:g>` elements, format arguments, and inline markup, and each translated string is checked for those and for the apostrophe and quote escaping the Android build requires. `<plurals>` are rebuilt for the target language's categories: Polish gets `one`, `few`, `many`, and `other`, Arabic all six, and Chinese only `other`, and categories the language never selects, including a source `zero`, are dropped. A comment above a resource is sent as context. The CLI doesn't translate resources marked `translatable="false"`, values that reference another resource, or non-text types such as `<color>`. (See the [strings.xml reference](/docs/cli/reference/formats/android-strings-files).)
+
+Resources marked `translatable="false"` inside an included file are copied unchanged into each translated file, and Android Lint's [`Untranslatable`](https://googlesamples.github.io/android-custom-lint-rules/checks/Untranslatable.md.html) check warns about every copy. Keep those values in `res/values/donottranslate.xml` and include only `strings.xml`.
+
+Review translations in the [Dashboard](/docs/platform/dashboard/guides/reviewing-translations) or in Android Studio; if you edit files locally, run [`npx gt save-local`](/docs/cli/reference/commands/save-local) so later runs keep your changes. Assign one [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) to your Android, [iOS](/kb/localize-ios-app), and web projects, and a Glossary term like a plan name translates the same way everywhere. Partiful uses General Translation for 2+ locales across web, iOS, and Android ([production deployments](https://generaltranslation.com/enterprise)).
+
+## Common questions
+
+### Do I need a values-en folder for English?
+
+No. The unqualified `values/` folder serves every locale you don't translate. When you turn on `generateLocaleConfig`, `resources.properties` tells the build which locale that folder holds.
+
+### Why is my translated app showing English for some strings?
+
+The translated `strings.xml` is missing those names, so Android falls back to `values/`. Lint's `MissingTranslation` check lists them per language.
+
+### Does Google Play translate my store listing automatically?
+
+People viewing a listing in a language you haven't translated can choose an automated translation of it. Your own translations, added under **Manage translations**, replace that for each language you add.
+
+## Key takeaways
+
+- `res/values/strings.xml` must contain every string; translated folders can hold a subset and fall back to it.
+- Folder names use qualifiers: `values-pt-rBR` for a region, `values-b+zh+Hant+TW` for a script.
+- Use positional arguments such as `%1$s`, escape apostrophes, and let each language define its own `<plurals>` categories.
+- Turn on `generateLocaleConfig` (AGP 8.1+) for Android 13's per-app language setting, and test with the `en-XA` and `ar-XB` pseudolocales.
+- General Translation's CLI translates `strings.xml` with `androidStrings` and a `transform` into `values-{locale}`, writing the qualifier Android expects and rebuilding plurals per language.

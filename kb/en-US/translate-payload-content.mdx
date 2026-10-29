@@ -1,0 +1,109 @@
+---
+title: How do I translate content in Payload CMS?
+summary: Add localization to your Payload config and set localized true on each field to translate, and Payload stores one value per locale in the same document. Payload doesn't fill those values; General Translation's gt-payload plugin adds a Translate button that writes each target locale as a draft you review and publish.
+description: Add localization to your Payload config and mark fields localized, then fill each locale. General Translation's gt-payload plugin translates them and saves drafts you review and publish.
+date: 2026-10-28
+category: workflow-tools
+related: [translate-sanity-content, translate-storyblok-content, make-website-multilingual, review-translations, general-translation-vs-lingo-dev]
+---
+
+Payload CMS stores translations at the field level. Once your config has a `localization` block, every field marked `localized: true` holds one value per locale in the same document, and your frontend asks for a language with the `locale` parameter. Payload doesn't produce those values, and filling them is fiddly: Lexical rich text (Payload's default editor) carries links, marks, and embedded blocks; arrays and blocks nest localized fields; slugs, relationships, and uploads must stay as they are; and an editor's fix to a translation shouldn't be lost on the next update.
+
+## How Payload stores translations
+
+Localization is part of Payload's core config in Payload 3 ([Payload localization docs](https://payloadcms.com/docs/configuration/localization)). You list the locales once:
+
+```ts title="src/payload.config.ts"
+import { buildConfig } from 'payload';
+
+export default buildConfig({
+  // ... your existing config
+  localization: {
+    locales: ['en', 'es', 'fr'], // or objects with code, label, rtl, and fallbackLocale
+    defaultLocale: 'en',
+    fallback: true, // the default: a missing value falls back to the default locale
+  },
+});
+```
+
+Then mark each field to translate. `localized: true` works on any named field, including arrays and blocks, and nested fields inside a localized container become per-locale sets. Payload warns that changing `localized` on a field that already holds data loses that field's existing data, so decide before you load content.
+
+Every API takes a locale. REST uses `?locale=es` and `?fallback-locale=none`, GraphQL takes `locale` and `fallbackLocale` arguments, and the Local API takes the same options:
+
+```ts
+// Spanish values, falling back to English for fields with no Spanish value
+const page = await payload.findByID({ collection: 'pages', id, locale: 'es' });
+
+// Spanish values only; untranslated fields come back empty
+const strict = await payload.findByID({ collection: 'pages', id, locale: 'es', fallbackLocale: false });
+
+// Every locale at once: all.title is { en: 'Pricing', es: 'Precios' }
+const all = await payload.findByID({ collection: 'pages', id, locale: 'all' });
+```
+
+In a Payload 3.92 test app, a page with only English and Spanish titles returned the English title for `fr` by default and an empty title with `fallbackLocale: false`. That default is worth knowing: an untranslated locale quietly serves the source language instead of failing.
+
+## Ways to translate Payload content
+
+Payload's official plugins include SEO, Redirects, Search, and Import/Export, but none translates content ([Payload plugins](https://payloadcms.com/docs/plugins/overview)). These are the options:
+
+| Approach | What it does well | How translations reach Payload | What it leaves to you |
+| --- | --- | --- | --- |
+| Editors type each locale | A translator sees each field in the admin panel | Switch the admin locale and type each value | Every translation, and finding the fields that changed after each source edit |
+| Payload's [Import/Export plugin](https://payloadcms.com/docs/plugins/import-export) with translators or a translation management system (TMS) | Exports a locale to CSV or JSON for people who translate in files | Import the translated file into the target locale | Keeping rich text, blocks, and row IDs intact through the round trip, and re-exporting after edits |
+| A script on an AI API (OpenAI API, Claude API) | Translates many documents in one run, with your tone and terms in the prompt | Your script writes with `payload.update({ locale })` | Walking nested fields and Lexical JSON, context for each string, consistent terms, review, and reruns |
+| [Lingo.dev](https://lingo.dev/guides/payload) (`@lingo.dev/payloadcms`) | Translates localized text and rich text automatically when the source is saved | Its hosted service writes each locale, published or as a draft | Lingo.dev's Enterprise plan, a Payload service user with an API key, and the Lexical editor |
+| General Translation (`gt-payload`) | Translates localized `text`, `textarea`, and Lexical `richText`, nested blocks included, with your project's Glossary and Custom Prompts | A **Translate** button per document, or one run for the whole site, writes each locale as a draft | Starting a run after source edits, and reviewing and publishing each draft |
+
+Type translations by hand when you have a few documents and a translator per language. Use Import/Export when an agency or TMS already owns translation and works in files. Use an AI API script for a one-off batch someone reviews. Use General Translation when documents carry rich text and blocks, change often, and should use the same terminology as your app and docs. (See [General Translation vs. Lingo.dev](/kb/general-translation-vs-lingo-dev) for how the two services compare.)
+
+## Translate Payload content with gt-payload
+
+General Translation's `gt-payload` plugin (MIT-licensed, version 0.1.2) needs Payload 3.90.0 or later with `localization` configured, Next.js 15.2.9 or later, React 19.0.1 or later, and at least one localized field.
+
+1. Install it with `npm install gt-payload`.
+2. Add the plugin to your config. It reads your locales and localized fields from Payload, so it takes no options for the common case:
+
+   ```ts title="src/payload.config.ts"
+   import { buildConfig } from 'payload';
+   import { gtPlugin } from 'gt-payload';
+
+   export default buildConfig({
+     // ... your existing config
+     localization: {
+       locales: ['en', 'es', 'fr'],
+       defaultLocale: 'en',
+     },
+     plugins: [gtPlugin()],
+   });
+   ```
+
+3. Set `GT_PROJECT_ID` and a [project API key](/docs/platform/dashboard/reference/api-keys#create-project-keys) with **All** permissions as `GT_API_KEY` on the server that runs Payload. Never expose the key to client code.
+4. Run `npx payload generate:importmap` so the admin panel loads the plugin's components. On PostgreSQL or SQLite, create and apply a migration (`npx payload migrate:create`, then `npx payload migrate`) for the two collections the plugin adds.
+5. Open a saved document, choose **Translate**, select the target locales, and choose **Translate into …**. To translate everything, open **Translations** in the admin navigation instead.
+
+In a test app on Payload 3.92.1, the plugin added its document controls, the **Translations** view, and the `gt-translation-runs` and `gt-translation-locks` collections to the import map and generated types, and `next build` succeeded. Its endpoints refuse requests without a signed-in Payload user. The [Payload Quickstart](/docs/integrations/payload/quickstart) has the full steps.
+
+## What a translation run does
+
+The plugin uses the default locale as the source and sends each document's localized text to your General Translation project, where it appears under its Payload identity (`collection/id`, or a global's slug). It translates localized `text` fields (including `hasMany` lists), `textarea` fields, and Lexical `richText`, inside groups, tabs, arrays, blocks, and rich text blocks. Rich text keeps its marks, links, uploads, and blocks; a string whose markup can't be matched to the source is skipped and reported, not written broken.
+
+It leaves alone slug fields, read-only, hidden, and virtual fields, `text` values that look like URLs, paths, or email addresses, relationships, uploads, dates, numbers, and IDs. Set `custom: { gt: { translate: false } }` on a field, such as a SKU, to skip it. When a translation exceeds a field's `maxLength`, the plugin asks for a shorter one, then cuts at a word boundary with an ellipsis only if it still doesn't fit. (See [supported content](/docs/integrations/payload/reference/supported-content).)
+
+Results go into the same document under each target locale. Collections and globals with [drafts](https://payloadcms.com/docs/versions/drafts) get a draft; others are saved directly. The plugin never publishes. Runs are stored in Payload, so they keep going after you close the tab: the next admin visit resumes them, or Payload's [jobs queue](https://payloadcms.com/docs/jobs-queue/overview) finishes them when `jobs.autoRun` is configured. A failure in one document or locale doesn't undo the others.
+
+## Review, publish, and keep edits
+
+Review each locale in Payload's editor and publish it with your normal Payload permissions; the plugin's controls follow the signed-in user's access rules. If an editor fixes a translation in Payload, turn on **Save local edits before translating** in the **Translations** drawer (it's off by default), or choose **Save local edits**, so General Translation keeps that wording on later runs. Saving makes Payload's values the source of truth and replaces what General Translation holds for that document. (See [managing translations](/docs/integrations/payload/guides/managing-translations).)
+
+Translation quality comes from context. Assign a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) to the project, and its Glossary and Custom Prompts guide every Payload run, so a product name or plan tier translates the same way in your CMS pages as in your app. To translate from your own code, such as a hook or a scheduled job, call [`translateDocument`](/docs/integrations/payload/reference/api#translate-document) or `translateSite` from `gt-payload`. Usage is billed per [General Translation's pricing](https://generaltranslation.com/pricing).
+
+For the rest of a multilingual site, such as URLs per language and `hreflang`, see [How do I make a website multilingual?](/kb/make-website-multilingual). The same pattern of per-locale fields filled as drafts applies in [Sanity](/kb/translate-sanity-content) and [Storyblok](/kb/translate-storyblok-content).
+
+## Key takeaways
+
+- Payload 3 stores translations per field: add `localization` to the config, set `localized: true`, and read with `locale` and `fallback-locale`.
+- With the default `fallback: true`, a locale you haven't translated serves the source text, so check coverage before you link a language.
+- Payload has no official translation plugin; its Import/Export plugin can move a locale out to translators as CSV or JSON.
+- General Translation's `gt-payload` adds `gtPlugin()`, a **Translate** button, and a site-wide **Translations** page; it translates localized text, textarea, and Lexical rich text, and writes drafts it never publishes.
+- Turn on **Save local edits before translating** so edits made in Payload survive later runs.

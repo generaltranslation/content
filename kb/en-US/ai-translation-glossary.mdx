@@ -1,0 +1,134 @@
+---
+title: How do I keep terminology consistent in AI translation?
+summary: Keep one glossary of approved terms, including names that stay untranslated, apply it to every translation request, keep variables and code out of translation, and review the result. General Translation does this with Context Groups, whose Glossary and Custom Prompts apply to every project you assign them to, plus the Var component for values that are never translated.
+description: Keep AI translation terminology consistent with one glossary applied to every request, do-not-translate markup, and review. General Translation uses shared Context Groups.
+date: 2026-10-28
+category: translation
+related: [is-ai-translation-accurate, general-translation-vs-deepl, best-ai-translation-tools, review-translations, what-is-translation-memory]
+---
+
+Keep terminology consistent by maintaining one glossary of approved translations, applying it to every translation request, marking text that must never be translated, and checking the output in review. Terms drift because machine translation engines and LLMs treat each request on its own: nothing carries the word chosen last week into this week's translation unless you send it.
+
+## Why does AI translation drift on terms?
+
+Say your product has a feature called Vault. Translated into German one string at a time, it can come back as *Tresor* on the pricing page, stay "Vault" in the app, and turn into *Safe* in the docs. Each output is a reasonable translation; together they describe three different features. Drift has a few causes:
+
+- **Each request starts fresh.** DeepL's API reference says each string in a request is [translated independently](https://developers.deepl.com/api-reference/translate/request-translation). An LLM picks its wording on every call, and a new model version can pick differently.
+- **Short strings carry little context.** A tab labeled "Vault" or "Spaces" reads as an ordinary noun, so the engine translates it as one.
+- **Different tools per surface.** App strings in one tool, docs in another, and marketing pages with a vendor means three glossaries, or none.
+- **Grammar changes the word.** German and Polish add case endings to nouns, so an approved translation is a base form the sentence has to inflect, not a string to paste.
+
+The terms that need a rule are usually brand and product names, feature names, UI labels that your docs refer to ("click **Save**" has to match the button in each language), domain terms, and anything that must stay exactly as written: code, variables, URLs, and user data.
+
+## How do the options compare?
+
+| Approach | How it keeps terms consistent | Where it falls short |
+| --- | --- | --- |
+| A machine translation glossary (DeepL, Google Cloud Translation) | Term pairs per language pair, applied by ID on each request | You pass the ID on every call and maintain each language pair; short strings still lack context |
+| Terms in an LLM prompt (OpenAI API, Claude API) | You list the terms and rules in each prompt | You decide which terms each string needs, and nothing checks the output unless you build the check |
+| A termbase in a translation management system (TMS) | Translators and AI see approved terms; QA checks flag misses | It lives in the TMS, separate from your code, and each project needs it connected |
+| Do-not-translate markup (`translate="no"`) | Engines skip the marked element | HTML input only; it keeps text unchanged but can't choose a translation |
+| General Translation Context Groups | A Glossary and Custom Prompts apply to every translation in each assigned project; [`<Var>`](/docs/react/reference/components/var) keeps values out | Existing translations change only when you apply the Glossary to them or retranslate |
+
+### Machine translation glossaries
+
+DeepL's [multilingual glossaries](https://developers.deepl.com/docs/customize/managing-glossaries) hold one dictionary of term pairs per language pair, uploaded as TSV or CSV, and a request can apply up to five with `glossary_ids`. Google Cloud Translation's [glossaries](https://docs.cloud.google.com/translate/docs/advanced/glossary) take term pairs for one language pair or equivalent term sets across several languages, from TSV, CSV, or TMX files. Google matches terms case-sensitively unless you set `ignoreCase`, returns the translation with and without the glossary so you can compare them, and supports its contextual glossary mode only with its Translation LLM.
+
+### Terms in an LLM prompt
+
+With the OpenAI API or the Claude API, the glossary is text in your prompt. Send only the terms that appear in the string, ask for output that follows a JSON schema, and check afterward that each approved term made it into the translation. The model follows instructions well; the selection, the check, and keeping the list current across scripts are yours.
+
+### Termbases in a TMS
+
+A [translation management system](/kb/what-is-a-translation-management-system) keeps a termbase next to the strings. Translators see matching terms in the editor, AI translation can use them (Crowdin's [AI prompts](https://support.crowdin.com/crowdin-ai/) can include glossary terms), and QA checks catch misses: Crowdin's [Consistent terminology](https://support.crowdin.com/project-settings/qa-checks/) check flags a translation that doesn't use the glossary term for a source word.
+
+### Do-not-translate markup
+
+HTML's [`translate` attribute](https://html.spec.whatwg.org/multipage/dom.html#the-translate-attribute) set to `no` tells translation tools to leave an element's text unchanged. DeepL skips elements marked `translate="no"` or `class="notranslate"` when `tag_handling` is `html` ([Translating HTML](https://developers.deepl.com/docs/translate/translating-html)), and Google Cloud Translation does the same for `text/html` input ([troubleshooting](https://docs.cloud.google.com/translate/troubleshooting)). Plain-text requests ignore it.
+
+Use a machine translation glossary when you call DeepL or Google directly from your own pipeline. Use prompt instructions when translation is part of a model call your product already makes. Use a TMS termbase when translators and vendors work in that TMS. Use `translate="no"` for HTML you send to an engine. Use General Translation when the same terms have to hold across your app, docs, and other content with every release, without passing a glossary through each script.
+
+## How General Translation keeps terms consistent
+
+General Translation applies terminology through [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations): reusable instructions that live at the Organization level and apply to every project you assign them to. Each holds a Glossary for terms and Custom Prompts for tone and style.
+
+### Set up a Context Group
+
+1. In the Dashboard, open **Context** in your Organization sidebar, click the plus sign, and choose **Create new group**. Creating it from a project's **Context** page instead lets you select **Autogenerate context** to draft Glossary terms and Custom Prompts from that project's files.
+2. On the **Glossary** tab, add each term with a definition that says what it means and how to treat it.
+3. Fill in each target locale's translation: type it in, import a CSV, TSV, or JSON file, or click **Translate** on the project's **Context** page to have AI fill in the terms that don't have a translation yet. Then correct any cell.
+4. On the **Custom Prompts** tab, add rules for tone and style, such as "Use the formal Sie" for German only. Each prompt applies to all locales or to one.
+5. Assign the group to each project from the project's **Context** tab. When groups overlap, the one at the top of the list wins.
+
+A Glossary for the Vault example might look like this:
+
+| Term | Definition | `de` | `ja` |
+| --- | --- | --- | --- |
+| Vault | Product name for an encrypted folder. Keep in English. | Vault | Vault |
+| Workspace | A team's shared area in the app. | Arbeitsbereich | ワークスペース |
+
+The default **Admin** and **Editor** roles can edit Context Groups.
+
+### How the Glossary reaches each translation
+
+For every string it translates, General Translation finds the Glossary terms that appear in it and sends their definitions and the target locale's translations along with the string. The model treats the approved translation as the base form and inflects it to fit the sentence, and when a word appears in a different sense than its definition, it translates the word normally. The same Context Groups apply to [`<T>`](/docs/react/reference/components/t) content and files translated with [`npx gt translate`](/docs/cli/reference/commands/translate), to runtime translation with [`tx`](/docs/node/reference/functions/tx), and to translations generated by [Locadex](/docs/platform/locadex/quickstart), so the app, docs, and marketing site all use "Vault."
+
+### Keep values out of translation with `<Var>`
+
+Some text must stay exactly as written: names, IDs, code, and other runtime values. General Translation's [`<Var>`](/docs/react/reference/components/var) renders its contents as-is, and they're never sent to the General Translation API:
+
+```tsx title="InviteBanner.tsx"
+import { T, Var, Plural, Num } from 'gt-react';
+
+export function InviteBanner({
+  inviterName,
+  vaultCount,
+}: {
+  inviterName: string;
+  vaultCount: number;
+}) {
+  return (
+    <T context="Team settings banner. Vault is our product name for an encrypted folder.">
+      <p>
+        <Var>{inviterName}</Var> invited you to their workspace.{' '}
+        <Plural
+          n={vaultCount}
+          one={<>You can open one Vault.</>}
+          other={<>You can open <Num>{vaultCount}</Num> Vaults.</>}
+        />
+      </p>
+    </T>
+  );
+}
+```
+
+The inviter's name stays in [`<Var>`](/docs/react/reference/components/var). "Vault" stays in the sentence, so the Glossary keeps it in English while the model builds the grammar around it, and [`<Plural>`](/docs/react/reference/components/plural) gets every plural form the target language needs. Put product names in the Glossary rather than [`<Var>`](/docs/react/reference/components/var): the model then sees the name and can fit the sentence to it.
+
+### Update translations that already exist
+
+Editing a Context Group changes new translations, not existing ones. To bring existing content in line, click **Apply** on the project's **Context** page and choose the Glossary terms and locales to update, or retranslate files with the CLI or a Locadex run. (See [Apply Glossary translations](/docs/platform/dashboard/guides/defining-context-for-translations#apply-glossary).) Then have someone who reads the language check the result in the Dashboard. (See [How do I review and edit translations?](/kb/review-translations))
+
+## Common questions
+
+### Does a glossary guarantee the approved term every time?
+
+It makes the approved term the default, but review is still the check. Grammar can require a different form, and a word used in another sense shouldn't take the glossary translation. Review the highest-traffic screens in each language, as described in [Is AI translation accurate enough for a production app?](/kb/is-ai-translation-accurate)
+
+### How do I keep a brand name untranslated?
+
+Add it as a Glossary term with a definition such as "Product name. Keep in English," and use the name itself as its translation in each locale. For HTML you send to DeepL or Google Cloud Translation, wrap it in an element marked `translate="no"`.
+
+### What's the difference between a glossary and translation memory?
+
+A glossary fixes how individual terms are translated. Translation memory stores whole earlier translations and reuses them when the same or a similar sentence appears again. (See [What is translation memory, and do you still need it with AI?](/kb/what-is-translation-memory))
+
+### Can one glossary cover my app, docs, and website?
+
+Yes. In General Translation, assign one Context Group to every project, then add project-specific groups only where a surface uses different terms or tone. (See [General Translation vs. DeepL](/kb/general-translation-vs-deepl) for how that compares to passing glossary IDs on each request.)
+
+## Key takeaways
+
+- Terms drift because each translation request is independent and short strings carry little context; a glossary applied to every request fixes the default.
+- DeepL and Google Cloud Translation apply glossaries by ID per language pair, LLM prompts need your own term selection and checks, and TMS termbases add QA checks such as Crowdin's Consistent terminology.
+- `translate="no"` keeps HTML text unchanged in DeepL and Google Cloud Translation; it doesn't choose a translation.
+- General Translation's Context Groups share one Glossary and Custom Prompts across every assigned project, **Translate** fills in missing term translations for a locale, **Apply** updates existing translations, and [`<Var>`](/docs/react/reference/components/var) keeps runtime values out of translation entirely.
