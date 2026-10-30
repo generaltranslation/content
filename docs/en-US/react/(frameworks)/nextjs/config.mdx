@@ -159,7 +159,9 @@ A natural-language description of your app. It is sent as context to improve tra
 
 ### Routing options [#routing]
 
-`withGTConfig` also accepts the [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware#options) routing options. Set them here so [`<Link>`](/docs/react/nextjs/link) and the middleware use the same values. Options passed directly to the middleware take precedence.
+`withGTConfig` also accepts the [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware#options) routing options: [`localeRouting`](/docs/react/nextjs/reference/functions/create-next-middleware#locale-routing), [`prefixDefaultLocale`](/docs/react/nextjs/reference/functions/create-next-middleware#prefix-default-locale), [`enableSmartRouting`](/docs/react/nextjs/reference/functions/create-next-middleware#smart-routing), [`ignoreSourceMaps`](/docs/react/nextjs/reference/functions/create-next-middleware#ignore-source-maps), [`pathConfig`](/docs/react/nextjs/reference/functions/create-next-middleware#path-config), [`routeOverrides`](/docs/react/nextjs/reference/functions/create-next-middleware#route-overrides), and [`localeRoutes`](/docs/react/nextjs/reference/functions/create-next-middleware#locale-routes). Set them here so the middleware and [`<Link>`](/docs/react/nextjs/link) share one configuration. Options passed directly to the middleware take precedence.
+
+[`<Link>`](/docs/react/nextjs/link), [`useLocalizeHref`](/docs/react/nextjs/reference/hooks/use-localize-href), and [`getLocalizeHref`](/docs/react/nextjs/reference/functions/get-localize-href) read `prefixDefaultLocale` and `enableSmartRouting` only from `withGTConfig`. In development, the middleware warns when its values for those two options differ from the ones set here, because links can then trigger an extra redirect.
 
 ### `runtimeUrl` [#runtime-url]
 
@@ -260,7 +262,7 @@ Settings for the compiler plugin that analyzes your source at build time. Fields
   **Changed in v11.4.2:** The published `gt-next` package includes the WebAssembly plugin required by `type: 'swc'`. Upgrade to v11.4.2 or later before using the SWC compiler.
 </Callout>
 
-Install `@generaltranslation/compiler`, then set `enableAutoJsxInjection` here or under `files.gt.parsingFlags` in `gt.config.json`. Prefer `gt.config.json` to keep CLI extraction and compiler transforms in sync; see [Using automatic JSX injection](/docs/cli/guides/using-auto-jsx). In either case, `type: 'babel'` is required so `gt-next` loads the compiler:
+Set `enableAutoJsxInjection` here or under `files.gt.parsingFlags` in `gt.config.json`. Prefer `gt.config.json` to keep CLI extraction and compiler transforms in sync; see [Using automatic JSX injection](/docs/cli/guides/using-auto-jsx). In either case, `type: 'babel'` is required so `gt-next` loads the compiler:
 
 ```ts title="next.config.ts"
 export default withGTConfig(nextConfig, {
@@ -270,6 +272,10 @@ export default withGTConfig(nextConfig, {
   },
 });
 ```
+
+<Callout type="info">
+  **Changed in v11.4.12:** `gt-next` installs `@generaltranslation/compiler` as a dependency. On earlier versions, install it separately before using `type: 'babel'`.
+</Callout>
 
 Automatic JSX injection only runs in webpack builds. Run `next dev --webpack` during development and `next build --webpack` for production. Next.js 16 uses Turbopack by default; Turbopack disables the Babel compiler, and `type: 'swc'` or `type: 'none'` does not support injection. In each case, `gt-next` warns that injection was skipped.
 
@@ -297,7 +303,11 @@ When Next.js internationalized routing is configured and `localeDetection` is no
 
 A JavaScript regular expression source string. When set, the i18n middleware and client locale-routing boundary only run on pathnames that match it — for example, `^/(?!uk(?:/|$)).*` to skip everything under `/uk`. An invalid expression throws at build time. This is set here, on `withGTConfig`, not on [`createNextMiddleware`](/docs/react/nextjs/reference/functions/create-next-middleware); the plugin forwards it to the middleware at build time.
 
-Write the expression for paths without the locale prefix. [`<Link>`](/docs/react/nextjs/link), [`useLocalizeHref()`](/docs/react/nextjs/reference/hooks/use-localize-href) and [`getLocalizeHref()`](/docs/react/nextjs/reference/functions/get-localize-href) test the unprefixed path and leave paths that don't match unprefixed, so with `^/(?!api(?:/|$)).*` a link to `/api/export` stays `/api/export` in every locale.
+Write the expression for paths without the locale prefix. [`<Link>`](/docs/react/nextjs/link), [`useLocalizeHref()`](/docs/react/nextjs/reference/hooks/use-localize-href), and [`getLocalizeHref()`](/docs/react/nextjs/reference/functions/get-localize-href) test the unprefixed path and leave paths that don't match unprefixed, so with `^/(?!api(?:/|$)).*` a link to `/api/export` stays `/api/export` in every locale.
+
+<Callout type="info">
+  **Changed in v11.4.14:** Links to paths that don't match `pathRegex` are no longer prefixed. A pattern that only matches locale-prefixed paths, such as `^/(?:en|fr)(?:/|$)`, now produces unprefixed links; rewrite it for paths without the locale prefix.
+</Callout>
 
 <Callout type="warn">
   **Handle locale aliases manually:** Filtered paths bypass locale normalization. If your configured locales are `en`, `en-GB`, and `fr`, the path segment `uk` is not recognized as `en-GB`. A custom [`getLocale()`](/docs/react/nextjs/reference/functions/get-locale) function must return `en-GB` for `uk`:

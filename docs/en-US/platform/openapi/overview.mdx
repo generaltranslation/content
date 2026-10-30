@@ -86,6 +86,10 @@ Each `sourceCode` file keeps at most five context entries. The API truncates eac
 
 Set `fileFormat` to `MD` or `MDX` to translate a whole document supplied as a string. Document requests must use `dataFormat: STRING` and cannot include `maxChars` or `sourceCode`. The API parses the document into chunks, adds the request context to each chunk, and returns one validated document string. A failed chunk or invalid final document fails that entry rather than returning partial output.
 
+### Locale allowlist
+
+Runtime translation returns `403` with code `locale_not_allowed` when the project has a non-empty locale list and `targetLocale` is not on it. An empty locale list does not restrict target locales. A batch served entirely from cache skips this check, so a locale removed from the project can still return its cached translations.
+
 ### Rate limits
 
 Rate limiting uses 60-second windows at two layers:
@@ -110,27 +114,34 @@ List endpoints return one page of results as `{ "items": [...], "nextCursor": ..
 
 ### Errors
 
-With `gt-api-version` set, errors return a JSON body with an `error` message. This applies to every error, including malformed JSON (`400`), oversized bodies (`413`), and rate limits (`429`).
+From API version `2026-02-18.v1`, errors return a JSON body with an `error` message and a stable `code`. This includes malformed JSON (`400`), oversized bodies (`413`), and rate limits (`429`). Earlier versions return most errors as plain text without `code`.
 
 ```json
 {
-  "error": "API key is missing required permission: project:files:write"
+  "error": "Missing required permission: project:files:write",
+  "code": "permission_missing"
 }
 ```
 
-Common status codes:
+`code` names the cause. A route can return a more specific code than the generic code for its status; each endpoint's reference lists the codes it can return. New codes may be added, so treat an unrecognized code like its HTTP status.
 
-- `400` for invalid request body, query, or version.
-- `401` for a missing or invalid bearer credential.
-- `402` when the Organization's billing account is blocked, or its usage limits or credit balance do not cover the request (translating files and runtime translation).
-- `403` when the request identity lacks permission or the action is not allowed on the current plan.
-- `404` when the resource is not found.
-- `409` for a conflict, such as project creation over the Organization's project limit, a branch name already in use, or a rename that collides with an existing Glossary term or Custom Prompt.
-- `413` when the request body exceeds the endpoint limit, or when a Context Management response would exceed 1 MiB (request a smaller `limit`).
-- `415` when the request body's `Content-Type` is missing or not `application/json`.
-- `429` when a rate limit is exceeded.
-- `500` for an internal server error.
-- `503` when the service is temporarily unavailable.
+Common status codes and their generic `code`:
+
+- `400` `invalid_request` for an invalid request body, query, or version.
+- `401` `unauthenticated` for a missing or invalid bearer credential.
+- `402` `payment_required` when the Organization's billing account is blocked, or its plan usage limit, monthly spend limit, or credit balance does not cover the request (translating files and runtime translation).
+- `403` `permission_denied` when the request identity lacks permission or the action is not allowed on the current plan. A missing permission returns `permission_missing` and names the permission in `error`.
+- `404` `not_found` when the resource is not found.
+- `409` `conflict` for a conflict, such as project creation over the Organization's project limit, a branch name already in use, or a rename that collides with an existing Glossary term or Custom Prompt.
+- `410` `route_retired` when the route is retired in the requested API version. `error` names the route to use instead.
+- `413` `payload_too_large` when the request body exceeds the endpoint limit, or when a Context Management response would exceed 1 MiB (request a smaller `limit`).
+- `415` `unsupported_media_type` when the request body's `Content-Type` is missing or not `application/json`.
+- `423` `locked` when the resource is locked by an operation in progress.
+- `425` `not_ready` when the requested result is not ready yet.
+- `429` `rate_limited` when a rate limit is exceeded.
+- `500` `internal_error` for an internal server error.
+- `502` `upstream_error` when an upstream service fails to complete the request.
+- `503` `unavailable` when the service is temporarily unavailable.
 
 Retry `429` and `503` responses after a delay. For `429`, wait the number of seconds in the `Retry-After` header.
 
