@@ -1,0 +1,91 @@
+---
+
+title: setupRouterGTIntegration
+description: Connect a TanStack Router instance to General Translation to resolve the locale, load translations, and provide them to your app. API reference for setupRouterGTIntegration.
+
+---
+
+The `setupRouterGTIntegration` function wires General Translation into the router that `getRouter()` returns. Import it from `gt-tanstack-start` and call it with the configuration supplied by the [`gtTanstackStart`](/docs/react/tanstack-start/config) Vite plugin.
+
+## Overview [#overview]
+
+```tsx title="src/router.tsx"
+import { createRouter } from '@tanstack/react-router';
+import { setupRouterGTIntegration } from 'gt-tanstack-start';
+import { routeTree } from './routeTree.gen';
+
+export function getRouter() {
+  const router = createRouter({ routeTree });
+  setupRouterGTIntegration({ router });
+  return router;
+}
+```
+
+```ts
+setupRouterGTIntegration(options: {
+  router: Router;
+  localeRewrite?: false;
+}): void
+```
+
+## How it works [#how-it-works]
+
+The function updates the router's `dehydrate`, `hydrate`, `Wrap`, and, with locale routing, `rewrite` options.
+
+- **Server.** For each request, it resolves the locale from the locale cookie, the `Accept-Language` header, and `defaultLocale`, in that order. With [`localeRouting`](/docs/react/reference/config#locale-routing), a supported path prefix comes first. It writes the resolved locale to the locale cookie, loads the locale's translations and dictionary after your loaders run, and sends them to the browser with the page.
+- **Browser.** It applies the server's locale and translations before hydration, so the first render matches the server.
+- **Provider.** It wraps your app, including the root route, in [`<GTProvider>`](/docs/react/reference/components/gt-provider). Components anywhere in the route tree can use the shared hooks and components.
+- **Locale routing.** When `localeRouting` is enabled, it installs a URL rewrite. Incoming locale prefixes are removed before routes match, and links get the active non-default locale's prefix. The default locale stays unprefixed.
+- **Existing router options.** Your `Wrap` renders around the provider, so it cannot use the General Translation hooks, and your `dehydrate`, `hydrate`, and `rewrite` options keep running. Your `rewrite` receives locale-free URLs.
+- **Repeated calls.** Calling the function again with the same router does nothing.
+
+The function throws when the [`gtTanstackStart`](/docs/react/tanstack-start/config) plugin is not registered, because there is no configuration to read.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`router`](#router) | The router returned by `createRouter`. | `Router` | No | — |
+| [`localeRewrite`](#locale-rewrite) | Pass `false` to skip the locale URL rewrite. | `false` | Yes | Enabled with `localeRouting` |
+
+### `router` [#router]
+
+**Type** `Router` · **Required**
+
+The TanStack Router instance to integrate. Pass the router you create in `getRouter()`.
+
+### `localeRewrite` [#locale-rewrite]
+
+**Type** `false` · **Optional** · **Default** Enabled with `localeRouting`
+
+Pass `false` when your app handles locale prefixes itself, for example with optional `/{-$locale}` route segments or its own locale rewrite. The request locale is still resolved from the path prefix, and locale changes still reload at the matching pathname. The option has no effect when `localeRouting` is disabled. (See [Handle locale prefixes yourself](/docs/react/tanstack-start/setup#own-prefixes)).
+
+## Returns [#returns]
+
+**Type** `void`
+
+The function updates the router in place.
+
+## Example [#example]
+
+Keep an existing router `Wrap` and URL rewrite. The integration renders your `Wrap` around the provider and runs your rewrite on locale-free URLs:
+
+```tsx title="src/router.tsx"
+import { createRouter } from '@tanstack/react-router';
+import { setupRouterGTIntegration } from 'gt-tanstack-start';
+import { QueryProvider } from './query';
+import { routeTree } from './routeTree.gen';
+
+export function getRouter() {
+  const router = createRouter({
+    routeTree,
+    Wrap: QueryProvider,
+    rewrite: {
+      // Receives /about, not /es/about
+      input: ({ url }) => url,
+    },
+  });
+  setupRouterGTIntegration({ router });
+  return router;
+}
+```

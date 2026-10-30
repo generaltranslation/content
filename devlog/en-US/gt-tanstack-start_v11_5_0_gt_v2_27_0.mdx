@@ -1,0 +1,110 @@
+---
+
+title: gt-tanstack-start@11.5.0 / gt@2.27.0
+headline: Two-line setup with a Vite plugin
+summary: Set up TanStack Start with a Vite plugin and a router integration, with no middleware, loader file, root loader, or provider.
+date: 2026-10-19
+authors: [cyan]
+tags: ['gt-tanstack-start', '11.5.0', 'gt', '2.27.0', 'tanstack-start', 'vite']
+
+---
+
+`gt-tanstack-start@11.5.0` sets up TanStack Start apps with a Vite plugin and a router integration, and `gt@2.27.0` adds them to your app when you run [`gt init`](/docs/cli/reference/commands/init). Your app no longer needs request middleware, a translation loader file, a root-route loader, or a [`<GTProvider>`](/docs/react/reference/components/gt-provider).
+
+## Add the plugin and the router integration
+
+Add [`gtTanstackStart`](/docs/react/tanstack-start/config) to your Vite plugins:
+
+```ts title="vite.config.ts"
+import { gtTanstackStart } from 'gt-tanstack-start/plugin/vite';
+
+export default defineConfig({
+  plugins: [tanstackStart(), react(), gtTanstackStart()],
+});
+```
+
+Then call [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) in `getRouter()`:
+
+```tsx title="src/router.tsx"
+import { setupRouterGTIntegration } from 'gt-tanstack-start';
+
+export function getRouter() {
+  const router = createRouter({ routeTree });
+  setupRouterGTIntegration({ router });
+  return router;
+}
+```
+
+The plugin reads `gt.config.json` and loads translations from `files.gt.output`, or from the CDN when there is no local output path. The router integration resolves each request's locale, loads its translations before render, hydrates them in the browser, and wraps your app in [`<GTProvider>`](/docs/react/reference/components/gt-provider).
+
+Because the provider wraps the root route, the root document can use hooks. Set the document language with [`useLocale`](/docs/react/reference/hooks/use-locale):
+
+```tsx title="src/routes/__root.tsx"
+<html lang={useLocale()}>
+```
+
+[`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale), [`getGT`](/docs/react/tanstack-start/reference/functions/get-gt), and the other runtime functions read the request locale from TanStack Start's own request context, so server functions and server routes work without middleware.
+
+## Configure the plugin
+
+Settings that `gt.config.json` cannot hold are [plugin options](/docs/react/tanstack-start/config#options): cookie names, `cacheExpiryTime`, `batchConfig`, and `runtimeTranslation`, plus paths to `dictionary`, [`loadDictionary`](/docs/react/reference/functions/load-dictionary), and [`loadTranslations`](/docs/react/reference/functions/load-translations) files. Without these paths, the plugin finds `dictionary` and [`loadDictionary`](/docs/react/reference/functions/load-dictionary) files in your app root or `src/`, as `gt-next` does.
+
+The plugin keeps `apiKey` and `devApiKey` out of the configuration it sends to the browser. Set `VITE_GT_PROJECT_ID` and `VITE_GT_DEV_API_KEY` in the environment instead; the development key is read only in development.
+
+## Keep routes locale-free
+
+With `localeRouting` enabled in `gt.config.json`, the router integration rewrites URLs. Non-default locales are prefixed, such as `/fr/about`, the default locale stays unprefixed, and your routes and links stay locale-free. If your routes already handle locale prefixes with `{-$locale}` segments or your own rewrite, pass `localeRewrite: false` (see [Handle locale prefixes yourself](/docs/react/tanstack-start/setup#own-prefixes)).
+
+## Run the compiler
+
+The plugin can run the experimental compiler, which adds build-time hashes and build checks. It is off by default, as in `gt-next`:
+
+```ts title="vite.config.ts"
+gtTanstackStart({ experimentalCompilerOptions: { type: 'babel' } });
+```
+
+The compiler now installs with `gt-tanstack-start` and loads only when enabled. It also recognizes imports from `gt-tanstack-start`, so [`<T>`](/docs/react/reference/components/t) and [`useGT`](/docs/react/reference/hooks/use-gt) imported from it get build-time hashes.
+
+## Set up with `gt init`
+
+[`gt init`](/docs/cli/reference/commands/init) adds the Vite plugin, calls [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) in `src/router.tsx`, and sets the root route's `<html lang>` to [`useLocale()`](/docs/react/reference/hooks/use-locale). For local translations, it creates empty target-locale files instead of a loader. When a change is not safe to make automatically, it lists a manual step instead.
+
+## Fixes
+
+A visitor whose browser prefers a target locale can now switch back to the default locale.
+
+## Upgrading
+
+[`initializeGT`](/docs/react/reference/config#initialize) and `gtMiddleware` are deprecated. Apps that use them with a root-route loader and [`<GTProvider>`](/docs/react/reference/components/gt-provider) keep working until a future major release, and [`gt init`](/docs/cli/reference/commands/init) leaves those apps unchanged. To move to the new setup:
+
+```diff
+ // vite.config.ts
++import { gtTanstackStart } from 'gt-tanstack-start/plugin/vite';
+-plugins: [tanstackStart(), react()],
++plugins: [tanstackStart(), react(), gtTanstackStart()],
+
+ // src/router.tsx
+-import { initializeGT } from 'gt-tanstack-start';
+-import gtConfig from '../gt.config.json';
+-import loadTranslations from './loadTranslations';
+-initializeGT({ ...gtConfig, loadTranslations });
++import { setupRouterGTIntegration } from 'gt-tanstack-start';
+ export function getRouter() {
+   const router = createRouter({ routeTree });
++  setupRouterGTIntegration({ router });
+   return router;
+ }
+
+ // src/start.ts
+-requestMiddleware: [gtMiddleware],
++requestMiddleware: [],
+
+ // src/routes/__root.tsx
+-loader: async () => ({ locale: getLocale(), translations: await getTranslationsSnapshot(getLocale()) }),
+-<GTProvider locale={locale} translations={translations}>{children}</GTProvider>
++{children}
+```
+
+- **Move other [`initializeGT`](/docs/react/reference/config#initialize) settings** to the plugin options. Move an inline `dictionary` or [`loadDictionary`](/docs/react/reference/functions/load-dictionary) function to a file.
+- **Keep or delete your loader.** A `src/loadTranslations.*` file keeps working. The plugin can load `files.gt.output` itself, so a loader generated by [`gt init`](/docs/cli/reference/commands/init) can be deleted.
+- **Check locale routes.** With `localeRouting`, the integration adds locale prefixes to URLs. If your routes declare `{-$locale}` segments, remove them or pass `localeRewrite: false`.
