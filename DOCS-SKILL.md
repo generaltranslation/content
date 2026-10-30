@@ -198,7 +198,7 @@ Capitalize the Organization scope noun even inside hyphenated compounds (Organiz
 ### Plans and billing
 
 - **The plans are Starter and Enterprise.** Capitalize both as product terms. The **Team** plan is retired: never write "Team plan" or "Starter, Team, or Enterprise," and replace any remaining mention with the plan that gates the feature today. An Organization that has not added a payment method is a *free Organization* (lowercase "free") that draws from a rolling allowance; do not invent a "Free plan" tier.
-- **Phrase a plan gate by the plans that unlock the feature.** Write "requires a Starter or Enterprise plan" for features that adding a payment method unlocks (member invitations, Locadex, webhooks, annotations, project integrations, branching) and "requires an Enterprise plan" for Enterprise-only features (Audit Logs, SSO, model provider selection). Call an Organization billed at Enterprise scope an *Enterprise-managed Organization*.
+- **Phrase a plan gate by the plans that unlock the feature.** Write "requires a Starter or Enterprise plan" for features that adding a payment method unlocks (member invitations, Locadex, annotations, project integrations, branching) and "requires an Enterprise plan" for Enterprise-only features (Audit Logs, SSO, model provider selection, webhooks, translation approval, custom roles). Call an Organization billed at Enterprise scope an *Enterprise-managed Organization*.
 - **Use the Dashboard's billing breadcrumbs and permission names exactly.** Plans live under **Organization > Plans**, usage under **Organization > Usage**, and the credit balance, auto-reload, and invoices under **Organization > Settings > Billing** (**Enterprise > Billing** for Enterprise-managed Organizations). Name the billing permissions as the Dashboard does — **View billing**, **Update billing**, and **Manage Projects & plan** — instead of a loose "billing access."
 - **Billing units.** Write "platform credits" and "credit balance" in lowercase ($1 = 1M credits). Expand **Locadex Compute Units (LCUs)** on first use. Capitalize **Layout Processing** charges and the **Usage Limit** setting as the Usage and Billing pages do.
 - **Link rates instead of copying them.** Point to the pricing and usage-rates pages for current amounts (see Preserve semantics while simplifying); the partner credits table on the **Managing billing** guide is the one place that records credit amounts.
@@ -341,6 +341,7 @@ The publishing app generates machine-readable maps from the docs source:
 - `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
 - `/AGENTS.md` — the default-language drop-in agent guide from the **For coding agents** page.
 - `/agent-prompt.md`: the default-language start prompt from the **For coding agents** page, the text the website's Setup for Agents button copies.
+- `/blog.md` — the default-language Markdown index of blog posts and changelog entries.
 - `sitemap.md` — a default-language Markdown index of every docs page and blog post.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
@@ -350,7 +351,7 @@ Do not add hand-written copies to this repository. When you add, rename, remove,
 
 Beyond the machine-readable outputs above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
+- **Raw Markdown for every page.** Every docs page, blog post, and changelog entry is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 

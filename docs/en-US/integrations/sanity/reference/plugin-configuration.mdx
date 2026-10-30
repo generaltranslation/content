@@ -129,6 +129,8 @@ client.createOrReplace({
 
 The document field used to store each document-level translation's locale. Add a field with this name to document types translated with document-level localization, and query it to fetch a specific locale. Field-level localization does not use this field.
 
+Re-importing a translation keeps the translated document's locale in this field, including when you use a custom field name such as `locale`.
+
 ### `translateDocuments` [#translate-documents]
 
 **Type** `TranslateDocumentFilter[] | string[]` · **Optional** · **Default** `[]`
@@ -334,6 +336,7 @@ Editors can change this preference from the **Translations** tool or document di
 | `3.1.4` | Added `autoRefresh`, `autoImport`, `autoPatchReferences`, and `autoPublish` as plugin options, with per-project, per-dataset persistence. Changed the `autoPatchReferences` and `autoPublish` defaults to `false`; `autoRefresh` and `autoImport` remain `true`. |
 | `3.1.6` | Document-level import seeds a draft from the published state instead of patching the published document, so imports no longer bypass the auto-publish setting. |
 | `4.0.0` | Added Sanity 6 support and dropped the Sanity 5 generation. The package is ESM-only, requires Node.js 22.12 or later, and declares a `sanity` peer range of `^6.9.2`; the Studio packages it previously bundled are now peer dependencies. Studios on Sanity 6.0 through 6.8 should stay on `3.1.x`. |
+| `4.0.30` | Added a locale menu to the **Translations** tool. On that tool, **Translate All**, **Import All**, **Import Missing**, **Save Local Edits**, **Patch References**, and **Publish Translations** run only for the selected target locales. Every target locale starts selected. |
 
 ## Studio structure helpers [#structure-helpers]
 
@@ -465,6 +468,10 @@ Setting an exclusion option on a custom type definition's `options` excludes eve
 
 The plugin serializes documents to HTML for translation and deserializes the result back into Sanity fields. Most projects do not need these options.
 
+<Callout type="info">
+  **Changed in v4.0.26:** The serializer preserves significant whitespace, tag-like string content, inline objects, complete annotation data, and custom decorators. Existing translations are not sent again automatically; retranslate affected documents to apply these fixes. If an `additionalBlockDeserializers` rule matched the previous empty `<div>` for an inline object or an `unknown__pt__mark__*` annotation element, update it for the current HTML or remove it so the built-in deserializer restores the content.
+</Callout>
+
 ### `additionalStopTypes` [#additional-stop-types]
 
 **Type** `string[]` · **Optional** · **Default** `[]`
@@ -485,7 +492,7 @@ gtPlugin({
 
 Custom serializers merged with the defaults, following the `@portabletext/to-html` component shape (`types`, `marks`, `block`, `list`, `listItem`, and more). Most often used to serialize custom `marks`.
 
-For custom marks, wrap the output with `attachGTData` so the mark's data survives translation.
+Built-in links and other annotations keep their complete `markDef`, including `_key`, without a custom serializer. When you define a custom annotation serializer, including an override for `link`, wrap its output with `attachGTData` so the annotation data survives translation.
 
 ```ts title="sanity.config.ts"
 import { attachGTData, gtPlugin } from 'gt-sanity';
@@ -495,8 +502,6 @@ gtPlugin({
   locales: ['es'],
   additionalSerializers: {
     marks: {
-      link: ({ value, children }) =>
-        attachGTData(`<a>${children}</a>`, value, 'markDef'),
       inlineMath: ({ value, children }) =>
         attachGTData(`<span>${children}</span>`, value, 'markDef'),
     },
@@ -599,8 +604,8 @@ export default defineConfig({
       // Serialization — only if the defaults do not handle your schema
       additionalSerializers: {
         marks: {
-          link: ({ value, children }) =>
-            attachGTData(`<a>${children}</a>`, value, 'markDef'),
+          inlineMath: ({ value, children }) =>
+            attachGTData(`<span>${children}</span>`, value, 'markDef'),
         },
       },
     }),
