@@ -1,0 +1,180 @@
+---
+title: What are locale codes, such as en-US and en-GB?
+summary: A locale code identifies a language and, when it matters, its script and region, such as en-US for English in the United States or zh-Hant-TW for Traditional Chinese in Taiwan. Most software uses BCP 47 tags built from ISO codes. General Translation uses BCP 47 codes for the source and target locales in gt.config.json.
+description: A locale code like en-US or zh-Hant-TW names a language plus an optional script and region, following BCP 47. How the parts fit, common mistakes, and which code to choose.
+date: 2026-10-28
+category: locale-formatting
+related: [detect-user-language, what-is-hreflang, internationalization-vs-localization, format-numbers-dates-currencies, multilingual-url-structure]
+---
+
+A locale code names a language and, when it matters, the script it's written in and the region it's used in. `en-US` is English as used in the United States, `en-GB` is English as used in the United Kingdom, and `zh-Hant-TW` is Chinese written in Traditional characters as used in Taiwan. Browsers, HTTP, HTML, and JavaScript's `Intl` APIs all use the same standard for these codes, BCP 47, so the code you pick decides which translation, date format, and plural rules a user gets.
+
+## How a BCP 47 tag is built
+
+[BCP 47](https://www.rfc-editor.org/info/bcp47) is the IETF's standard for language tags. It combines [RFC 5646](https://www.rfc-editor.org/rfc/rfc5646.html), which defines the syntax, with [RFC 4647](https://www.rfc-editor.org/rfc/rfc4647.html), which defines how to match tags. A tag is a sequence of subtags separated by hyphens, always in this order:
+
+| Subtag | Form | Comes from | Examples |
+| --- | --- | --- | --- |
+| Language (required) | 2 or 3 letters | ISO 639, shortest code available | `en`, `zh`, `gsw` |
+| Script | 4 letters | ISO 15924 | `Hant`, `Hans`, `Latn`, `Cyrl` |
+| Region | 2 letters or 3 digits | ISO 3166-1 alpha-2, or UN M.49 | `GB`, `BR`, `419` |
+| Variant | 5 to 8 characters, or a digit plus 3 | Registered with IANA | `de-1901` (traditional German spelling) |
+| Extension | A single letter, then its subtags | `u` is defined by Unicode | `ar-EG-u-nu-latn` |
+| Private use | `x`, then your own subtags | You | `en-CA-x-ca` |
+
+Every valid subtag is listed in the [IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry), the one place to look up a code. Its September 2026 edition lists 8,276 language subtags and 305 region subtags, and it marks retired codes with the code that replaces them.
+
+The pieces combine to say exactly what you mean. `sr-Latn-RS` is Serbian in the Latin script as used in Serbia. `es-419` is Spanish as used in Latin America and the Caribbean, where `419` is a UN M.49 code for a multi-country region. RFC 5646 gives a subtler example: `de-CH` is German as used in Switzerland (Swiss High German), while Swiss German (Schweizerdeutsch) is a different language with its own code, `gsw-CH`.
+
+### Extensions change formatting, not the language
+
+The `-u-` extension, defined in [RFC 6067](https://www.rfc-editor.org/rfc/rfc6067.html) with its keys listed in [Unicode's LDML specification](https://unicode.org/reports/tr35/), carries formatting preferences. `-u-nu-` picks the numbering system, `-u-hc-` the hour cycle, `-u-ca-` the calendar, and `-u-co-` the sort order. `en-US-u-hc-h23` is still US English; it just shows `14:05` instead of `2:05 PM`. The example further down shows both.
+
+## Case, hyphens, and underscores
+
+Tags are case-insensitive, so `EN-gb` and `en-GB` mean the same thing. RFC 5646 [recommends a convention](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.1.1) anyway: language in lowercase, script in title case, region in uppercase, as in `zh-Hant-TW`. Normalize to that form before you use a code in a file name or URL, so `/en-gb/` and `/en-GB/` don't become two paths.
+
+BCP 47 separates subtags with hyphens. Several platforms use their own formats, so convert at the boundary:
+
+| System | Format | Example |
+| --- | --- | --- |
+| Web (HTML `lang`, `hreflang`, `Accept-Language`, `Intl`) | BCP 47 with hyphens | `en-US`, `zh-Hant-TW` |
+| [POSIX](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html) (`LANG`, `LC_*`) | `language[_territory][.codeset][@modifier]` | `en_US.UTF-8` |
+| [Unicode CLDR](https://unicode.org/reports/tr35/) and ICU locale IDs | Underscores; hyphens also accepted | `en_US` |
+| [Java](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Locale.html) | `toString()` gives underscores, `toLanguageTag()` gives BCP 47 | `en_US`, `en-US` |
+| [Android resources](https://developer.android.com/guide/topics/resources/providing-resources) | `r` before the region, or `b+` for BCP 47 tags (Android 7.0 and later) | `values-en-rUS`, `values-b+es+419` |
+
+JavaScript rejects the underscore form: `Intl.getCanonicalLocales('en_US')` throws a `RangeError`.
+
+## Common mistakes
+
+- **`en-UK` instead of `en-GB`.** The ISO region code for the United Kingdom is `GB`, and `UK` isn't in the IANA registry. Unicode CLDR treats `UK` as an alias, so JavaScript quietly turns `en-UK` into `en-GB`, but [Google ignores](https://developers.google.com/search/docs/specialty/international/localized-versions) `UK` in hreflang. Write `en-GB`.
+- **A country code in the language slot.** `jp`, `cn`, `gr`, `dk`, and `cz` aren't language codes; Japanese is `ja`, Chinese `zh`, Greek `el`, Danish `da`, and Czech `cs`. Some country codes are other languages entirely: `se` is Northern Sami (Swedish is `sv`), `kr` is Kanuri (Korean is `ko`), `uk` is Ukrainian, and `be` is Belarusian. Syntax checks pass `jp` because it's two letters, so look codes up instead of trusting that they parse.
+- **`zh-CN` where you mean Simplified Chinese.** For Chinese, the script changes the written text, and the region only implies a script: `zh-TW` expands to `zh-Hant-TW` and `zh-SG` to `zh-Hans-SG`. When one Simplified translation serves mainland China and Singapore, tag it `zh-Hans`; use `zh-Hant` for Traditional, and add a region such as `zh-Hant-HK` when wording differs.
+- **Retired codes.** `iw` (Hebrew), `in` (Indonesian), and `ji` (Yiddish) were deprecated in 1989 in favor of `he`, `id`, and `yi`. Java before version 17 still produced the old forms, so they turn up in older data. Canonicalizing replaces them.
+- **Tags that say too much.** `en-Latn-US` adds a script English is almost always written in. RFC 5646 [advises](https://www.rfc-editor.org/rfc/rfc5646.html#section-4.1) leaving out subtags that add no distinguishing information, and notes that a request for `en-US` won't match content tagged `en-Latn-US` under basic filtering.
+- **Valid codes that a consumer doesn't support.** `es-419` is valid BCP 47, but Google's hreflang accepts only ISO 3166-1 regions, so annotate those pages as `es` or with specific countries. (See [What is hreflang?](/kb/what-is-hreflang).)
+
+## Generic or regional: which code should you use?
+
+The W3C's advice on [choosing language tags](https://www.w3.org/International/questions/qa-choosing-language-tags) is to keep tags as short as possible and add a region only when it carries information you need. Turn that into a rule per locale:
+
+- **Use the bare language** (`fr`, `de`, `ja`) when one translation serves every region that speaks it.
+- **Add a region** when spelling, vocabulary, or legal text differs and you will maintain separate translations: `en-US` and `en-GB`, `pt-BR` and `pt-PT`, `es-MX` and `es-ES`, `fr-CA`.
+- **Pick the script first for Chinese, Serbian, and other multi-script languages**: `zh-Hans` and `zh-Hant`, `sr-Cyrl` and `sr-Latn`.
+- **Use a regional code for formatting even when the translation is shared.** Text translated once as `en` can still format dates with the visitor's `en-GB`, which writes 28/10/2026 where `en-US` writes 10/28/2026.
+
+A bare code isn't regionless to software. CLDR's likely-subtags data fills in the most probable script and region, so `pt` expands to `pt-Latn-BR` and `zh` to `zh-Hans-CN`. If your `pt` translation is European Portuguese, tag it `pt-PT`.
+
+When a user's locale isn't one you support, software falls back. RFC 4647's [lookup](https://www.rfc-editor.org/rfc/rfc4647.html#section-3.4) drops subtags from the end until something matches (`zh-Hant-HK`, then `zh-Hant`, then `zh`), and other matchers also try sibling regions. Reading the browser's preferences and choosing between those algorithms is covered in [how to detect a user's browser language](/kb/detect-user-language).
+
+## Normalize codes in JavaScript
+
+[`Intl.getCanonicalLocales`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/getCanonicalLocales) fixes casing and replaces deprecated or aliased subtags, and [`Intl.Locale`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Locale) can fill in the likely script and region:
+
+```js title="locale-codes.mjs"
+const names = new Intl.DisplayNames(['en'], { type: 'language' });
+
+for (const tag of ['EN-gb', 'zh-tw', 'iw-IL', 'en-UK', 'jp', 'es-419', 'en_US']) {
+  try {
+    // Canonicalize: fix casing and replace deprecated or aliased subtags
+    const [canonical] = Intl.getCanonicalLocales(tag);
+    // Add the likely script and region
+    const maximized = new Intl.Locale(canonical).maximize().toString();
+    console.log(`${tag} -> ${canonical} (${maximized}): ${names.of(canonical)}`);
+  } catch (error) {
+    console.log(`${tag} -> ${error.name}: ${error.message}`);
+  }
+}
+
+// A -u- extension changes formatting, not the language
+const time = new Date(Date.UTC(2026, 9, 28, 14, 5));
+for (const tag of ['en-US', 'en-US-u-hc-h23', 'ar-EG', 'ar-EG-u-nu-latn']) {
+  const formatted = new Intl.DateTimeFormat(tag, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(time);
+  console.log(`${tag}: ${formatted}`);
+}
+```
+
+Output from `node locale-codes.mjs` on Node.js 24.19.0:
+
+```text title="Output"
+EN-gb -> en-GB (en-Latn-GB): British English
+zh-tw -> zh-TW (zh-Hant-TW): Chinese (Taiwan)
+iw-IL -> he-IL (he-Hebr-IL): Hebrew (Israel)
+en-UK -> en-GB (en-Latn-GB): British English
+jp -> jp (jp): jp
+es-419 -> es-419 (es-Latn-419): Latin American Spanish
+en_US -> RangeError: Incorrect locale information provided
+en-US: 2:05 PM
+en-US-u-hc-h23: 14:05
+ar-EG: ٢:٠٥ م
+ar-EG-u-nu-latn: 2:05 م
+```
+
+Two lines are worth a second look. `jp` passes canonicalization and comes back without a display name, because the check is about syntax, not whether the language exists. And `ar-EG-u-nu-latn` keeps Arabic text while switching to Western digits.
+
+## How General Translation uses locale codes
+
+General Translation uses BCP 47 codes throughout. In `gt.config.json`, [`defaultLocale`](/docs/cli/reference/config#default-locale) is the locale your source content is written in (`en` by default), and [`locales`](/docs/cli/reference/config#locales) lists the targets:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en-US",
+  "locales": ["en-GB", "fr-CA", "pt-BR", "zh-Hant"]
+}
+```
+
+The CLI checks these codes before it translates anything. It stops on a code that isn't valid, and it stops when `defaultLocale` is broader than a target: translating from `en` into `en-GB` fails, so a project that adds British English sets its source to `en-US`, as above.
+
+The platform translates into the locales on its [supported locales](/docs/platform/dashboard/reference/supported-locales) list. General Translation usually treats equivalent codes as one locale: `fr`, `fr-FR`, and `fr-Latn-FR` would get the same translation, and `ja` and `ja-JP` update the same stored translation. (See [Understanding locale codes](/docs/platform/core/guides/locale-codes).)
+
+To use a code that isn't a registered language, such as `cn` in your URLs, General Translation's [`customMapping`](/docs/cli/reference/config#custom-mapping) aliases it to a standard code (`cn` to `zh`) and can override its display name. For hreflang, the [locale alias SEO guide](/docs/react/nextjs/locale-alias-seo) maps the alias back to `zh`.
+
+The `generaltranslation` Core library exports locale helpers as standalone functions that need no API key. The return values below are from `generaltranslation` 9.5.8:
+
+```js title="check-locales.mjs"
+import {
+  standardizeLocale,
+  isValidLocale,
+  getLocaleName,
+  determineLocale,
+} from 'generaltranslation';
+
+standardizeLocale('EN-gb'); // 'en-GB'
+isValidLocale('en_US'); // false
+isValidLocale('jp'); // false
+getLocaleName('pt-BR', 'en'); // 'Brazilian Portuguese'
+determineLocale(['fr-CA', 'en-US'], ['en', 'fr', 'zh-Hant']); // 'fr'
+```
+
+[`standardizeLocale`](/docs/platform/core/reference/utility-functions/locales/standardize-locale) fixes casing, [`isValidLocale`](/docs/platform/core/reference/utility-functions/locales/is-valid-locale) rejects underscore forms and codes such as `jp` that `Intl` lets through, [`getLocaleName`](/docs/platform/core/reference/utility-functions/locales/get-locale-name) returns a display name for a language picker, and [`determineLocale`](/docs/platform/core/reference/utility-functions/locales/determine-locale) picks the best supported match for a user's preferences, here serving a Canadian French user your `fr` translation.
+
+## Common questions
+
+### What's the difference between a language code and a locale code?
+
+A language code is one subtag, such as `en` or `pt`. A locale code can add a script and a region, such as `pt-BR`, so it also decides formatting for dates, numbers, and currency.
+
+### Is it en-GB or en-UK?
+
+`en-GB`. `GB` is the ISO 3166-1 code for the United Kingdom; `UK` isn't a registered region subtag, and Google ignores it in hreflang.
+
+### Should I use zh-CN or zh-Hans?
+
+Use `zh-Hans` for Simplified Chinese text that serves more than one region, and `zh-CN` only when the content is specific to mainland China. Both resolve to Simplified script.
+
+### Are locale codes case-sensitive?
+
+No. `en-us` and `en-US` are the same tag, but write `en-US` so file names, URLs, and keys stay consistent.
+
+## Key takeaways
+
+- A BCP 47 locale code is a language subtag plus optional script, region, variant, and extension subtags, in that order, separated by hyphens: `zh-Hant-TW`, `es-419`, `en-US-u-hc-h23`.
+- Look codes up in the IANA registry: `en-GB`, not `en-UK`; `ja`, not `jp`; `he`, not `iw`.
+- Keep tags short, add a region only for content that differs by region, and choose the script first for Chinese.
+- Convert at system boundaries: POSIX, ICU, and Java's `toString()` use underscores, and Android uses `values-b+es+419`.
+- General Translation reads BCP 47 codes from `defaultLocale` and `locales` in `gt.config.json`, rejects a source locale broader than a target, and supports aliases through `customMapping`.

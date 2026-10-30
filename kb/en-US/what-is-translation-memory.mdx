@@ -1,0 +1,122 @@
+---
+title: What is translation memory, and do you still need it with AI?
+summary: Translation memory (TM) is a database of earlier source and target segment pairs that a translation tool searches for exact, in-context, and fuzzy matches. With AI, you still want approved wording reused and past translations available as context. General Translation reuses matching translations from earlier file versions and keeps team edits, without a separate TM to maintain.
+description: Translation memory stores past source and target segments and reuses them by exact, in-context, or fuzzy match. With AI, approved matches can also guide the model as examples.
+date: 2026-10-28
+category: translation
+related: [what-is-a-translation-management-system, ai-translation-glossary, general-translation-vs-tms, is-ai-translation-accurate, review-translations]
+---
+
+Translation memory (TM) is a database of segments, usually sentences or UI strings, each stored with its approved translation in one or more languages. When new content arrives, a translation tool looks up every segment in the TM, reuses an exact match, and suggests similar ones for a translator to edit. AI hasn't made that job disappear: you still want approved wording reused and repeated text kept consistent. What changes is how near matches are used: approved ones can guide a model's draft as well as a translator's edit. How much they're worth depends on their quality, the review effort, how much text repeats, and whether approved wording must be reused.
+
+## How translation memory works
+
+A TM starts with segmentation: the tool splits source content into translation units. For prose, a unit is usually a sentence; for software, [Microsoft's globalization glossary](https://learn.microsoft.com/en-us/globalization/reference/glossary) notes that each string resource is a unit. Each entry stores the source segment, its translations, and metadata such as dates, the translator, and context: the file name, resource identifier, or the text around it.
+
+When you translate new content, the tool queries the TM for each segment and gets back ranked candidates, each with a confidence score that is usually shown as a percentage. The match type decides what happens next:
+
+| Match type | What matches | What usually happens |
+| --- | --- | --- |
+| In-context (101%) | The segment and its neighbors | Reused with a light check |
+| Exact (100%) | The segment text, but its context differs | Reused, then reviewed in its new context |
+| Fuzzy (below 100%) | A similar segment; the percentage reflects similarity | A translator edits the stored translation |
+| Repetition | The same segment appears again in the current job | Translated once |
+| No match | Nothing above the tool's cutoff | Translated from scratch, by a person, MT, or AI |
+
+[Phrase's documentation](https://support.phrase.com/hc/en-us/articles/9386879839900) defines a 101% match as an in-context match, judged by the segments before and after it, and a 100% match as one where the source text matches but its context differs. That distinction exists because an exact match can still be wrong. "Save" on a document editor's toolbar and "Save" on a pricing page are the same string, but in German one is _speichern_ and the other _sparen_.
+
+A fuzzy match is the near miss. If the TM holds "Delete this file?" with its German translation and the new segment is "Delete these files?", the tool suggests the stored translation at a high percentage, and the translator fixes the plural.
+
+## TMX: the format for moving a TM between tools
+
+TMX (Translation Memory eXchange) is the XML standard for exporting a TM from one tool and importing it into another. The [ETSI specification](https://www.etsi.org/deliver/etsi_gs/LIS/001_099/002/01.04.02_60/gs_LIS002v010402p.pdf) describes it as a standard way to exchange TM data among tools and translation vendors with little or no loss of critical data. The format came from LISA's OSCAR group; after LISA was declared insolvent in 2011, ETSI republished [TMX 1.4b](https://www.ttt.org/oscarStandards/tmx/tmx14b.html) as ETSI GS LIS 002.
+
+A TMX file has a `<header>` describing the export, then a `<body>` of translation units (`<tu>`), each holding one variant per language (`<tuv>`) with the text in a `<seg>`:
+
+```xml title="memory.tmx"
+<?xml version="1.0" encoding="UTF-8"?>
+<tmx version="1.4">
+  <header creationtool="ExampleTool" creationtoolversion="1.0"
+          segtype="sentence" o-tmf="ExampleTM" adminlang="en-US"
+          srclang="en-US" datatype="plaintext"/>
+  <body>
+    <tu tuid="settings-save" creationdate="20261028T120000Z">
+      <prop type="x-context">Settings form, primary button</prop>
+      <tuv xml:lang="en-US"><seg>Save changes</seg></tuv>
+      <tuv xml:lang="de-DE"><seg>Änderungen speichern</seg></tuv>
+      <tuv xml:lang="fr-FR"><seg>Enregistrer les modifications</seg></tuv>
+    </tu>
+  </body>
+</tmx>
+```
+
+This file validates against the TMX 1.4 DTD with `xmllint --dtdvalid`. The spec defines two levels: Level 1 carries plain text only, and Level 2 adds markup for inline codes such as bold text or placeholders, so a tool can rebuild a formatted document. Rules for how text was split into segments travel separately, in an SRX (Segmentation Rules eXchange) file.
+
+A TM is different from a glossary. A TM stores whole segments; a glossary, or termbase, stores individual terms such as product names and the words that must never be translated. (See [keeping terminology consistent in AI translation](/kb/ai-translation-glossary).)
+
+## Where translation memory lives, and what it does to cost
+
+Translators keep TMs in CAT (computer-assisted translation) tools, and companies keep them in a [translation management system (TMS)](/kb/what-is-a-translation-management-system), which shows TM matches next to each segment in its editor. If a language service provider keeps your TM, ask for a TMX export before you change vendors.
+
+The TM also shapes the bill. Before a job starts, the vendor's tool analyzes it against the TM and counts words in each match category, and each category is billed at its own rate, with matched words billed below new ones. Phrase calls these [net rate schemes](https://support.phrase.com/hc/en-us/articles/5709665578908): repetitions, in-context matches, 100% matches, and fuzzy matches each get a rate, and fuzzy matches below 75% count as new words. A large, clean TM lowers the billable word count on every release.
+
+## How AI changes translation memory
+
+When a model drafts the translations, part of the TM's job changes and part stays the same:
+
+- **Fuzzy matches and past translations become context.** A fuzzy match used to be a starting point that a translator edited. With a model drafting, approved near matches can also guide generation: you put similar approved pairs in the model's prompt as examples.
+- **Exact reuse still matters.** Re-translating an approved sentence on every run risks new wording that nobody reviewed. Unchanged text should keep its approved translation, and only new or changed text should go to the model.
+
+In an [EAMT 2023 paper](https://aclanthology.org/2023.eamt-1.22/), Moslem and colleagues found that a prompt containing example translation pairs lets an LLM adapt to a domain's style and terminology while translating a new sentence. Lokalise's [custom AI profiles](https://docs.lokalise.com/en/articles/11894216-ai-profiles) do this with retrieval from translation memory, on its Advanced and Enterprise plans.
+
+A model can combine retrieved translations with the component a string sits in, the variables inside it, and a developer's note about what it means. That context decides between _speichern_ and _sparen_ before anyone checks a match. (See [whether AI translation is accurate enough for production](/kb/is-ai-translation-accurate).)
+
+| Approach | Unchanged text | New or changed text | Terminology | Fits |
+| --- | --- | --- | --- | --- |
+| Classic TM in a CAT tool or TMS | Exact and in-context matches | Fuzzy matches for a translator, or MT | A separate termbase | Human translators and vendor contracts |
+| Raw LLM calls | Translated again on every run | Fluent drafts from the string alone | Only what you paste into each prompt | One-off text |
+| LLM with retrieval from a TM | Depends on the tool | Similar approved pairs as examples | Glossary plus examples | Large reviewed corpora in one domain |
+| Incremental translation in the build (General Translation) | Matching translations from earlier versions | AI with code context, a Glossary, and style rules | Shared Glossary | Product UI and docs in a repository |
+
+## Do you still need a translation memory?
+
+Keep a classic TM when human translators or a language service provider do the work, when your vendor contract prices by match category, when you exchange TMX with vendors, or when regulated text must reuse approved sentences word for word. In those cases, the TM is part of the workflow and the contract.
+
+You may not need a separate TM if your pipeline already gives your team the reuse, review, and portability it needs: unchanged translations are reused, your team's edits are kept, a glossary is applied, and the translations stay in files you own. If you have a large corpus of reviewed translations in a narrow domain, such as legal or medical text, add retrieval so the model sees those pairs as examples.
+
+## How General Translation handles reuse
+
+General Translation doesn't keep a standalone translation memory, and it has no fuzzy matching or TMX import. It covers what a TM is for inside the translation pipeline:
+
+- **Unchanged text is reused.** By default, General Translation's [`npx gt translate`](/docs/cli/reference/commands/translate) only translates content whose source has changed, and it can [reuse a matching translation from an earlier version of the same file](/docs/cli/guides/generating-translations#retranslate), not only the latest one. A segment is translated again when its source text changes. `--force` re-translates everything, overwrites existing translations and local edits, and is charged as new work.
+- **Branches and moves don't start over.** With [branching](/docs/cli/guides/branching#inheritance) on, a feature branch inherits its base branch's translations, so shared content isn't re-translated or double-charged. [`npx gt upload`](/docs/cli/reference/commands/upload) detects files that moved without changing and keeps their translations.
+- **Your team's edits are kept.** Reviewers edit translations on the Dashboard's **Translations** page ([reviewing translations](/docs/platform/dashboard/guides/reviewing-translations)). Edits made to downloaded files sync back with [`npx gt save-local`](/docs/cli/reference/commands/save-local), or before each run with `--save-local` or [`options.saveLocal`](/docs/cli/reference/config#save-local); this sync is opt-in. An edited translation becomes the stored version, so later runs reuse it until its source changes.
+- **Existing translations come along.** [`npx gt upload`](/docs/cli/reference/commands/upload) sends your source files and any existing translations to the platform, so translated JSON, PO, YAML, or iOS and Android strings files you already have are imported instead of generated again.
+- **Terminology lives in a Glossary.** A [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) holds a Glossary for terms and Custom Prompts for tone, shared across the projects you assign it to. Glossary imports accept CSV, TSV, JSON, and text, and the **Apply** button updates existing translations with selected Glossary terms.
+
+Context comes from the code instead of neighboring segments. General Translation's [`<T>`](/docs/react/reference/components/t) component sends each JSX block with its element structure and variable placeholders, and its [`context`](/docs/react/reference/components/t#context) prop tells the model which "Save" you mean. For the broader choice between this workflow and a TMS, see [General Translation vs. a TMS](/kb/general-translation-vs-tms).
+
+## Common questions
+
+### Is translation memory the same as a glossary?
+
+No. A TM stores whole segments with their translations, and a glossary stores individual terms, such as product names, with required translations or a rule not to translate them. Most workflows need both.
+
+### What is a 101% match?
+
+An in-context match: the segment matches the TM, and so do the segments around it. It ranks above a 100% match, which matches the text but not its context.
+
+### Can I import a TMX file into General Translation?
+
+No. Upload your existing translated files in a supported format with [`npx gt upload`](/docs/cli/reference/commands/upload), and import terminology into a Context Group from CSV, TSV, JSON, or text.
+
+### Does AI make translation memory obsolete?
+
+No. AI changes how fuzzy matches can be used: approved examples can guide generation as well as human editing. Reusing approved translations and keeping your team's edits still matter.
+
+## Key takeaways
+
+- A translation memory stores segment pairs and returns in-context (101%), exact (100%), and fuzzy matches, and TMX is the XML format for moving it between tools.
+- Vendors bill each match category at its own rate, so a TM lowers the billable word count when people translate.
+- With AI drafting translations, a TM still keeps approved wording stable, and its near matches can guide the model as examples as well as human editing.
+- General Translation has no standalone TM or TMX import; it reuses matching translations from earlier file versions, keeps your team's edits, and applies a shared Glossary through Context Groups.

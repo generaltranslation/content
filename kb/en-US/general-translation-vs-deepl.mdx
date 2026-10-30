@@ -1,0 +1,142 @@
+---
+title: "DeepL alternatives: General Translation vs. DeepL"
+summary: "DeepL is a machine translation API, so it returns a translation for each text or document you send it. General Translation is a localization platform. It adds what an API leaves to you: context from your code and your team, consistent terms across every surface, review in a Dashboard, and continuous translation with each release."
+description: DeepL is a machine translation API for text and documents. General Translation is a localization platform with context, consistent terms, review, and continuous translation.
+date: 2026-10-28
+category: translation
+related: [best-ai-translation-tools, general-translation-vs-google-translate, ai-translation-glossary, is-ai-translation-accurate, general-translation-vs-lingo-dev]
+---
+
+DeepL is a machine translation API: it translates the text and documents you send it and returns the result. General Translation is a localization platform: it decides what to translate in your app, docs, and site, supplies the context, keeps terms consistent, lets your team review, and ships each change in every language. The two are different categories of tool, and most of the work of localizing a product sits in the part DeepL leaves to you.
+
+## What DeepL is
+
+DeepL makes [DeepL Translator](https://www.deepl.com/translator), a web and desktop app, and the [DeepL API](https://developers.deepl.com/docs/getting-started/quickstart). [`POST /v2/translate`](https://developers.deepl.com/api-reference/translate/request-translation) takes an array of strings and a target language and translates each string independently. You can steer the output with a `context` parameter, a `formality` setting, up to 10 [custom instructions](https://developers.deepl.com/docs/customize/custom-instructions), [style rules](https://developers.deepl.com/docs/customize/using-style-rules), up to five [glossaries](https://developers.deepl.com/docs/customize/managing-glossaries) per request, and TMX [translation memories](https://developers.deepl.com/docs/customize/using-translation-memories).
+
+DeepL's document translation is its standout: Word, PowerPoint, Excel, PDF, InDesign, and other files come back in the same format ([formats and limits](https://developers.deepl.com/docs/resources/usage-limits)). DeepL sells the API as a free Developer plan, a Growth plan with a monthly fee plus usage, and custom Enterprise pricing ([DeepL plans](https://www.deepl.com/en/pro#api)), counted in characters of source text.
+
+## DeepL vs. General Translation at a glance
+
+| | DeepL API | General Translation |
+| --- | --- | --- |
+| Category | Machine translation API | Localization platform: i18n libraries, CLI, Dashboard, and [Locadex](/docs/platform/locadex/quickstart), an AI agent |
+| What decides what gets translated | Your code, which extracts strings and sends them | Content marked in code with [`<T>`](/docs/react/reference/components/t), files listed in `gt.config.json`, or runtime strings |
+| Context | A `context` string you write for each request | JSX structure, [`context`](/docs/react/reference/components/t#context) notes, and Context Groups shared across projects |
+| Terminology | Glossary IDs passed on each request, one per language pair | A Glossary and Custom Prompts applied to every project in a Context Group |
+| Consistency across a site | Glossaries and TMX translation memories applied per request; each string translated independently | A consistency check against existing translations |
+| Structure of Markdown and MDX | Not checked | Headings, code blocks, links, imports, and frontmatter checked against the source and corrected |
+| Variables and plurals | XML tag handling; you send each plural form | [`<Var>`](/docs/react/reference/components/var) values never sent; every plural form the target language needs |
+| Review | Build your own | Dashboard Translation Editor, annotations, version history, and roles |
+| Continuous translation | Rerun your own pipeline | Translates only what changed; Locadex opens pull requests |
+| Office documents and PDFs | Yes, with formatting kept | No; Google Docs and Slides go through the Google Drive integration |
+| Pricing | Free Developer plan; Growth is a monthly fee plus usage; custom Enterprise | [Usage-based, with no seat charges](https://generaltranslation.com/pricing) |
+
+## What DeepL doesn't cover
+
+DeepL's API reference says each string in a request is translated independently. Everything that turns a product into good requests, and responses back into a shipped product, is yours to build.
+
+### Context
+
+`context` is text you write per request. DeepL's guide describes it as surrounding content and [warns against using it for instructions](https://developers.deepl.com/docs/learning-how-tos/examples-and-guides/how-to-use-context-parameter). Nothing tells DeepL that "Save" is a button in a billing banner unless your pipeline writes that for every string.
+
+General Translation takes context from where the content lives. [`<T>`](/docs/react/reference/components/t) sends a sentence as one unit with its elements, variables, and an optional note; [keyed metadata](/docs/cli/reference/keyed-metadata) adds a note per key in JSON and YAML; and a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) adds a Glossary and Custom Prompts, which can apply to every locale or to one, such as formal "Sie" in German.
+
+### Consistency
+
+DeepL supports glossaries and [translation memories](https://developers.deepl.com/docs/customize/using-translation-memories), which match source text against stored segments and reuse translations. Your integration supplies and maintains those resources and selects them in translation requests. Placeholders need their own handling: DeepL's [placeholder guide](https://developers.deepl.com/docs/learning-how-tos/examples-and-guides/placeholder-tags) converts Mustache variables to XML tags and back. Plural forms are yours too: English has `one` and `other`, while Polish needs `one`, `few`, `many`, and `other` ([CLDR plural rules](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html)).
+
+General Translation applies one Context Group to your app, docs, and site, and runs a consistency check against existing translations. Markdown and MDX pages get a proofreading pass, then are checked against the source: headings, code blocks, links, imports, and frontmatter must match, or the translation is corrected. [`<Var>`](/docs/react/reference/components/var) keeps dynamic values out of translation, and [`<Plural>`](/docs/react/reference/components/plural) gets every form the target language uses.
+
+### Review
+
+The API returns text. A place where reviewers see each translation next to its source, fix it, and keep the fix on the next run is a product you'd build.
+
+General Translation's [Dashboard](/docs/platform/dashboard/guides/reviewing-translations) shows locales side by side. Reviewers edit inline, add annotations, and browse history from earlier source versions. Roles and permissions control access, and Enterprise plans add SSO and [audit logs](/docs/platform/dashboard/reference/audit-logs).
+
+### Continuous translation
+
+Each release means finding changed strings, sending them, writing results into the right locale files, and deploying. [`npx gt translate`](/docs/cli/reference/commands/translate) does this in CI, translating only content whose source changed and writing results before your build. Locadex runs on the pull requests or commits you choose and opens a pull request with the translations.
+
+### One banner, both ways
+
+With DeepL, your pipeline wraps the variables in tags and sends each English plural form as its own string:
+
+```json title="POST /v2/translate"
+{
+  "text": [
+    "<var>{name}</var>, you have one unpaid invoice.",
+    "<var>{name}</var>, you have <var>{count}</var> unpaid invoices."
+  ],
+  "target_lang": "PL",
+  "context": "Billing dashboard banner shown to the account owner.",
+  "tag_handling": "xml",
+  "ignore_tags": ["var"]
+}
+```
+
+With General Translation, the banner stays in the component, and Polish gets all four plural forms:
+
+```tsx title="InvoiceReminder.tsx"
+import { T, Var, Plural, Num } from 'gt-react';
+
+export function InvoiceReminder({ name, count }: { name: string; count: number }) {
+  return (
+    <T context="Billing dashboard banner shown to the account owner.">
+      <p>
+        <Var>{name}</Var>,{' '}
+        <Plural
+          n={count}
+          one={<>you have one unpaid invoice.</>}
+          other={<>you have <Num>{count}</Num> unpaid invoices.</>}
+        />
+      </p>
+    </T>
+  );
+}
+```
+
+Ramp localizes its dashboard, landing page, and iOS app into 11+ locales with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
+
+## When DeepL makes sense
+
+- **Office documents and PDFs.** You translate Word, PowerPoint, Excel, PDF, or InDesign files and need the formatting kept.
+- **An engine inside a system you already run.** A helpdesk, a CAT (computer-assisted translation) tool, or a translation management system that calls a machine translation API; Lokalise's [Standard AI/MT](https://docs.lokalise.com/en/articles/11776521-what-is-standard-ai-mt-and-pro-ai), for example, uses DeepL.
+- **Translator-led programs on TMX or XLIFF.** Your translators maintain TMX memories or exchange XLIFF files.
+- **Speech and rewriting.** You need the [DeepL Voice API](https://developers.deepl.com/docs/voice/overview) or [DeepL Write](https://developers.deepl.com/docs/translate/write-quickstart).
+
+## Moving from DeepL to General Translation
+
+If a script sends your locale files to DeepL, point `gt.config.json` at the same files:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["de", "fr", "ja"],
+  "files": {
+    "json": {
+      "include": ["locales/[locale].json"]
+    }
+  }
+}
+```
+
+Run [`npx gt upload`](/docs/cli/reference/commands/upload) to send the source files and your existing translations, then [`npx gt translate`](/docs/cli/reference/commands/translate). The `gt` CLI also reads YAML, Markdown, PO, iOS and Android string files, and [other formats](/docs/cli/reference/config#files).
+
+Export your DeepL glossary entries and import them into a Context Group; the importer accepts CSV, TSV, JSON, and text files. Move custom instructions into Custom Prompts. For content that only exists at run time, such as user messages, replace DeepL calls with [`tx`](/docs/node/reference/functions/tx) in `gt-node` or [`translate`](/docs/platform/core/reference/gt-class-methods/translation/translate) in the [Core library](/docs/platform/core/quickstart); both use your project's Context Groups.
+
+## Is General Translation an alternative to DeepL?
+
+Yes, for localizing apps, docs, and websites. DeepL is a translation engine you call from a pipeline you build. General Translation is that pipeline with the translation included: context, consistent terms, review, and continuous delivery. For one-off document translation with formatting, DeepL is the better tool.
+
+## Other DeepL alternatives
+
+- **Google Cloud Translation:** another machine translation API, with a Gemini-based Translation LLM. (See [General Translation vs. Google Translate](/kb/general-translation-vs-google-translate).)
+- **The OpenAI API or the Claude API:** general-purpose models you prompt yourself. (See [What are the best AI translation tools for developers?](/kb/best-ai-translation-tools))
+- **Lokalise, Crowdin, or Phrase:** translation management systems with AI built in. (See [General Translation vs. Lokalise](/kb/general-translation-vs-lokalise), [vs. Crowdin](/kb/general-translation-vs-crowdin), and [vs. Phrase](/kb/general-translation-vs-phrase).)
+
+## Key takeaways
+
+- DeepL is a machine translation API; General Translation is a localization platform that includes translation.
+- With DeepL, extraction, per-string context, consistency across pages, placeholders, extra plural forms, review, and delivery are yours to build.
+- General Translation supplies context from code and Context Groups, checks consistency and MDX structure, offers Dashboard review, and translates only what changed with each release.
+- Use DeepL for Office and PDF documents or as an engine inside a system you already run.
