@@ -1,0 +1,140 @@
+---
+title: How do I translate YAML locale files?
+summary: Translate only the string values and keep keys, placeholders such as %{name} or {{name}}, and anchors as they are. Quote values that contain a colon or start with % or {, set each file's locale root or filename, and add the plural keys the target language needs. General Translation's CLI translates YAML values in place and leaves keys alone.
+description: Translate YAML locale files by changing only string values, quoting risky ones, and keeping keys, placeholders, and plural keys valid for Rails, Symfony, Hugo, and i18next.
+date: 2026-10-28
+category: translation
+related: [general-translation-vs-rails-i18n, general-translation-vs-i18n-tasks, general-translation-vs-symfony-translation, translate-json-files, translate-po-files]
+---
+
+A YAML locale file maps keys to user-facing strings, one file (or one top-level key) per language. Translating it means replacing the string values while keys, placeholders, and the file's structure stay exactly as the framework expects. YAML makes that harder than JSON: an unquoted colon or a leading `%` breaks parsing, and `no` can turn into a boolean, so a translation that reads correctly can still produce a file your app rejects or misreads.
+
+## Common YAML locale layouts
+
+Each framework puts the language in a different place and uses its own placeholder syntax, and a translated file has to follow the same rules:
+
+| Framework | Source file | Where the language goes | Placeholders | Plurals |
+| --- | --- | --- | --- | --- |
+| [Rails I18n](https://guides.rubyonrails.org/i18n.html) | `config/locales/en.yml` | Top-level key (`en:`) | `%{name}` | `one` and `other` keys; more with rails-i18n |
+| [Symfony](https://symfony.com/doc/current/translation.html#translation-resource-file-names-and-locations) | `translations/messages.en.yaml` | Filename (`domain.locale.yaml`) | `%name%`, or `{name}` in `+intl-icu` files | ICU plurals inside the string |
+| [Hugo](https://gohugo.io/functions/lang/translate/#translation-tables) | `i18n/en.yaml` | Filename | Go templates such as `{{ . }}` | CLDR keys (`one`, `few`, `many`, `other`) |
+| i18next with [i18next-fs-backend](https://github.com/i18next/i18next-fs-backend) | `locales/en/common.yml` | Directory | `{{name}}` | Suffixed keys such as `_one` and `_other` |
+| vue-i18n with [unplugin-vue-i18n](https://github.com/intlify/bundle-tools/tree/main/packages/unplugin-vue-i18n) | `locales/en.yaml` | Filename | `{name}` | Pipe-separated forms in one string |
+
+Rails is the strictest about structure. The [Rails guide](https://guides.rubyonrails.org/i18n.html#configuring-the-load-paths-and-default-locale) loads every `.yml` and `.rb` file under `config/locales`, and in each file "the top level key is the locale." A Spanish file has to start with `es:`, whatever its filename.
+
+## YAML pitfalls that break translated files
+
+Here's a Rails file written so that every value survives translation:
+
+```yaml title="config/locales/en.yml"
+en:
+  checkout:
+    title: "Note: prices include VAT"
+    joined: "%{name} joined your team"
+    confirm_no: "No"
+    terms: |
+      By paying, you agree to our terms.
+      Refunds take 5 to 7 days.
+    items:
+      one: "%{count} item"
+      other: "%{count} items"
+```
+
+Each line guards against a common failure:
+
+- **Colons.** `title: Note: prices include VAT` without quotes is a syntax error, and a translation can add a colon the English didn't have.
+- **Values that start with an indicator character.** A plain value can't start with `%`, `{`, `[`, `@`, or a backtick. `joined: %{name} joined your team` fails to parse, and `{{name}} joined` is read as the start of a mapping. Word order changes in translation, so a placeholder that sat mid-sentence in English often moves to the front. Hugo's own docs quote `'{{ . }} day'` for this reason.
+- **Booleans.** Ruby's YAML parser follows YAML 1.1, so unquoted `yes`, `no`, `on`, and `off` become `true` and `false`; YAML 1.2 parsers, including most JavaScript tooling, read them as strings. The Rails guide says [these keys must be escaped](https://guides.rubyonrails.org/i18n.html#configuring-the-load-paths-and-default-locale), and the same goes for values. Even a Norwegian file rooted at `no:` loads in Ruby under the key `false`.
+- **Block scalars.** `|` keeps line breaks and `>` folds them into spaces. The translated lines must keep the block's indentation, or the value ends early or the file stops parsing.
+- **Anchors and aliases.** `&name` defines a block and `*name` reuses it, so changing an anchored value changes every alias. Rails loads them, but unplugin-vue-i18n states that its YAML resources [don't support aliases](https://github.com/intlify/bundle-tools/tree/main/packages/unplugin-vue-i18n), so check your loader before relying on them.
+
+With the `title` and `joined` lines unquoted, each in its own file, Ruby's parser (Ruby 2.6, Psych 3.1) rejects both before Rails sees a single key:
+
+```text title="Output"
+unquoted-colon.yml: mapping values are not allowed in this context at line 3 column 16
+unquoted-placeholder.yml: found character that cannot start any token while scanning for the next token at line 3 column 13
+```
+
+Quoting every value is the simplest rule: a double-quoted string is always a string, and `%{name}`, colons, and `No` stay text.
+
+### Plural keys differ by language
+
+English uses `one` and `other`, but Russian and Polish also need `few` and `many`. Missing keys don't raise an error. With the i18n gem's pluralization backend and a Russian plural rule like the one rails-i18n ships, a file translated key by key from English silently uses `other` for every count that needs `few`. Both Russian files below hold General Translation's translations:
+
+```text title="Output"
+count  key-by-key (one, other)              complete (one, few, many, other)
+1      У вас 1 непрочитанное сообщение.     У вас 1 непрочитанное сообщение.
+3      У вас 3 непрочитанных сообщений.     У вас 3 непрочитанных сообщения.
+5      У вас 5 непрочитанных сообщений.     У вас 5 непрочитанных сообщений.
+22     У вас 22 непрочитанных сообщений.    У вас 22 непрочитанных сообщения.
+```
+
+The [Rails guide](https://guides.rubyonrails.org/i18n.html#locale-specific-rules) notes that only English plural rules apply by default; the I18n `Pluralization` backend or the rails-i18n gem adds the rest. Hugo's translation tables use the same CLDR categories, from `zero` through `other`.
+
+### The locale root has to change
+
+In Rails, a translated file that still starts with `en:` doesn't fail. It loads as English: in a test with the i18n gem, a Spanish file left rooted at `en:` replaced the English title with Spanish, and `I18n.t` for `es` returned a missing-translation message. Rename the root in every translated file, and keep `config.i18n.available_locales` in sync.
+
+## Ways to translate YAML locale files
+
+| Approach | Keys and placeholders | Plural keys | Context for short strings | Keeping up with changes |
+| --- | --- | --- | --- | --- |
+| By hand | Safe if the translator knows YAML | Added if the translator knows the language's rules | The translator can ask | Manual on every change |
+| [i18n-tasks](https://github.com/glebm/i18n-tasks) `translate-missing` (Rails) with Google Translate, DeepL, or OpenAI | Swaps `%{...}` for tokens before sending | `missing` reports absent plural forms when rails-i18n rules are loaded | Per-backend options and prompts | Fills missing keys; edited English isn't retranslated |
+| A translation management system (TMS) | Parsed by format | Depends on the TMS | Screenshots, comments, glossary | Repository sync or file exchange |
+| An LLM script over the file | Usually kept, but nothing guarantees quoting | Added only if you ask for them | Whatever you put in the prompt | Rerun and validate each time |
+| [General Translation's CLI](/docs/cli/reference/formats/yaml-files) | Translates string values only; keys stay | Translates the keys in your source | Glossary, Custom Prompts, per-key metadata | Reuses unchanged translations each run |
+
+Use hand edits for one or two small files. Use i18n-tasks when a Rails app needs missing-key checks and you're fine filling gaps with machine translation you review yourself. (See [General Translation vs. i18n-tasks](/kb/general-translation-vs-i18n-tasks) for how the two fit together.) Use a [TMS](/kb/what-is-a-translation-management-system) when translators own the files. Use General Translation when every locale file should be regenerated as English changes, with shared terminology across your app, docs, and marketing site.
+
+## Translate YAML files with General Translation
+
+General Translation's CLI, `gt`, translates `.yaml` and `.yml` files with a `yaml` entry in `gt.config.json`. The `[locale]` placeholder marks where the language goes, so formats with the locale in the filename work as they are. For Symfony, `translations/*.[locale].yaml` maps `messages+intl-icu.en.yaml` to `messages+intl-icu.fr.yaml`; for Hugo:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["de", "pt-BR"],
+  "files": {
+    "yaml": {
+      "include": ["i18n/[locale].yaml"]
+    }
+  }
+}
+```
+
+Checked against `gt` 2.26.11, the CLI's path resolution maps `i18n/en.yaml` to `i18n/de.yaml` and `i18n/pt-BR.yaml`, matching Hugo's language-tag filenames. Sign in with [`npx gt login`](/docs/cli/reference/commands/login) and set a project ID ([CLI credentials](/docs/cli/guides/configuring#credentials)), import any existing translations with [`npx gt upload`](/docs/cli/reference/commands/upload), then run [`npx gt translate`](/docs/cli/reference/commands/translate).
+
+General Translation translates string values and leaves everything else as it is: keys, numbers, booleans, and comments stay in place, and an anchored block is translated once while its aliases keep pointing to it. That means a few framework details are still yours:
+
+- **Rails locale roots.** The CLI doesn't rename keys, including the top-level `en:`, and the [`transform`](/docs/cli/reference/config#files) option renames output files, not keys. Keep root-less working files such as `translations/en.yml` for the CLI and add the locale root when you export them to `config/locales`. (See [General Translation vs. Rails I18n](/kb/general-translation-vs-rails-i18n) for a short export script.)
+- **Plural keys.** The CLI translates the plural keys your source has, so a Russian file from an English `one`/`other` source has `one` and `other`. Run `i18n-tasks missing` with rails-i18n loaded to find the `few` and `many` keys still to add.
+- **Unquoted `yes`, `no`, `on`, and `off`.** General Translation parses YAML by 1.2 rules, where these are strings, so they're translated as text. Quote them in your source, as you would for Rails anyway.
+- **Library syntax.** Custom string syntax such as ICU messages is supported for `i18next` and `next-intl`; for other libraries, check strings with custom syntax after the first run.
+
+To resolve a short string such as "Save," add a companion `.metadata.yaml` file with a `context` note or `maxChars` limit per key ([keyed metadata](/docs/cli/reference/formats/yaml-files#metadata)). A Glossary and Custom Prompts in a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) keep product terms the same across your YAML catalogs and every other project in the group, and reviewers can [edit translations in the Dashboard](/docs/platform/dashboard/guides/reviewing-translations). If someone edits a translated file locally, run [`npx gt save-local`](/docs/cli/reference/commands/save-local) before the next run so it isn't overwritten.
+
+After each run, load the files the way your app does: `i18n-tasks missing` and `i18n-tasks check-consistent-interpolations` for Rails, `lint:translations` for Symfony, and a build for Hugo. (See [General Translation vs. Symfony Translation](/kb/general-translation-vs-symfony-translation) for the Symfony setup, and [How do I translate i18n JSON files?](/kb/translate-json-files) if your catalogs are JSON.)
+
+## Common questions
+
+### Should I quote every value in a YAML locale file?
+
+Quoting every value is the safest habit. A double-quoted value is always a string, so colons, a leading `%{name}`, and words like `No` can't change how the file parses, before or after translation.
+
+### Why does my Rails app say "translation missing" for a language I translated?
+
+Check the file's top-level key first. A file still rooted at `en:` loads as English, so the new locale has no keys; also confirm the locale is in `config.i18n.available_locales`.
+
+### Can I use anchors and aliases in locale files?
+
+Rails loads them, but some loaders don't, including unplugin-vue-i18n for vue-i18n. Translating an anchored value changes every alias that points to it, so use them only for text that should be identical everywhere.
+
+## Key takeaways
+
+- Translate values only; keys, placeholders like `%{name}` and `{{name}}`, and block indentation stay as they are.
+- Quote values with colons, a leading `%` or `{`, or words like `yes`, `no`, `on`, and `off`; Ruby reads the unquoted ones as booleans.
+- Russian and Polish need `few` and `many` keys that an English source lacks, and Rails silently falls back to `other` without them.
+- Every Rails file needs its own locale root; a Spanish file rooted at `en:` loads as English.
+- General Translation's CLI translates YAML string values with `"yaml": { "include": [...] }` and [`npx gt translate`](/docs/cli/reference/commands/translate), keeping keys, comments, and anchors; Rails roots and missing plural keys stay your responsibility.
