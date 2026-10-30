@@ -1,0 +1,62 @@
+---
+
+title: resolveLocale
+description: Pick the best supported locale from a requested locale or a preference list. API reference for resolveLocale.
+
+---
+
+`resolveLocale` matches requested locales against the `locales` passed to [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt). It always returns a supported locale, so its result is safe to render, store, and pass to [`loadTranslations()`](/docs/svelte/reference/functions/load-translations).
+
+## Overview [#overview]
+
+```ts
+function resolveLocale(candidates?: string | string[]): string;
+```
+
+Use it in a server hook to choose the request's locale:
+
+```ts title="src/hooks.server.ts"
+import { resolveLocale } from 'gt-svelte';
+
+const locale = resolveLocale(['fr-CA', 'fr', 'en']);
+```
+
+## How it works [#how-it-works]
+
+The candidates are tried in order, and the first one that matches a supported locale wins:
+
+- **Exact matches** win first, including a configured custom code.
+- **Same-language matches** come next. A regional request matches the supported locale of the same language, so `fr-CA` resolves to `fr` when `fr` is supported. A bare language matches a supported regional locale, so `fr` resolves to `fr-FR` when only `fr-FR` is supported.
+- **Invalid codes** are skipped rather than throwing.
+
+When no candidate matches, or `candidates` is missing or empty, it returns the default locale. Call it only after [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) has run. It does not need a component, so it works in hooks, `load` functions, and endpoints.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`candidates`](#candidates) | Requested locale, or locales in order of preference. | `string \| string[]` | Yes | — |
+
+### `candidates`
+
+**Type** `string | string[]` · **Optional**
+
+A locale code or a preference list, such as the saved locale cookie followed by the request's `Accept-Language` entries.
+
+## Returns [#returns]
+
+**Type** `string`
+
+A supported locale, or the default locale when nothing matches.
+
+## Example [#example]
+
+With `defaultLocale: 'en'` and `locales: ['en', 'fr', 'ja']`:
+
+```ts
+resolveLocale('fr'); // 'fr'
+resolveLocale('fr-CA'); // 'fr'
+resolveLocale(['de', 'ja-JP']); // 'ja'
+resolveLocale('not a locale'); // 'en'
+resolveLocale(); // 'en'
+```

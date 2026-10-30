@@ -1,0 +1,92 @@
+---
+
+title: loadTranslations
+description: Load one locale's translations so a page renders translated on the server and hydrates without a flash. API reference for loadTranslations.
+
+---
+
+`loadTranslations` resolves a requested locale and returns it with its translations, ready to pass to [`<GTProvider>`](/docs/svelte/reference/components/gt-provider). Call it in a `load` function so the translations travel with the page data.
+
+## Overview [#overview]
+
+```ts
+function loadTranslations(
+  locale?: string | string[]
+): Promise<GTTranslationsData>;
+```
+
+Call it in the root layout's server `load` function:
+
+```ts title="src/routes/+layout.server.ts"
+import '#lib/gt.ts';
+import { loadTranslations } from 'gt-svelte';
+import type { LayoutServerLoad } from './$types';
+
+export const load: LayoutServerLoad = async ({ locals }) => ({
+  gt: await loadTranslations(locals.locale),
+});
+```
+
+Then pass the result to [`<GTProvider>`](/docs/svelte/reference/components/gt-provider):
+
+```svelte title="src/routes/+layout.svelte"
+<GTProvider locale={data.gt.locale} translations={data.gt.translations}>
+  {@render children()}
+</GTProvider>
+```
+
+## How it works [#how-it-works]
+
+1. Resolves `locale` with [`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale), so an unsupported or missing locale becomes the default locale.
+2. Loads that locale's translations through the shared cache, calling the configured [`loadTranslations`](/docs/svelte/reference/types/gt-svelte-config#load-translations) option only when the cache has none. The default locale returns `{}` without loading.
+3. Returns the resolved locale and its translations.
+
+Both values are plain, serializable data, so a server `load` function can return them. [`<GTProvider>`](/docs/svelte/reference/components/gt-provider) adds them to the browser's cache during hydration, so the first render on both sides matches.
+
+[`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) must run first. Import the module that calls it at the top of the file.
+
+## Parameters [#parameters]
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`locale`](#locale) | Requested locale, or locales in order of preference. | `string \| string[]` | Yes | Default locale |
+
+### `locale`
+
+**Type** `string | string[]` · **Optional** · **Default** Default locale
+
+A locale code, or a list in preference order such as a cookie value followed by `Accept-Language` entries. The first supported match wins.
+
+## Returns [#returns]
+
+**Type** `Promise<`[`GTTranslationsData`](/docs/svelte/reference/types/gt-translations-data)`>`
+
+Resolves with `{ locale, translations }`, where `locale` is the resolved locale.
+
+## Errors [#errors]
+
+When the configured loader throws or rejects, the result depends on the environment:
+
+- **Development:** the promise rejects with the loader's error, so the `load` function fails.
+- **Production:** the error is logged and `translations` is `{}`, so the page renders source content.
+
+## Example [#example]
+
+Resolve the locale inside the `load` function instead of a server hook:
+
+```ts title="src/routes/+layout.server.ts"
+import { LOCALE_COOKIE } from '#lib/gt.ts';
+import { loadTranslations } from 'gt-svelte';
+import type { LayoutServerLoad } from './$types';
+
+export const load: LayoutServerLoad = async ({ cookies, request }) => {
+  const preferred = (request.headers.get('accept-language') ?? '')
+    .split(',')
+    .map((part) => part.split(';')[0].trim())
+    .filter(Boolean);
+  const cookie = cookies.get(LOCALE_COOKIE);
+  return {
+    gt: await loadTranslations(cookie ? [cookie, ...preferred] : preferred),
+  };
+};
+```

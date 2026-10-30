@@ -1,0 +1,112 @@
+---
+
+title: Translating strings
+description: How to translate attributes, labels, and messages declared outside components with useGT, msg, and useMessages.
+related:
+  links:
+    - /docs/svelte/guides/translating-content
+    - /docs/svelte/guides/formatting-variables
+    - /docs/svelte/guides/managing-locales
+    - /docs/svelte/guides/generating-translations
+
+---
+
+Use string translation where markup is not possible: attributes, `<title>`, button labels built in script, and messages defined in plain TypeScript modules. Strings use ICU message syntax, so they can include variables, plurals, and selects.
+
+## Translate strings with `useGT` [#use-gt]
+
+Call [`useGT()`](/docs/svelte/reference/functions/use-gt) once while the component initializes, and call the returned function wherever you need a string:
+
+```svelte title="src/lib/SearchForm.svelte"
+<script lang="ts">
+  import { useGT } from 'gt-svelte';
+
+  let { count }: { count: number } = $props();
+  const gt = useGT();
+</script>
+
+<svelte:head>
+  <title>{gt('Search')}</title>
+</svelte:head>
+
+<input
+  placeholder={gt('Search {count} recipes', { count })}
+  aria-label={gt('Search')}
+/>
+```
+
+- Pass runtime values as ICU variables in the options. They are inserted after lookup, so the source string stays the same.
+- Calls in the template update when the locale changes or translations finish loading.
+- A string without a translation renders the source text with its variables.
+
+### Write strings the CLI can find
+
+The CLI and the preprocessor find strings by reading your code, not by running it:
+
+- Assign the function directly from [`useGT()`](/docs/svelte/reference/functions/use-gt), as in `const gt = useGT()`, and call it by that name.
+- Pass a string literal, a template literal without `${}` expressions, or literals joined with `+`. The CLI reports anything else as an error and skips it, so it is never translated.
+- Keep `$context`, `$id`, `$maxChars`, and `$requiresReview` static.
+
+```ts
+// ❌ The CLI cannot see which string this is
+const label = gt(isNew ? 'Create' : 'Save');
+
+// ✅ Two literal strings
+const label = isNew ? gt('Create') : gt('Save');
+```
+
+An invalid ICU message is skipped and reported by the CLI.
+
+### Add context
+
+Set `$context` when the same words need different translations. It also describes the string to translators:
+
+```ts
+gt('Open', { $context: 'Verb: open the settings panel' });
+gt('Open', { $context: 'Adjective: the store is open' });
+```
+
+(See [GTTranslationOptions](/docs/svelte/reference/types/gt-translation-options) for every option).
+
+## Translate strings declared outside components [#messages]
+
+[`useGT()`](/docs/svelte/reference/functions/use-gt) only works inside a component. For strings defined in a module, such as navigation items, seed data, or enum labels, register each one with [`msg()`](/docs/svelte/reference/functions/msg) and translate it where it renders with [`useMessages()`](/docs/svelte/reference/functions/use-messages):
+
+```ts title="src/lib/categories.ts"
+import { msg } from 'gt-svelte';
+
+export const CATEGORIES = {
+  cocktail: msg('Cocktail'),
+  mocktail: msg('Mocktail'),
+  punch: msg('Punch', { $context: 'Mixed drink served from a bowl' }),
+};
+```
+
+```svelte title="src/lib/CategoryList.svelte"
+<script lang="ts">
+  import { useMessages } from 'gt-svelte';
+  import { CATEGORIES } from '#lib/categories.ts';
+
+  const m = useMessages();
+</script>
+
+<ul>
+  {#each Object.values(CATEGORIES) as category}
+    <li>{m(category)}</li>
+  {/each}
+</ul>
+```
+
+[`msg()`](/docs/svelte/reference/functions/msg) returns the string itself when called without options, so the value works as plain text anywhere. With options, it returns an encoded string that carries the options; render it through [`useMessages()`](/docs/svelte/reference/functions/use-messages).
+
+<Callout type="warn">
+  Call [`msg()`](/docs/svelte/reference/functions/msg) with the string literal at each definition. A helper such as `const label = (text: string) => msg(text)` hides the strings from the CLI, so they are never translated.
+</Callout>
+
+Only strings written in your code are extracted. Content created at runtime, such as rows users add to a database, is not translated.
+
+## Choose `<T>` or a string [#choose]
+
+- **[`<T>`](/docs/svelte/reference/components/t)** for markup: sentences with links, emphasis, or components, and any visible content in the template.
+- **[`useGT()`](/docs/svelte/reference/functions/use-gt)** for attributes, document titles, and strings computed in a component's script.
+- **[`msg()`](/docs/svelte/reference/functions/msg) with [`useMessages()`](/docs/svelte/reference/functions/use-messages)** for strings defined in modules and rendered by components.

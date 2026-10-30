@@ -1,0 +1,157 @@
+---
+
+title: "<T>"
+description: Translate Svelte markup in place. API reference for the <T> component.
+
+---
+
+`<T>` renders the translation of its children in the active locale, or the children themselves when no translation exists. Text, elements, components, and variable components inside it form one translation entry, so translators can reorder words and markup.
+
+## Overview [#overview]
+
+```svelte
+<script lang="ts">
+  import { T, Var } from 'gt-svelte';
+
+  let { user } = $props();
+</script>
+
+<T>Welcome back, <b><Var>{user.name}</Var></b>!</T>
+```
+
+Use [`<Var>`](/docs/svelte/reference/components/var), [`<Num>`](/docs/svelte/reference/components/num), [`<Currency>`](/docs/svelte/reference/components/currency), [`<DateTime>`](/docs/svelte/reference/components/datetime), and [`<RelativeTime>`](/docs/svelte/reference/components/relative-time) for runtime values. Use [`<Plural>`](/docs/svelte/reference/components/plural) and [`<Branch>`](/docs/svelte/reference/components/branch) for alternatives.
+
+`<T>` requires [`gtPreprocess()`](/docs/svelte/reference/functions/gt-preprocess) on every component that uses it.
+
+## How it works [#how-it-works]
+
+- **Build-time preparation.** The preprocessor reads the children as written, computes the translation hash, and turns each child element and variable into a snippet that `<T>` can rearrange. The CLI extracts the same content with the same hash.
+- **Lookup.** At render time, `<T>` looks up its hash in the active locale's translations from [`<GTProvider>`](/docs/svelte/reference/components/gt-provider). In the default locale, no lookup happens.
+- **Rendering.** A translation renders your own elements, components, and variables in the order the translation gives them. Element attributes, event handlers, and bindings stay as written.
+- **Fallback.** With no translation, `<T>` renders its children. Variables inside it then format in the default locale, matching the surrounding source text.
+- **Invalid translations.** A translation that does not match the source structure, for example after the source changed, renders the children instead. In development, `<T>` logs a warning telling you to run the CLI again.
+- **No wrapper.** `<T>` adds no HTML element.
+- **Reactivity.** The translation updates when the locale changes or translations finish loading. Variable values update like any other Svelte expression.
+
+If the preprocessor did not run on a component, its `<T>` renders the children untranslated and logs a warning once in development.
+
+## Props [#props]
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`children`](#children) | Markup to translate. | `Snippet` | Yes | — |
+| [`context`](#context) | Context that disambiguates identical content. | `string` | Yes | — |
+| [`id`](#id) | Stable identifier for the entry. | `string` | Yes | — |
+| [`maxChars`](#maxchars) | Maximum length of the translation. | `number` | Yes | — |
+| [`requiresReview`](#requiresreview) | Whether the translation requires approval before use. | `boolean` | Yes | `false` |
+
+All props must be static, because the preprocessor reads them at build time. Spread props are not supported on `<T>`.
+
+### `children`
+
+**Type** `Snippet` · **Optional**
+
+The content to translate. It must follow the [content rules](#content-rules).
+
+### `context`
+
+**Type** `string` · **Optional**
+
+Context for translators. It is part of the hash, so identical content with different context gets separate translations. Must be a static string.
+
+```svelte
+<T context="Button that opens the settings panel">Open</T>
+```
+
+### `id`
+
+**Type** `string` · **Optional**
+
+A stable identifier sent with the entry. Must be a static string.
+
+### `maxChars`
+
+**Type** `number` · **Optional**
+
+Asks for a translation no longer than this many characters. It is translation metadata and part of the hash; rendering does not truncate the output. Must be a static integer.
+
+```svelte
+<T maxChars={40}>Save your changes</T>
+```
+
+### `requiresReview`
+
+**Type** `boolean` · **Optional** · **Default** `false`
+
+Marks the translation as requiring approval before use. It is part of the hash. Must be a static boolean or a bare attribute.
+
+```svelte
+<T requiresReview>Terms and conditions apply.</T>
+```
+
+## Content rules [#content-rules]
+
+The preprocessor must know the full structure of the children at build time. A child that breaks a rule fails the build with an error that points to the line, and [`gt generate`](/docs/cli/reference/commands/generate) and [`gt translate`](/docs/cli/reference/commands/translate) report the same problems.
+
+- **Dynamic values go in variable components.** `{expression}` must be wrapped in [`<Var>`](/docs/svelte/reference/components/var), [`<Num>`](/docs/svelte/reference/components/num), [`<Currency>`](/docs/svelte/reference/components/currency), [`<DateTime>`](/docs/svelte/reference/components/datetime), or [`<RelativeTime>`](/docs/svelte/reference/components/relative-time). Static string and number literals, such as `{' '}` or `{42}`, are treated as text.
+- **No logic blocks or tags.** `{#if}`, `{#each}`, `{#await}`, `{#key}`, `{@html}`, `{@const}`, `{@render}`, and `{@debug}` are not supported. Move them outside `<T>`, wrap them in [`<Var>`](/docs/svelte/reference/components/var), or express the alternatives with [`<Plural>`](/docs/svelte/reference/components/plural) or [`<Branch>`](/docs/svelte/reference/components/branch).
+- **No snippets directly inside `<T>`.** Svelte would pass a `{#snippet}` declared there to `<T>` as a prop. Declare it outside `<T>`.
+- **No nested `<T>`.** A `<T>` cannot contain another `<T>`, including inside a snippet in its children.
+- **No `animate:` or `let:` directives** on elements inside `<T>`. For slot props, move `<T>` inside the component that provides them.
+- **No explicit `children` snippet** on components inside `<T>`. Pass the content as regular children.
+- **Branch and plural rules.** Inside `<T>`, the branches of [`<Plural>`](/docs/svelte/reference/components/plural) and [`<Branch>`](/docs/svelte/reference/components/branch) must be static strings or `{#snippet}` blocks without parameters, and spread props are not allowed on them.
+- **Variable names.** The `name` prop of a variable component must be a static string.
+- **Reserved identifiers.** Identifiers starting with `__gt_` are reserved for the preprocessor.
+
+### Translated attributes
+
+Static values of these attributes on elements and components inside `<T>` are translated with the content: `placeholder`, `title`, `alt`, `aria-label`, `aria-labelledby`, and `aria-describedby`. Dynamic values render unchanged. Translate them separately with [`useGT()`](/docs/svelte/reference/functions/use-gt).
+
+```svelte
+<T>Read the <a href="/docs" title="Documentation">docs</a>.</T>
+```
+
+### Components
+
+Content passed as children to your own components inside `<T>` is part of the translation, and the component renders it as usual. Content a component renders from its own template is not; put a separate `<T>` inside that component.
+
+## Whitespace [#whitespace]
+
+`<T>` renders and extracts exactly the text the same markup renders without `<T>`, under Svelte's whitespace rules:
+
+- Whitespace at the start and end of the children is removed.
+- Whitespace between text and an element, component, or block becomes a single space. Content a formatter wraps across lines keeps a space between words.
+- Whitespace next to an `{expression}`, and whitespace inside one run of text, is kept as written. The browser displays it collapsed, but it is part of the source text and its hash.
+- Inside `<pre>` and `<textarea>`, and with `<svelte:options preserveWhitespace />`, whitespace is kept as written.
+
+This markup renders and extracts `You can make 7 of 50 recipes`:
+
+```svelte
+<T>
+  You can make <Num value={7} /> of
+  <Num value={50} />
+  recipes
+</T>
+```
+
+Because whitespace inside a run of text is kept, re-wrapping a paragraph inside `<T>` changes its hash. Run the CLI again after reformatting translated content so it gets translated again.
+
+## Example [#example]
+
+```svelte title="src/routes/+page.svelte"
+<script lang="ts">
+  import { Num, Plural, T, Var } from 'gt-svelte';
+
+  let { name, count }: { name: string; count: number } = $props();
+</script>
+
+<T context="Inbox greeting">
+  <h1>Hello, <Var>{name}</Var>!</h1>
+  <p>
+    <Plural n={count}>
+      {#snippet one()}You have <b>one</b> new message.{/snippet}
+      {#snippet other()}You have <b><Num value={count} /></b> new messages.{/snippet}
+    </Plural>
+  </p>
+</T>
+```

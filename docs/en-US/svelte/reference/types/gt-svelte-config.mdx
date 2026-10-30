@@ -1,0 +1,102 @@
+---
+
+title: GTSvelteConfig
+description: Options that set supported locales and how translations load. API reference for GTSvelteConfig.
+
+---
+
+Pass this object to [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt). It is not read from `gt.config.json`, so import shared values from that file yourself.
+
+## Overview [#overview]
+
+```ts
+import type { GTSvelteConfig } from 'gt-svelte';
+
+const config: GTSvelteConfig = {
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  loadTranslations: async (locale) =>
+    (await import(`../_gt/${locale}.json`)).default,
+};
+```
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`defaultLocale`](#default-locale) | Locale of your source content. | `string` | Yes | `'en'` |
+| [`locales`](#locales) | Supported locales. | `string[]` | Yes | `[]` |
+| [`customMapping`](#custom-mapping) | Custom locale codes and names. | [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) | Yes | — |
+| [`loadTranslations`](#load-translations) | Returns one locale's translations. | `(locale: string) => Promise<unknown>` | Yes | — |
+| [`projectId`](#project-id) | Project whose published translations load from the CDN. | `string` | Yes | — |
+| [`cacheUrl`](#cache-url) | Remote store that translations load from. | `string \| null` | Yes | General Translation CDN |
+| [`cacheExpiryTime`](#cache-expiry) | How long loaded translations stay cached, in milliseconds. | `number \| null` | Yes | `60000` on the server; `null` in the browser |
+
+## How translations load [#loading]
+
+The options select one loading mode:
+
+1. **Custom loader.** When `loadTranslations` is set, it is always used. This is the usual setup for translation files written into your source tree by the CLI.
+2. **General Translation CDN.** Without `loadTranslations`, a `projectId` loads translations that the CLI published to the CDN.
+3. **Custom remote store.** Without `loadTranslations`, a `cacheUrl` other than the CDN loads from that store.
+4. **Disabled.** With none of these, every locale renders source content.
+
+The default locale never loads: its source content is already in your components.
+
+## `defaultLocale` [#default-locale]
+
+**Type** `string` · **Optional** · **Default** `'en'`
+
+The locale your source content is written in. [`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale) falls back to it, and content in it renders without a lookup. Use the same value as `defaultLocale` in `gt.config.json`.
+
+## `locales` [#locales]
+
+**Type** `string[]` · **Optional** · **Default** `[]`
+
+The locales your app supports. The default locale is always added, so `['es', 'fr']` and `['en', 'es', 'fr']` are equivalent when `defaultLocale` is `'en'`. [`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale) only returns locales from this list, and [`useLocales()`](/docs/svelte/reference/functions/use-locales) returns it.
+
+```ts
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+});
+```
+
+## `customMapping` [#custom-mapping]
+
+**Type** [`CustomMapping`](/docs/platform/core/reference/types/custom-mapping) · **Optional**
+
+Custom locale codes, aliases, and display names. Pass the same mapping as [`customMapping`](/docs/cli/reference/config#custom-mapping) in `gt.config.json` so the CLI and the app agree on locale codes. Custom names also appear in [`useLocaleProperties()`](/docs/svelte/reference/functions/use-locale-properties).
+
+## `loadTranslations` [#load-translations]
+
+**Type** `(locale: string) => Promise<unknown>` · **Optional**
+
+Returns the translations for one target locale: an object keyed by translation hash, as the CLI writes to `files.gt.output`. It is called once per locale and cache period, and never for the default locale.
+
+```ts
+loadTranslations: async (locale) =>
+  (await import(`../_gt/${locale}.json`)).default,
+```
+
+A dynamic `import()` with a template literal lets Vite bundle every file in `src/_gt/` and load only the requested one. Call it from a module shared by the server and the browser: the server uses it in [`loadTranslations()`](/docs/svelte/reference/functions/load-translations), and the browser uses it when [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) switches to a locale it has not loaded.
+
+When the loader throws or rejects in development, the error propagates, so [`loadTranslations()`](/docs/svelte/reference/functions/load-translations) and [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) reject. In production, the error is logged and the locale resolves to no translations, so its content renders as source text.
+
+## `projectId` [#project-id]
+
+**Type** `string` · **Optional**
+
+Without [`loadTranslations`](#load-translations), loads translations from the General Translation CDN for this project. The CDN only serves translations that the CLI published, with [`publish`](/docs/cli/reference/config#publish) in `gt.config.json` or [`gt translate --publish`](/docs/cli/reference/commands/translate).
+
+## `cacheUrl` [#cache-url]
+
+**Type** `string | null` · **Optional** · **Default** General Translation CDN
+
+The remote store to load translations from when [`loadTranslations`](#load-translations) is not set. Set a URL to use your own store, or `null` to disable remote loading even when `projectId` is set.
+
+## `cacheExpiryTime` [#cache-expiry]
+
+**Type** `number | null` · **Optional** · **Default** `60000` on the server; `null` in the browser
+
+How long a locale's loaded translations stay cached, in milliseconds. An expired locale reloads the next time it is requested. `null` keeps translations for the life of the process or page.
+
+On the server, the default lets a long-running process pick up new translations from a remote store. In the browser, translations usually arrive once from a `load` function that client-side navigation does not rerun, so they never expire unless you set a number.

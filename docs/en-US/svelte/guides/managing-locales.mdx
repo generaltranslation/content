@@ -1,0 +1,151 @@
+---
+
+title: Managing locales
+description: How to choose each request's locale in SvelteKit, set the document language and direction, and build a language switcher.
+related:
+  links:
+    - /docs/svelte/guides/configuring
+    - /docs/svelte/guides/translating-strings
+    - /docs/svelte/guides/formatting-variables
+    - /docs/svelte/guides/generating-translations
+
+---
+
+In SvelteKit, the server decides the locale for each request, and the browser takes over once the page hydrates. `gt-svelte` provides the pieces: [`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale) on the server, [`<GTProvider>`](/docs/svelte/reference/components/gt-provider) for rendering, and [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) for switching. Your app decides how the choice is stored.
+
+## Basic locale workflow [#workflow]
+
+1. A server hook reads the saved cookie and the `Accept-Language` header, and resolves a supported locale.
+2. The hook writes the locale into `<html lang dir>` and stores it in `event.locals`.
+3. The root layout's `load` function loads that locale's translations.
+4. [`<GTProvider>`](/docs/svelte/reference/components/gt-provider) renders the page with them, on the server and during hydration.
+5. A language switcher saves the visitor's choice in the cookie and calls [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale).
+
+## Declare supported locales [#declare]
+
+Supported locales come from [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt). Keep them in sync with the CLI by reading `gt.config.json`:
+
+```ts title="src/lib/gt.ts"
+initializeGT({
+  defaultLocale: gtConfig.defaultLocale,
+  locales: [gtConfig.defaultLocale, ...gtConfig.locales],
+  loadTranslations: async (locale) =>
+    (await import(`../_gt/${locale}.json`)).default,
+});
+```
+
+Read them in components with [`useLocales()`](/docs/svelte/reference/functions/use-locales) and [`useDefaultLocale()`](/docs/svelte/reference/functions/use-default-locale). Both also work on the server, after [`initializeGT()`](/docs/svelte/reference/functions/initialize-gt) runs.
+
+## Resolve the locale for each request [#resolve]
+
+[`resolveLocale()`](/docs/svelte/reference/functions/resolve-locale) takes one locale or an ordered list, and returns the first one your app supports, or the default locale. Put the saved cookie first, so an explicit choice beats the browser's preferences:
+
+```ts title="src/hooks.server.ts"
+import type { Handle } from '@sveltejs/kit/hooks';
+import { getLocaleDirection, resolveLocale } from 'gt-svelte';
+import { LOCALE_COOKIE } from '#lib/gt.ts';
+
+export const handle: Handle = ({ event, resolve }) => {
+  // "fr-CA,fr;q=0.9,en;q=0.8" -> ["fr-CA", "fr", "en"]
+  const preferred = (event.request.headers.get('accept-language') ?? '')
+    .split(',')
+    .map((part) => part.split(';')[0].trim())
+    .filter(Boolean);
+  const cookie = event.cookies.get(LOCALE_COOKIE);
+  const locale = resolveLocale(cookie ? [cookie, ...preferred] : preferred);
+  event.locals.locale = locale;
+
+  return resolve(event, {
+    transformPageChunk: ({ html }) =>
+      html
+        .replace('%gt.lang%', locale)
+        .replace('%gt.dir%', getLocaleDirection(locale)),
+  });
+};
+```
+
+On SvelteKit 2, import `Handle` from `@sveltejs/kit` and the module from `$lib/gt`. The [Quickstart](/docs/svelte/quickstart#quickstart) shows the matching `app.html` placeholders and `app.d.ts` declaration.
+
+This example reads the `generaltranslation.locale` cookie, the name other General Translation libraries use. Any cookie name works, as long as the hook and the switcher agree.
+
+<Callout type="info">
+  If your hooks already define `handle`, combine them with `sequence` from `@sveltejs/kit/hooks` and run the locale hook first, so later hooks can read `event.locals.locale`.
+</Callout>
+
+## Set the document language and direction [#html]
+
+The server hook fills `lang` and `dir` on the `<html>` element from placeholders in `src/app.html`:
+
+```html title="src/app.html"
+<html lang="%gt.lang%" dir="%gt.dir%">
+```
+
+[`getLocaleDirection()`](/docs/svelte/reference/functions/get-locale-direction) returns `'rtl'` for right-to-left languages such as Arabic and Hebrew, and `'ltr'` otherwise. It needs no component, so it works in hooks.
+
+For a single element, read the reactive direction of the active locale with [`useLocaleDirection()`](/docs/svelte/reference/functions/use-locale-direction):
+
+```svelte
+<script lang="ts">
+  import { useLocaleDirection } from 'gt-svelte';
+
+  const dir = useLocaleDirection();
+</script>
+
+<article dir={dir.current}>...</article>
+```
+
+## Build a language switcher [#switcher]
+
+Read the active locale with [`useLocale()`](/docs/svelte/reference/functions/use-locale), and switch it with [`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale). [`useLocaleProperties()`](/docs/svelte/reference/functions/use-locale-properties) gives each locale's display names:
+
+```svelte title="src/lib/LocaleSwitcher.svelte"
+<script lang="ts">
+  import {
+    getLocaleDirection,
+    useGT,
+    useLocale,
+    useLocaleProperties,
+    useLocales,
+    useSetLocale,
+  } from 'gt-svelte';
+  import { LOCALE_COOKIE } from '#lib/gt.ts';
+
+  const gt = useGT();
+  const locale = useLocale();
+  const setLocale = useSetLocale();
+  // Call useLocaleProperties() during initialization, once per locale
+  const options = useLocales().map((code) => ({
+    code,
+    properties: useLocaleProperties(code),
+  }));
+
+  async function change(event: Event) {
+    const next = (event.currentTarget as HTMLSelectElement).value;
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    await setLocale(next);
+    document.documentElement.lang = next;
+    document.documentElement.dir = getLocaleDirection(next);
+  }
+</script>
+
+<select aria-label={gt('Language')} value={locale.current} onchange={change}>
+  {#each options as { code, properties } (code)}
+    <option value={code}>{properties.current.nativeName}</option>
+  {/each}
+</select>
+```
+
+[`useSetLocale()`](/docs/svelte/reference/functions/use-set-locale) loads the new locale's translations before switching, so the current page stays on screen until they arrive. If the visitor switches again before a load finishes, the latest choice wins.
+
+It only changes what `gt-svelte` renders. Your switcher handles the rest:
+
+- **Save the choice.** Write the cookie the server hook reads. Without it, a full reload, or anything that reruns the root layout's `load` function, returns to the previous locale.
+- **Update the document.** Set `document.documentElement.lang` and `dir`. The server set them for the first render only.
+
+## Read the locale in components [#read]
+
+- [`useLocale()`](/docs/svelte/reference/functions/use-locale) returns the active locale as `.current`.
+- [`useLocaleProperties()`](/docs/svelte/reference/functions/use-locale-properties) returns names such as `name`, `nativeName`, and `regionName` for the active locale or a given one.
+- [`useLocaleDirection()`](/docs/svelte/reference/functions/use-locale-direction) returns `'ltr'` or `'rtl'`.
+
+Call these during component initialization. Their `.current` values update when the locale changes. Components outside a [`<GTProvider>`](/docs/svelte/reference/components/gt-provider) render in the default locale.

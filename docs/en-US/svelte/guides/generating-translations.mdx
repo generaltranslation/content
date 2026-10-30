@@ -1,0 +1,75 @@
+---
+
+title: Generating translations
+description: How to extract Svelte content into translation files with gt generate and translate them with gt translate.
+related:
+  links:
+    - /docs/svelte/guides/configuring
+    - /docs/svelte/guides/translating-content
+    - /docs/svelte/guides/translating-strings
+    - /docs/svelte/guides/managing-locales
+
+---
+
+The `gt` CLI detects `gt-svelte` in your `package.json` and reads [`<T>`](/docs/svelte/reference/components/t), [`useGT()`](/docs/svelte/reference/functions/use-gt), and [`msg()`](/docs/svelte/reference/functions/msg) content from your source. Two commands write the files your app loads: [`gt generate`](/docs/cli/reference/commands/generate) works offline, and [`gt translate`](/docs/cli/reference/commands/translate) produces the translations.
+
+## Generate files while you develop [#generate]
+
+[`gt generate`](/docs/cli/reference/commands/generate) extracts your content and writes the translation files without calling the API:
+
+```bash
+npx gt generate
+```
+
+- `src/_gt/en.json` (your `defaultLocale`) holds every source entry, keyed by a hash of its content and options.
+- Each target locale file keeps its existing translations, gains a copy of the source text for each new entry, and loses entries that no longer exist in the source.
+
+Until [`gt translate`](/docs/cli/reference/commands/translate) runs, new content shows the source text in every language. Run [`gt generate`](/docs/cli/reference/commands/generate) after adding a locale or changing content, so every locale file exists and your app can load it.
+
+To check your content for extraction errors without writing files, run [`gt validate`](/docs/cli/reference/commands/validate).
+
+## Translate your content [#translate]
+
+[`gt translate`](/docs/cli/reference/commands/translate) uploads the extracted content to your project, waits for the translations, and overwrites the target locale files:
+
+```bash
+npx gt translate
+```
+
+The command needs credentials and a project:
+
+- **Credentials:** a saved [`gt login`](/docs/cli/reference/commands/login) session, or a `GT_API_KEY` with file and translation queue permissions.
+- **Project:** `GT_PROJECT_ID`, or [`projectId`](/docs/cli/reference/config#project-id) in `gt.config.json`.
+
+The CLI reads `.env`, `.env.local`, and `.env.production` from the directory it runs in, in that order. Values in `.env.local` and `.env.production` override variables already set in your shell. (See [CLI credentials](/docs/cli/guides/configuring#credentials)).
+
+Besides the translation files, [`gt translate`](/docs/cli/reference/commands/translate) writes:
+
+- `_versionId` in `gt.config.json`, which identifies the uploaded source version. Set [`omitConfigIds`](/docs/cli/reference/config#omit-config-ids) to stop the CLI from editing the config.
+- `gt-lock.json`, which records the files it has synced so later runs can skip unchanged content.
+
+Translations are part of your build. Run the command when content changes, then restart your development server or rebuild to load the new files.
+
+## Use one project per app [#one-project]
+
+Give each app its own General Translation project. The CLI uploads all of an app's Svelte content as a single file with a fixed ID, so two apps that share a project overwrite each other's content on every run.
+
+In a monorepo, keep a `gt.config.json` and env file in each app, and run the CLI from that app's directory:
+
+```bash
+cd apps/storefront && npx gt translate
+```
+
+## Translate in CI [#ci]
+
+Translate before building so every deployment ships current translations:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "gt translate && vite build"
+  }
+}
+```
+
+Provide `GT_API_KEY` and `GT_PROJECT_ID` from your CI provider's secret store. A saved login needs human approval, so it does not work unattended. Keep the API key out of browser code: it is only read by the CLI.

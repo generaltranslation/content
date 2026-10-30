@@ -1,0 +1,101 @@
+---
+
+title: useGT
+description: Get a function that translates strings, with ICU variables, in the active locale. API reference for useGT.
+
+---
+
+The function returned by `useGT` translates plain strings such as attributes, labels, and messages built in script code. Use [`<T>`](/docs/svelte/reference/components/t) instead when text and markup belong to one translation.
+
+## Overview [#overview]
+
+```ts
+function useGT(): GTFunctionType;
+
+// The returned function
+type GTFunctionType = (message: string, options?: GTTranslationOptions) => string;
+```
+
+Call `useGT` during component initialization, then call the returned function wherever you need a string:
+
+```svelte
+<script lang="ts">
+  import { useGT } from 'gt-svelte';
+
+  const gt = useGT();
+  let count = $state(3);
+</script>
+
+<input placeholder={gt('Search {count} items', { count })} />
+```
+
+## How it works [#how-it-works]
+
+- **Lookup.** The function hashes the message with its `$context`, `$maxChars`, `$requiresReview`, and `$format` options, then reads the active locale's loaded translations. No request is made at call time.
+- **Fallback.** In the default locale, or when there is no translation, it returns the source message. Variables in a source message are formatted for the default locale.
+- **Interpolation.** By default, messages are ICU MessageFormat. Every option that does not start with `$` is a variable, so `{count}` reads `options.count`, and `{count, plural, one {# item} other {# items}}` selects a plural form.
+- **Reactivity.** The function reads the locale from the nearest [`<GTProvider>`](/docs/svelte/reference/components/gt-provider). Calls in the template, `$derived`, or `$effect` rerun when the locale changes or new translations arrive. A call made once in the `<script>` block is a snapshot that does not update.
+- **Context.** `useGT` reads Svelte context, so call it during component initialization, not in an event handler or at module scope. Without a provider, strings render in the default locale.
+
+### Extraction rules
+
+The CLI finds calls in `.svelte` files and JavaScript and TypeScript modules, and extracts each message for translation. For a call to be extracted:
+
+- Assign the function directly from `useGT()`, as in `const gt = useGT()`, and call it by that name.
+- Pass the message as a string literal, or a `+` concatenation of literals. Put dynamic values in variables: `gt('Hello, {name}', { name })`, not `gt('Hello, ' + name)`.
+- Write `$context`, `$id`, `$maxChars`, `$requiresReview`, and `$format` as static values in an inline options object.
+
+The CLI reports a call that breaks these rules as an error and does not extract it. A message that is not valid ICU produces a warning and is skipped.
+
+## Returns [#returns]
+
+**Type** [`GTFunctionType`](/docs/svelte/reference/types/gt-function-type)
+
+A function that takes these parameters and returns the translated string:
+
+| Parameter | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`message`](#message) | Source message, written as a string literal. | `string` | No | — |
+| [`options`](#options) | Variables and translation options. | [`GTTranslationOptions`](/docs/svelte/reference/types/gt-translation-options) | Yes | `{}` |
+
+### `message`
+
+**Type** `string` · **Required**
+
+The source text in the default locale. It is both the fallback and part of the translation's identity, so changing it requires a new translation.
+
+### `options`
+
+**Type** [`GTTranslationOptions`](/docs/svelte/reference/types/gt-translation-options) · **Optional** · **Default** `{}`
+
+Variables for the message, plus `$`-prefixed options:
+
+- `$context` disambiguates identical messages, such as "Open" as a verb and as an adjective.
+- `$id` adds a stable identifier.
+- `$maxChars` sets a maximum length, and truncates the result with an ellipsis.
+- `$requiresReview` marks the translation as needing approval.
+- `$format` selects `'ICU'` (default), `'STRING'`, or `'I18NEXT'`. Only ICU fills variables.
+- `$locale` renders in a specific locale instead of the active one.
+
+## Example [#example]
+
+```svelte title="src/lib/CartSummary.svelte"
+<script lang="ts">
+  import { useGT } from 'gt-svelte';
+
+  let { items }: { items: string[] } = $props();
+  const gt = useGT();
+
+  // $derived keeps the label in sync with the locale
+  const label = $derived(
+    gt('{count, plural, one {# item} other {# items}} in your cart', {
+      count: items.length,
+    })
+  );
+</script>
+
+<h2>{label}</h2>
+<button title={gt('Open', { $context: 'Verb: open the cart' })}>
+  {gt('Open', { $context: 'Verb: open the cart' })}
+</button>
+```

@@ -10,6 +10,7 @@ const EXPECTED_ROOTS = [
   'cli',
   'react',
   'vue',
+  'svelte',
   'node',
   'python',
   'integrations',
@@ -21,6 +22,7 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
   cli: ['Guides', 'Reference'],
   react: ['Guides', 'Reference', 'Frameworks'],
   vue: ['Guides', 'Reference'],
+  svelte: ['Guides', 'Reference'],
   node: ['Guides', 'Reference'],
   python: ['Guides', 'Reference'],
   integrations: [
@@ -64,6 +66,7 @@ const EXPECTED_OVERVIEW_GROUP_PAGES: Readonly<
     '[React Router](/docs/react/react-router-quickstart)',
     '[React Native](/docs/react/react-native-quickstart)',
     '[Vue](/docs/vue/quickstart)',
+    '[Svelte (Beta)](/docs/svelte/quickstart)',
     '[Node.js](/docs/node/quickstart)',
     '[Python](/docs/python/quickstart)',
     '[CLI](/docs/cli/quickstart)',
@@ -334,7 +337,7 @@ export function validateDocsStructure(
 
   for (const [path, content] of files) {
     if (
-      !/^(?:react|vue)\/(?:.+\/)?reference\/components\/[^/]+\.(?:md|mdx)$/.test(
+      !/^(?:react|vue|svelte)\/(?:.+\/)?reference\/components\/[^/]+\.(?:md|mdx)$/.test(
         path
       )
     ) {

@@ -1,0 +1,110 @@
+---
+
+title: "<RelativeTime>"
+description: Format a relative time, such as 3 days ago, for the active locale. API reference for the <RelativeTime> component.
+
+---
+
+`<RelativeTime>` formats the distance to a date, or a number of units, as relative time in the active locale. Inside [`<T>`](/docs/svelte/reference/components/t), it is a variable: the translation places it, and the value is never sent for translation.
+
+## Overview [#overview]
+
+Pass a `Date`, or a number with a `unit`. The value can also be the only child:
+
+```svelte
+<RelativeTime value={postedAt} />
+<!-- en: 3 days ago · fr: il y a 3 jours -->
+
+<RelativeTime value={-1} unit="day" options={{ numeric: 'auto' }} />
+<!-- en: yesterday -->
+
+<RelativeTime>{postedAt}</RelativeTime>
+```
+
+## How it works [#how-it-works]
+
+- **Date values.** A `Date` is measured from [`baseDate`](#basedate), which defaults to the current time. The unit is the largest one that fits, rounding down: seconds under a minute, minutes under an hour, hours under a day, days under a week, weeks under a month, months under a year, then years.
+- **Numeric values.** A number is formatted in [`unit`](#unit). Without `unit`, nothing renders. Negative numbers are in the past, positive numbers in the future.
+- **Empty values.** `null` and `undefined` render nothing.
+- **Children.** The children must be a single `{expression}`, and a component cannot have both `value` and children. Either mistake fails the build.
+- **No wrapper.** The formatted text renders without an HTML element.
+
+The formatting locale follows the same rules as [`<Num>`](/docs/svelte/reference/components/num#formatting-locales): the default locale only while content renders in the default locale or inside an untranslated [`<T>`](/docs/svelte/reference/components/t); otherwise `locales`, then the active locale, then the default locale.
+
+A `Date` value is measured against the time of rendering, so the server render and hydration can differ near a unit boundary. Pass a fixed `baseDate` when the output must match exactly.
+
+## Props [#props]
+
+| Name | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`value`](#value) | The date, or number of units, to format. | `Date \| number \| null \| undefined` | Yes | — |
+| [`children`](#children) | The value as a single `{expression}` child. | `Snippet` | Yes | — |
+| [`unit`](#unit) | Unit for a numeric `value`. | `Intl.RelativeTimeFormatUnit` | Yes | — |
+| [`baseDate`](#basedate) | Date to measure a `Date` value from. | `Date` | Yes | Now |
+| [`options`](#options) | Options passed to `Intl.RelativeTimeFormat`. | `Intl.RelativeTimeFormatOptions` | Yes | `{}` |
+| [`locales`](#locales) | Locales to try before the active locale. | `string[]` | Yes | `[]` |
+| [`name`](#name) | Variable key used in translations. | `string` | Yes | Generated |
+
+### `value`
+
+**Type** `Date | number | null | undefined` · **Optional**
+
+A `Date` to describe relative to `baseDate`, or a number of `unit`s. A missing or `null` value renders nothing.
+
+### `children`
+
+**Type** `Snippet` · **Optional**
+
+The value written as the only child, `<RelativeTime>{date}</RelativeTime>`. It must be a single `{expression}`, and it cannot be combined with `value`.
+
+### `unit`
+
+**Type** `Intl.RelativeTimeFormatUnit` · **Optional**
+
+The unit of a numeric `value`: `'year'`, `'quarter'`, `'month'`, `'week'`, `'day'`, `'hour'`, `'minute'`, or `'second'` (plural forms such as `'days'` are also accepted). Required for numeric values; ignored for `Date` values.
+
+### `baseDate`
+
+**Type** `Date` · **Optional** · **Default** Now
+
+The date a `Date` value is measured from. Ignored for numeric values.
+
+### `options`
+
+**Type** `Intl.RelativeTimeFormatOptions` · **Optional** · **Default** `{}`
+
+Only these `Intl.RelativeTimeFormat` options are used:
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `numeric` | `'always'` gives "in 1 day"; `'auto'` allows phrases such as "tomorrow". | `'always' \| 'auto'` | Yes | `'always'` |
+| `style` | Length of the output. | `'long' \| 'short' \| 'narrow'` | Yes | `'long'` |
+| `localeMatcher` | Locale matching algorithm. | `'lookup' \| 'best fit'` | Yes | `'best fit'` |
+
+(See [`Intl.RelativeTimeFormat` options](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/RelativeTimeFormat/RelativeTimeFormat#options)).
+
+### `locales`
+
+**Type** `string[]` · **Optional** · **Default** `[]`
+
+Locales to try before the active locale. They are ignored while content renders in the default locale.
+
+### `name`
+
+**Type** `string` · **Optional** · **Default** Generated
+
+The key the variable uses in the translation. Inside [`<T>`](/docs/svelte/reference/components/t), it must be a static string.
+
+## Example [#example]
+
+```svelte title="src/lib/PostMeta.svelte"
+<script lang="ts">
+  import { RelativeTime, T, Var } from 'gt-svelte';
+
+  let { author, postedAt }: { author: string; postedAt: Date } = $props();
+</script>
+
+<T>
+  Posted by <Var>{author}</Var> <RelativeTime value={postedAt} options={{ numeric: 'auto' }} />.
+</T>
+```
