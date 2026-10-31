@@ -1,0 +1,243 @@
+---
+title: How do I translate a Flask or FastAPI app?
+summary: Mark user-facing strings, pick each request's locale (usually from Accept-Language), and load that locale's translations. Flask apps usually use Flask-Babel with gettext catalogs, and FastAPI apps wire Babel into a middleware. General Translation's CLI fills those catalogs, and its experimental gt-flask and gt-fastapi SDKs translate inline t() strings without catalogs.
+description: Translate a Flask or FastAPI app with Babel's gettext catalogs or General Translation's gt-flask and gt-fastapi SDKs, picking each request's locale from Accept-Language.
+date: 2026-10-28
+category: internationalization
+related: [general-translation-vs-flask-babel, translate-po-files, detect-user-language, translate-node-app, general-translation-vs-django-i18n]
+---
+
+Neither Flask nor FastAPI ships translation support, so you add three things: a way to mark user-facing strings, a way to choose each request's language, and translations for every language you serve. The established route is Babel's gettext catalogs; a newer one keeps the strings inline and loads translations as JSON. Either way, the language belongs to the request, not the process, because one server answers users in many languages at once.
+
+## What a translated Python web app needs
+
+- **Marked strings.** Code calls a function such as `gettext()` or [`t()`](/docs/python/reference/functions/t) instead of returning a bare string, and templates use `_()` or `{% trans %}`. Marking is what lets a tool find every string and look up its translation.
+- **A locale per request.** Usually from the `Accept-Language` header, overridden by a URL prefix, cookie, or account setting. Flask keeps it in the request context; FastAPI handles requests concurrently on one event loop, so the locale goes in a `contextvars.ContextVar` that each request sets.
+- **Translations for each locale.** gettext loads compiled `.mo` catalogs; the General Translation SDKs load a JSON file per locale. Either way, a missing translation falls back to the source text without an error, so untranslated strings show up as English, not as a crash.
+
+## Option 1: gettext catalogs with Babel
+
+[Babel](https://babel.pocoo.org/en/latest/cmdline.html) extracts marked strings into a POT template, creates and updates a PO catalog per language, and compiles them to `.mo` files. It also formats dates, numbers, and currencies for any locale.
+
+### Flask with Flask-Babel
+
+[Flask-Babel](https://python-babel.github.io/flask-babel/) (4.0.0) connects Babel to Flask's requests and Jinja templates. You give it a `locale_selector` that returns each request's locale:
+
+```python title="app.py"
+from flask import Flask, render_template, request
+from flask_babel import Babel, gettext, ngettext
+
+
+def select_locale():
+    # Best match between the Accept-Language header and the languages you ship
+    return request.accept_languages.best_match(["en", "es", "pl"])
+
+
+app = Flask(__name__)
+babel = Babel(app, locale_selector=select_locale)
+
+
+@app.route("/inbox/<int:count>")
+def inbox(count):
+    return {
+        "title": gettext("Inbox"),
+        # ngettext picks the plural form for the active locale
+        "unread": ngettext("You have %(num)d unread message.", "You have %(num)d unread messages.", count),
+    }
+
+
+@app.route("/")
+def home():
+    return render_template("home.html", name="Alice")
+```
+
+Templates mark strings with `_()`, for example `{{ _("Welcome back, %(name)s!", name=name) }}`. A `babel.cfg` file tells `pybabel` where to look, and four commands manage the catalogs:
+
+```bash
+# babel.cfg contains [python: **.py] and [jinja2: **/templates/**.html]
+pybabel extract -F babel.cfg -o messages.pot .
+pybabel init -i messages.pot -d translations -l es    # once per language
+pybabel update -i messages.pot -d translations        # after each extract, all languages
+pybabel compile -d translations
+```
+
+With the Spanish catalog that General Translation's CLI wrote, a request with `Accept-Language: es-MX,es;q=0.9` returned "Bandeja de entrada" and "Tienes 5 mensajes sin leer." With the Polish catalog created but empty, a Polish request returned every string in English, with no warning.
+
+### FastAPI with Babel
+
+FastAPI has no first-party equivalent of Flask-Babel. Third-party packages such as [fastapi-babel](https://pypi.org/project/fastapi-babel/) and [starlette-babel](https://pypi.org/project/starlette-babel/) exist, or you can load Babel's catalogs in a middleware yourself. This version reads the same `translations` directory and keeps each request's catalog in a `ContextVar`:
+
+```python title="main.py"
+from contextvars import ContextVar
+from functools import lru_cache
+
+from babel.core import negotiate_locale
+from babel.support import Translations
+from fastapi import FastAPI, Request
+
+SUPPORTED = ["en", "es", "pl"]
+current = ContextVar("translations")
+
+
+@lru_cache
+def load(locale: str) -> Translations:
+    # Reads translations/<locale>/LC_MESSAGES/messages.mo, compiled by pybabel
+    return Translations.load("translations", [locale])
+
+
+def _(message: str) -> str:
+    return current.get().gettext(message)
+
+
+def preferred_locales(header: str) -> list[str]:
+    """Accept-Language tags, most preferred first, without q=0 entries."""
+    weighted = []
+    for part in header.split(","):
+        tag, sep, param = part.strip().partition(";")
+        try:
+            q = float(param.strip().removeprefix("q=")) if sep else 1.0
+        except ValueError:
+            q = 0.0
+        # q=0 means "not acceptable", so skip it
+        if tag and q > 0:
+            weighted.append((q, tag.replace("-", "_")))
+    # sorted() is stable, so tags with equal weights keep the header's order
+    return [tag for q, tag in sorted(weighted, key=lambda pair: -pair[0])]
+
+
+app = FastAPI()
+
+
+@app.middleware("http")
+async def select_locale(request: Request, call_next):
+    preferred = preferred_locales(request.headers.get("accept-language", ""))
+    current.set(load(negotiate_locale(preferred, SUPPORTED) or "en"))
+    return await call_next(request)
+
+
+@app.get("/inbox/{count}")
+def inbox(count: int):
+    t = current.get()
+    return {
+        "title": _("Inbox"),
+        "unread": t.ngettext("You have %(num)d unread message.", "You have %(num)d unread messages.", count) % {"num": count},
+    }
+```
+
+Run under Uvicorn, `Accept-Language: es-MX,es;q=0.9,en;q=0.8` returned the Spanish strings, `de,en;q=0.5` fell back to English, `en;q=0.5,es` returned Spanish, and `es;q=0,en` returned English. `negotiate_locale` matches `es_MX` to `es`. `preferred_locales` orders the tags by their `q` weight and drops `q=0`, which marks a language the user doesn't accept.
+
+### What the Babel route leaves to you
+
+Babel manages catalogs; it doesn't write translations. Every new or changed string waits for someone to fill its `msgstr` in each language, including all three plural slots for Polish, then for `pybabel compile` and a deploy. (See [How do I translate PO and POT files?](/kb/translate-po-files) for the format and the checks that catch broken entries, and [General Translation vs. Babel and Flask-Babel](/kb/general-translation-vs-flask-babel) for what each tool covers.) Django apps follow the same pattern with their own commands. (See [General Translation vs. Django's translation framework](/kb/general-translation-vs-django-i18n).)
+
+## Choose the locale for each request
+
+`Accept-Language` lists the user's languages with optional `q` weights, and your job is matching it to the languages you ship, with a default for everything else. Werkzeug's `best_match()` on `request.accept_languages` and Babel's `negotiate_locale` both fall back from a regional tag such as `es-MX` to `es`. Let an explicit choice win over the header: a `/es/` URL prefix for pages that search engines index, or a cookie the language switcher sets. (See [How do I detect a user's browser language?](/kb/detect-user-language) for the full order of signals.) Node.js servers solve the same problem with `AsyncLocalStorage`. (See [How do I translate a Node.js app?](/kb/translate-node-app).)
+
+## Compare the approaches
+
+| Approach | How you write strings | Locale per request | Who writes translations | Status |
+| --- | --- | --- | --- | --- |
+| Flask-Babel with PO catalogs | `gettext`, `ngettext`, Jinja `_()` | `locale_selector` | You or translators, per catalog | Stable |
+| Babel in a FastAPI middleware | `gettext` through a `ContextVar` | Your middleware | You or translators, per catalog | Stable, assembled by you |
+| Machine translation API per request | Raw strings sent at run time | You pass the target language | The API, on every request | Adds latency and cost per call unless cached |
+| Babel catalogs plus General Translation's CLI | Same as Babel | Same as Babel | General Translation, before deploy | CLI is stable; Babel unchanged |
+| General Translation's `gt-flask` or `gt-fastapi` | Inline [`t()`](/docs/python/reference/functions/t) with ICU messages | Built-in `Accept-Language` matching | General Translation, before deploy | Experimental (0.1.0); loaded translations expire after 60 seconds |
+
+Use Flask-Babel, or Babel in a FastAPI middleware, when you already have catalogs or translators. Add General Translation's CLI to that setup when you want every catalog filled for every language on each change, without a translation round. Try `gt-flask` or `gt-fastapi` on a prototype where you'd rather keep strings inline with no catalog files, and pin the version. Call a machine translation API at request time only for content that exists just at run time, such as user posts.
+
+## How General Translation translates Flask and FastAPI apps
+
+### Keep Babel and translate the catalogs
+
+General Translation's CLI, `gt`, reads an English PO catalog and writes the other languages' catalogs where Babel expects them. Create the English catalog once with `pybabel init -i messages.pot -d translations -l en` and refresh it after each extract with `pybabel update -i messages.pot -d translations -l en`, then point `gt.config.json` at it:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "pl"],
+  "files": {
+    "pot": {
+      "include": ["translations/[locale]/LC_MESSAGES/messages.po"],
+      "transformationFormat": "PO"
+    }
+  }
+}
+```
+
+Checked against `gt` 2.26.11, the CLI maps the English catalog in `translations/en/LC_MESSAGES` to the `es` and `pl` folders beside it. Run [`npx gt translate`](/docs/cli/reference/commands/translate), then `pybabel compile -d translations`. General Translation fills every plural slot for each target language and checks each plural form for placeholders such as `%(num)d`. A Glossary and Custom Prompts in a [Context Group](/docs/platform/dashboard/guides/defining-context-for-translations) keep terms consistent with your other projects. The CLI runs on Node.js, so the machine that runs it needs Node; your app keeps loading compiled catalogs with no runtime dependency on General Translation.
+
+### Or use gt-flask and gt-fastapi
+
+General Translation's Python SDKs, `gt-flask` and `gt-fastapi` (0.1.0 on PyPI, from the [gt-python](https://github.com/generaltranslation/gt-python) repository), are experimental and may change between releases. They need Python 3.10 or later. Strings stay in your code as ICU messages passed to [`t`](/docs/python/reference/functions/t), with values as keyword arguments, and [`initialize_gt`](/docs/python/reference/functions/initialize-gt) sets up `Accept-Language` matching. This Flask app loads translations from local JSON files:
+
+```python title="app.py"
+import json
+from pathlib import Path
+
+from flask import Flask
+from gt_flask import initialize_gt, t, get_locale
+
+
+def load_translations(locale: str) -> dict[str, str]:
+    # Files the gt CLI writes to files.gt.output
+    path = Path("translations") / f"{locale}.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+app = Flask(__name__)
+# On Flask, pass locales here so translations load at startup
+initialize_gt(app, default_locale="en", locales=["es", "fr"], load_translations=load_translations)
+
+
+@app.route("/")
+def index():
+    return {
+        "message": t("Hello, {name}!", name="Alice"),
+        "unread": t("{count, plural, one {You have # unread message.} other {You have # unread messages.}}", count=3),
+        "locale": get_locale(),
+    }
+```
+
+For FastAPI, import from `gt_fastapi`, create `FastAPI()`, and use `@app.get`; [`initialize_gt`](/docs/python/reference/functions/initialize-gt) there adds an HTTP middleware and loads translations in the app's lifespan, so locales from `gt.config.json` are enough. With the `translations/es.json` that General Translation's CLI wrote, both apps answered like this:
+
+```text title="Output"
+Accept-Language: es-MX,es;q=0.9   {"locale": "es", "message": "¡Hola, Alice!", "unread": "Tienes 3 mensajes sin leer."}
+Accept-Language: de                {"locale": "en", "message": "Hello, Alice!", "unread": "You have 3 unread messages."}
+```
+
+The CLI writes those files. List `gt-flask` or `gt-fastapi` in `requirements.txt` or `pyproject.toml` so the CLI detects it, and set the output path in `gt.config.json`:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "files": { "gt": { "output": "translations/[locale].json" } }
+}
+```
+
+[`npx gt translate`](/docs/cli/reference/commands/translate) scans your `.py` files for [`t()`](/docs/python/reference/functions/t) calls (skipping virtual environments, tests, and migrations), translates them, and writes one file per locale. On this app, [`npx gt validate`](/docs/cli/reference/commands/validate) reported 2 translatable entries for `gt-flask` without calling the API. To load from General Translation's CDN instead, set `projectId` and `cacheUrl` in the config (see [Choose how translations are delivered](/docs/python/guides/configuring#delivery)). The SDKs take no API key; local files mean no network calls at run time.
+
+In 0.1.0, [`t()`](/docs/python/reference/functions/t) reads translations from an in-memory cache that expires after 60 seconds and isn't reloaded on that read path, so a long-running server returns source strings once the cache expires until the loader runs again. (See the [preload notes](/docs/python/guides/configuring#preload).) Until a release changes that, use Babel catalogs filled by the CLI for production traffic, and keep `gt-flask` and `gt-fastapi` to prototypes.
+
+## Common questions
+
+### Does gt-flask replace Flask-Babel's date and currency formatting?
+
+No. In 0.1.0, `gt-flask` and `gt-fastapi` export translation and locale helpers ([`t`](/docs/python/reference/functions/t), [`get_locale`](/docs/python/reference/functions/get-locale), [`declare_var`](/docs/python/reference/functions/declare-var), and a few more), so keep Babel's `format_date` and `format_currency` for locale formatting.
+
+### How do I let users pick a language instead of using Accept-Language?
+
+With Flask-Babel, read a cookie or URL segment in your `locale_selector`. With the General Translation SDKs, pass a [`get_locale`](/docs/python/reference/functions/get-locale) callback to [`initialize_gt`](/docs/python/reference/functions/initialize-gt); it replaces header matching, so return a supported locale yourself. (See [Detecting the request locale](/docs/python/guides/detecting-locale).)
+
+### How do I translate database content or user posts?
+
+Catalogs and [`t()`](/docs/python/reference/functions/t) cover strings in your code. Content that exists only at run time needs a translation call when it's created or requested, such as General Translation's [Translate content](/docs/platform/openapi/reference/translation/translate-content) endpoint (`POST /v2/projects/{projectId}/translate`), with the results stored alongside the original.
+
+## Key takeaways
+
+- Flask and FastAPI need three additions: marked strings, a locale per request, and translations per locale; FastAPI keeps the locale in a `ContextVar`.
+- Flask-Babel handles Flask with a `locale_selector` and `pybabel extract`, `pybabel init`, `pybabel update`, and `pybabel compile`; FastAPI loads Babel's `Translations` in a middleware.
+- An empty or missing catalog falls back to English silently, so filling every `msgstr` is the work that remains.
+- General Translation's CLI fills Babel's PO catalogs with `"pot"` and `"transformationFormat": "PO"`, plural slots included, and your app keeps loading compiled catalogs.
+- General Translation's experimental `gt-flask` and `gt-fastapi` 0.1.0 translate inline [`t()`](/docs/python/reference/functions/t) strings from JSON files the CLI writes; on Flask, pass `locales` to [`initialize_gt`](/docs/python/reference/functions/initialize-gt), and plan for the 60-second cache expiry before serving production traffic.

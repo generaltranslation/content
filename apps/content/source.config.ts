@@ -30,6 +30,9 @@ export const docs = defineDocs({
   },
   meta: {
     schema: contentMetaSchema,
+    // Only meta.json files are navigation metadata; other JSON under docs/,
+    // such as the OpenAPI snapshots, is not validated as metadata.
+    files: ['**/meta.json'],
   },
 });
 
@@ -45,7 +48,6 @@ export const devlog = defineCollections({
   schema: contentFrontmatterSchema,
 });
 
-// Knowledge base articles: flat kb/<slug>.mdx files, served only in en-US.
 export const kb = defineCollections({
   type: 'doc',
   dir: '../../kb',

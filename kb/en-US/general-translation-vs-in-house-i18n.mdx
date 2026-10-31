@@ -1,0 +1,193 @@
+---
+title: Should you build your own i18n or use General Translation?
+summary: Hand-rolled i18n (a dictionary per language and a small t() helper) is fine for one or two languages and a little copy. As an app grows, you rebuild plural rules, fallbacks, and file syncing, and you still need to produce translations. General Translation's open-source libraries handle rendering, and General Translation generates and updates translations from your code.
+description: A dictionary and a t() helper work for one or two languages. As an app grows, you rebuild plurals, fallbacks, and file syncing, and still need translations. General Translation does both.
+date: 2026-10-16
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [general-translation-vs-i18n-libraries, how-to-handle-plurals-in-react, multilingual-nextjs-seo, i18n-without-translation-files, general-translation-vs-google-translate]
+---
+
+You can build internationalization (i18n) yourself: a messages object per language, a `t()` helper that looks up a key and fills in variables, a locale switcher, and the built-in `Intl` APIs for numbers and dates. For one or two languages and a few dozen strings, that's often all you need, and it's what a coding agent will often write when you ask it to add a language. What grows with the app is everything around the helper: plural rules, missing keys, keeping every language file in step with the code, and producing every translation in the first place. General Translation's open-source libraries do the run-time half of that work, and General Translation generates and updates the translations from your code.
+
+## When hand-rolled i18n is enough
+
+- **No third-party dependencies.** You own the dictionary and helper and control every line.
+- **The platform does the formatting.** `Intl.NumberFormat`, `Intl.DateTimeFormat`, `Intl.PluralRules`, and `Intl.Locale` are [built into modern browsers and Node.js](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) and format currencies, dates, and plural categories per locale.
+- **Small, stable copy.** A prototype, an internal tool, or a site with one extra language that a teammate writes doesn't need more.
+- **Languages that pluralize like English.** English and German both use only [`one` and `other`](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html).
+
+## What breaks as it grows
+
+Here's a typical first version, with a Polish dictionary added:
+
+```js title="i18n.mjs"
+const messages = {
+  en: {
+    greeting: 'Hello, {name}!',
+    files: { one: '{count} file', other: '{count} files' },
+    checkout: 'Checkout',
+  },
+  pl: {
+    greeting: 'Cześć, {name}!',
+    files: { one: '{count} plik', other: '{count} pliki' },
+    // "checkout" hasn't been translated yet
+  },
+};
+
+export function t(locale, key, vars = {}) {
+  let message = messages[locale][key];
+  if (typeof message === 'object') {
+    message = vars.count === 1 ? message.one : message.other;
+  }
+  return message.replace(/\{(\w+)\}/g, (_, name) => vars[name]);
+}
+
+console.log(t('pl', 'greeting', { name: 'Ania' }));
+console.log([1, 2, 5].map((count) => t('pl', 'files', { count })).join(', '));
+console.log(t('pl', 'checkout'));
+```
+
+Running it with Node.js 24:
+
+```text title="Output"
+Cześć, Ania!
+1 plik, 2 pliki, 5 pliki
+TypeError: Cannot read properties of undefined (reading 'replace')
+```
+
+Two bugs show up at once. "5 pliki" is wrong (Polish says "5 plików"), and the untranslated `checkout` key crashes the render. The platform has the pieces to fix both:
+
+```js title="intl.mjs"
+// Plural categories per language
+for (const locale of ['en', 'ja', 'pl', 'ar']) {
+  console.log(locale, new Intl.PluralRules(locale).resolvedOptions().pluralCategories.join(' '));
+}
+const pl = new Intl.PluralRules('pl');
+console.log([1, 2, 5, 22].map((n) => `${n} → ${pl.select(n)}`).join(', '));
+
+// Currencies and dates
+const date = new Date(Date.UTC(2026, 9, 16));
+for (const locale of ['en-US', 'de-DE', 'ja-JP']) {
+  const price = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(1234.5);
+  const day = new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+  console.log(locale, price, day);
+}
+
+// Text direction
+console.log(new Intl.Locale('ar').getTextInfo().direction);
+```
+
+```text title="Output"
+en one other
+ja other
+pl one few many other
+ar zero one two few many other
+1 → one, 2 → few, 5 → many, 22 → few
+en-US €1,234.50 October 16, 2026
+de-DE 1.234,50 € 16. Oktober 2026
+ja-JP €1,234.50 2026年10月16日
+rtl
+```
+
+Each fix is small, but they add up:
+
+- **Plurals.** `n === 1` fails for Polish (four categories) and Arabic (six), so the helper needs [`Intl.PluralRules`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules), and every dictionary needs a string per category. (See [How do I handle plurals in React?](/kb/how-to-handle-plurals-in-react))
+- **Word order.** Placeholders such as `{name}` let each language move the value. Concatenation doesn't: `t('by') + ' ' + author` puts the name last, but Japanese writes "Ana 著".
+- **Formatting.** `{count}` inserts the raw number, so the helper also needs [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) to print 12,500 as "12 500" in Polish.
+- **Missing keys.** The helper needs a fallback chain (target language, then source, then the key), or users see `undefined` or a crash.
+- **Keeping files in sync.** Nothing tells you that `pl` lacks `checkout` or has last month's wording until a user sees it.
+- **Right-to-left languages.** Arabic and Hebrew need `lang` and `dir="rtl"` on the page and a mirrored layout.
+- **Search engines.** A switcher that keeps the choice in state or a cookie leaves every language on one URL, while Google recommends a URL per language ([Managing multilingual sites](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)). (See [How do I set up SEO for a multilingual Next.js app?](/kb/multilingual-nextjs-seo))
+- **The translations.** No helper removes this cost: someone writes "plików" and every other string in every language, and again each time the English changes.
+
+Once the helper handles plural categories, fallbacks, and number formatting, you've written the core of an i18n library, and you still need the translations.
+
+## What General Translation does instead
+
+General Translation keeps what works about the hand-rolled approach (readable copy and the platform's formatting) and takes over the parts that grow. With `gt-react` (or `gt-next` for Next.js), copy stays in the component inside [`<T>`](/docs/react/reference/components/t), so there's no dictionary or helper to maintain:
+
+```tsx title="Inbox.tsx"
+import { T, Plural, Num, Var } from 'gt-react';
+
+export function Inbox({ name, count }: { name: string; count: number }) {
+  return (
+    <T>
+      <h1>Welcome back, <Var>{name}</Var></h1>
+      <Plural
+        n={count}
+        singular={<p>You have <Num>{count}</Num> unread message.</p>}
+        plural={<p>You have <Num>{count}</Num> unread messages.</p>}
+      />
+    </T>
+  );
+}
+```
+
+[`<Plural>`](/docs/react/reference/components/plural) picks a branch with each locale's CLDR plural rules, the same rules behind `Intl.PluralRules`, so there's no `n === 1` to get wrong. [`<Num>`](/docs/react/reference/components/num) formats the count for the reader's locale, and the value in [`<Var>`](/docs/react/reference/components/var) is never sent to the General Translation API. Here's the component rendered on the server with `gt-react` 11.4.12, using a Spanish translation filled into the [`gt generate`](/docs/cli/reference/commands/generate) template by hand for illustration (React's text separators removed):
+
+```html title="Output"
+<!-- en, count = 12500 -->
+<h1>Welcome back, Ana</h1><p>You have 12,500 unread messages.</p>
+<!-- es, count = 12500 -->
+<h1>Hola de nuevo, Ana</h1><p>Tienes 12.500 mensajes sin leer.</p>
+```
+
+When a locale has no translation for a block, [`<T>`](/docs/react/reference/components/t) renders the source content, not `undefined` or an error.
+
+The bigger change is that General Translation produces the translations:
+
+- **Generated with context.** [`npx gt translate`](/docs/cli/reference/commands/translate) sends each [`<T>`](/docs/react/reference/components/t) block with its elements, variables, plural branches, and any [`context`](/docs/react/reference/components/t#context) note, and writes a file per locale. A Glossary pins terms and Custom Prompts set tone across every project that shares a Context Group. (See [Defining context for translations](/docs/platform/dashboard/guides/defining-context-for-translations).)
+- **Kept in sync.** Each run translates new and changed content and reuses translations for the rest. Run it in CI, or let [Locadex](/docs/platform/locadex/quickstart), General Translation's AI agent, open pull requests on the triggers you choose. For Next.js and React apps, Locadex can also wrap existing copy in [`<T>`](/docs/react/reference/components/t).
+- **Reviewed by people.** Your team edits translations in the Dashboard. (See [Reviewing and editing translations](/docs/platform/dashboard/guides/reviewing-translations).)
+- **Direction and routing.** [`useLocaleDirection`](/docs/react/reference/hooks/use-locale-direction) returns `'rtl'` for Arabic, and `gt-next` can serve each locale at its own URL with its [middleware](/docs/react/nextjs/app-router-middleware).
+
+The JavaScript libraries are MIT-licensed and work without a General Translation account when you supply translations. An app configured to load all translations from its bundle makes no runtime calls to General Translation. Use the hosted service to generate translations, with [usage-based pricing](https://generaltranslation.com/pricing).
+
+At the other end of the scale, Profound ships its platform and docs in 47+ locales with General Translation. (See [production deployments](https://generaltranslation.com/enterprise).)
+
+## Hand-rolled vs. a library vs. General Translation at a glance
+
+| | Hand-rolled dictionary and helper | Open-source library, such as i18next | General Translation |
+| --- | --- | --- | --- |
+| Dependencies | None | The library plus framework bindings, such as `react-i18next` | `gt-react` or `gt-next`, plus the `gt` CLI |
+| Plurals | Your selection code, and every form in every file | CLDR selection; people or a connected translation service supply the forms | [`<Plural>`](/docs/react/reference/components/plural) selects with CLDR rules; translation generates each target language's forms from the branches you write |
+| Numbers, dates, currencies | `Intl` APIs you call yourself | Built-in formatters on top of `Intl` | [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency), and [`<DateTime>`](/docs/react/reference/components/datetime) |
+| Missing translations | Whatever your helper does | [Falls back to a configured language, then shows the key](https://www.i18next.com/principles/fallback) | Renders the source content |
+| Keeping languages in sync | By hand or with your own script | Extraction tools and a translation service you connect | Each [`npx gt translate`](/docs/cli/reference/commands/translate) translates new and changed content |
+| Who translates | People or a service you integrate | People or a connected translation service | AI with marked JSX context, Glossary, and Custom Prompts; your team reviews in the Dashboard |
+| Cost | Your time and any services you integrate | Free library; translation is separate | Free JavaScript libraries; [usage-based translation](https://generaltranslation.com/pricing) |
+
+## When to build it yourself
+
+Build it yourself when you ship one or two languages, the copy is small and stable, your languages pluralize like English, and a teammate writes the translations, or when it's a prototype. Add an open-source library such as i18next when you need plural rules and fallbacks and already have translators or a translation management system. Use General Translation when you're adding several languages, copy changes every release, or nobody on the team should be writing Polish plural forms: General Translation generates the translations with the context of your code and keeps every language current with each build. (See [General Translation vs. i18next, react-intl, and next-intl](/kb/general-translation-vs-i18n-libraries).)
+
+## Keep your dictionary and let the CLI translate it
+
+You don't have to rewrite your helper to stop translating by hand. Move each language's messages into a JSON file (`locales/en.json`, `locales/es.json`), keep your `t()`, and point `gt.config.json` at them with the `[locale]` placeholder:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": [
+    "es"
+  ],
+  "files": {
+    "json": {
+      "include": [
+        "locales/[locale].json"
+      ]
+    }
+  }
+}
+```
+
+[`npx gt translate --dry-run`](/docs/cli/reference/commands/translate) lists `locales/en.json` as the source, and a full run writes `locales/es.json`. This example uses English and Spanish messages with matching key structures and simple placeholders such as `{name}`. A companion `locales/en.metadata.json` can add context or character limits per key. See [JSON](/docs/cli/reference/formats/json-files) and [Keyed metadata](/docs/cli/reference/keyed-metadata). Your helper still owns key lookup and plural selection; check both against the rendered Spanish output.
+
+To move off the helper, wrap one component at a time in [`<T>`](/docs/react/reference/components/t), or keep keys with [`useTranslations`](/docs/react/guides/translating-with-dictionaries). If a coding agent is doing the work, give it General Translation's [agent instructions](/docs/overview/for-coding-agents) instead of asking for a `t()` helper. Start with the [Next.js Quickstart](/docs/react/nextjs-quickstart) or the [React SPA Quickstart](/docs/react/react-spa-quickstart).
+
+## Key takeaways
+
+- A dictionary, a `t()` helper, and the built-in `Intl` APIs are enough for one or two languages, a little copy, and plurals that work like English.
+- As the app grows, you maintain plural selection, fallbacks, formatting, file syncing, right-to-left support, per-locale URLs, and the process that produces translations.
+- General Translation's libraries handle the run-time work, General Translation generates the translations with your code as context, and the CLI can translate a hand-rolled JSON dictionary if you keep it.

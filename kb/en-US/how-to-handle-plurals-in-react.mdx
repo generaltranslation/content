@@ -1,0 +1,182 @@
+---
+title: How do I handle plurals in React?
+summary: Handle plurals in React by giving each language one sentence per plural form and picking it with that language's plural rules, since English has 2 forms, Russian has 4, and Arabic has 6. General Translation's <Plural> component in gt-react and gt-next takes your source forms, and General Translation generates the forms each target language needs.
+description: Give each language one sentence per plural form, picked by its plural rules. General Translation's <Plural> component takes your source forms and generates the forms each language needs.
+date: 2025-02-17
+updated: 2026-10-21
+category: locale-formatting
+authors: [archie]
+redirectFrom: [plurals]
+related: [translate-conditional-jsx, i18n-without-translation-files, best-react-i18n-library]
+---
+
+To handle plurals in React, give each language one sentence per plural form, and pick the sentence for each count with that language's plural rules. JavaScript's built-in [`Intl.PluralRules`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules) does the picking: it maps a number to a plural category from the Unicode CLDR (Common Locale Data Repository). English has 2 categories, Russian and Polish have 4, Arabic has 6, and Japanese has 1.
+
+A `count === 1` check models English only. Russian uses three forms for whole numbers, "1 файл", "2 файла", and "5 файлов" (1 file, 2 files, 5 files), and 21 takes the same form as 1. A check that shows "файл" for 1 and "файлов" for every other count renders "2 файлов" and "21 файлов", and both are wrong.
+
+## What are the plural categories in each language?
+
+CLDR defines six plural categories: `zero`, `one`, `two`, `few`, `many`, and `other`. Each language uses a subset, and its rules assign every number to one category in that subset.
+
+| Language | Categories | Which counts get each category |
+| --- | --- | --- |
+| English | `one`, `other` | 1 is `one`; 0, 2, 5, and 1.5 are `other` |
+| Japanese, Chinese | `other` | Every count is `other` |
+| Russian | `one`, `few`, `many`, `other` | 1, 21, and 101 are `one`; 2 to 4 and 22 are `few`; 0, 5 to 20, and 100 are `many`; 1.5 is `other` |
+| Polish | `one`, `few`, `many`, `other` | 1 is `one`; 2 to 4 and 22 are `few`; 0, 5 to 21, and 100 are `many`; 1.5 is `other` |
+| Arabic | `zero`, `one`, `two`, `few`, `many`, `other` | 0 is `zero`; 1 is `one`; 2 is `two`; 3 to 10 are `few`; 11 to 99 are `many`; 100 to 102 are `other` |
+
+To list a language's categories, run `new Intl.PluralRules('ru').resolvedOptions().pluralCategories` in a browser console. For Russian, it returns `one`, `few`, `many`, and `other`.
+
+## How do I handle plurals in a multilingual React app?
+
+General Translation handles plurals in React with the [`<Plural>`](/docs/react/reference/components/plural) component from `gt-react`, or `gt-next` in Next.js. You write the forms your source language uses, and General Translation generates the forms each target language needs.
+
+1. Pass the count to [`<Plural>`](/docs/react/reference/components/plural) as `n`, with one prop per source form, such as `one` and `other` for English.
+2. Wrap the count in [`<Num>`](/docs/react/reference/components/num) and the whole [`<Plural>`](/docs/react/reference/components/plural) in [`<T>`](/docs/react/reference/components/t), so each form is translated as a full sentence with the number as a variable.
+3. Run [`npx gt translate`](/docs/cli/reference/commands/translate) before your production build. General Translation translates each form and adds the categories each target language uses, so Arabic gets six forms and Russian gets four.
+
+```tsx
+import { T, Plural, Num } from 'gt-react';
+
+export function InboxCount({ count }: { count: number }) {
+  return (
+    <T>
+      <Plural
+        n={count}
+        one={<>You have <Num>{count}</Num> message.</>}
+        other={<>You have <Num>{count}</Num> messages.</>}
+      />
+    </T>
+  );
+}
+```
+
+At render, General Translation's [`<Plural>`](/docs/react/reference/components/plural) picks the form for `count` with the active locale's [CLDR plural rules](https://cldr.unicode.org/index/cldr-spec/plural-rules). If that category is missing, it uses `plural`, then `other`, then its children. [`<Num>`](/docs/react/reference/components/num) formats the count locally with `Intl.NumberFormat`, so 1000000 renders as 1,000,000 in English, 1.000.000 in German, and 10,00,000 in Hindi, and the value is never sent to the General Translation API.
+
+To keep plural messages translated as copy changes, run [`npx gt translate`](/docs/cli/reference/commands/translate) in CI, or [configure Locadex](/docs/platform/locadex/guides/configuring-automations), General Translation's AI agent, to translate new source content when a pull request changes or a commit is pushed. Reviewers can correct any generated form in the [Translation Editor](/docs/platform/dashboard/guides/reviewing-translations) in General Translation's Dashboard. [Handling plurals and branches](/docs/react/guides/handling-plurals-and-branches) has the steps for React, Next.js, and the experimental `gt-tanstack-start` and `gt-react-native`.
+
+## How do I pluralize a string in an English-only React app?
+
+An app that ships only in English needs two forms, `one` and `other`, so a small helper is enough. Pass complete phrases, so irregular nouns ("person" and "people") and verbs ("is" and "are") change with the count.
+
+```ts title="pluralize.ts"
+const englishPlurals = new Intl.PluralRules('en-US');
+
+export function pluralize(count: number, one: string, other: string): string {
+  return englishPlurals.select(count) === 'one' ? one : other;
+}
+```
+
+```tsx
+import { pluralize } from './pluralize';
+
+export function CartSummary({ items, viewers }: { items: number; viewers: number }) {
+  return (
+    <>
+      {/* 1 item, 5 items */}
+      <p>{pluralize(items, `${items} item`, `${items} items`)}</p>
+      {/* 1 person is watching, 3 people are watching */}
+      <p>{pluralize(viewers, '1 person is watching', `${viewers} people are watching`)}</p>
+    </>
+  );
+}
+```
+
+English rules put 0 in `other`, so the helper renders "0 items". The helper hard-codes English rules and takes two phrases, while Russian needs three, so replace it with [`<Plural>`](/docs/react/reference/components/plural) or another internationalization (i18n) library when the app adds a second language.
+
+## How do I pluralize a string outside JSX?
+
+For text that has to be a plain string, such as a `placeholder` or an `aria-label`, General Translation's [`useGT`](/docs/react/reference/hooks/use-gt) hook returns a function that accepts an ICU (International Components for Unicode) plural message. Inside the message, `#` prints the count.
+
+```tsx
+import { useGT } from 'gt-react';
+
+export function ProductSearch({ count }: { count: number }) {
+  const gt = useGT();
+  return (
+    <input
+      type="search"
+      placeholder={gt(
+        'Search {count, plural, one {# product} other {# products}}',
+        { count }
+      )}
+    />
+  );
+}
+```
+
+In async App Router components, use [`getGT`](/docs/react/nextjs/reference/functions/get-gt) from `gt-next/server` instead. [Translating strings](/docs/react/guides/translating-strings) covers the rest of the string API.
+
+## How do react-i18next and react-intl handle plurals?
+
+Both libraries pick the category with CLDR plural rules and read each language's sentences from a catalog file, so your team or your translators write every form of every message in every language. Neither library generates the translations.
+
+[react-i18next](https://react.i18next.com/) stores one key per category, with the category as a suffix, and picks the key from the `count` option.
+
+```json title="locales/en/translation.json"
+{
+  "messages_one": "You have {{count}} message.",
+  "messages_other": "You have {{count}} messages."
+}
+```
+
+```tsx
+import { useTranslation } from 'react-i18next';
+
+export function InboxCount({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return <p>{t('messages', { count })}</p>;
+}
+```
+
+An Arabic file needs six keys, from `messages_zero` to `messages_other`. The [i18next plurals docs](https://www.i18next.com/translation-function/plurals) list every suffix.
+
+[react-intl](https://formatjs.github.io/docs/react-intl/), FormatJS's React library, writes all the categories inside one ICU MessageFormat string, where `#` is the count formatted for the locale.
+
+```tsx
+import { FormattedMessage } from 'react-intl';
+
+export function InboxCount({ count }: { count: number }) {
+  return (
+    <FormattedMessage
+      id="inbox.count"
+      defaultMessage="{count, plural, one {You have # message.} other {You have # messages.}}"
+      values={{ count }}
+    />
+  );
+}
+```
+
+An Arabic catalog repeats the message with `zero`, `one`, `two`, `few`, `many`, and `other` branches. [FormatJS's ICU syntax guide](https://formatjs.github.io/docs/core-concepts/icu-syntax/) covers plural branches and exact matches such as `=0`.
+
+## Which approach should you use for plurals in React?
+
+| Approach | Where the forms live | Who writes each target language's forms |
+| --- | --- | --- |
+| An `Intl.PluralRules` helper | Your code, in English only | Nobody, since the app ships in one language |
+| react-i18next | Suffixed keys in one JSON file per language | Your team or translators |
+| react-intl | ICU messages in one catalog per language | Your team or translators |
+| General Translation's [`<Plural>`](/docs/react/reference/components/plural) | Your source-language forms, in JSX | General Translation, when [`npx gt translate`](/docs/cli/reference/commands/translate) runs |
+
+Use a helper when the app ships only in English. Use react-i18next or react-intl alone when your team already keeps catalog files and translators write every form by hand. Use General Translation's [`<Plural>`](/docs/react/reference/components/plural) when the app ships in several languages and its copy changes every release, since General Translation writes every target language's forms for each new plural message.
+
+## Common questions
+
+### How do I show "No items" when the count is 0?
+
+English rules put 0 in `other`, so a message with only `one` and `other` reads "0 items". In a string, add an exact match for zero to the ICU message you pass to [`useGT`](/docs/react/reference/hooks/use-gt):
+
+```tsx
+gt('{count, plural, =0 {No items} one {# item} other {# items}}', { count });
+```
+
+In JSX, check `count === 0` and render the empty state in its own [`<T>`](/docs/react/reference/components/t) block.
+
+### Does the Plural component work in Next.js?
+
+Yes. Import [`<Plural>`](/docs/react/reference/components/plural), [`<T>`](/docs/react/reference/components/t), and [`<Num>`](/docs/react/reference/components/num) from `gt-next`, with the same props as in `gt-react`. General Translation also ships them in the experimental `gt-tanstack-start` and `gt-react-native`.
+
+### Which counts should I test plurals with?
+
+Render each plural message at 0, 1, 2, 5, 11, 21, and 100 in every target locale. Those counts reach every whole-number category in English, Russian, Polish, and Arabic. Add 1.5 to reach `other` in Russian and Polish.

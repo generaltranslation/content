@@ -1,0 +1,132 @@
+---
+title: Internationalization vs. localization (i18n vs. l10n)
+summary: Internationalization (i18n) is the code and design work that lets one product support many locales, such as formatting dates with Intl and supporting right-to-left text. Localization (l10n) adapts it for one locale, which covers translation plus currency, date formats, units, tone, and legal details.
+description: Internationalization (i18n) makes code support many locales; localization (l10n) adapts content, formats, and tone for each. Translation is part of l10n.
+date: 2026-10-20
+category: internationalization
+authors: [kevin-wu, jackie]
+related: [multilingual-app-launch-checklist, general-translation-vs-in-house-i18n, pseudo-localization, what-is-a-translation-management-system, general-translation-vs-i18n-libraries]
+---
+
+Internationalization makes a product adaptable; localization applies that capability to a particular market. Developers, designers, translators, and product teams often work on both in the same release. Translation is one part of localization, alongside formats, layout, and local conventions.
+
+## What is internationalization (i18n), and what is localization (l10n)?
+
+- **Internationalization (i18n)** prepares your codebase to support multiple locales (handling dates, plurals, currencies, and layout). The W3C defines it as design and development that "enables easy localization" for audiences that vary in culture, region, or language. In practice it means pulling user-facing text out of hardcoded strings, formatting values per locale, supporting right-to-left text, and using Unicode throughout. (See the W3C's [Localization vs. Internationalization](https://www.w3.org/International/questions/qa-i18n).)
+- **Translation** converts content from one language into another.
+- **Localization (l10n)** is the broader process of adapting your product for another locale. Besides translation, the W3C lists number, date, and time formats, currency, sorting, symbols, icons and colors, address and phone formats, legal requirements, and references that a culture may misread.
+
+A locale is a language or dialect plus its conventions, written as a code such as `en-US` or `de-DE`.
+
+## Where i18n, l10n, and g11n come from
+
+They're numeronyms: the first letter, the count of letters in between, and the last letter. "Internationalization" has 18 letters between the i and the n, so it's i18n; "localization" has 10 between the l and the n, so it's l10n. "Globalization" becomes g11n the same way.
+
+Globalization is the least consistent of the three. The W3C notes that some people use it to mean the same thing as internationalization, while [Microsoft's globalization glossary](https://learn.microsoft.com/en-us/globalization/reference/glossary) uses globalization for making an application work in every locale and internationalization for the entire process of bringing software to worldwide markets. When you read g11n, check which meaning the author intends.
+
+## Is localization the same as translation?
+
+Translation is one step inside localization. [Microsoft's localization guide](https://learn.microsoft.com/en-us/globalization/localization/localization) uses a sentence about the price of a train ticket on a given date: translating it into German isn't enough, because the price should be in euros and the date should read day-month-year. The same guide points out that localizing from US English to UK English can require no translation at all, only spelling, vocabulary, and format changes.
+
+## An example of each
+
+**Internationalization is a code change.** Here's an order summary before and after:
+
+```js title="order-summary.mjs"
+const date = new Date(Date.UTC(2026, 6, 30));
+const total = 1234.5;
+
+// Before: English text, US date order, and a dollar sign are baked in
+console.log(
+  `Order placed on ${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}. Total: $${total.toFixed(2)}`
+);
+
+// After: text comes from a per-locale message, and Intl formats the values
+const messages = {
+  'en-US': 'Order placed on {date}. Total: {total}',
+  'de-DE': 'Bestellt am {date}. Gesamt: {total}',
+};
+
+function orderSummary(locale, currency) {
+  const values = {
+    date: new Intl.DateTimeFormat(locale, { timeZone: 'UTC' }).format(date),
+    total: new Intl.NumberFormat(locale, { style: 'currency', currency }).format(total),
+  };
+  return messages[locale].replace(/\{(\w+)\}/g, (_, key) => values[key]);
+}
+
+console.log(orderSummary('en-US', 'USD'));
+console.log(orderSummary('de-DE', 'EUR'));
+```
+
+Running it with Node.js 24:
+
+```text title="Output"
+Order placed on 7/30/2026. Total: $1234.50
+Order placed on 7/30/2026. Total: $1,234.50
+Bestellt am 30.7.2026. Gesamt: 1.234,50 €
+```
+
+The formatting code works with either locale; the German message is supplied separately. `Intl.NumberFormat` formats an amount in the chosen currency; it does not convert dollars to euros. The same numeric amount here is an illustration, not an exchange-rate calculation.
+
+**Localization is the adapted page.** Localizing a US product page for Germany changes more than the words:
+
+| Element | en-US page | de-DE page |
+| --- | --- | --- |
+| Price | $49.00 | 49,00 € |
+| Date | July 30, 2026 | 30. Juli 2026 |
+| Support hours | 3:00 PM | 15:00 |
+| Weight | 2.2 lb | 1 kg |
+| Tone | "Start your free trial" | Formal "Sie" in place of "du" |
+
+The formats in the first three rows come from `Intl` once the code is internationalized. The unit, the tone, and whether the price itself should change are localization decisions someone has to make for each market.
+
+## Who is responsible for i18n and l10n?
+
+- **Developers** internationalize: they wrap or extract strings, add locale-aware formatting and plural handling, set up per-locale routing, and fix layouts for longer text and right-to-left scripts.
+- **Translators, reviewers, and localization managers** localize: they translate, keep terminology consistent, adapt tone and examples, and check each language in the running product.
+- **Product and legal teams** decide what changes per market, such as currencies, payment methods, and required notices.
+
+## At a glance
+
+| | Internationalization (i18n) | Localization (l10n) |
+| --- | --- | --- |
+| What changes | The code and design | The content and conventions for one locale |
+| When | Establish before the first extra language; maintain as features change | For every locale, and again whenever content changes |
+| Who | Developers | Translators, reviewers, localization managers |
+| Output | One codebase that supports your target locales | A product adapted and reviewed for one locale |
+| Example | Replace `$${total}` with `Intl.NumberFormat` | Translate the checkout into German in the formal register |
+
+## Common mistakes
+
+- **Treating localization as translation.** A translated page with US dates, dollar prices, and idioms that don't carry over still reads as foreign. The W3C calls localization "often a substantially more complex issue" than translating the interface and documentation.
+- **Retrofitting i18n late.** Hardcoded strings, concatenated sentences, and fixed-width buttons make a large codebase harder to localize. Translated labels can overflow a layout even when their meaning is correct. [Pseudo-localization](/kb/pseudo-localization) exposes many of these problems before translation begins.
+- **Hand-rolling plural logic.** `count === 1 ? 'item' : 'items'` works for English, which has 2 plural forms, but Arabic has 6. (See [How do I handle plurals in React?](/kb/how-to-handle-plurals-in-react))
+- **Translating without context.** A translator or model who sees "Save" alone can't tell whether it means writing to disk or spending less money.
+
+Before launch, the [multilingual app launch checklist](/kb/multilingual-app-launch-checklist) covers what to test in each locale.
+
+## How General Translation splits i18n and l10n
+
+For internationalization, General Translation's open-source libraries, such as `gt-next`, `gt-react`, `gt-vue`, and `gt-node`, handle the code side. The [`<T>`](/docs/react/reference/components/t) component wraps JSX where it's written, so there's no key file to extract strings into, and [`<DateTime>`](/docs/react/reference/components/datetime), [`<Currency>`](/docs/react/reference/components/currency), and [`<Plural>`](/docs/react/reference/components/plural) format values per locale:
+
+```jsx title="OrderSummary.jsx"
+import { T, DateTime, Currency } from 'gt-next';
+
+export function OrderSummary({ date, total, currency }) {
+  return (
+    <T>
+      Order placed on <DateTime>{date}</DateTime>. Total:{' '}
+      <Currency currency={currency}>{total}</Currency>
+    </T>
+  );
+}
+```
+
+For localization, add a locale in `gt.config.json` and run [`npx gt translate`](/docs/cli/reference/commands/translate) to generate its translations. The translation platform uses the component, variables, and developer notes as context, [Context Groups](/docs/platform/dashboard/guides/defining-context-for-translations) share terminology and style rules across projects, and your team [reviews translations](/docs/platform/dashboard/guides/reviewing-translations) in the Dashboard. To check a public site, the free [Report Card](https://generaltranslation.com/report-card) grades how well it's localized, including `hreflang` tags, language declarations, locale routing, translated metadata, and text direction.
+
+## Key takeaways
+
+- Internationalization (i18n) establishes shared support for multiple locales. Maintain that support as features change; it does not produce translations.
+- Localization (l10n) adapts the product for each locale: translation plus currency, date and number formats, units, tone, and legal and cultural details.
+- The numerals in i18n, l10n, and g11n count the letters between the first and last letter; g11n's meaning varies by source.

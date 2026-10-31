@@ -9,7 +9,7 @@ Uploads TrueType or OpenType fonts through a project so Lottie translation jobs 
 
 ## Overview [#overview]
 
-Call `uploadFonts` with base64-encoded font assets. The method divides large inputs into batches of 50 and returns the stored asset identifiers.
+Call `uploadFonts` with up to 10 base64-encoded font assets. It returns the stored asset identifiers. To upload more fonts, split them into several calls of at most 10 fonts each.
 
 ```typescript
 const result = await gt.uploadFonts(fonts, {
@@ -26,7 +26,7 @@ uploadFonts(
 ): Promise<UploadAssetsResponse>
 ```
 
-*Note: `uploadFonts` requires an API key (including the deprecated `devApiKey` alias), plus `projectId` on the GT instance.*
+*Note: `uploadFonts` requires an Organization API key with `org:assets:write` (**Organization assets** in the Dashboard), passed as `apiKey` or the deprecated `devApiKey` alias, plus `projectId` on the GT instance. Project API keys receive a 403 error.*
 
 ## How it works [#how-it-works]
 
@@ -34,9 +34,9 @@ uploadFonts(
 - Each font must have a `.ttf` or `.otf` file name and decode to no more than 20MB.
 - The project determines which Organization owns the font. Uploaded fonts persist across that Organization's translation jobs.
 - The service derives font family, weight, and italic style from font metadata, then falls back to the file name. Uploading the same derived identity again replaces the stored asset.
-- Inputs longer than 50 fonts are uploaded in multiple requests.
+- The API accepts at most 10 fonts per request and rejects a larger request with a 400 error. The method splits only inputs longer than 50 fonts into several requests, so a call with 11 or more fonts fails. Call `uploadFonts` once for each group of up to 10 fonts.
 
-(See [Upload project assets](/docs/platform/openapi/reference/project/upload-assets) for validation, identity, and retry behavior).
+(See [Upload project assets](/docs/platform/openapi/reference/organizations/upsert-assets) for validation, identity, and retry behavior).
 
 ## Parameters [#parameters]
 
@@ -77,8 +77,8 @@ Resolves with the stored asset identifiers and the number of fonts processed:
 | `assets[].fileName` | File name supplied in the upload. | `string` |
 | `count` | Number of fonts processed. | `number` |
 
-<Callout type="warn">
-  **Current v9.1.0 type mismatch:** `UploadedAsset` declares a `deduped` boolean, but the service response does not include it. Do not use that field to detect whether an existing font was replaced.
+<Callout type="info">
+  **Changed in v9.5.0:** `UploadedAsset` no longer declares a `deduped` field, which the service never returned. Uploading the same derived identity replaces the stored asset. (See [How it works](#how-it-works)).
 </Callout>
 
 ## Example [#example]
@@ -87,22 +87,24 @@ Resolves with the stored asset identifiers and the number of fonts processed:
 import { readFile } from 'node:fs/promises';
 import { GT } from 'generaltranslation';
 
+// An Organization API key (gtx-org-) with org:assets:write.
 const gt = new GT({
   apiKey: process.env.GT_API_KEY,
   projectId: process.env.GT_PROJECT_ID,
 });
 
-const content = (await readFile('./public/fonts/BrandSans.ttf')).toString(
-  'base64'
+const fileNames = ['BrandSans.ttf', 'BrandSans-Bold.ttf'];
+const fonts = await Promise.all(
+  fileNames.map(async (fileName) => ({
+    assetType: 'FONT' as const,
+    content: (await readFile(`./public/fonts/${fileName}`)).toString('base64'),
+    fileName,
+  }))
 );
 
-const result = await gt.uploadFonts([
-  {
-    assetType: 'FONT',
-    content,
-    fileName: 'BrandSans.ttf',
-  },
-]);
-
-console.log(result.assets[0].assetKey);
+// The API accepts at most 10 fonts per request.
+for (let i = 0; i < fonts.length; i += 10) {
+  const result = await gt.uploadFonts(fonts.slice(i, i + 10));
+  console.log(result.assets.map((asset) => asset.assetKey));
+}
 ```

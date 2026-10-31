@@ -140,7 +140,6 @@ function TOC({
 
 const customComponents = {
   AllLogoCards: StubComponent,
-  AuthorSpotlight: StubComponent,
   Carousel,
   CarouselItem,
   HitList,
@@ -151,6 +150,7 @@ const customComponents = {
   LogoCardImage: StubComponent,
   Mermaid: StubComponent,
   ShadCard: StubComponent,
+  Spotlight: StubComponent,
   CardContent: StubComponent,
   CardDescription: StubComponent,
   CardFooter: StubComponent,
@@ -159,6 +159,7 @@ const customComponents = {
   FumadocsArchitecture: StubComponent,
   GitHub,
   IntroFeature,
+  OpenSourceGrants: StubComponent,
   SupportedLocales: StubComponent,
   Tweet,
   Video,

@@ -42,7 +42,7 @@ awaitJobs(
 ## How it works [#how-it-works]
 
 - **Automatic polling.** Replaces manual polling loops — you do not need to call [`checkJobStatus`](/docs/platform/core/reference/gt-class-methods/translation/check-job-status) in a `while` loop yourself.
-- **Terminal states.** Resolves when every job is `completed`, `failed`, or `unknown`. Jobs the API cannot find are treated as `'unknown'`.
+- **Terminal states.** Resolves when every job is `completed`, `failed`, or `unknown`. A job the API cannot find is treated as `'unknown'` when another job in the same status request exists. If none of the jobs in a status request exist, the request fails with a 404 error and `awaitJobs` rejects.
 - **Deadline.** Each status request has a timeout of at most 60 seconds, shortened to the remaining overall time. At timeout, the last known statuses return with `complete: false`; they can still be queued, processing, or unknown. Custom fetch implementations must honor cancellation to stop promptly.
 - **Errors.** Status errors before the deadline reject. Errors after the deadline return incomplete results instead. Stopping polling does not cancel remote jobs.
 - **Empty input.** After validating credentials and project ID, empty input resolves with `{ complete: true, jobs: [] }`.
@@ -149,6 +149,6 @@ for (const job of result.jobs) {
 
 ## Notes [#notes]
 
-- Jobs that are not found by the API are treated as `'unknown'` status.
+- A job the API cannot find is treated as `'unknown'`, unless none of the jobs in the status request exist. Then the request fails with a 404 error and `awaitJobs` rejects with an [`ApiError`](/docs/platform/core/reference/api-client#api-error).
 - Empty input returns `{ complete: true, jobs: [] }` after authentication validation.
 - Timeout returns the last accepted statuses, not necessarily terminal statuses; late poll results are discarded.

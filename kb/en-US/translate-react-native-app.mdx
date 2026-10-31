@@ -1,0 +1,45 @@
+---
+title: How do I translate a React Native app?
+summary: Mark the text in your components, generate a translation file for each language, add Intl polyfills, and load the file for the device's language. With General Translation's experimental gt-react-native, you wrap text in <T>, a Babel plugin adds the polyfills, and npx gt translate writes the files.
+description: Mark your text, generate a file per language, add Intl polyfills, and load the device's language. General Translation's experimental gt-react-native uses <T>, a Babel plugin, and the gt CLI.
+date: 2026-10-21
+category: internationalization
+authors: [kevin, kevin-wu]
+related: [translate-react-app, add-i18n-to-nextjs, i18n-without-translation-files, how-to-handle-plurals-in-react]
+---
+
+Translating a React Native app means marking the text in your components, producing a translation for each language, and loading the one that matches the device's language. React Native's JavaScript runtime does not ship the full `Intl` APIs that format numbers, dates, and plurals, so the app needs polyfills. The Metro bundler cannot resolve computed import paths, so each translation file needs a static `require` call. Every release then adds strings that each language needs before the release ships.
+
+## Ways to translate a React Native app
+
+| Approach | What it does well | What it leaves to you |
+| --- | --- | --- |
+| An internationalization (i18n) library alone ([`i18next`](/kb/general-translation-vs-i18next), [`react-intl`](/kb/general-translation-vs-react-intl)) | Mature runtimes for rendering translations and formatting values | Moving every string into key files, replacing the text in each `<Text>` with a key lookup, adding the `Intl` polyfills, and producing and maintaining every translation |
+| `expo-localization` or `react-native-localize` | Read the device's preferred languages and regional settings, so the app can pick a starting locale | Everything after that: a library to look up strings, the translation files, plural forms, and every translation |
+| A translation management system ([Crowdin](/kb/general-translation-vs-crowdin), [Lokalise](/kb/general-translation-vs-lokalise)) | A web editor where translators work with screenshots, a glossary, and translation memory, synced with your repository | The i18n library and key files in the app, the sync setup, and waiting on translators before each release |
+| General Translation (`gt-react-native` and the `gt` CLI) | [`<T>`](/docs/react/reference/components/t) translates `<Text>` in place with no keys, a Babel plugin adds the `Intl` polyfills, and [`npx gt translate`](/docs/cli/reference/commands/translate) writes one file per language with your Glossary and Custom Prompts applied | The package is experimental, and Expo apps need a development build because Expo Go cannot load the package's native module |
+
+Use an i18n library alone, with hand-written translations, when the app has a few screens and one or two target languages, or when your team has to keep testing in Expo Go; pair it with `expo-localization` or `react-native-localize` to choose the starting language. Use a translation management system when a localization team translates each release by hand. Use General Translation when the copy changes with every release and each language has to keep up. If you already use `i18next`, the `gt` CLI can translate its JSON files.
+
+## Translate a React Native app with General Translation
+
+General Translation's `gt-react-native` package is experimental and works with Expo and the bare React Native CLI.
+
+1. Install `gt-react-native` and the `gt` CLI, and list your languages in `gt.config.json`.
+2. Add the package's Babel plugin, which injects the `Intl` polyfills into your entry file.
+3. Call [`initializeGT`](/docs/react/reference/config#initialize) once with a [`loadTranslations`](/docs/react/reference/functions/load-translations) function, and wrap the app in [`<GTProvider>`](/docs/react/reference/components/gt-provider), which detects the locale from the device.
+4. Wrap text in [`<T>`](/docs/react/reference/components/t), with no keys:
+
+   ```tsx
+   import { T } from 'gt-react-native';
+
+   <T>
+     <Text>Welcome back</Text>
+     <Text>Your order is on its way.</Text>
+   </T>;
+   ```
+
+5. Sign in with [`npx gt login`](/docs/cli/reference/commands/login) and set your project ID.
+6. Run [`npx gt translate`](/docs/cli/reference/commands/translate) to write one translation file per language, and add the command to your build script so every release ships with current translations.
+
+Assign one Context Group (your Glossary and Custom Prompts) to your mobile and web projects to keep the same terms and tone in both. The [React Native Quickstart](/docs/react/react-native-quickstart) has the full steps.

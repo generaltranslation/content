@@ -27,6 +27,7 @@ The `gt.config.json` file configures what the CLI translates and where results a
 | [`dictionary`](#dictionary) | Path to a dictionary file. | `string` | Yes | — |
 | [`branchOptions`](#branch-options) | Branch-based translation tracking settings. | `object` | Yes | — |
 | [`customMapping`](#custom-mapping) | Locale aliases and property overrides. | `object` | Yes | — |
+| [`options.docsUrlPattern`](#docs-url-pattern) | URL pattern or patterns used to place locale codes in documentation links. | `string \| string[]` | Yes | `/[locale]` |
 | [`options.experimentalLocalizeStaticUrls`](#localize-static-urls) | Localize static URLs in translated Markdown and MDX files. | `boolean \| object` | Yes | `false` |
 | [`options.saveLocal`](#save-local) | Detect and submit local translation edits before enqueueing. | `boolean` | Yes | `false` |
 
@@ -46,13 +47,19 @@ The project used for API and translation workflows. Login does not select it: bi
 
 **Type** `string` · **Optional** · **Default** `https://api.gtx.dev`
 
-The API origin used by CLI requests, including [`gt api`](/docs/cli/reference/commands/api). Set this only when your workflow uses a custom General Translation API endpoint.
+The API origin used by CLI requests, including [`gt api`](/docs/cli/reference/commands/api). Set this only when the project should always use a custom General Translation API endpoint.
+
+The [`GT_API_URL`](/docs/cli/reference/global-options#api-url) environment variable overrides this value for every command. An empty value is treated as unset.
 
 ```json title="gt.config.json"
 {
   "baseUrl": "https://api.gtx.dev"
 }
 ```
+
+<Callout type="info">
+  **Changed in v2.26.1:** `GT_API_URL` overrides `baseUrl` for every command, not only [`gt login`](/docs/cli/reference/commands/login).
+</Callout>
 
 ## `defaultLocale` [#default-locale]
 
@@ -122,7 +129,7 @@ Each file type accepts the following keys.
 - `transform` — remaps output file names. A string with a `*` wildcard remaps the extension (for example `*.[locale].json`). An object with `match` and `replace` supports regex capture groups and the locale placeholders in [Locale placeholders](#locale-placeholders).
 - `transformationFormat` — outputs translated files in a different format than the source. For example, `pot` sources with `"transformationFormat": "PO"` produce `.po` files.
 - `requiresReview` — gates translated files behind human review. Accepts `true`/`false`, or an object with `include` and `exclude` glob arrays where `exclude` takes precedence.
-- `output` — for `gt` files only, the local save path with a `[locale]` placeholder, such as `public/i18n/[locale].json`. This is required when a Locadex workflow uses **Preserve local edits** without top-level CDN publishing; see [Locadex preserve local edits](#locadex-requirements).
+- `output` — for `gt` files only, the local save path with a `[locale]` placeholder, such as `public/i18n/[locale].json`. Library apps that enable **Preserve local edits** without top-level CDN publishing use this path. (See [Locadex preserve local edits](#locadex-requirements)).
 - `parsingFlags` — for `gt` files only, flags that control inline content parsing. See [`autoderive`](/docs/cli/guides/using-autoderive) and [automatic JSX injection](/docs/cli/guides/using-auto-jsx).
 
 ```json title="gt.config.json"
@@ -199,7 +206,7 @@ Font files to upload before translation jobs run. Use `include` and optional `ex
 }
 ```
 
-The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt translate`](/docs/cli/reference/commands/translate) runs that enqueue new work. When `stageTranslations` is enabled, [`gt translate`](/docs/cli/reference/commands/translate) only downloads the staged version and does not sync fonts. A failed font sync emits a warning but does not stop translation; Lottie processing continues with fallback fonts. See [Upload project assets](/docs/platform/openapi/reference/project/upload-assets) for font validation and storage behavior.
+The CLI syncs matching fonts before [`gt stage`](/docs/cli/reference/commands/stage), [`gt upload`](/docs/cli/reference/commands/upload), [`gt enqueue`](/docs/cli/reference/commands/enqueue), and [`gt translate`](/docs/cli/reference/commands/translate) runs that enqueue new work. When `stageTranslations` is enabled, [`gt translate`](/docs/cli/reference/commands/translate) only downloads the staged version and does not sync fonts. A failed font sync emits a warning but does not stop translation; Lottie processing continues with fallback fonts. Fonts are Organization assets, so font sync needs credentials with `org:assets:write`: a [saved login](/docs/cli/guides/configuring#credentials) whose [role](/docs/platform/dashboard/reference/roles-and-permissions) can upload Organization assets, or an Organization API key with [**Organization assets**](/docs/platform/dashboard/reference/api-keys#create-organization-keys) enabled. Project API keys cannot upload fonts, so their font sync fails with that warning. (See [Upsert Organization assets](/docs/platform/openapi/reference/versions/2026-03-06.v1/organizations/upsert-assets) for the `POST /v2/project/assets` route the CLI calls, including font validation and storage behavior).
 
 ## `publish` [#publish]
 
@@ -217,7 +224,7 @@ When `true`, translated files are published to the General Translation CDN after
 
 **Type** `boolean` · **Optional** · **Default** `false`
 
-When `true`, the CLI downloads only versions submitted with [`gt stage`](/docs/cli/reference/commands/stage). The CLI sets this automatically the first time you run [`gt stage`](/docs/cli/reference/commands/stage). Use the staged workflow for human review and for asynchronous formats such as [Lottie](/docs/cli/reference/formats/lottie-files); the project's review settings determine whether completed translations also require approval.
+When `true`, the CLI downloads only versions submitted with [`gt stage`](/docs/cli/reference/commands/stage). The CLI sets this automatically the first time you run [`gt stage`](/docs/cli/reference/commands/stage). Use the staged workflow for human review and for asynchronous formats such as [Lottie](/docs/cli/reference/formats/lottie-files); the project's [review settings](/docs/platform/dashboard/reference/project-settings#review) determine whether completed translations also require approval.
 
 ## `omitConfigIds` [#omit-config-ids]
 
@@ -329,11 +336,40 @@ When you use an alias, set `defaultLocale` and entries in `locales` to the alias
 }
 ```
 
+## `options.docsUrlPattern` [#docs-url-pattern]
+
+**Type** `string | string[]` · **Optional** · **Default** `/[locale]`
+
+Sets where the CLI inserts the locale when it localizes documentation URLs. Every pattern must contain `[locale]`, such as `/docs/[locale]`.
+
+Use an array when one site serves documentation from several URL prefixes. The CLI matches each URL against the part of every pattern before `[locale]`, then uses the longest matching prefix.
+
+```json title="gt.config.json"
+{
+  "options": {
+    "docsUrlPattern": ["/docs/[locale]", "/ai/docs/[locale]"],
+    "experimentalLocalizeStaticUrls": true
+  }
+}
+```
+
+With this configuration, `/docs/guide` becomes `/docs/es/guide`, while `/ai/docs/guide` becomes `/ai/docs/es/guide` for Spanish. A URL outside both prefixes is unchanged.
+
+The `/[locale]` default applies to static URL localization. [`options.mintlify.localizeRedirects`](/docs/integrations/mintlify/reference/config#localized-redirects) requires this key explicitly; when it is absent, the CLI warns and does not add localized redirects.
+
+### Version history
+
+| Version | Changes |
+| --- | --- |
+| `2.26.3` | Added arrays of URL patterns and longest-prefix matching. |
+
 ## `options.experimentalLocalizeStaticUrls` [#localize-static-urls]
 
 **Type** `boolean | { skipUntranslatedPages?: boolean; attributes?: string[] }` · **Optional** · **Default** `false`
 
-Localizes static URLs in translated Markdown and MDX files. Set it under the top-level `options` object, or pass the `--experimental-localize-static-urls` flag to [`gt translate`](/docs/cli/reference/commands/translate#experimental) for one run.
+Localizes static URLs in translated Markdown and MDX files. Set it under the top-level `options` object, or pass the `--experimental-localize-static-urls` flag to [`gt translate`](/docs/cli/reference/commands/translate#experimental) or [`gt download`](/docs/cli/reference/commands/download) for one run.
+
+Use [`options.docsUrlPattern`](#docs-url-pattern) to control where locale codes are inserted.
 
 - `true` adds the target locale to every matching static URL.
 - `{ "skipUntranslatedPages": true }` keeps a link on the source locale when its source page exists but no translated page exists. Links to generated pages without a source Markdown or MDX file, such as OpenAPI reference pages, are still localized.
@@ -406,7 +442,7 @@ For any file, the CLI resolves publishing in this order: an explicit `"publish":
 
 ## Locadex preserve local edits [#locadex-requirements]
 
-When a Locadex automation has **Preserve local edits** enabled, configure either top-level `"publish": true` or `files.gt.output`. Locadex validates this before it runs translation.
+When **Preserve local edits** is enabled for an app that depends on a General Translation library, such as `gt-next` or `gt-react`, set top-level `"publish": true` or `files.gt.output`. Locadex checks `gt.config.json` before translation. File-only projects, including Mintlify docs sites, can leave both unset. A library app without top-level CDN publishing stores its GTJSON translations at `files.gt.output`:
 
 ```json title="gt.config.json"
 {
@@ -418,7 +454,7 @@ When a Locadex automation has **Preserve local edits** enabled, configure either
 }
 ```
 
-Per-file and `files.gt.publish` settings do not satisfy this check. Without top-level CDN publishing, `files.gt.output` tells the workflow where local GTJSON translations are stored so it can preserve edits.
+Per-file publish settings and `files.gt.publish` do not satisfy the library-app check.
 
 ## Example configuration [#example]
 

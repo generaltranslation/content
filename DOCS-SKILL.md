@@ -198,7 +198,7 @@ Capitalize the Organization scope noun even inside hyphenated compounds (Organiz
 ### Plans and billing
 
 - **The plans are Starter and Enterprise.** Capitalize both as product terms. The **Team** plan is retired: never write "Team plan" or "Starter, Team, or Enterprise," and replace any remaining mention with the plan that gates the feature today. An Organization that has not added a payment method is a *free Organization* (lowercase "free") that draws from a rolling allowance; do not invent a "Free plan" tier.
-- **Phrase a plan gate by the plans that unlock the feature.** Write "requires a Starter or Enterprise plan" for features that adding a payment method unlocks (member invitations, Locadex, webhooks, annotations, project integrations, branching) and "requires an Enterprise plan" for Enterprise-only features (Audit Logs, SSO, model provider selection). Call an Organization billed at Enterprise scope an *Enterprise-managed Organization*.
+- **Phrase a plan gate by the plans that unlock the feature.** Write "requires a Starter or Enterprise plan" for features that adding a payment method unlocks (member invitations, Locadex, annotations, project integrations, branching) and "requires an Enterprise plan" for Enterprise-only features (Audit Logs, SSO, model provider selection, webhooks, translation approval, custom roles). Call an Organization billed at Enterprise scope an *Enterprise-managed Organization*.
 - **Use the Dashboard's billing breadcrumbs and permission names exactly.** Plans live under **Organization > Plans**, usage under **Organization > Usage**, and the credit balance, auto-reload, and invoices under **Organization > Settings > Billing** (**Enterprise > Billing** for Enterprise-managed Organizations). Name the billing permissions as the Dashboard does — **View billing**, **Update billing**, and **Manage Projects & plan** — instead of a loose "billing access."
 - **Billing units.** Write "platform credits" and "credit balance" in lowercase ($1 = 1M credits). Expand **Locadex Compute Units (LCUs)** on first use. Capitalize **Layout Processing** charges and the **Usage Limit** setting as the Usage and Billing pages do.
 - **Link rates instead of copying them.** Point to the pricing and usage-rates pages for current amounts (see Preserve semantics while simplifying); the partner credits table on the **Managing billing** guide is the one place that records credit amounts.
@@ -260,13 +260,13 @@ The docs have these top-level sections, in this order:
 5. **Vue** — the Vue 3 SDK (`gt-vue`).
 6. **Node**
 7. **Python**
-8. **Integrations** — plugins and add-ons that attach General Translation to a third-party platform or tool (for example, Sanity, Storyblok, Google Drive, and rrweb).
+8. **Integrations** — plugins and add-ons that attach General Translation to a third-party platform or tool (for example, Payload CMS, Sanity, Storyblok, Google Drive, and rrweb).
 
 ### When something gets its own top-level section
 
 Reserve a top-level section for a **framework**: a first-party SDK that developers install into their own application and build on directly — the React ecosystem, Vue, Node, and Python — plus the CLI and the Platform itself. A framework earns a tab because readers arrive already thinking in that framework's terms and need a whole spine (Quickstart → Guides → Reference) shaped around it.
 
-Everything else lives under **Integrations**, as one plugin folder with its own Quickstart → Guides → Reference: content platforms and CMSs (Sanity, Storyblok), storage and docs tools (Google Drive, Mintlify), and libraries that attach to another tool rather than host an app (`gt-rrweb` for rrweb recordings). **When in doubt, put it in Integrations.** Promote a plugin to its own section only when it has grown into a framework SDK in the sense above; that is an information-architecture change, so the top-level list is pinned by CI (`scripts/validate-docs-structure.ts`) and the Overview hub must be updated with it.
+Everything else lives under **Integrations**, as one plugin folder with its own Quickstart → Guides → Reference: content platforms and CMSs (Payload CMS, Sanity, Storyblok), storage and docs tools (Google Drive, Mintlify), and libraries that attach to another tool rather than host an app (`gt-rrweb` for rrweb recordings). **When in doubt, put it in Integrations.** Promote a plugin to its own section only when it has grown into a framework SDK in the sense above; that is an information-architecture change, so the top-level list is pinned by CI (`scripts/validate-docs-structure.ts`) and the Overview hub must be updated with it.
 
 Some sections are **multi-part**: they group several capabilities, and *each* capability carries its own **Get Started/Quickstart → Guides → Reference** spine (Platform groups Dashboard, Locadex, OpenAPI, and Core; Integrations groups one plugin per integration). **CLI, Vue, Node, and Python** are **single-part**: the section itself is directly **Quickstart → Guides → Reference**. **React** is a **multi-framework** section: it covers several closely-related frameworks that share one API, so it uses a **Get Started (Overview + one Quickstart per framework) → shared Guides → shared Reference → per-framework folders** shape (see React section (multi-framework)). **Overview** has its own shape (**Introduction → Key Concepts → For coding agents**).
 
@@ -326,7 +326,7 @@ The **overview** section doubles as a **landing hub**: its `meta.json` lists the
 
 - **Frameworks:** React, React SPA, Next.js App Router, Next.js Pages Router, TanStack Start, React Native, Vue, Node.js, Python, CLI, JSON
 - **Platform:** Dashboard, Locadex, Core, OpenAPI
-- **Integrations:** Google Drive, Mintlify, Sanity, Storyblok, rrweb
+- **Integrations:** Google Drive, Mintlify, Payload CMS, Sanity, Storyblok, rrweb
 
 Treat the Overview sidebar hub, each section's `meta.json`, and the corresponding landing-page card grid as one synchronized navigation surface. Whenever a framework, Platform capability, or integration is added, removed, renamed, or reordered, update all applicable surfaces in the same change and verify every route. Keep the Integrations sidebar and landing page in the order above, with Google Drive first. The structure validator enforces route coverage.
 
@@ -341,6 +341,7 @@ The publishing app generates machine-readable maps from the docs source:
 - `/docs/platform/openapi/llms.txt` and `/docs/platform/openapi/llms-full.txt` — the API index and operation bundle, with `/openapi.yaml` as the canonical OpenAPI specification.
 - `/AGENTS.md` — the default-language drop-in agent guide from the **For coding agents** page.
 - `/agent-prompt.md`: the default-language start prompt from the **For coding agents** page, the text the website's Setup for Agents button copies.
+- `/blog.md` — the default-language Markdown index of blog posts and changelog entries.
 - `sitemap.md` — a default-language Markdown index of every docs page and blog post.
 - `sitemap.xml` — the standard sitemap for every published page, including localized docs URLs.
 
@@ -350,7 +351,7 @@ Do not add hand-written copies to this repository. When you add, rename, remove,
 
 Beyond the machine-readable outputs above, the docs follow these agent best practices so an agent can consume them without scraping HTML. Keep them in place and current:
 
-- **Raw Markdown for every page.** Every page is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
+- **Raw Markdown for every page.** Every docs page, blog post, and changelog entry is available as raw Markdown by appending `.md` or `.mdx` to its URL. Generated indexes and discovery metadata use `.mdx`; link to the logical page path in prose.
 
 Document these entry points for developers on the **Overview → For coding agents** page (see For coding agents page).
 

@@ -11,7 +11,7 @@ The configuration is a standard General Translation CLI config. Each shared key 
 
 ## Modes [#modes]
 
-Setup started from **Project > Automations** generates the show-default-locale mode, where every language uses a locale-prefixed path. Existing projects may use hide-default-locale mode, where source pages keep their original paths. Both modes translate `docs.json` and every `.mdx`/`.md` page; they differ in how files are laid out and how the source locale is served.
+Setup started from **Project > Automations** defaults to hide-default-locale mode, where source pages keep their original paths. Turning off **Hide default locale in URL paths** during setup generates show-default-locale mode, where every language uses a locale-prefixed path. Both modes translate `docs.json` and every `.mdx`/`.md` page; they differ in how files are laid out and how the source locale is served.
 
 | Key | Description | Hide default locale | Show default locale |
 | --- | --- | --- | --- |
@@ -44,10 +44,10 @@ The `options` block configures Mintlify-specific behavior. These keys are set fo
 - `mintlify.openapi.files` — paths to detected OpenAPI 3.x specifications *(when present)*. Registers the translated specifications with Mintlify.
 - `jsonSchema` — maps `./docs.json` to a preset that knows how to localize Mintlify navigation: `mintlify-hide-default` when the default locale is hidden, otherwise `mintlify`. Detected JSON OpenAPI specifications use the `openapi` preset.
 - `yamlSchema` — maps detected YAML OpenAPI specifications to the `openapi` preset *(when present)*.
-- `docsUrlPattern` — `/[locale]`. The pattern used when localizing documentation URLs.
+- [`docsUrlPattern`](/docs/cli/reference/config#docs-url-pattern) — `/[locale]` in generated configs. The pattern used when localizing documentation URLs. It also accepts an array for sites that serve docs from several URL prefixes.
 - `docsImportPattern` — `/snippets/[locale]`. The pattern used when localizing snippet imports.
 - `experimentalLocalizeStaticImports` — `true`. Localizes static import paths (such as snippets).
-- `experimentalLocalizeStaticUrls` — `{ "skipUntranslatedPages": true }`. Localizes internal static URLs so links stay within the reader's language, but keeps a link on its source URL when the target page has no translation.
+- `experimentalLocalizeStaticUrls` — `{ "skipUntranslatedPages": true }`. Localizes internal static URLs so links and navigation entries stay within the reader's language, but keeps them on the source URL when the target page has no translation. An empty navigation root, or one ending in `/`, refers to that folder's `index.md` or `index.mdx`.
 - `experimentalLocalizeRelativeAssets` — `true`. Localizes relative asset references.
 - `experimentalClearLocaleDirs` — `true`. Clears generated locale directories before writing translations so removed source pages do not leave stale translated pages behind.
 - `experimentalAddHeaderAnchorIds` — `'mintlify'`. Writes Mintlify-native `{#id}` syntax on every translated heading, using the source heading's ID so in-page links keep the same target across languages. Headings nested deeply in JSX are moved to the margin because Mintlify only recognizes this syntax with up to three leading spaces.
@@ -58,13 +58,20 @@ The `options` block configures Mintlify-specific behavior. These keys are set fo
 
 **Type** `boolean` · **Optional** · **Default** `false`
 
-Set `options.mintlify.localizeRedirects` to `true` to add per-locale copies of source-locale redirect entries whose source page was renamed or removed during the same [`gt translate`](/docs/cli/reference/commands/translate) run. The CLI leaves the original redirect unchanged, preserves its anchor and `permanent` value, and skips a locale when the destination page has no translation.
+Set `options.mintlify.localizeRedirects` to `true` to add per-locale copies of source-locale redirect entries whose source page was renamed or removed during the same [`gt translate`](/docs/cli/reference/commands/translate) run. The CLI leaves the original redirect unchanged, preserves its anchor and `permanent` value, and skips a locale when the destination page has no translation. It also skips redirects whose source or destination is already locale-prefixed, so locale segments are not added twice.
 
-This option requires `options.docsUrlPattern` to place the locale in each URL. `options.experimentalHideDefaultLocale` controls whether the source locale keeps an unprefixed path. If `docsUrlPattern` is missing, the CLI warns and adds no redirects.
+This option requires [`options.docsUrlPattern`](/docs/cli/reference/config#docs-url-pattern) to place the locale in each URL. For multiple docs roots, pass an array such as `["/docs/[locale]", "/ai/docs/[locale]"]`; each redirect uses the longest matching prefix. `options.experimentalHideDefaultLocale` controls whether the source locale keeps an unprefixed path. If `docsUrlPattern` is missing, the CLI warns and adds no redirects.
+
+### Version history
+
+| Version | Changes |
+| --- | --- |
+| `2.26.3` | Added arrays of URL patterns and longest-prefix matching. |
+| `2.26.2` | Stopped adding a second locale segment to redirects that are already localized. |
 
 ## Example [#example]
 
-The following example shows an existing project configured to hide the source locale (English source, Spanish and French targets):
+The following example shows a project configured to hide the source locale (English source, Spanish and French targets):
 
 ```json title="gt.config.json"
 {

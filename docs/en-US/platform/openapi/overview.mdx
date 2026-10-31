@@ -3,21 +3,11 @@
 title: Overview
 description: Call the public General Translation API endpoints and download the OpenAPI spec.
 
-related:
-  title: Reference sections
-  links:
-    - /docs/platform/core/reference/api-client
-    - /docs/platform/openapi/reference/files/upload-source
-    - /docs/platform/openapi/reference/context/generate-context
-    - /docs/platform/openapi/reference/context-management/list-groups
-    - /docs/platform/openapi/reference/translation/translate-runtime
-    - /docs/platform/openapi/reference/project/create-project
-
 ---
 
 Use the General Translation API to build custom automation workflows.
 
-The CLI handles most API calls for you. Use the [`generaltranslation/api` TypeScript client](/docs/platform/core/reference/api-client) for generated request and response types, or call endpoints directly when you need custom automation.
+The CLI handles most API calls for you. Use the [`@generaltranslation/api` TypeScript client](/docs/platform/core/reference/api-client) for generated request and response types, or call endpoints directly when you need custom automation.
 
 The OpenAPI spec defines these endpoints in machine-readable format.
 
@@ -25,17 +15,16 @@ The OpenAPI spec defines these endpoints in machine-readable format.
 
 ### Base URL
 
-All endpoints, including runtime translation with `POST /v2/translate`, live under `https://api.gtx.dev`.
-
-
+All endpoints, including runtime translation with `POST /v2/projects/{projectId}/translate`, live under `https://api.gtx.dev`.
 
 ### Authentication
 
 Authenticate with an API key in the standard `Authorization` header.
 
 ```bash
-curl https://api.gtx.dev/v2/project/info/PROJECT_ID \
-  -H "Authorization: Bearer gtx-api-..."
+curl https://api.gtx.dev/v2/projects/PROJECT_ID \
+  -H "Authorization: Bearer gtx-api-..." \
+  -H "gt-api-version: 2026-10-08.v1"
 ```
 
 Choose the key scope that matches your workflow:
@@ -43,23 +32,24 @@ Choose the key scope that matches your workflow:
 - **Project** with prefix `gtx-api-`: bound to one project and usable in any environment, subject to its permissions
 - **Organization** with prefix `gtx-org-`: works across projects in its bound Organization, subject to its permissions
 
-For project-scoped endpoints with a project ID in the path, that ID selects the project. An optional `gt-project-id` must match or the request fails with `403`. Without a path target, project keys use their bound project; Organization keys must send `gt-project-id`. Project and Organization discovery need no project target. Organization-scoped routes with a path target use that Organization, and Context Group routes (`/v2/context-groups/{groupId}`) use the Organization that owns the group.
+The path selects what a request acts on: `/v2/projects/{projectId}/...` the project, `/v2/orgs/{orgId}/...` the Organization, and `/v2/context-groups/{groupId}/...` the Organization that owns the group. Discovery endpoints (`GET /v2/orgs` and `GET /v2/projects`) need no ID. The key must have access to the selected project or Organization, so a project key works only on its own project.
 
-Legacy API-key headers remain supported and take precedence over the bearer header. Keep API keys out of deployed browser and mobile bundles.
+Keep API keys out of deployed browser and mobile bundles.
 
 (See [API keys](/docs/platform/dashboard/reference/api-keys) for how to create and scope API keys).
 
 ### Permissions
 
-Most endpoints require a permission on the request identity. [List Organizations](/docs/platform/openapi/reference/project/list-orgs), [List Projects](/docs/platform/openapi/reference/project/list-projects), and [Get Project information](/docs/platform/openapi/reference/project/project-info) need no resource permission beyond access to the returned Organization or project. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. The [project API-key endpoint](/docs/platform/openapi/reference/project/create-api-key) lets you select permissions or omit the selection to grant all delegable project permissions. Explicit HTTP Write grants do not implicitly include Read. Context Management endpoints require Organization permissions, so they need an Organization key; project keys cannot call them.
+Most endpoints require a permission on the request identity. [List Organizations](/docs/platform/openapi/reference/organizations/list-orgs), [List Projects](/docs/platform/openapi/reference/projects/list-projects), and [Get a Project](/docs/platform/openapi/reference/projects/get-project) need no resource permission beyond access to the returned Organization or project. Both Organization and project keys support **All** or **Custom** permissions in the Dashboard, limited to permissions the creator can grant. The [project API-key endpoint](/docs/platform/openapi/reference/projects/create-project-api-key) lets you select permissions or omit the selection to grant all project permissions you can delegate. Write permissions do not include Read. Project keys cannot hold Organization permissions (`org:*`) or `project:api_keys:write`, so the endpoints that require them need an Organization key.
 
 Common permissions:
 
 - `org:projects:create` for creating projects with `POST /v2/orgs/{orgId}/projects`.
 - `project:api_keys:write` for creating project API keys with `POST /v2/projects/{projectId}/api-keys`.
-- `project:files:read` for downloading files and reading file info, translation status, branch info, orphaned files, and job info.
-- `project:files:write` for uploading files, translations, and assets; submitting diffs; publishing; creating branches and tags; and moving files.
-- `project:translations:enqueue` for queuing files for translation.
+- `org:assets:write` for uploading fonts with `POST /v2/orgs/{orgId}/assets`.
+- `project:files:read` for downloading files; reading file metadata and status; listing branches and branch files; and reading jobs.
+- `project:files:write` for uploading source files and translations; overwriting translations; publishing; creating and updating branches; setting tags; and moving files.
+- `project:translations:enqueue` for translating files with `POST /v2/projects/{projectId}/files/translate`.
 - `project:translations:generate` for runtime translation.
 - `project:context:write` for generating context.
 - `org:context:read` for reading Context Groups, their Glossary and Custom Prompts, project assignments, and exports.
@@ -68,21 +58,37 @@ Common permissions:
 
 ### Versioning
 
-Send the optional `gt-api-version` header to pin a response format.
+Send the `gt-api-version` header on every request to choose the API contract.
 
 ```bash
--H "gt-api-version: 2026-03-06.v1"
+-H "gt-api-version: 2026-10-08.v1"
 ```
 
-If you omit the header, the earliest supported version is used. The latest version is `2026-03-06.v1`.
+- Endpoints whose reference page marks the header as required return `400` without it or with an older version.
+- The other endpoints use the oldest supported version when the header is missing, and return their errors as plain text instead of JSON.
+
+To read an older version's endpoints, pick it in the API version menu at the top of any OpenAPI page.
+
+### Batch requests
+
+The batch endpoints below answer one result per item, in request order.
+
+- **Writes** (uploading source files and translations, moving, publishing, and overwriting files, and uploading font assets) return `200` with `summary` (`total`, `succeeded`, and `failed` counts) and `results`, even when every item fails. A failed item has `status: "failed"` and an `error`; the other items are still applied. A request that fails validation returns `400` and applies nothing.
+- **Reads** (file, file content, and job queries) return `200` with `results`. An item the project does not have is `not_found`. A file translation that is stored but not completed yet, for example during a layout pass, is `pending`; request it again later. A translation is `not_found` while its translation job has not stored it yet, so wait for the job with `GET /v2/projects/{projectId}/jobs/{jobId}` or `POST /v2/projects/{projectId}/jobs/query` before reading it. Without `versionId`, a read returns the newest completed version on the branch, and is `pending` only while none is completed. Job queries return each job's status.
+
+Other batch endpoints have their own response: queueing file translation returns `202` with the created `jobs`, and the Context Management glossary and custom-prompt upserts apply the whole batch or nothing and return `committed` with item `counts`.
 
 ### Runtime metadata limits
 
-For `POST /v2/translate`, a positive integer `maxChars` adds a length instruction to supported translation prompts; it is not a guaranteed output-length limit. Nonpositive or fractional numbers are ignored. Values of the wrong type fail request validation.
+For `POST /v2/projects/{projectId}/translate`, a positive integer `maxChars` adds a length instruction to supported translation prompts; it is not a guaranteed output-length limit. Nonpositive or fractional numbers are ignored. Values of the wrong type fail request validation.
 
 Each `sourceCode` file keeps at most five context entries. The API truncates each entry's `before` and `after` fields to 2,000 characters and its `target` field to 500 characters.
 
 Set `fileFormat` to `MD` or `MDX` to translate a whole document supplied as a string. Document requests must use `dataFormat: STRING` and cannot include `maxChars` or `sourceCode`. The API parses the document into chunks, adds the request context to each chunk, and returns one validated document string. A failed chunk or invalid final document fails that entry rather than returning partial output.
+
+### Locale allowlist
+
+Runtime translation returns `403` with code `locale_not_allowed` when the project has a non-empty locale list and `targetLocale` is not on it. An empty locale list does not restrict target locales. A batch served entirely from cache skips this check, so a locale removed from the project can still return its cached translations.
 
 ### Rate limits
 
@@ -93,14 +99,14 @@ Rate limiting uses 60-second windows at two layers:
 
 Post-authentication limits vary by endpoint:
 
-- **Heavy:** 30 requests/minute for queueing translations.
-- **Medium:** 120 requests/minute for uploads, diffs, context generation, moves, orphaned files, and publishing.
+- **Heavy:** 30 requests/minute for translating files.
+- **Medium:** 120 requests/minute for uploading source files, translations, and fonts; overwriting translations; generating context; moving files; listing branch files; and publishing.
 - **Light:** 300 requests/minute for file downloads.
-- **Default:** 200 requests/minute for project and Organization discovery, project and project API-key creation, branches, tags, project info, job info, file info, translation status, runtime translation, and Context Management.
+- **Default:** 200 requests/minute for project and Organization discovery, project and project API-key creation, project settings, branches, tags, jobs, file metadata and status, runtime translation, and Context Management.
 
-Project and Organization discovery and project/key creation share a request limit.
+Listing projects, creating projects, and creating project API keys share one limit.
 
-Exceeding a post-authentication limit returns `429` with `RateLimit-*` headers. Organization token quotas return `402` from `POST /v2/translate`.
+Exceeding a post-authentication limit returns `429` with `RateLimit-*` headers.
 
 ### Pagination
 
@@ -108,32 +114,39 @@ List endpoints return one page of results as `{ "items": [...], "nextCursor": ..
 
 ### Errors
 
-Errors return an `error` message. For API version `2026-02-18.v1` and later, the body is JSON; earlier versions, including the default used when no `gt-api-version` header is sent, return the message as plain text. This applies to every error, including malformed JSON (`400`), oversized bodies (`413`), and rate limits (`429`).
+From API version `2026-02-18.v1`, errors return a JSON body with an `error` message and a stable `code`. This includes malformed JSON (`400`), oversized bodies (`413`), and rate limits (`429`). Earlier versions return most errors as plain text without `code`.
 
 ```json
 {
-  "error": "API key is missing required permission: project:files:write"
+  "error": "Missing required permission: project:files:write",
+  "code": "permission_missing"
 }
 ```
 
-Common status codes:
+`code` names the cause. A route can return a more specific code than the generic code for its status; each endpoint's reference lists the codes it can return. New codes may be added, so treat an unrecognized code like its HTTP status.
 
-- `400` for invalid request body, query, or version.
-- `401` for a missing or invalid bearer credential.
-- `402` when an Organization token quota is exceeded (`POST /v2/translate`).
-- `403` when the request identity lacks permission or the action is not allowed on the current plan.
-- `404` when the resource is not found.
-- `409` for a conflict, such as project creation over the Organization's project limit or a rename that collides with an existing Glossary term or Custom Prompt.
-- `413` when the request body exceeds the endpoint limit, or when a Context Management response would exceed 1 MiB (request a smaller `limit`).
-- `425` when a requested translated file is still processing.
-- `429` when a rate limit is exceeded.
-- `500` for an internal server error.
-- `503` when the service is temporarily unavailable.
+Common status codes and their generic `code`:
 
-Retry `425`, `429`, and `503` responses after a delay. For `429`, wait the number of seconds in the `Retry-After` header.
+- `400` `invalid_request` for an invalid request body, query, or version.
+- `401` `unauthenticated` for a missing or invalid bearer credential.
+- `402` `payment_required` when the Organization's billing account is blocked, or its plan usage limit, monthly spend limit, or credit balance does not cover the request (translating files and runtime translation).
+- `403` `permission_denied` when the request identity lacks permission or the action is not allowed on the current plan. A missing permission returns `permission_missing` and names the permission in `error`.
+- `404` `not_found` when the resource is not found.
+- `409` `conflict` for a conflict, such as project creation over the Organization's project limit, a branch name already in use, or a rename that collides with an existing Glossary term or Custom Prompt.
+- `410` `route_retired` when the route is retired in the requested API version. `error` names the route to use instead.
+- `413` `payload_too_large` when the request body exceeds the endpoint limit, or when a Context Management response would exceed 1 MiB (request a smaller `limit`).
+- `415` `unsupported_media_type` when the request body's `Content-Type` is missing or not `application/json`.
+- `423` `locked` when the resource is locked by an operation in progress.
+- `425` `not_ready` when the requested result is not ready yet.
+- `429` `rate_limited` when a rate limit is exceeded.
+- `500` `internal_error` for an internal server error.
+- `502` `upstream_error` when an upstream service fails to complete the request.
+- `503` `unavailable` when the service is temporarily unavailable.
+
+Retry `429` and `503` responses after a delay. For `429`, wait the number of seconds in the `Retry-After` header.
 
 ## OpenAPI spec [#openapi-spec]
 
-A machine-readable OpenAPI 3.1 spec is available at [`/openapi.json`](/openapi.json). Import it into Postman, Insomnia, or an OpenAPI client to generate requests and types.
+A machine-readable OpenAPI 3.1 spec of the latest version is available at [`/openapi.json`](/openapi.json), and each older version's at `/openapi/<version>.json`. Import it into Postman, Insomnia, or an OpenAPI client to generate requests and types.
 
-For typed endpoint helpers, use the [`generaltranslation/api` client](/docs/platform/core/reference/api-client).
+For typed endpoint helpers, use the [`@generaltranslation/api` client](/docs/platform/core/reference/api-client).
