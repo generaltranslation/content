@@ -11,7 +11,7 @@ related:
 
 ---
 
-`gt-tanstack-start` adds automatic internationalization to TanStack Start apps. You initialize General Translation in the router entry point, resolve the request locale, and hydrate [`GTProvider`](/docs/react/reference/components/gt-provider) from a route loader.
+`gt-tanstack-start` adds automatic internationalization to TanStack Start apps. A Vite plugin reads your `gt.config.json`, and a router integration loads translations during server rendering and provides them to your components.
 
 Use this quickstart for TanStack Start apps. For a plain React SPA use the [React Quickstart](/docs/react/react-quickstart).
 
@@ -19,45 +19,45 @@ Use this quickstart for TanStack Start apps. For a plain React SPA use the [Reac
   **Warning:** `gt-tanstack-start` is experimental and may have breaking changes. It is not yet recommended for production use.
 </Callout>
 
-Run [`npx gt@latest init`](/docs/cli/reference/commands/init) from the app root to automate the setup. The wizard installs the runtime, creates the translation loader and middleware, initializes the router, and configures the root route. It leaves unrecognized files unchanged and lists any manual actions; this guide covers the same setup by hand.
+Run [`npx gt@latest init`](/docs/cli/reference/commands/init) from the app root to automate the setup. The wizard installs the runtime, adds the Vite plugin and the router integration, and sets the root route's `<html lang>`. It leaves unrecognized files unchanged and lists any manual actions; this guide covers the same setup by hand.
+
+*Note: This setup requires `gt-tanstack-start` 11.5.0 or later, `@tanstack/react-start` 1.159.0 or later, and Vite 6 or later.*
 
 ## Quickstart [#quickstart]
 
-Install the packages, create a config file and a translation loader, add request middleware, initialize the router, wire up the root route, mark content for translation, and generate translations.
+Install the packages, create a config file, add the Vite plugin and the router integration, mark content for translation, and generate translations.
 
 ### 1. Install `gt-tanstack-start`
 
-Install `gt-tanstack-start` and `gt-react` as dependencies, and the [`gt` CLI](/docs/cli/quickstart) as a dev dependency. `gt-react` is required directly so the CLI can detect [`<T>`](/docs/react/reference/components/t) components in your source.
+Install `gt-tanstack-start` as a dependency and the [`gt` CLI](/docs/cli/quickstart) as a dev dependency.
 
 <Tabs items={['npm', 'yarn', 'bun', 'pnpm']}>
   <Tab value="npm">
     ```bash
-    npm install gt-tanstack-start gt-react && npm install gt --save-dev
+    npm install gt-tanstack-start && npm install gt --save-dev
     ```
   </Tab>
 
   <Tab value="yarn">
     ```bash
-    yarn add gt-tanstack-start gt-react && yarn add --dev gt
+    yarn add gt-tanstack-start && yarn add --dev gt
     ```
   </Tab>
 
   <Tab value="bun">
     ```bash
-    bun add gt-tanstack-start gt-react && bun add --dev gt
+    bun add gt-tanstack-start && bun add --dev gt
     ```
   </Tab>
 
   <Tab value="pnpm">
     ```bash
-    pnpm add gt-tanstack-start gt-react && pnpm add --save-dev gt
+    pnpm add gt-tanstack-start && pnpm add --save-dev gt
     ```
   </Tab>
 </Tabs>
 
 `gt-tanstack-start` is ESM-only. Use `import` syntax rather than CommonJS `require()`.
-
-*Note: This setup requires `gt-tanstack-start` 11.1.5 or later so [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) resolves from the package's main entry in client builds.*
 
 ### 2. Create `gt.config.json`
 
@@ -77,88 +77,60 @@ Create a `gt.config.json` file in your project root. It declares your source lan
 
 - `defaultLocale` — the language your app is written in.
 - `locales` — the languages to translate into. Pick from the [supported locales](/docs/platform/dashboard/reference/supported-locales).
-- `files.gt.output` — where the CLI writes translation files. Keep them under `src/` so Vite can import them; files in `public/` will not resolve.
+- `files.gt.output` — where the CLI writes translation files and where the app loads them from. Keep them under `src/` so Vite can bundle them; files in `public/` will not resolve.
 
-### 3. Create a translation loader
+### 3. Add the Vite plugin
 
-Create a `loadTranslations.ts` file that imports a locale's translation file at runtime.
+Add [`gtTanstackStart`](/docs/react/tanstack-start/config) to the plugins in your Vite config.
 
-```ts title="loadTranslations.ts"
-export default async function loadTranslations(locale: string) {
-  const translations = await import(`./src/_gt/${locale}.json`);
-  return translations.default;
+```ts title="vite.config.ts"
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import react from '@vitejs/plugin-react';
+import { gtTanstackStart } from 'gt-tanstack-start/plugin/vite'; // [!code ++]
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [tanstackStart(), react(), gtTanstackStart()], // [!code highlight]
+});
+```
+
+The plugin reads `gt.config.json` and loads translations from the `files.gt.output` path, so you do not write a translation loader.
+
+### 4. Set up the router integration
+
+Call [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) in `getRouter()` in your existing `src/router.tsx` file.
+
+```tsx title="src/router.tsx"
+import { createRouter } from '@tanstack/react-router';
+import { setupRouterGTIntegration } from 'gt-tanstack-start'; // [!code ++]
+import { routeTree } from './routeTree.gen';
+
+export function getRouter() {
+  const router = createRouter({ routeTree });
+  setupRouterGTIntegration({ router }); // [!code ++]
+  return router;
 }
 ```
 
-### 4. Add request middleware
+The integration resolves each request's locale, loads its translations before the page renders, hydrates them in the browser, and wraps your app in [`<GTProvider>`](/docs/react/reference/components/gt-provider).
 
-Create `src/start.ts` and register [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware) as global request middleware. Keep TanStack Start's CSRF middleware when you define a custom start instance.
+### 5. Set the document language
 
-```ts title="src/start.ts"
-import { createCsrfMiddleware, createStart } from '@tanstack/react-start';
-import { gtMiddleware } from 'gt-tanstack-start';
-
-const csrfMiddleware = createCsrfMiddleware({
-  filter: ({ handlerType }) => handlerType === 'serverFn',
-});
-
-export const startInstance = createStart(() => ({
-  requestMiddleware: [csrfMiddleware, gtMiddleware],
-}));
-```
-
-The middleware scopes the locale, region, and internationalization setting to each request so server functions use the correct language. Complete the initialization in the next step before starting the development server.
-
-### 5. Initialize General Translation and set up the root route
-
-Call [`initializeGT`](/docs/react/tanstack-start/setup#initialize) once at module scope in `src/router.tsx`. Add the imports and initializer to your existing router file:
-
-```tsx title="src/router.tsx"
-import { initializeGT } from 'gt-tanstack-start';
-import gtConfig from '../gt.config.json';
-import loadTranslations from '../loadTranslations';
-
-initializeGT({ ...gtConfig, loadTranslations });
-```
-
-Then resolve the locale with [`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale) and load a translations snapshot in the `src/routes/__root.tsx` loader. Pass the `locale` and `translations` to [`GTProvider`](/docs/react/reference/components/gt-provider).
+Because the integration wraps the root route, the root document can read the active locale with [`useLocale`](/docs/react/reference/hooks/use-locale). Set it on the `<html>` element in `src/routes/__root.tsx`.
 
 ```tsx title="src/routes/__root.tsx"
-import {
-  HeadContent,
-  Scripts,
-  createRootRoute,
-} from '@tanstack/react-router';
-import {
-  GTProvider,
-  getLocale,
-  getTranslationsSnapshot,
-  LocaleSelector,
-} from 'gt-tanstack-start';
-
-export const Route = createRootRoute({
-  loader: async () => {
-    const locale = getLocale();
-    return {
-      locale,
-      translations: await getTranslationsSnapshot(locale),
-    };
-  },
-  shellComponent: RootDocument,
-});
+import { HeadContent, Scripts } from '@tanstack/react-router';
+import { LocaleSelector, useLocale } from 'gt-tanstack-start';
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { locale, translations } = Route.useLoaderData();
   return (
-    <html lang={locale}>
+    <html lang={useLocale()}>
       <head>
         <HeadContent />
       </head>
       <body>
-        <GTProvider locale={locale} translations={translations}>
-          <LocaleSelector />
-          {children}
-        </GTProvider>
+        <LocaleSelector />
+        {children}
         <Scripts />
       </body>
     </html>
@@ -166,19 +138,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 }
 ```
 
-[`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale) reads the request-scoped locale on the server and the initialized browser locale on the client. [`GTProvider`](/docs/react/reference/components/gt-provider) requires both `locale` and `translations`.
-
-<Callout type="warn">
-  **Warning:** These translation files (`src/_gt/[locale].json`) do not exist until you create them. The default locale still renders, but selecting a target locale in the language switcher returns HTTP 500 until the files exist. Run [`npx gt generate`](/docs/cli/reference/commands/generate) (no API key needed), [`npx gt translate`](/docs/cli/reference/commands/translate) (with credentials), or add empty `{}` files at `src/_gt/[locale].json`, to create them first.
-</Callout>
+[`<LocaleSelector>`](/docs/react/reference/components/locale-selector) adds a language switcher so you can test each locale.
 
 ### 6. Mark content for translation
 
-Wrap JSX in the [`<T>`](/docs/react/reference/components/t) component to translate it in place. Import [`<T>`](/docs/react/reference/components/t) and [`useGT`](/docs/react/reference/hooks/use-gt) from `gt-react` so the CLI detects them when scanning your source.
+Wrap JSX in the [`<T>`](/docs/react/reference/components/t) component to translate it in place, and translate strings with [`useGT`](/docs/react/reference/hooks/use-gt).
 
 ```tsx title="src/routes/index.tsx"
 import { createFileRoute } from '@tanstack/react-router';
-import { T, useGT } from 'gt-react';
+import { T, useGT } from 'gt-tanstack-start';
 
 export const Route = createFileRoute('/')({ component: Home });
 
@@ -207,6 +175,8 @@ Sign in with [`gt login`](/docs/cli/reference/commands/login), set your existing
 npx gt login
 GT_PROJECT_ID=your-project-id npx gt translate
 ```
+
+Until a locale's translation file exists, that locale renders your source content.
 
 Add the command to your build script so production builds always have up-to-date translations:
 

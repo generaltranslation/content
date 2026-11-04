@@ -1,0 +1,191 @@
+---
+
+title: Configuration
+description: Configure General Translation in a TanStack Start app with the gtTanstackStart Vite plugin, its options, and local versus CDN translations. API reference for gtTanstackStart.
+
+---
+
+`gtTanstackStart` is the `gt-tanstack-start` Vite plugin. It reads your `gt.config.json` file, applies the options you pass, and supplies the result to the runtime on the server and in the browser. It also builds the translation loader from your config and can run the experimental compiler.
+
+This page documents the plugin and its options. For the shared `gt.config.json` locale and file settings, see the [`gt-react` configuration reference](/docs/react/reference/config); for the CLI-side `files` schema, see the [CLI configuration reference](/docs/cli/reference/config).
+
+## Overview [#overview]
+
+Import `gtTanstackStart` from `gt-tanstack-start/plugin/vite` and add it to your Vite plugins. Most projects pass no options and keep locale settings in `gt.config.json`.
+
+```ts title="vite.config.ts"
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import react from '@vitejs/plugin-react';
+import { gtTanstackStart } from 'gt-tanstack-start/plugin/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [tanstackStart(), react(), gtTanstackStart()],
+});
+```
+
+```ts
+gtTanstackStart(options?: GTTanstackStartPluginOptions): Plugin[]
+```
+
+The plugin works with [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration), which reads the configuration on each request.
+
+## How it works [#how-it-works]
+
+- **Config resolution.** The plugin reads `gt.config.json` from the current working directory, as the CLI does; set [`config`](#config-path) to use another file. Options you pass override the file's values.
+- **Credentials stay out of the browser.** The browser loads the same configuration, so the plugin leaves `apiKey` and `devApiKey` out of it and warns when `gt.config.json` contains either. Set credentials as environment variables (see [Credentials](#credentials)).
+- **Translation delivery.** The plugin loads translations with a [`loadTranslations`](/docs/react/reference/functions/load-translations) file when one is found, otherwise from the `files.gt.output` path in `gt.config.json`, otherwise from the General Translation CDN. See [Local vs. CDN translations](#translations).
+- **Dictionaries.** The plugin finds a dictionary and a [`loadDictionary`](/docs/react/reference/functions/load-dictionary) file in your app root or `src/`, or uses the paths you set with [`dictionary`](#dictionary) and [`loadDictionaryPath`](#load-dictionary-path).
+- **Restart to apply changes.** The dev server reads the configuration once at startup. After you change `gt.config.json` or the plugin options, stop and restart it; the plugin warns when it detects a change.
+- **Compiler.** The experimental compiler is off by default. Set [`experimentalCompilerOptions`](#compiler-options) to run it.
+
+## Credentials [#credentials]
+
+Set your project ID in `gt.config.json` as [`projectId`](/docs/react/reference/config#project-id), or in the environment:
+
+| Variable | Description |
+| `VITE_GT_PROJECT_ID` | Your General Translation project ID. Used when `gt.config.json` has no `projectId`. |
+| `VITE_GT_DEV_API_KEY` | Project API key (prefixed `gtx-api-`) with runtime translation permission, for on-demand translation and hot reload in development. Read only in development. |
+| `GT_API_KEY` | Project API key for CLI commands such as [`gt translate`](/docs/cli/reference/commands/translate); optional when the CLI uses login. |
+
+[`gt init`](/docs/cli/reference/commands/init) writes `VITE_GT_PROJECT_ID` and `VITE_GT_DEV_API_KEY` to `.env.local` when you enable live development translations.
+
+<Callout type="warn">
+  **Warning:** Vite exposes `VITE_` variables to browser code. Keep `VITE_GT_DEV_API_KEY` out of production build environments, and never prefix `GT_API_KEY` with `VITE_`.
+</Callout>
+
+## Options [#options]
+
+All options are optional. File paths resolve from the current working directory.
+
+| Option | Description | Type | Optional | Default |
+| [`config`](#config-path) | Path to the `gt.config.json` file. | `string` | Yes | `gt.config.json` |
+| [`localeCookieName`](#locale-cookie-name) | Cookie that stores the active locale. | `string` | Yes | `generaltranslation.locale` |
+| [`regionCookieName`](#region-cookie-name) | Cookie that stores the active region. | `string` | Yes | `generaltranslation.region` |
+| [`enableI18nCookieName`](#enable-i18n-cookie-name) | Cookie that stores whether to translate. | `string` | Yes | `generaltranslation.enable-i18n` |
+| [`cacheExpiryTime`](#cache-expiry-time) | Milliseconds before locally cached translations expire. | `number \| null` | Yes | `60000` |
+| [`batchConfig`](#batch-config) | Batching for runtime translation requests. | `object` | Yes | See below |
+| [`runtimeTranslation`](#runtime-translation) | Timeout and metadata for runtime translation requests. | `object` | Yes | See below |
+| [`dictionary`](#dictionary) | Path to your dictionary file. | `string` | Yes | Auto-resolved |
+| [`loadDictionaryPath`](#load-dictionary-path) | Path to a custom [`loadDictionary`](/docs/react/reference/functions/load-dictionary) file. | `string` | Yes | Auto-resolved |
+| [`loadTranslationsPath`](#load-translations-path) | Path to a custom [`loadTranslations`](/docs/react/reference/functions/load-translations) file. | `string` | Yes | Auto-resolved |
+| [`experimentalCompilerOptions`](#compiler-options) | Compiler plugin settings. | `object` | Yes | See below |
+
+### `config` [#config-path]
+
+**Type** `string` · **Optional** · **Default** `gt.config.json`
+
+Path to the `gt.config.json` file, relative to the current working directory. The plugin throws when the file is missing or is not valid JSON.
+
+### `localeCookieName` [#locale-cookie-name]
+
+**Type** `string` · **Optional** · **Default** `generaltranslation.locale`
+
+Name of the cookie that stores the active locale. The server reads it to resolve the request locale and writes the resolved locale back to it.
+
+### `regionCookieName` [#region-cookie-name]
+
+**Type** `string` · **Optional** · **Default** `generaltranslation.region`
+
+Name of the cookie that stores the active region.
+
+### `enableI18nCookieName` [#enable-i18n-cookie-name]
+
+**Type** `string` · **Optional** · **Default** `generaltranslation.enable-i18n`
+
+Name of the cookie that stores whether to translate content.
+
+### `cacheExpiryTime` [#cache-expiry-time]
+
+**Type** `number | null` · **Optional** · **Default** `60000`
+
+Milliseconds before locally cached translations expire. Set `null` to keep loaded translations until the server restarts or the page reloads.
+
+### `batchConfig` [#batch-config]
+
+**Type** `{ maxConcurrentRequests?: number; maxBatchSize?: number; batchInterval?: number }` · **Optional**
+
+Controls how runtime translation requests are batched:
+
+| Field | Description | Type | Default |
+| `maxConcurrentRequests` | Maximum concurrent translation requests. | `number` | `100` |
+| `maxBatchSize` | Maximum translations per batched request. | `number` | `25` |
+| `batchInterval` | Milliseconds between batched requests. | `number` | `50` |
+
+### `runtimeTranslation` [#runtime-translation]
+
+**Type** `{ timeout?: number; metadata?: object }` · **Optional**
+
+Settings for runtime translation requests. `timeout` is the number of milliseconds to wait for a translation and defaults to `12000`. `metadata` adds request options sent with every runtime translation request.
+
+### `dictionary` [#dictionary]
+
+**Type** `string` · **Optional**
+
+Path to your dictionary file. The file must have a default or named `dictionary` export. By default, the plugin uses the first `dictionary.ts`, `dictionary.js`, or `dictionary.json` file it finds in your app root, then in `src/`.
+
+### `loadDictionaryPath` [#load-dictionary-path]
+
+**Type** `string` · **Optional**
+
+Path to a custom [`loadDictionary`](/docs/react/reference/functions/load-dictionary) file. The file must have a default or named [`loadDictionary`](/docs/react/reference/functions/load-dictionary) function export. By default, the plugin uses the first `loadDictionary.ts` or `loadDictionary.js` file it finds in your app root, then in `src/`.
+
+### `loadTranslationsPath` [#load-translations-path]
+
+**Type** `string` · **Optional**
+
+Path to a custom [`loadTranslations`](/docs/react/reference/functions/load-translations) file. The file must have a default or named [`loadTranslations`](/docs/react/reference/functions/load-translations) function export. By default, the plugin uses `src/loadTranslations.ts`, `.tsx`, `.js`, or `.jsx` when one exists. A custom loader replaces loading from `files.gt.output` and the CDN.
+
+### `experimentalCompilerOptions` [#compiler-options]
+
+**Type** `object` · **Optional**
+
+Settings for the experimental compiler, which analyzes your source at build time. Fields:
+
+| Field | Description | Type | Default |
+| `type` | Which compiler plugin to use. | `'babel' \| 'none'` | `'none'` |
+| `logLevel` | Log verbosity for the compiler. | `'silent' \| 'error' \| 'warn' \| 'info' \| 'debug'` | `'warn'` |
+| `compileTimeHash` | Pre-compute translation hashes at build time. | `boolean` | `true` |
+| `disableBuildChecks` | Disable build-time validation checks. | `boolean` | `false` |
+| `enableAutoJsxInjection` | Automatically wrap translatable JSX at build time. | `boolean` | `files.gt.parsingFlags.enableAutoJsxInjection` |
+
+Set `type: 'babel'` to run the compiler. It is installed with `gt-tanstack-start` and loaded only when enabled. The compiler skips `node_modules`.
+
+```ts title="vite.config.ts"
+gtTanstackStart({
+  experimentalCompilerOptions: { type: 'babel' },
+});
+```
+
+To use [automatic JSX injection](/docs/cli/guides/using-auto-jsx), enable `enableAutoJsxInjection` under `files.gt.parsingFlags` in `gt.config.json`, which keeps CLI extraction and compiler transforms in sync, and set `type: 'babel'`. The plugin warns when injection is enabled without the compiler, when `compileTimeHash` is `false`, and when the compiler plugin is also registered separately.
+
+## Local vs. CDN translations [#translations]
+
+By default, the plugin loads translation files from the `files.gt.output` path in `gt.config.json`. The CLI writes the same files when you run [`npx gt translate`](/docs/cli/reference/commands/translate):
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja"],
+  "files": { "gt": { "output": "src/_gt/[locale].json" } }
+}
+```
+
+The path must contain the `[locale]` placeholder. A locale without a file loads no translations and renders your source content. Local translations are bundled with your app, so updating them requires a redeploy.
+
+To load translations from the General Translation CDN instead, remove `files.gt.output` and set a [`projectId`](/docs/react/reference/config#project-id). To load them from another source, such as a database or an API, add a [`loadTranslations`](/docs/react/reference/functions/load-translations) file:
+
+```ts title="src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  const response = await fetch(`https://your-cdn.com/translations/${locale}.json`);
+  return response.json();
+}
+```
+
+See [Storing translations locally](/docs/react/guides/storing-translations) for the full workflow.
+
+## Returns [#returns]
+
+`gtTanstackStart` returns an array of Vite plugins: the configuration plugin, plus the compiler plugin when it is enabled.
+
+The dev server and the build fail when `gt.config.json` cannot be read or an explicit file option points to a missing file. The app throws when it loads a loader or dictionary file that lacks the expected export.

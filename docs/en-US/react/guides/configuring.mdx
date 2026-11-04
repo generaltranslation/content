@@ -12,7 +12,7 @@ related:
 
 Server-rendered React and each framework integration need configuration plus a [`GTProvider`](/docs/react/reference/components/gt-provider) that exposes translations to your components. React SPAs initialize directly with [`initializeGTSPA`](/docs/react/reference/config#initialize-spa); follow the [React SPA Quickstart](/docs/react/react-spa-quickstart) for that setup.
 
-*Note: `gt-react`, `gt-tanstack-start`, and `gt-react-native` do not read `gt.config.json` automatically — import it and pass its fields into the initialization call. In Next.js, the [`withGTConfig`](/docs/react/nextjs/config) plugin reads `gt.config.json` for you.*
+*Note: `gt-react` and `gt-react-native` do not read `gt.config.json` automatically — import it and pass its fields into the initialization call. In Next.js, the [`withGTConfig`](/docs/react/nextjs/config) plugin reads `gt.config.json` for you, and in TanStack Start, the [`gtTanstackStart`](/docs/react/tanstack-start/config) Vite plugin does.*
 
 ## Initialize the library [#initialize]
 
@@ -50,19 +50,17 @@ Configure General Translation once, before your first render.
   </Tab>
 
   <Tab value="TanStack Start">
-    Call [`initializeGT`](/docs/react/reference/config#initialize) once during server and client startup, spreading in your config.
+    TanStack Start has no manual initialization call. Add the [`gtTanstackStart`](/docs/react/tanstack-start/config) Vite plugin to `vite.config.ts`; it reads `gt.config.json` and loads translations from your `files.gt.output` path.
 
-    ```tsx
-    import { initializeGT } from 'gt-tanstack-start';
-    import gtConfig from '../gt.config.json';
+    ```ts title="vite.config.ts"
+    import { gtTanstackStart } from 'gt-tanstack-start/plugin/vite';
 
-    const loadTranslations = (locale: string) =>
-      import(`./_gt/${locale}.json`).then((m) => m.default);
-
-    initializeGT({ ...gtConfig, loadTranslations });
+    export default defineConfig({
+      plugins: [tanstackStart(), react(), gtTanstackStart()],
+    });
     ```
 
-    Register [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware), then use [`getLocale`](/docs/react/tanstack-start/reference/functions/get-locale) from `gt-tanstack-start` inside the request scope. With [`localeRouting`](/docs/react/reference/config#locale-routing) enabled, middleware resolves the locale from the path prefix before the cookie and `Accept-Language` header.
+    Pass options such as cookie names, `dictionary`, and `loadTranslationsPath` to the plugin (see [Configuration](/docs/react/tanstack-start/config#options)).
   </Tab>
 
   <Tab value="React Native">
@@ -131,16 +129,16 @@ Wrap your app in [`GTProvider`](/docs/react/reference/components/gt-provider#con
   </Tab>
 
   <Tab value="TanStack Start">
-    Pass the active [`locale`](/docs/react/reference/components/gt-provider#locale) and the [`translations`](/docs/react/reference/components/gt-provider#translations) for it. Both are required.
+    Call [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) in `getRouter()`. It resolves each request's locale, loads its translations, and renders the provider around your app, so you do not render [`<GTProvider>`](/docs/react/reference/components/gt-provider#contracts) yourself.
 
-    ```tsx
-    import { GTProvider, getTranslationsSnapshot } from 'gt-tanstack-start';
+    ```tsx title="src/router.tsx"
+    import { setupRouterGTIntegration } from 'gt-tanstack-start';
 
-    const translations = await getTranslationsSnapshot(locale);
-
-    <GTProvider locale={locale} translations={translations}>
-      <App />
-    </GTProvider>;
+    export function getRouter() {
+      const router = createRouter({ routeTree });
+      setupRouterGTIntegration({ router });
+      return router;
+    }
     ```
   </Tab>
 
@@ -182,9 +180,9 @@ Translation delivery uses your project ID. For on-demand development translation
   </Tab>
 
   <Tab value="TanStack Start">
-    Set them through your bundler's public env and pass them into the initialization call.
+    Use `VITE_` variables for your project ID and development key. The SDK reads them automatically, and reads the development key only in development. Remove `VITE_GT_DEV_API_KEY` from production build environments.
 
-    ```bash title=".env (Vite)"
+    ```bash title=".env.local"
     VITE_GT_PROJECT_ID="..."
     VITE_GT_DEV_API_KEY="gtx-api-..."
     ```

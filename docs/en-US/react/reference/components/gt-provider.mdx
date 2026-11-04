@@ -18,7 +18,7 @@ The `<GTProvider>` contract depends on the framework and router. Some providers 
 | React server rendering | `locale`, `translations` | Your server loader |
 | Next.js App Router | None | The request and `gt-next` cache |
 | Next.js Pages Router | `locale`, `translations` | Pages Router data wrappers |
-| TanStack Start | `locale`, `translations` | Your request loader |
+| TanStack Start | None | Rendered by [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) |
 | React Native | None | Native locale detection and the configured translation loader |
 
 The [Props](#props) section identifies exactly which provider variants accept each prop.
@@ -80,14 +80,16 @@ The [Props](#props) section identifies exactly which provider variants accept ea
   </Tab>
 
   <Tab value="TanStack Start">
-    `gt-tanstack-start` re-exports the shared provider. Pass the active locale and its translation snapshot after registering [`gtMiddleware`](/docs/react/tanstack-start/reference/functions/gt-middleware).
+    [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) renders the provider around your app. It passes the request's locale, translations, dictionary, region, and translation state, and supplies locale-routing navigation. Do not render `<GTProvider>` yourself.
 
-    ```tsx
-    import { GTProvider } from 'gt-tanstack-start';
+    ```tsx title="src/router.tsx"
+    import { setupRouterGTIntegration } from 'gt-tanstack-start';
 
-    <GTProvider locale={locale} translations={translations}>
-      <App />
-    </GTProvider>
+    export function getRouter() {
+      const router = createRouter({ routeTree });
+      setupRouterGTIntegration({ router });
+      return router;
+    }
     ```
   </Tab>
 
@@ -108,7 +110,7 @@ The [Props](#props) section identifies exactly which provider variants accept ea
 
 ## How it works [#how-it-works]
 
-- **React, TanStack Start, and Next.js Pages Router.** The provider receives a translation snapshot up front, so translated content renders synchronously.
+- **React, TanStack Start, and Next.js Pages Router.** The provider receives a translation snapshot up front, so translated content renders synchronously. In TanStack Start, the router integration loads the snapshot before render.
 - **Next.js App Router.** The server provider reads request state and loads translations and dictionaries before rendering its client boundary.
 - **React Native.** The provider loads translations for the resolved locale through Suspense. It renders `fallback` until they are available.
 - **Context for the tree.** Descendants read the active locale, translations, dictionaries, region, and translation state from provider context.
@@ -119,8 +121,8 @@ The [Props](#props) section identifies exactly which provider variants accept ea
 | Prop | Description | Type | Optional | Default |
 | --- | --- | --- | --- | --- |
 | [`children`](#children) | Component tree. Accepted by every provider. | `ReactNode` | Yes | — |
-| [`locale`](#locale) | Active locale. Required by React, TanStack Start, and Next.js Pages Router; optional in React Native; not accepted in Next.js App Router. | `string \| LocaleCandidates` | Framework-specific | Device or stored locale in React Native |
-| [`translations`](#translations) | Translation snapshot. Required by React, TanStack Start, and Next.js Pages Router; not accepted in Next.js App Router or React Native. | `object` | Framework-specific | — |
+| [`locale`](#locale) | Active locale. Required by React and Next.js Pages Router; optional in React Native; supplied by the router integration in TanStack Start; not accepted in Next.js App Router. | `string \| LocaleCandidates` | Framework-specific | Device or stored locale in React Native |
+| [`translations`](#translations) | Translation snapshot. Required by React and Next.js Pages Router; supplied by the router integration in TanStack Start; not accepted in Next.js App Router or React Native. | `object` | Framework-specific | — |
 | [`dictionaries`](#dictionaries) | Per-locale dictionaries. Accepted by React, TanStack Start, Next.js Pages Router, and React Native; loaded internally in Next.js App Router. | `object` | Yes | — |
 | [`region`](#region) | Active region. Accepted by React, TanStack Start, Next.js Pages Router, and React Native; resolved internally in Next.js App Router. | `string` | Yes | Stored region or `undefined` |
 | [`enableI18n`](#enable-i18n) | Whether to translate. Accepted by React, TanStack Start, Next.js Pages Router, and React Native; resolved internally in Next.js App Router. | `boolean` | Yes | `true` |
@@ -142,7 +144,8 @@ The component tree that receives translation context. Every provider variant acc
 
 The active locale for the tree:
 
-- Required as a resolved `string` in React, TanStack Start, and Next.js Pages Router.
+- Required as a resolved `string` in React and Next.js Pages Router.
+- Supplied by [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) in TanStack Start.
 - Optional in React Native, where it accepts locale candidates and defaults to the stored or device locale.
 - Not accepted by the Next.js App Router provider, which resolves the request locale internally.
 
@@ -152,7 +155,7 @@ Read the result downstream with [`useLocale`](/docs/react/reference/hooks/use-lo
 
 **Type** `Record<Locale, Record<Hash, Translation>>` · **Framework-specific**
 
-A translation snapshot produced by [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot). It is required in React, TanStack Start, and Next.js Pages Router so those providers can resolve content synchronously.
+A translation snapshot produced by [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot). It is required in React and Next.js Pages Router so those providers can resolve content synchronously. In TanStack Start, [`setupRouterGTIntegration`](/docs/react/tanstack-start/reference/functions/setup-router-gt-integration) supplies it.
 
 The Next.js App Router provider loads the snapshot internally. The React Native provider accepts no `translations` prop and loads translations for the active locale itself.
 
@@ -186,7 +189,7 @@ React Native-only content shown while translations load. The default is a center
 
 Callback after a web locale, region, or translation-state change. React and TanStack Start accept it through the shared provider. Next.js Pages Router uses it to replace a full-page reload with `Router.push`.
 
-Plain `gt-react` and Next.js Pages Router fall back to `window.location.reload`. TanStack Start supplies pathname navigation when locale routing is enabled. The Next.js App Router provider supplies its own callback and does not accept this prop: it normally calls `router.refresh`, but reloads the document when middleware must remove a non-default locale prefix after switching to the default locale. React Native updates provider state instead.
+Plain `gt-react` and Next.js Pages Router fall back to `window.location.reload`. In TanStack Start, the router integration reloads the page, or reloads at the corresponding pathname when locale routing is enabled. The Next.js App Router provider supplies its own callback and does not accept this prop: it normally calls `router.refresh`, but reloads the document when middleware must remove a non-default locale prefix after switching to the default locale. React Native updates provider state instead.
 
 ### `onMissingTranslation` [#missing-translation]
 
