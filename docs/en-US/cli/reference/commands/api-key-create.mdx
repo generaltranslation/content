@@ -1,11 +1,11 @@
 ---
 
 title: gt api-key create
-description: Create a project API key with explicit permissions and print its secret once. API reference for the gt api-key create command.
+description: Create a project or Organization API key with explicit permissions and print its secret once. API reference for the gt api-key create command.
 
 ---
 
-Create runtime or automation credentials without changing local environment or config files. Authenticate with a saved login or an authorized explicit key as described in [Configuring the CLI](/docs/cli/guides/configuring#credentials).
+Create runtime or automation credentials without changing local environment or config files. A project key can use a saved login or an authorized explicit key. An Organization key always uses the saved [`gt login`](/docs/cli/reference/commands/login) session. (See [credential precedence](/docs/cli/guides/configuring#credentials)).
 
 ## Overview [#overview]
 
@@ -17,13 +17,18 @@ npx gt api-key create --name <name> --permission <permissions...> [options]
 | --- | --- | --- | --- | --- |
 | [`--name <name>`](#name) | Nonempty key name. | `string` | No | — |
 | [`--permission <permissions...>`](#permission) | Explicit canonical grants. | `string[]` | No | — |
+| [`--org-id <orgId>`](#organization-id) | Create an Organization key for this Organization. | `string` | Yes | — |
 | [`-c, --config <path>`](#config) | Config file path. | `string` | Yes | Auto-resolved |
-| [`--api-key <key>`](#api-key) | Explicit authentication override. | `string` | Yes | `GT_API_KEY`, otherwise login |
-| [`--project-id <id>`](#project-id) | Target project. | `string` | Yes | Config or environment |
+| [`--api-key <key>`](#api-key) | Explicit authentication override for a project key. | `string` | Yes | `GT_API_KEY`, otherwise login |
+| [`--project-id <id>`](#project-id) | Target project for a project key. | `string` | Yes | Config or environment |
 
 ## How it works [#how-it-works]
 
-The caller needs `project:api_keys:write` authorization and permission to delegate every requested grant. Unavailable grants fail all-or-nothing; the CLI does not silently narrow the selection. Project keys cannot hold `project:api_keys:write` and cannot create other keys.
+Creating a project key requires a project ID. The caller needs `project:api_keys:write` and permission to delegate every requested grant. Creating an Organization key does not use an API key. Pass [`--org-id`](#organization-id), and the command sends the saved [`gt login`](/docs/cli/reference/commands/login) session instead. If you are not signed in, it stops and tells you to run [`gt login`](/docs/cli/reference/commands/login).
+
+Unavailable grants fail all-or-nothing; the CLI does not silently narrow the selection. Project keys cannot hold `project:api_keys:write` and cannot create other keys. An Organization-only permission without `--org-id` fails before any request.
+
+Since `gt` 2.27.0, `--org-id` creates an Organization key. Earlier releases created only project keys.
 
 On success, only the new secret plus a newline is written to stdout. Diagnostics go to stderr. The secret bypasses the logger and log file, including under `--quiet` and when `GT_LOG_FORMAT` is `json` or `agent`; it is not JSON metadata. The command does not write env or config files.
 
@@ -51,7 +56,22 @@ Pass one or more canonical permission names, separated by spaces or repeated occ
 - `project:translations:generate`
 - `project:translations:enqueue`
 
+These permissions require [`--org-id`](#organization-id). An Organization key can include them together with the project permissions above:
+
+- `org:projects:create`
+- `project:api_keys:read`
+- `project:api_keys:write`
+- `org:context:read`
+- `org:context:write`
+- `org:assets:write`
+
 Wildcards, preset names, and key-type flags are not supported. Omitting permissions is an error, not a full-access shortcut. Include each required grant explicitly; do not assume a write grant also adds read access.
+
+### Organization ID
+
+**Type** `string` · **Optional** · **Default** —
+
+Create an Organization key for this Organization instead of a project key. The value is the Organization ID. The command requires a saved [`gt login`](/docs/cli/reference/commands/login) session and does not send `--api-key` or `GT_API_KEY`.
 
 ### Config
 
@@ -63,13 +83,13 @@ Read project settings from this JSON config file; the `.json` suffix may be omit
 
 **Type** `string` · **Optional** · **Default** `GT_API_KEY`, otherwise saved login
 
-Override authentication with an explicit authorized key. Invalid or insufficient keys do not fall back to login. Prefer environment-based secrets over literal secrets in shell history. (See [credential precedence](/docs/cli/guides/configuring#credentials)).
+Override authentication for a project key with an explicit authorized key. Invalid or insufficient keys do not fall back to login. This flag is not used when [`--org-id`](#organization-id) is set. Prefer environment-based secrets over literal secrets in shell history. (See [credential precedence](/docs/cli/guides/configuring#credentials)).
 
 ### Project ID
 
 **Type** `string` · **Optional** · **Default** Config or environment
 
-Select the target project. A config ID that disagrees with the flag or resolved environment ID fails validation. Without a config ID, the flag wins over the environment. Supported framework-prefixed project variables also participate in resolution.
+Select the target project for a project key. A config ID that disagrees with the flag or resolved environment ID fails validation before the request, including when [`--org-id`](#organization-id) is set. Without a config ID, the flag wins over the environment. Supported framework-prefixed project variables also participate in resolution. The project ID is not sent when creating an Organization key.
 
 ## Example [#example]
 
@@ -83,6 +103,15 @@ npx gt api-key create \
 ```
 
 Store the returned secret securely. This generate-only key cannot run the full [`gt translate`](/docs/cli/reference/commands/translate) pipeline. For CI, grant permissions for the [whole workflow](/docs/cli/guides/configuring#credentials) and save the key in your CI provider's secret store, not in committed files.
+
+After signing in, create an Organization key that can read Context Groups:
+
+```bash
+npx gt api-key create \
+  --org-id your-organization-id \
+  --name "Context read" \
+  --permission org:context:read
+```
 
 <Callout type="warn">
   Treat stdout as secret material. Do not merge stderr into it, send it to shared logs, or expose even a generate-only key in deployed browser or mobile bundles. Repeating the command can create another key; there is no remote rollback or idempotent retry guarantee.
