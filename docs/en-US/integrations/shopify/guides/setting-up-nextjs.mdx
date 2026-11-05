@@ -1,12 +1,12 @@
 ---
 
-title: Setting up Next.js
+title: Setting up Next.js for Shopify
+navTitle: "Setting up Next.js"
 description: How to localize a Vercel Shop storefront with gt-next, locale-prefixed routes, Shopify markets, and Cache Components.
 related:
   links:
     - /docs/integrations/shopify/guides/setting-up-hydrogen
-    - /docs/integrations/shopify/guides/translating-catalog
-    - /docs/react/nextjs/cache-components
+    - /docs/integrations/shopify/guides/translating-catalog-content
 
 ---
 
@@ -98,7 +98,9 @@ export default async function loadTranslations(locale: string): Promise<object> 
 
 Run [`npx gt translate`](/docs/cli/reference/commands/translate) after changing copy and commit the generated files, or run it before `next build`. Committed files let the storefront build without a General Translation API key.
 
-## Move routes under `[locale]` [#locale-routes]
+## Route requests by locale [#routing]
+
+### Move routes under `[locale]`
 
 1. Move every storefront route into `app/[locale]/` and delete `app/layout.tsx`, so `[locale]` is a root param. Keep `api/`, `md/`, `agent/`, `sitemap*`, `robots.ts`, `manifest.ts`, `llms.txt`, `global-error.tsx`, and static icons directly under `app/`.
 2. Update `PageProps<"/...">` and `LayoutProps<"/...">` type arguments to `"/[locale]/..."`.
@@ -150,7 +152,7 @@ Run [`npx gt translate`](/docs/cli/reference/commands/translate) after changing 
   **Warning:** In `gt-next` 11.4, [`GTProvider`](/docs/react/reference/components/gt-provider) reads `usePathname()` on the client. Under Cache Components, a dynamic route with no static params then fails to prerender. Return a placeholder from `generateStaticParams` on routes that have none, such as the catch-all route and `account/orders/[id]`.
 </Callout>
 
-## Route requests in the proxy [#proxy]
+### Route requests in the proxy
 
 Read the locale list once from `gt.config.json` and split the prefix from each path:
 
@@ -210,6 +212,91 @@ function isPagePath(pathname: string): boolean {
 ```
 
 Because `splitLocalePath` never treats the default locale as a prefix, `/en/products/x` is rewritten to `/en/en/products/x` and returns 404. Each page has one canonical URL.
+
+### Localize links
+
+Pass string hrefs through [`useLocalizeHref`](/docs/react/nextjs/reference/hooks/use-localize-href) inside the template's `Link` component, so internal links keep the current locale. Do the same for `router.push`, `router.replace`, and search navigation.
+
+```tsx title="components/ui/link.tsx"
+import { useLocalizeHref } from "gt-next/link";
+
+// Keep navigation in the active locale; the default locale stays unprefixed.
+const localizeHref = useLocalizeHref();
+const localizedHref = typeof href === "string" ? localizeHref(href) : href;
+```
+
+For the language switcher, swap the prefix of the current URL and name each language in itself:
+
+```tsx title="components/nav/language-switcher.tsx"
+"use client";
+
+import { T, useLocale, useLocales } from "gt-next";
+import { useId } from "react";
+
+import { localizePath, splitLocalePath } from "@/lib/i18n";
+
+/** Names each language in itself ("Français", "日本語") so shoppers recognize their own. */
+function getEndonym(locale: string): string {
+  const name = new Intl.DisplayNames([locale], { type: "language" }).of(locale) ?? locale;
+  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
+}
+
+export function LanguageSwitcher() {
+  const id = useId();
+  const locale = useLocale();
+  const locales = useLocales();
+  return (
+    <>
+      <label htmlFor={id} className="sr-only">
+        <T>Language</T>
+      </label>
+      <select
+        id={id}
+        value={locale}
+        onChange={(event) => {
+          // A full navigation lets the proxy move the cart to the new language's Shopify market.
+          const { pathname } = splitLocalePath(window.location.pathname);
+          window.location.assign(
+            `${localizePath(pathname, event.target.value)}${window.location.search}`,
+          );
+        }}
+      >
+        {locales.map((option) => (
+          <option key={option} lang={option} value={option}>
+            {getEndonym(option)}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+}
+```
+
+### Add SEO metadata
+
+Give each page a canonical URL in its own locale and an `hreflang` alternate for every locale:
+
+```ts title="lib/seo/server.ts"
+export async function buildAlternates({
+  pathname,
+  searchParams,
+}: {
+  pathname: string;
+  searchParams?: SearchParamsInput;
+}): Promise<Metadata["alternates"]> {
+  const canonicalPath = buildCanonicalPath(pathname, searchParams);
+  const locale = await getLocale();
+  return {
+    canonical: localizePath(canonicalPath, locale),
+    languages: {
+      ...Object.fromEntries(locales.map((code) => [code, localizePath(canonicalPath, code)])),
+      "x-default": canonicalPath,
+    },
+  };
+}
+```
+
+List every locale's URL in the sitemap too, each with `<xhtml:link rel="alternate" hreflang="...">` entries for every locale.
 
 ## Sell each locale in a market [#markets]
 
@@ -334,66 +421,7 @@ if (isPagePath(pathname) && rememberedLocale && rememberedLocale !== locale) {
 }
 ```
 
-Shopify reprices the cart lines in the new currency. The language switcher below navigates with a full page load, so the proxy sees every switch.
-
-## Localize links [#links]
-
-Pass string hrefs through [`useLocalizeHref`](/docs/react/nextjs/reference/hooks/use-localize-href) inside the template's `Link` component, so internal links keep the current locale. Do the same for `router.push`, `router.replace`, and search navigation.
-
-```tsx title="components/ui/link.tsx"
-import { useLocalizeHref } from "gt-next/link";
-
-// Keep navigation in the active locale; the default locale stays unprefixed.
-const localizeHref = useLocalizeHref();
-const localizedHref = typeof href === "string" ? localizeHref(href) : href;
-```
-
-For the language switcher, swap the prefix of the current URL and name each language in itself:
-
-```tsx title="components/nav/language-switcher.tsx"
-"use client";
-
-import { T, useLocale, useLocales } from "gt-next";
-import { useId } from "react";
-
-import { localizePath, splitLocalePath } from "@/lib/i18n";
-
-/** Names each language in itself ("Français", "日本語") so shoppers recognize their own. */
-function getEndonym(locale: string): string {
-  const name = new Intl.DisplayNames([locale], { type: "language" }).of(locale) ?? locale;
-  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
-}
-
-export function LanguageSwitcher() {
-  const id = useId();
-  const locale = useLocale();
-  const locales = useLocales();
-  return (
-    <>
-      <label htmlFor={id} className="sr-only">
-        <T>Language</T>
-      </label>
-      <select
-        id={id}
-        value={locale}
-        onChange={(event) => {
-          // A full navigation lets the proxy move the cart to the new language's Shopify market.
-          const { pathname } = splitLocalePath(window.location.pathname);
-          window.location.assign(
-            `${localizePath(pathname, event.target.value)}${window.location.search}`,
-          );
-        }}
-      >
-        {locales.map((option) => (
-          <option key={option} lang={option} value={option}>
-            {getEndonym(option)}
-          </option>
-        ))}
-      </select>
-    </>
-  );
-}
-```
+Shopify reprices the cart lines in the new currency. The [language switcher](#routing) navigates with a full page load, so the proxy sees every switch.
 
 ## Translate copy [#copy]
 
@@ -445,7 +473,7 @@ Format Shopify prices with the locale and the currency code Shopify returns. The
 
 Product titles, descriptions, and options come from Shopify. You have two options:
 
-- **Store translations in Shopify.** Register translations with the Admin API and read them with `@inContext(language:)`, which the market map above already passes. Catalog edits don't need a new storefront build. (See [Translating catalog content](/docs/integrations/shopify/guides/translating-catalog)).
+- **Store translations in Shopify.** Register translations with the Admin API and read them with `@inContext(language:)`, which the market map above already passes. Catalog edits don't need a new storefront build. (See [Translating catalog content](/docs/integrations/shopify/guides/translating-catalog-content)).
 - **Bundle translations with the storefront.** Export the catalog's source text to a JSON file and translate it with the CLI along with your copy. This needs no Shopify Admin access, and is what the example storefront does.
 
 To bundle the catalog, export the text with the Storefront API, keyed by the source text itself. Write short labels (titles, option names and values, alt text) and rich text (descriptions, page bodies) to separate files, so only the labels reach the browser. Sanitize rich text the same way the storefront renders it, so the keys match:
@@ -507,29 +535,3 @@ export async function getCatalogText() {
 - For client components such as the cart and predictive search, pass `getCatalogLabels(locale)` to a context provider in the layout. Don't ship rich text or other locales' catalogs to the browser.
 - Keep option values in their source language wherever they select a variant, build a URL, or reach Shopify. Translate only the label you display.
 - To guide product-name translation, such as keeping brand terms or translating a garment word, add glossary terms and custom prompts to the project's context in the Dashboard.
-
-## Add SEO metadata [#seo]
-
-Give each page a canonical URL in its own locale and an `hreflang` alternate for every locale:
-
-```ts title="lib/seo/server.ts"
-export async function buildAlternates({
-  pathname,
-  searchParams,
-}: {
-  pathname: string;
-  searchParams?: SearchParamsInput;
-}): Promise<Metadata["alternates"]> {
-  const canonicalPath = buildCanonicalPath(pathname, searchParams);
-  const locale = await getLocale();
-  return {
-    canonical: localizePath(canonicalPath, locale),
-    languages: {
-      ...Object.fromEntries(locales.map((code) => [code, localizePath(canonicalPath, code)])),
-      "x-default": canonicalPath,
-    },
-  };
-}
-```
-
-List every locale's URL in the sitemap too, each with `<xhtml:link rel="alternate" hreflang="...">` entries for every locale.

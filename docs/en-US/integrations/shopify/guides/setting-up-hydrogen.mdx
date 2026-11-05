@@ -1,17 +1,18 @@
 ---
 
-title: Setting up Hydrogen
+title: Setting up Shopify Hydrogen
+navTitle: "Setting up Hydrogen"
 description: How to add gt-react to a Hydrogen storefront and keep Shopify's language context in step with it.
 related:
   links:
     - /docs/integrations/shopify/guides/setting-up-nextjs
-    - /docs/integrations/shopify/guides/translating-catalog
+    - /docs/integrations/shopify/guides/translating-catalog-content
 
 ---
 
 Hydrogen storefronts are React Router framework apps, so `gt-react` translates their copy. The Hydrogen-specific work is making Shopify's Storefront API context use the same locale as the page.
 
-*Note: This guide matches Hydrogen 2026.4 on React Router 7.*
+*Note: This guide matches Hydrogen 2026.4 on React Router 7. Hydrogen 2026.10 replaces `createHydrogenContext` with `createShopifyRequestContext`, which takes the same `i18n` language and country, plus an optional `pathPrefix` such as `/fr`.*
 
 ## Before you start [#before-start]
 
@@ -19,7 +20,7 @@ Complete the [React Router Quickstart](/docs/react/react-router-quickstart), inc
 
 ## Resolve the locale from the URL [#request-locale]
 
-Read the locale from the request path so every locale has its own URL. Use one function for both GT and Hydrogen:
+Read the locale from the request path so every locale has its own URL. Use one function for both `gt-react` and Hydrogen:
 
 ```ts title="app/lib/i18n.ts"
 import gtConfig from '../../gt.config.json';
@@ -33,12 +34,26 @@ export function getRequestLocale(request: Request): string {
 
 In the root loader, call `getRequestLocale(request)` instead of `parseLocale(request)`, and pass the result to [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot).
 
-To serve prefixed paths, add an optional `($locale)` segment to your route files, as in Shopify's [Hydrogen Markets guide](https://shopify.dev/docs/storefronts/headless/hydrogen/markets). Respond with 404 when the segment is not a configured target locale, so `/en/...` and unknown prefixes don't render a second copy of a page. Leave routes whose URLs are registered with Shopify unprefixed, such as the Customer Account API callback.
+To serve prefixed paths, add an optional `($locale)` segment to your route files, as in Shopify's [Hydrogen Markets guide](https://shopify.dev/docs/storefronts/headless/hydrogen/markets). Respond with 404 when the segment is not a configured target locale, so `/en/...` and unknown prefixes don't render a second copy of a page:
+
+```ts title="app/routes/($locale).tsx"
+import gtConfig from '../../gt.config.json';
+
+// Only target locales are valid prefixes; the default locale stays unprefixed.
+export async function loader({params}: {params: {locale?: string}}) {
+  if (params.locale && !gtConfig.locales.includes(params.locale)) {
+    throw new Response(null, {status: 404});
+  }
+  return null;
+}
+```
+
+Leave routes whose URLs are registered with Shopify unprefixed, such as the Customer Account API callback.
 
 *Note: `parseLocale` reads the locale cookie, then `Accept-Language`. Used on its own, it serves every language from one URL, so search engines index only one language.*
 
 <Callout type="info">
-  **Upcoming in Hydrogen:** open pull requests propose `defineShopifyI18n`, `getSupportedLocales`, and `getLanguageTag` for declaring locales and matching them from the URL. They are not released, so keep your own locale list and mapping until they ship. (See [Upcoming Hydrogen APIs](/docs/integrations/shopify/reference/locale-handling#upcoming-hydrogen)).
+  **Upcoming in Hydrogen:** open pull requests propose `defineShopifyI18n`, `getSupportedLocales`, and `getLanguageTag` for declaring locales and matching them from the URL. They are not released, so keep your own locale list and mapping until they ship. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)).
 </Callout>
 
 ## Pass the language to Shopify [#storefront-language]
@@ -79,7 +94,7 @@ Format Shopify's amount with the currency code Shopify returns. [`<Currency>`](/
 ```tsx title="app/components/LocalizedMoney.tsx"
 import {Currency} from 'gt-react';
 
-/** Format Shopify's price in the active GT locale without converting currency. */
+/** Format Shopify's price in the active locale without converting currency. */
 export function LocalizedMoney({data}: {data: {amount?: string; currencyCode?: string}}) {
   // Optimistic cart responses can temporarily omit their cost fields.
   if (data.amount == null || !data.currencyCode) return null;
@@ -90,6 +105,16 @@ export function LocalizedMoney({data}: {data: {amount?: string; currencyCode?: s
 ## Link within the locale [#links]
 
 Keep route paths in your code unprefixed, and add the current locale's prefix when you render a link. The default locale has no prefix. Switching languages changes only the prefix of the current URL; the cart stays as it is.
+
+```ts title="app/lib/i18n.ts"
+// "/products/x" -> "/fr/products/x"; the default locale keeps the unprefixed path.
+export function localizePath(pathname: string, locale: string): string {
+  if (locale === gtConfig.defaultLocale) return pathname;
+  return pathname === '/' ? `/${locale}` : `/${locale}${pathname}`;
+}
+```
+
+Read the active locale with [`useLocale`](/docs/react/reference/hooks/use-locale) and pass `localizePath(to, locale)` to React Router's `Link`.
 
 ## Generate translations [#generate]
 
