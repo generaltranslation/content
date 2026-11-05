@@ -73,7 +73,7 @@ Cache Components require a custom [`loadTranslations`](/docs/react/reference/fun
   "src": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
   "files": {
     "gt": { "output": "public/_gt/[locale].json" },
-    "json": { "include": ["catalog/[locale].json"] }
+    "json": { "include": ["catalog/[locale]/labels.json", "catalog/[locale]/content.json"] }
   }
 }
 ```
@@ -448,44 +448,63 @@ Product titles, descriptions, and options come from Shopify. You have two option
 - **Store translations in Shopify.** Register translations with the Admin API and read them with `@inContext(language:)`, which the market map above already passes. Catalog edits don't need a new storefront build. (See [Translating catalog content](/docs/integrations/shopify/guides/translating-catalog)).
 - **Bundle translations with the storefront.** Export the catalog's source text to a JSON file and translate it with the CLI along with your copy. This needs no Shopify Admin access, and is what the example storefront does.
 
-To bundle the catalog, export the text with the Storefront API into `catalog/en.json`, keyed by the source text itself. Sanitize rich text the same way the storefront renders it, so the keys match:
+To bundle the catalog, export the text with the Storefront API, keyed by the source text itself. Write short labels (titles, option names and values, alt text) and rich text (descriptions, page bodies) to separate files, so only the labels reach the browser. Sanitize rich text the same way the storefront renders it, so the keys match:
 
 ```ts title="scripts/export-catalog.ts"
-const texts = new Set<string>();
-for (const product of data.products.nodes) {
-  texts.add(product.title).add(product.productType).add(sanitizeShopifyHtml(product.descriptionHtml));
-  for (const image of product.images.nodes) if (image.altText) texts.add(image.altText);
+const labels = new Set<string>();
+const content = new Set<string>();
+for (const product of catalog.products.nodes) {
+  labels.add(product.title).add(product.productType);
+  content.add(product.description).add(sanitizeShopifyHtml(product.descriptionHtml));
+  for (const image of product.images.nodes) if (image.altText) labels.add(image.altText);
   for (const option of product.options) {
-    texts.add(option.name);
-    for (const value of option.optionValues) texts.add(value.name);
+    labels.add(option.name);
+    for (const value of option.optionValues) labels.add(value.name);
   }
 }
 
-const entries = [...texts].filter((text) => text?.trim()).sort((a, b) => a.localeCompare(b, "en"));
-await writeFile(
-  new URL("../catalog/en.json", import.meta.url),
-  `${JSON.stringify(Object.fromEntries(entries.map((text) => [text, text])), null, 2)}\n`,
-);
+async function writeCatalog(file: string, texts: Set<string>): Promise<number> {
+  const entries = [...texts].filter((text) => text.trim()).sort((a, b) => a.localeCompare(b, "en"));
+  await writeFile(
+    new URL(`../catalog/en/${file}`, import.meta.url),
+    `${JSON.stringify(Object.fromEntries(entries.map((text) => [text, text])), null, 2)}\n`,
+  );
+  return entries.length;
+}
 ```
 
-[`npx gt translate`](/docs/cli/reference/commands/translate) then writes `catalog/<locale>.json` through the `files.json` entry in `gt.config.json`. Look translations up by the live source text and fall back to it, so anything edited in Shopify after the last export shows its current text:
+[`npx gt translate`](/docs/cli/reference/commands/translate) then writes `catalog/<locale>/labels.json` and `catalog/<locale>/content.json` through the `files.json` entry in `gt.config.json`. Look translations up by the live source text and fall back to it, so anything edited in Shopify after the last export shows its current text:
+
+```ts title="lib/catalog/index.ts"
+/** Looks up merchant text by its live English source and falls back to it when no translation exists. */
+export function translateCatalogText(catalog: Catalog, text: string): string;
+export function translateCatalogText(catalog: Catalog, text: string | undefined): string | undefined;
+export function translateCatalogText(catalog: Catalog, text: string | undefined) {
+  return (text && catalog[text]) || text;
+}
+```
 
 ```ts title="lib/catalog/server.ts"
-import { getLocale } from "gt-next/server";
+/** Short labels (titles, option names and values, alt text) for client components such as the cart. */
+export function getCatalogLabels(locale: string): Catalog {
+  return catalogs[locale]?.labels ?? {};
+}
 
-import { getCatalog } from "@/lib/catalog";
-import { translateCatalogText } from "@/lib/catalog/text";
-
-/** Returns a translator for Shopify merchant copy in the request's locale. */
+/** Returns a translator for Shopify merchant text in the request's locale. */
 export async function getCatalogText() {
-  const catalog = getCatalog(await getLocale());
-  return <Text extends string | undefined>(text: Text) =>
-    translateCatalogText(catalog, text) as Text;
+  const catalog = catalogs[await getLocale()];
+  const merged: Catalog = catalog ? { ...catalog.content, ...catalog.labels } : {};
+  function ct(text: string): string;
+  function ct(text: string | undefined): string | undefined;
+  function ct(text: string | undefined) {
+    return translateCatalogText(merged, text);
+  }
+  return ct;
 }
 ```
 
 - Pass translated text into [`<T>`](/docs/react/reference/components/t) through [`<Var>`](/docs/react/reference/components/var), not as source copy.
-- For client components such as the cart and predictive search, provide the current locale's short labels (titles, option names and values) through a context provider in the layout. Don't ship every locale's catalog to the browser.
+- For client components such as the cart and predictive search, pass `getCatalogLabels(locale)` to a context provider in the layout. Don't ship rich text or other locales' catalogs to the browser.
 - Keep option values in their source language wherever they select a variant, build a URL, or reach Shopify. Translate only the label you display.
 - To guide product-name translation, such as keeping brand terms or translating a garment word, add glossary terms and custom prompts to the project's context in the Dashboard.
 
@@ -493,7 +512,7 @@ export async function getCatalogText() {
 
 Give each page a canonical URL in its own locale and an `hreflang` alternate for every locale:
 
-```ts title="lib/seo/index.ts"
+```ts title="lib/seo/server.ts"
 export async function buildAlternates({
   pathname,
   searchParams,
