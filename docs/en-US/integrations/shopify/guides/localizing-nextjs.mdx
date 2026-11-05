@@ -382,7 +382,7 @@ const requestContext = createCustomerRequestContext(request, getCommerceLocale(r
 const headers = requestContext.getForwardedRequestHeaders();
 headers.set(LOCALE_HEADER_NAME, requestLocale);
 
-// On the response. Reached only after moveCartToMarket succeeds, so a failed move is retried.
+// On the response. Reached only after moveCartToMarket succeeds; a failed move deletes the cookie instead.
 if (marketMayChange) {
   response.cookies.set(LOCALE_COOKIE_NAME, locale, { path: "/", sameSite: "lax" });
 }
@@ -459,11 +459,15 @@ if (marketMayChange) {
   try {
     await moveCartToMarket(request, requestContext);
   } catch {
-    // Do not render new-market prices beside an old-market cart. Reloading retries the check.
-    return new NextResponse("Unable to switch the cart's market. Please reload to retry.", {
+    // Do not render new-market prices beside a cart in another market.
+    const failure = new NextResponse("Unable to switch the cart's market. Please reload to retry.", {
       status: 503,
       headers: { "Cache-Control": "no-store" },
     });
+    // The update may have reached Shopify even though it failed here, so forget the
+    // remembered locale; the next page navigation then reads the cart again.
+    failure.cookies.delete(LOCALE_COOKIE_NAME);
+    return failure;
   }
 }
 ```
@@ -472,7 +476,7 @@ Run this check before constructing the page response and setting the locale cook
 
 - **Cost.** Navigations within one language skip the check. A language switch, or a visit without the cookie, adds one uncached cart read, plus a mutation only when the countries differ. Do not cache the cart-country query.
 - **Failures.** Network failures, GraphQL errors, and mutation `userErrors` return 503 instead of rendering new-market prices beside an old-market cart. Because only market changes run the check, a Shopify cart outage blocks switching languages, not browsing.
-- **Retries.** The locale cookie changes only after the cart is in the new market, so `/api/cart` keeps using the cart's confirmed market, and the next navigation retries a failed move.
+- **Recovery.** The locale cookie is set only after a successful move. A failed move, including one that reached Shopify but lost its response, deletes the cookie, so the next page navigation in any language reads the cart again. The cookie remains a hint rather than proof of the cart's country: a country changed outside this proxy is corrected on the next language switch or visit without the cookie.
 
 Shopify reprices the cart lines after a successful country update. The [language switcher](#routing) navigates with a full page load, so the proxy sees every switch.
 
