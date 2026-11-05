@@ -12,7 +12,7 @@ related:
 
 In a React Router storefront, `gt-react` translates the copy in your code and Hydrogen talks to Shopify. The Shopify-specific work is giving Hydrogen's request context the same locale as the page.
 
-*Note: This guide matches `@shopify/hydrogen` 2026.10 on React Router 7 with middleware enabled (`future.v8_middleware: true`).*
+*Note: This guide matches `@shopify/hydrogen` 2026.10 on React Router 8, or on React Router 7 with `future.v8_middleware: true` in `react-router.config.ts`.*
 
 <Callout type="info">
   **Changed in Hydrogen 2026.10:** `createHydrogenContext` and the React Router-only template were replaced by the framework-agnostic `createShopifyRequestContext`. It takes the same `i18n` language and country, plus an optional `pathPrefix`. Hydrogen's packaged `migrate-to-hydrogen-2026-10` skill covers the upgrade.
@@ -21,7 +21,7 @@ In a React Router storefront, `gt-react` translates the copy in your code and Hy
 ## Before you start [#before-start]
 
 - Set up Hydrogen in your React Router app with `npx @shopify/hydrogen setup`. Your root middleware creates the Shopify request context and Storefront client, and runs `handleShopifyRoutes`.
-- Complete the [React Router Quickstart](/docs/react/react-router-quickstart). Your root loader returns a locale and a translations snapshot, and the root `Layout` renders [`GTProvider`](/docs/react/reference/components/gt-provider) and `<html lang>`.
+- Complete the [React Router Quickstart](/docs/react/react-router-quickstart). Your root loader returns a locale and a translations snapshot, and the root `Layout` renders [`GTProvider`](/docs/react/reference/components/gt-provider) and `<html lang>`. This guide replaces the Quickstart's [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) with a switcher that changes the URL.
 
 ## Resolve the locale from the URL [#request-locale]
 
@@ -41,15 +41,37 @@ export function localizePath(pathname: string, locale: string): string {
   if (locale === gtConfig.defaultLocale) return pathname;
   return pathname === '/' ? `/${locale}` : `/${locale}${pathname}`;
 }
+
+// "/fr/products/x" -> "/products/x"; unprefixed paths are returned as they are.
+export function stripLocale(pathname: string): string {
+  const [, segment, ...rest] = pathname.split('/');
+  return gtConfig.locales.includes(segment) ? `/${rest.join('/')}` : pathname;
+}
 ```
 
 In the root loader, call `getRequestLocale(request)` instead of `parseLocale(request)`, and pass the result to [`getTranslationsSnapshot`](/docs/react/reference/functions/get-translations-snapshot).
 
 *Note: `parseLocale` reads the locale cookie, then `Accept-Language`. Used on its own, it serves every language from one URL, so search engines index only one language.*
 
-To serve prefixed paths, add an optional `($locale)` segment to your route files. Respond with 404 when the segment is not a configured target locale, so `/en/...` and unknown prefixes don't render a second copy of a page:
+To serve prefixed paths, nest your pages under an optional `:locale?` layout route. Keep Hydrogen's catch-all route last, so unmatched paths still reach its redirects:
 
-```ts title="app/routes/($locale).tsx"
+```ts title="app/routes.ts"
+import {type RouteConfig, index, route} from '@react-router/dev/routes';
+
+export default [
+  // Pages render with no prefix or with a target-locale prefix, such as /fr.
+  route(':locale?', 'routes/locale.tsx', [
+    index('routes/home.tsx'),
+    route('products/:handle', 'routes/product.tsx'),
+  ]),
+  route('*', 'routes/catchall.tsx'),
+] satisfies RouteConfig;
+```
+
+In the layout route, respond with 404 when the segment is not a configured target locale, so `/en/...` and unknown prefixes don't render a second copy of a page:
+
+```tsx title="app/routes/locale.tsx"
+import {Outlet} from 'react-router';
 import gtConfig from '../../gt.config.json';
 
 // Only target locales are valid prefixes; the default locale stays unprefixed.
@@ -59,7 +81,13 @@ export async function loader({params}: {params: {locale?: string}}) {
   }
   return null;
 }
+
+export default function LocaleLayout() {
+  return <Outlet />;
+}
 ```
+
+With file-based routes, name the layout `($locale).tsx` and nest page files under it instead.
 
 Hydrogen's own handlers, such as `/api/cart`, `/checkout`, and the Customer Account routes, answer in the root middleware before any page renders, so they stay unprefixed.
 
@@ -133,7 +161,37 @@ export function LocalizedMoney({data}: {data: {amount?: string; currencyCode?: s
 
 ## Link within the locale [#links]
 
-Keep route paths in your code unprefixed, and add the current locale's prefix when you render a link. Read the active locale with [`useLocale`](/docs/react/reference/hooks/use-locale) and pass `localizePath(to, locale)` to React Router's `Link`. Switching languages changes only the prefix of the current URL; the cart stays as it is.
+Keep route paths in your code unprefixed, and add the current locale's prefix when you render a link. Read the active locale with [`useLocale`](/docs/react/reference/hooks/use-locale) and pass `localizePath(to, locale)` to React Router's `Link`.
+
+To switch languages, change the prefix of the current URL. The root loader then reads the new locale, and the cart stays as it is. Don't use [`<LocaleSelector>`](/docs/react/reference/components/locale-selector) here: it saves the locale in a cookie and reloads the same URL, which still resolves to the old locale.
+
+```tsx title="app/components/LanguageSwitcher.tsx"
+import {useLocale, useLocales} from 'gt-react';
+import {useLocation, useNavigate} from 'react-router';
+import {localizePath, stripLocale} from '~/lib/i18n';
+
+/** Switches language by changing the URL prefix; the root loader reads the new locale from the URL. */
+export function LanguageSwitcher() {
+  const locale = useLocale();
+  const locales = useLocales();
+  const {pathname, search} = useLocation();
+  const navigate = useNavigate();
+  return (
+    <select
+      aria-label="Language"
+      value={locale}
+      onChange={(event) => navigate(localizePath(stripLocale(pathname), event.target.value) + search)}
+    >
+      {locales.map((option) => (
+        // Name each language in itself, such as "français" or "日本語".
+        <option key={option} value={option} lang={option}>
+          {new Intl.DisplayNames([option], {type: 'language'}).of(option)}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
 
 Link to Customer Account routes, such as `/account/login`, with a plain `<a>` or `<form>`, not `Link`. Their handlers redirect to Shopify, which client-side navigation cannot follow.
 
