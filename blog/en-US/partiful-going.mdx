@@ -1,0 +1,81 @@
+---
+title: "18 Ways to Say \"Going\": What Partiful Taught Us About Localization"
+summary: "A single English enum with three forms became 18 in Spanish. How working with Partiful pushed us to rethink how localization tools handle grammatical agreement."
+date: 2026-05-06
+authors: [jackie]
+tags: ['case-study', 'localization', 'internationalization', 'derive', 'partiful', 'spanish', 'grammar']
+images: ['/static/blogs/partiful-going.png']
+layout: PostLayout
+---
+
+## One enum, three forms, zero problems (in English)
+
+Partiful has been one of the most important customers in General Translation's history. Not because of the scale of their app — though it is complex — but because of what their codebase forced us to confront about our own tooling.
+
+When we first offered to internationalize Partiful's app, our stack was young. Basic context support. Unoptimized translation runs. Simple consistency checks. Manual glossary definitions. It worked for straightforward apps. Partiful was not straightforward.
+
+Their architecture referenced a single string across hundreds of locations — different frameworks, different apps, different UI contexts. The string was "Going."
+
+In English, this is a non-problem. The RSVP status has three forms:
+
+- **Going** (present)
+- **Went** (past)
+- **Will go** (future)
+
+Render the right one, move on. English doesn't care who's going or how many people are going. The verb stays the same. Spanish is a different story.
+
+## Romance languages don't let you off that easy
+
+In Spanish, verbs conjugate based on who is performing the action. The sentences "He goes" and "He is going" collapse into the same form: *va*. That part isn't the hard part.
+
+The hard part is that Spanish verbs must agree with their subject in tense (past, present, future), number (singular or plural), and person (first, second, third). Multiply those out and instead of three forms for "Going," Spanish needs **eighteen**.
+
+| | Singular | Plural |
+|---|---|---|
+| **1st person, present** | voy | vamos |
+| **2nd person, present** | vas | vais |
+| **3rd person, present** | va | van |
+| **1st person, past** | fui | fuimos |
+| **2nd person, past** | fuiste | fuisteis |
+| **3rd person, past** | fue | fueron |
+| **1st person, future** | iré | iremos |
+| **2nd person, future** | irás | iréis |
+| **3rd person, future** | irá | irán |
+
+Every single one of these maps back to a concept that English handles with three words.
+
+## The ICU wall
+
+We already had a solution for number agreement: ICU message format with pluralization. Pass a `count` property into the translation function, and ICU resolves the correct plural form. Tense and number? Handled.
+
+But Partiful's app needed grammatical person too. "Jackie RSVP'd" should display *"Vamos con 1 más"* (first person plural: "we're going with 1 more") in one context and *"Van con 1 más"* (third person plural: "they're going with 1 more") in another. The verb form depends on whose profile you're looking at — not on any property you'd typically pass into a translation function.
+
+Partiful wanted grammatical person to be **context-dependent at the UI level**. The same enum, rendered differently depending on where it appeared, without hardcoding person into the data model.
+
+ICU doesn't have a mechanism for this. You can select on a variable, but that requires the caller to explicitly pass in the grammatical person every time the string is referenced. Across hundreds of call sites, referencing a single enum, that meant rewriting how Partiful's app thought about this string entirely.
+
+We weren't going to ask a customer to restructure their codebase to fit our tooling.
+
+## Derive: agreement without the boilerplate
+
+The solution was to move away from ICU for this class of problem and extend our `derive` function to support context.
+
+`derive` already had a powerful capability: it analyzes a function at build time, determines every possible return value, and generates a separate translation for each one. If a function returns "boy" or "girl," derive creates two translation entries — and the surrounding sentence gets translated correctly for each, preserving grammatical agreement automatically.
+
+What we added was **context-aware derivation**. Instead of requiring the caller to pass grammatical person as an explicit parameter, derive resolves which form to use based on where the string appears in the UI. The single enum stays as a single enum in the codebase. At build time, derive expands it into every form the target language needs and maps each to the correct rendering context.
+
+Partiful didn't have to change their data model. The "Going" enum stayed as one enum in their codebase, our build step expanded it into all 18 Spanish forms, and each call site resolved to the right conjugation based on its UI context. No ICU select statements threaded through hundreds of files.
+
+## What this changed for us
+
+Partiful's "Going" problem looked like an edge case at first. It wasn't. Grammatical person agreement shows up in every Romance language, German, Russian, Hindi, Arabic, and dozens more. Any app with user-facing verb forms (status labels, action buttons, notification text) will hit this wall the moment it ships in a second language.
+
+The fix ended up being more general than the problem. Derive with context support handles a category of localization that ICU was never designed for: when the correct translation depends not just on *what* you're saying, but on *where in the app* you're saying it.
+
+---
+
+## Next steps
+
+- Read the [`derive` API reference](/docs/next/api/strings/derive) for implementation details
+- See how [`<Plural>`](/docs/next/api/components/plural) handles number agreement
+- Check out the [gt-next quickstart](/docs/next) to get started with localization
