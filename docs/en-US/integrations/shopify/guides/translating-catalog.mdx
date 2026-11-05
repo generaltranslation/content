@@ -1,0 +1,114 @@
+---
+
+title: Translating catalog content
+description: How to translate Shopify products with the Core library, store the results as Shopify translations, and read them through the Storefront API.
+related:
+  links:
+    - /docs/integrations/shopify/guides/setting-up-hydrogen
+    - /docs/integrations/shopify/guides/setting-up-nextjs
+
+---
+
+Shopify stores a translation for each field of a resource, per locale. A script exports the source text with the Admin API, translates it with [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many), and registers the results back in Shopify. Storefronts then read them with `@inContext(language:)`, so catalog edits don't require a new storefront build.
+
+*Note: There is no hosted Shopify connection in the Dashboard. You run the script yourself with your own Shopify and General Translation credentials.*
+
+## Before you start [#before-start]
+
+You need:
+
+- The target languages added and published in the Shopify admin under **Settings > Languages**.
+- A Shopify Admin API access token from an app installed on the store, with the `read_translations`, `write_translations`, and `read_locales` scopes. A Storefront API token cannot write translations.
+- `generaltranslation` installed, and a project API key with **Runtime translation** permission (`project:translations:generate`). (See the Core library [Quickstart](/docs/platform/core/quickstart)).
+
+Keep the Admin token and API key in your script's environment. Never add them to the storefront's environment or browser bundles.
+
+## Export source content [#export]
+
+Query `translatableResources` for each resource type you translate. Each field returns its `key`, source `value`, and a `digest` that identifies that exact source text.
+
+```graphql title="Admin API"
+query CatalogExport($type: TranslatableResourceType!, $after: String) {
+  translatableResources(first: 50, after: $after, resourceType: $type) {
+    nodes {
+      resourceId
+      translatableContent { key value digest locale }
+      translations(locale: "fr") { key value outdated }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+```
+
+Use resource types such as `PRODUCT`, `PRODUCT_OPTION`, and `PRODUCT_OPTION_VALUE`, and page through results with `endCursor`. Keep the digests; you need them to register translations.
+
+## Translate with General Translation [#translate]
+
+Send plain-text fields, such as product titles, product types, SEO titles and descriptions, and option names and values, to [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many). Add [`metadata.context`](/docs/platform/core/reference/types/entry-metadata#context) so short labels translate correctly.
+
+```ts title="scripts/translate-catalog.ts"
+import { GT } from 'generaltranslation';
+
+const gt = new GT({
+  apiKey: process.env.GT_API_KEY,
+  projectId: process.env.GT_PROJECT_ID,
+  sourceLocale: 'en',
+});
+
+const results = await gt.translateMany(
+  fields.map((field) => ({
+    source: field.value,
+    metadata: {
+      context: `Shopify ${field.resourceType} ${field.key}. Preserve product brand names, measurements, and model numbers.`,
+    },
+  })),
+  { sourceLocale: 'en', targetLocale: 'fr' }
+);
+```
+
+Results come back in input order, and each one reports success or failure on its own. Retry failed entries rather than registering them.
+
+Rich-text fields, such as a product's `body_html`, contain HTML. Format-aware translation with [`metadata.fileFormat`](/docs/platform/core/reference/types/entry-metadata#file-format) covers only Markdown and MDX documents, so don't send raw HTML through [`translateMany`](/docs/platform/core/reference/gt-class-methods/translation/translate-many) without a step that preserves its markup.
+
+## Register translations in Shopify [#register]
+
+Write each translation with the Admin API [`translationsRegister`](https://shopify.dev/docs/api/admin-graphql/latest/mutations/translationsRegister) mutation. Pass the source digest as `translatableContentDigest`, so Shopify rejects a translation whose source changed after export.
+
+```graphql title="Admin API"
+mutation CatalogRegister($resourceId: ID!, $translations: [TranslationInput!]!) {
+  translationsRegister(resourceId: $resourceId, translations: $translations) {
+    translations { key locale value outdated }
+    userErrors { field code }
+  }
+}
+```
+
+```json title="Variables"
+{
+  "resourceId": "gid://shopify/Product/123",
+  "translations": [
+    {
+      "locale": "fr",
+      "key": "title",
+      "value": "Sweat à capuche en coton",
+      "translatableContentDigest": "<digest from export>"
+    }
+  ]
+}
+```
+
+Use Shopify's locale code for `locale`, which can differ from your General Translation locale. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)).
+
+<Callout type="warn">
+  `translationsRegister` replaces the existing translation for that key and locale, including translations a merchant entered in the admin or another app wrote. Before writing, compare the current translation with the value your script registered last time, and skip fields you did not write.
+</Callout>
+
+## Read translations in the storefront [#storefront]
+
+Add `@inContext(language: $language)` to catalog queries and pass the locale's Shopify `LanguageCode`. Shopify returns the translated value where one exists and the source value otherwise. Hydrogen fills `$language` from its context. (See [Setting up Hydrogen](/docs/integrations/shopify/guides/setting-up-hydrogen#storefront-language)).
+
+Translated catalog content appears once Shopify and storefront caches refresh, without another deployment.
+
+## Keep translations current [#updates]
+
+When a merchant edits a product, its field digest changes and Shopify marks existing translations as `outdated`. Rerun the export, translate only fields whose digest changed or that have no translation, and register the results.

@@ -1,0 +1,82 @@
+---
+
+title: Locale handling
+description: How a Shopify storefront keeps storefront copy, catalog content, URLs, and markets on one locale. Reference for locale handling in Shopify storefronts.
+
+---
+
+These rules apply to Hydrogen and Next.js storefronts alike. They keep `gt-react` or `gt-next`, Shopify's Storefront API context, routing, and caching on the same locale for every request.
+
+## Overview [#overview]
+
+| Topic | Description |
+| --- | --- |
+| [Locale codes](#locale-codes) | One locale list, mapped explicitly to Shopify codes. |
+| [Routing](#routing) | The URL decides the language, with one canonical URL per page. |
+| [Language and market](#language-market) | Copy language and commerce country are separate inputs. |
+| [Cached pages](#cached-pages) | Translations ship with the build. |
+| [Upcoming Hydrogen APIs](#upcoming-hydrogen) | Proposed Hydrogen helpers that are not yet released. |
+
+## Locale codes [#locale-codes]
+
+Define locales once, in `gt.config.json`. Derive routing, `<html lang>`, the provider, the language switcher, and Shopify query context from that list instead of keeping a second one.
+
+Each language has three codes in a Shopify storefront:
+
+- **General Translation locales** are BCP 47 tags, such as `fr` or `pt-BR`. (See [Locale codes](/docs/platform/core/guides/locale-codes)).
+- **Storefront API `LanguageCode`** values are uppercase enums with underscores, such as `FR` or `PT_BR`. Pass these to `@inContext(language:)`.
+- **Admin API locales** are the shop's locale codes, such as `fr` or `pt-BR`. Pass these to `translationsRegister`.
+
+Map each locale explicitly. Replacing `_` with `-` works for most codes but not all:
+
+| Shopify `LanguageCode` | Language | General Translation locale |
+| --- | --- | --- |
+| `EN` | English | `en` |
+| `FR` | French | `fr` |
+| `JA` | Japanese | `ja` |
+| `PT_BR` | Portuguese (Brazil) | `pt-BR` |
+| `PT_PT` | Portuguese (Portugal) | `pt-PT` |
+| `ZH_CN` | Chinese (Simplified) | `zh-CN` or `zh-Hans` |
+| `ZH_TW` | Chinese (Traditional) | `zh-TW` or `zh-Hant` |
+
+`ZH_CN` and `ZH_TW` name a script, not only a region. `zh-TW` also implies Taiwan, while `zh-Hant` means Traditional Chinese anywhere. Pick one locale for each Shopify language and use it in `gt.config.json`, URLs, and `<html lang>`.
+
+Build tags from the language alone. A shopper on the Canadian market reading French gets `fr`, not `fr-CA`. Add a separate locale, such as `fr-CA`, only when you maintain separate copy for it.
+
+## Routing [#routing]
+
+### The URL decides the language
+
+Resolve the locale from the request path or domain, and pass the same value to the provider, `<html lang>`, and Shopify's query context. A cookie or `Accept-Language` can suggest a redirect, but a URL always renders the same language, so caches and search engines see one language per URL.
+
+### One canonical URL per page
+
+Serve the default locale unprefixed and other locales under a prefix, such as `/fr/products/hoodie`. Return 404 for a prefixed default locale, such as `/en/products/hoodie`, and for unknown prefixes. Links rendered on a localized page keep its prefix.
+
+### Unlocalized routes
+
+Leave routes that Shopify or its scripts call at fixed paths unprefixed: cart and predictive-search API handlers, customer account authorization callbacks, and other `/api` routes. In the Vercel Shop template, `proxy.ts` lets Hydrogen's `handleShopifyRoutes` answer these requests before any locale rewrite. (See [Setting up Next.js](/docs/integrations/shopify/guides/setting-up-nextjs#proxy)).
+
+## Language and market [#language-market]
+
+The Storefront API `@inContext` directive takes a `language` and a `country`. They answer different questions:
+
+- **`language`** chooses which translation of catalog content Shopify returns. It follows the page locale.
+- **`country`** chooses the market, which sets prices, currency, and product availability. It also sets the cart's buyer identity.
+
+Changing the copy language must not change the country, convert prices, or touch the cart. Format Shopify amounts with the currency code Shopify returns, using [`<Currency>`](/docs/react/reference/components/currency). If you sell in several markets, let the shopper choose the country separately and update the cart's buyer identity when it changes.
+
+## Cached pages [#cached-pages]
+
+Load translations from files bundled with the build when pages are cached or prerendered. Runtime translation requests cannot run inside a static shell. In Next.js with Cache Components, a custom [`loadTranslations`](/docs/react/reference/functions/load-translations) is required. (See [Using Cache Components](/docs/react/nextjs/cache-components)).
+
+Catalog translations stored in Shopify are not part of the build. They follow your Storefront API cache settings.
+
+## Upcoming Hydrogen APIs [#upcoming-hydrogen]
+
+<Callout type="info">
+  **Upcoming in Hydrogen:** these APIs are proposed in open pull requests and are not part of a released `@shopify/hydrogen` version. Do not use them until they ship.
+</Callout>
+
+- [Shopify/hydrogen#4009](https://github.com/Shopify/hydrogen/pull/4009) proposes `defineShopifyI18n`, a module-scope locale definition with pathname or domain routing, and helpers such as `getSupportedLocales` and `getLocalizedHref`. With it, a GT locale list could be derived from `getSupportedLocales` instead of being kept separately.
+- [Shopify/hydrogen#4327](https://github.com/Shopify/hydrogen/pull/4327) proposes `getLanguageTag`, which converts a `LanguageCode` to a BCP 47 tag for `<html lang>`: `PT_BR` to `pt-BR`, `ZH_CN` to `zh-Hans`, and `ZH_TW` to `zh-Hant`.

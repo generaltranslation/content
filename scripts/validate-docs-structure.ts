@@ -28,6 +28,7 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
     'Mintlify',
     'Payload CMS',
     'Sanity',
+    'Shopify',
     'Storyblok',
     'rrweb',
   ],
@@ -48,6 +49,7 @@ const EXPECTED_OVERVIEW_PAGES = [
   '[Mintlify](/docs/integrations/mintlify/quickstart)',
   '[Payload CMS](/docs/integrations/payload/quickstart)',
   '[Sanity](/docs/integrations/sanity/quickstart)',
+  '[Shopify](/docs/integrations/shopify/quickstart)',
   '[Storyblok](/docs/integrations/storyblok/quickstart)',
   '[rrweb](/docs/integrations/rrweb/quickstart)',
 ] as const;
@@ -78,6 +80,7 @@ const EXPECTED_LANDING_CARDS: Readonly<Record<string, readonly string[]>> = {
     'Mintlify',
     'Payload CMS',
     'Sanity',
+    'Shopify',
     'Storyblok',
     'rrweb',
   ],
