@@ -1,12 +1,12 @@
 ---
 
 title: Localizing a Next.js Shopify storefront
-navTitle: "Setting up Next.js"
+navTitle: "Localizing Next.js"
 description: How to localize a Vercel Shop storefront with gt-next, locale-prefixed routes, Shopify markets, and Cache Components.
 related:
   links:
-    - /docs/integrations/shopify/guides/setting-up-react-router
-    - /docs/integrations/shopify/guides/translating-catalog-content
+    - /docs/integrations/shopify/guides/localizing-react-router
+    - /docs/integrations/shopify/guides/translating-products
 
 ---
 
@@ -372,6 +372,8 @@ const isPageNavigation =
   !request.headers.has("next-router-prefetch") &&
   request.headers.get("purpose") !== "prefetch" &&
   !request.headers.get("sec-purpose")?.includes("prefetch");
+// A language switch, or a page view without the locale cookie, may move the cart to another market.
+const marketMayChange = isPageNavigation && rememberedLocale !== locale;
 
 // Hydrogen's cart and search handlers run in the market of the shopper's language.
 const requestContext = createCustomerRequestContext(request, getCommerceLocale(requestLocale));
@@ -380,8 +382,8 @@ const requestContext = createCustomerRequestContext(request, getCommerceLocale(r
 const headers = requestContext.getForwardedRequestHeaders();
 headers.set(LOCALE_HEADER_NAME, requestLocale);
 
-// On the response:
-if (isPageNavigation && rememberedLocale !== locale) {
+// On the response. Reached only after moveCartToMarket succeeds, so a failed move is retried.
+if (marketMayChange) {
   response.cookies.set(LOCALE_COOKIE_NAME, locale, { path: "/", sameSite: "lax" });
 }
 
@@ -399,7 +401,7 @@ Accept the market in `createCustomerRequestContext` (`lib/auth/request.ts`) and 
 
 ### Move the cart when the language changes
 
-A cart keeps the currency of its buyer country. Hydrogen's cart handlers have no action for the buyer country, so check the existing cart's actual country before rendering a page and update it when it differs from the selected market. The locale cookie remembers the language for unprefixed endpoints; it is not evidence that a cart update succeeded.
+A cart keeps the currency of its buyer country. Hydrogen's cart handlers have no action for the buyer country, so when a page navigation may change the market, the proxy reads the cart's actual country and updates it before the page renders:
 
 ```ts title="lib/cart/request.ts"
 const CART_COUNTRY_QUERY = gql(`#graphql
@@ -429,10 +431,10 @@ export async function moveCartToMarket(
   if (!cartId) return;
   const client = createRequestStorefrontClient(requestContext);
   const countryCode = requestContext.i18n.country;
-  // Keep cart reads uncached: a locale cookie cannot confirm the cart's current market.
+  // Read the cart uncached; another tab or session may have moved it.
   const current = await client.graphql(CART_COUNTRY_QUERY, { variables: { cartId } });
   if (current.errors) throw new Error("Unable to read the cart's country");
-  const cart = current.data.cart;
+  const cart = current.data?.cart;
   // An expired cart is handled by the template's existing cart-creation flow.
   if (!cart || cart.buyerIdentity.countryCode === countryCode) return;
 
@@ -453,7 +455,7 @@ export async function moveCartToMarket(
 
 ```ts title="proxy.ts"
 // After handleShopifyRoutes declines the request, before the page response or locale cookie.
-if (isPageNavigation) {
+if (marketMayChange) {
   try {
     await moveCartToMarket(request, requestContext);
   } catch {
@@ -466,7 +468,11 @@ if (isPageNavigation) {
 }
 ```
 
-Run this check before constructing the page response and setting the locale cookie above. Do not cache the cart-country query. Each page navigation checks the actual buyer country, including when the locale cookie is missing or a previous update failed; matching countries skip the mutation. This adds one uncached read per page navigation for an existing cart. Network failures, GraphQL errors, and mutation `userErrors` stop the page response instead of silently advancing to the new market.
+Run this check before constructing the page response and setting the locale cookie above:
+
+- **Cost.** Navigations within one language skip the check. A language switch, or a visit without the cookie, adds one uncached cart read, plus a mutation only when the countries differ. Do not cache the cart-country query.
+- **Failures.** Network failures, GraphQL errors, and mutation `userErrors` return 503 instead of rendering new-market prices beside an old-market cart. Because only market changes run the check, a Shopify cart outage blocks switching languages, not browsing.
+- **Retries.** The locale cookie changes only after the cart is in the new market, so `/api/cart` keeps using the cart's confirmed market, and the next navigation retries a failed move.
 
 Shopify reprices the cart lines after a successful country update. The [language switcher](#routing) navigates with a full page load, so the proxy sees every switch.
 
@@ -520,7 +526,7 @@ Format Shopify prices with the locale and the currency code Shopify returns. The
 
 Product titles, descriptions, and options come from Shopify. You have two options:
 
-- **Store translations in Shopify.** Register translations with the Admin API and read them with `@inContext(language:)`, which the market map above already passes. Catalog edits don't need a new storefront build. (See [Translating catalog content](/docs/integrations/shopify/guides/translating-catalog-content)).
+- **Store translations in Shopify.** Register translations with the Admin API and read them with `@inContext(language:)`, which the market map above already passes. Catalog edits don't need a new storefront build. (See [Translating Shopify products with the Admin API](/docs/integrations/shopify/guides/translating-products)).
 - **Bundle translations with the storefront.** Export the catalog's source text to a JSON file and translate it with the CLI along with your copy. This needs no Shopify Admin access, and is what the example storefront does.
 
 To bundle the catalog, export the text with the Storefront API, keyed by the source text itself. Write short labels (titles, option names and values, alt text) and rich text (descriptions, page bodies) to separate files, so only the labels reach the browser. Sanitize rich text the same way the storefront renders it, so the keys match:
