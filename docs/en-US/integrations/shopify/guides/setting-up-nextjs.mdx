@@ -1,6 +1,6 @@
 ---
 
-title: Setting up Next.js for Shopify
+title: Localizing a Next.js Shopify storefront
 navTitle: "Setting up Next.js"
 description: How to localize a Vercel Shop storefront with gt-next, locale-prefixed routes, Shopify markets, and Cache Components.
 related:
@@ -300,7 +300,9 @@ List every locale's URL in the sitemap too, each with `<xhtml:link rel="alternat
 
 ## Sell each locale in a market [#markets]
 
-Shopify returns prices, currency, and availability for the market selected by the `country` in `@inContext`. To show each language in its own currency, map every locale to a Shopify country and language. If the store sells in one market, use the same country for every locale.
+Shopify returns prices, currency, and availability for the market selected by the `country` in `@inContext`. Pairing each language with a market is a choice made by this example, not a localization requirement. If the store sells in one market, use the same country for every locale; otherwise, you can let shoppers choose their country independently of the language.
+
+To follow the example's market-per-language setup, map every locale to a Shopify country and language.
 
 ```ts title="lib/i18n/index.ts"
 import type { CommerceLocale } from "@/lib/config/types";
@@ -361,7 +363,16 @@ Server actions, such as quick shop and **Load more**, cannot read route params. 
 Hydrogen's cart and predictive search handlers take the market from the request context's `i18n`. Requests such as `/api/cart` have no locale prefix, so the proxy remembers the page locale in a cookie and forwards it to Server Components and server actions in a header:
 
 ```ts title="proxy.ts"
+const rememberedLocale = request.cookies.get(LOCALE_COOKIE_NAME)?.value;
 const requestLocale = resolveRequestLocale(request);
+// Speculative prefetches must not change the shopper's cart or remembered language.
+const isPageNavigation =
+  request.method === "GET" &&
+  isPagePath(pathname) &&
+  !request.headers.has("next-router-prefetch") &&
+  request.headers.get("purpose") !== "prefetch" &&
+  !request.headers.get("sec-purpose")?.includes("prefetch");
+
 // Hydrogen's cart and search handlers run in the market of the shopper's language.
 const requestContext = createCustomerRequestContext(request, getCommerceLocale(requestLocale));
 
@@ -370,7 +381,7 @@ const headers = requestContext.getForwardedRequestHeaders();
 headers.set(LOCALE_HEADER_NAME, requestLocale);
 
 // On the response:
-if (isPagePath(pathname) && rememberedLocale !== locale) {
+if (isPageNavigation && rememberedLocale !== locale) {
   response.cookies.set(LOCALE_COOKIE_NAME, locale, { path: "/", sameSite: "lax" });
 }
 
@@ -388,12 +399,21 @@ Accept the market in `createCustomerRequestContext` (`lib/auth/request.ts`) and 
 
 ### Move the cart when the language changes
 
-A cart keeps the currency of its buyer country. Hydrogen's cart handlers have no action for the buyer country, so when a page request arrives with a different locale than the cookie, the proxy updates the existing cart before the page reads it:
+A cart keeps the currency of its buyer country. Hydrogen's cart handlers have no action for the buyer country, so check the existing cart's actual country before rendering a page and update it when it differs from the selected market. The locale cookie remembers the language for unprefixed endpoints; it is not evidence that a cart update succeeded.
 
 ```ts title="lib/cart/request.ts"
+const CART_COUNTRY_QUERY = gql(`#graphql
+  query cartCountry($cartId: ID!) {
+    cart(id: $cartId) {
+      buyerIdentity { countryCode }
+    }
+  }
+`);
+
 const CART_COUNTRY_UPDATE_MUTATION = gql(`#graphql
   mutation cartCountryUpdate($cartId: ID!, $countryCode: CountryCode!) {
     cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: { countryCode: $countryCode }) {
+      cart { buyerIdentity { countryCode } }
       userErrors {
         message
       }
@@ -407,21 +427,48 @@ export async function moveCartToMarket(
 ): Promise<void> {
   const cartId = getCartId({ cookie: request.headers.get("cookie") ?? undefined });
   if (!cartId) return;
-  await createRequestStorefrontClient(requestContext).graphql(CART_COUNTRY_UPDATE_MUTATION, {
-    variables: { cartId, countryCode: requestContext.i18n.country },
+  const client = createRequestStorefrontClient(requestContext);
+  const countryCode = requestContext.i18n.country;
+  // Keep cart reads uncached: a locale cookie cannot confirm the cart's current market.
+  const current = await client.graphql(CART_COUNTRY_QUERY, { variables: { cartId } });
+  if (current.errors) throw new Error("Unable to read the cart's country");
+  const cart = current.data.cart;
+  // An expired cart is handled by the template's existing cart-creation flow.
+  if (!cart || cart.buyerIdentity.countryCode === countryCode) return;
+
+  const result = await client.graphql(CART_COUNTRY_UPDATE_MUTATION, {
+    variables: { cartId, countryCode },
   });
+  if (result.errors) throw new Error("Unable to update the cart's country");
+  const updated = result.data.cartBuyerIdentityUpdate;
+  if (
+    !updated ||
+    updated.userErrors.length > 0 ||
+    updated.cart?.buyerIdentity.countryCode !== countryCode
+  ) {
+    throw new Error("The cart's country was not updated");
+  }
 }
 ```
 
 ```ts title="proxy.ts"
-const rememberedLocale = request.cookies.get(LOCALE_COOKIE_NAME)?.value;
-if (isPagePath(pathname) && rememberedLocale && rememberedLocale !== locale) {
-  // A language switch changes the market; move the cart before the page reads it.
-  await moveCartToMarket(request, requestContext).catch(() => undefined);
+// After handleShopifyRoutes declines the request, before the page response or locale cookie.
+if (isPageNavigation) {
+  try {
+    await moveCartToMarket(request, requestContext);
+  } catch {
+    // Do not render new-market prices beside an old-market cart. Reloading retries the check.
+    return new NextResponse("Unable to switch the cart's market. Please reload to retry.", {
+      status: 503,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
 }
 ```
 
-Shopify reprices the cart lines in the new currency. The [language switcher](#routing) navigates with a full page load, so the proxy sees every switch.
+Run this check before constructing the page response and setting the locale cookie above. Do not cache the cart-country query. Each page navigation checks the actual buyer country, including when the locale cookie is missing or a previous update failed; matching countries skip the mutation. This adds one uncached read per page navigation for an existing cart. Network failures, GraphQL errors, and mutation `userErrors` stop the page response instead of silently advancing to the new market.
+
+Shopify reprices the cart lines after a successful country update. The [language switcher](#routing) navigates with a full page load, so the proxy sees every switch.
 
 ## Translate copy [#copy]
 
