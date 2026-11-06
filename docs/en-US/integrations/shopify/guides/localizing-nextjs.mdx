@@ -315,7 +315,25 @@ Give each page a canonical URL in its own locale and an `hreflang` alternate for
    }
    ```
 
-   Make `buildOpenGraph` async the same way, and return `url: localizePath(url, locale)`, `locale`, and `alternateLocale: locales.filter((code) => code !== locale)` alongside its existing fields.
+   Make `buildOpenGraph` async the same way, and localize its URL and locales. Open Graph expects `language_TERRITORY` values, such as `fr_FR`, so convert the locale there and keep the plain tag for `hreflang` and `<html lang>`:
+
+   ```ts title="lib/seo/server.ts"
+   /** Open Graph locales use language_TERRITORY, such as fr_FR; "fr" becomes its likeliest territory. */
+   function toOpenGraphLocale(locale: string): string {
+     const { language, region } = new Intl.Locale(locale).maximize();
+     return `${language}_${region}`;
+   }
+
+   // In buildOpenGraph, alongside its existing fields:
+   const locale = await getLocale();
+   return {
+     url: localizePath(url, locale),
+     locale: toOpenGraphLocale(locale),
+     alternateLocale: locales.filter((code) => code !== locale).map(toOpenGraphLocale),
+   };
+   ```
+
+   `maximize()` picks the likeliest territory, such as `fr_FR` for `fr` and `zh_TW` for `zh-Hant`. Replace the conversion with an explicit map for any locale whose likeliest territory isn't the one you serve.
 3. In every page's `generateMetadata`, import both helpers from `@/lib/seo/server` and await them:
 
    ```tsx title="app/[locale]/page.tsx"
