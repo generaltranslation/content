@@ -42,6 +42,7 @@ gtPlugin({
 | [`autoPatchReferences`](#auto-patch-references) | Initial state of reference patching after import. | `boolean` | Yes | `false` |
 | [`autoPublish`](#auto-publish) | Initial state of publishing after import. | `boolean` | Yes | `false` |
 | [`preserveExistingTranslations`](#preserve-existing-translations) | Initial state of the **Save local edits** toggle. | `boolean` | Yes | `false` |
+| [`previewUrl`](#preview-url) | Site pages that show each document and translation, for preview links. | `PreviewUrlConfig` | Yes | — |
 | [`ignoreFields`](#ignore-fields) | Fields copied from the source without translating. | `FieldMatcher[]` | Yes | `[]` |
 | [`dedupeFields`](#dedupe-fields) | Fields copied from the source and made unique per locale. | `FieldMatcher[]` | Yes | `[]` |
 | [`skipFields`](#skip-fields) | Fields removed from translated documents. | `FieldMatcher[]` | Yes | `[]` |
@@ -338,6 +339,81 @@ Editors can change this preference from the **Translations** tool or document di
 | `4.0.0` | Added Sanity 6 support and dropped the Sanity 5 generation. The package is ESM-only, requires Node.js 22.12 or later, and declares a `sanity` peer range of `^6.9.2`; the Studio packages it previously bundled are now peer dependencies. Studios on Sanity 6.0 through 6.8 should stay on `3.1.x`. |
 | `4.0.30` | Added a locale menu to the **Translations** tool. On that tool, **Translate All**, **Import All**, **Import Missing**, **Save Local Edits**, **Patch References**, and **Publish Translations** run only for the selected target locales. Every target locale starts selected. |
 
+## Preview URLs [#preview-urls]
+
+### `previewUrl` [#preview-url]
+
+**Type** `PreviewUrlConfig` · **Optional**
+
+The page on your site that shows each document. The plugin stores each page as a preview URL in General Translation, so reviewers can open a string on the page where it appears. Source documents link to their source-language page, and each translation links to its own localized page.
+
+```ts
+type PreviewUrlConfig = {
+  origin: string; // your site's origin, such as https://staging.example.com
+  locations: Record<string, PreviewUrlResolver | DocumentLocationsState>; // keyed by document type
+};
+
+type PreviewUrlResolver = {
+  select: Record<string, string>; // document fields to read, by path
+  resolve: (
+    document: Record<string, any> | null,
+    context: { language: string } // Sanity language id of the page being linked
+  ) => DocumentLocationsState | null | undefined | void;
+};
+
+type DocumentLocationsState = {
+  locations?: { title: string; href: string }[];
+};
+```
+
+`locations` has the same shape as `presentationTool`'s `resolve.locations`, with the page's language passed to `resolve` as a second argument. The Presentation tool itself is not required.
+
+- `select` maps names to dotted field paths, such as `slug.current`. Paths can follow references, as in Sanity document previews.
+- `resolve` receives the selected fields and `{ language }`. `language` is the source document's language for a source page and the target language for a translation.
+- The first location's `href` is the page. A relative `href` is resolved against `origin`, and an absolute `href` is used as is.
+- A `DocumentLocationsState` object in place of a resolver links every document of that type to the same page.
+- Document types without an entry in `locations` get no preview URL.
+
+```ts title="sanity.config.ts"
+gtPlugin({
+  sourceLocale: 'en',
+  locales: ['es', 'fr'],
+  translateDocuments: [{ type: 'page' }, { type: 'siteSettings' }],
+  previewUrl: {
+    origin: 'https://staging.example.com',
+    locations: {
+      page: {
+        select: { slug: 'slug.current' },
+        // es links to /es/<slug>
+        resolve: (doc, { language }) => ({
+          locations: [{ title: 'Page', href: `/${language}/${doc?.slug}` }],
+        }),
+      },
+      // Shared content links to a page that shows it
+      siteSettings: {
+        select: {},
+        resolve: (_doc, { language }) => ({
+          locations: [{ title: 'Home', href: `/${language}` }],
+        }),
+      },
+    },
+  },
+});
+```
+
+Preview URLs are sent at two points:
+
+- **Upload:** each source document sends its page, resolved from its published version. A source document that has not been published gets no preview URL unless its type has fixed locations.
+- **Import:** each imported translation sends its page, resolved in the target language from the document it was written to. That is the translated document for document-level types and the same document for field-level types. Because an imported translation is usually still a draft, drafts are included when reading it. Patching references sends the translation's preview URLs again.
+
+If a preview URL cannot be resolved or stored, the Studio shows a warning and the upload or import continues without it.
+
+#### Version history
+
+| Version | Changes |
+| --- | --- |
+| `4.0.33` | Added `previewUrl`. |
+
 ## Studio structure helpers [#structure-helpers]
 
 `gt-sanity` exports two opt-in helpers for grouping document-level translations by locale in Sanity's structure tool.
@@ -576,6 +652,7 @@ Slug fields are *not* stopped by default, so a slug's `current` string is transl
 - `documentInternationalization` and its types (`DocumentInternationalizationConfig`, `Language`, `Metadata`, `TranslationReference`) — re-exported from `@sanity/document-internationalization`.
 - `internationalizedArray`, `internationalizedArrayLanguageFilter`, and `isInternationalizedArrayItemType`, plus the `InternationalizedArrayPluginConfig` and `InternationalizedArrayLanguage` types — re-exported from `sanity-plugin-internationalized-array`.
 - `GTSchemaFieldOptions` — the schema options interface behind `options.gt`. (See [Schema exclusion options](#schema-exclusion)).
+- `PreviewUrlConfig` — the type of the `previewUrl` option. (See [Preview URLs](#preview-urls)).
 
 ## Complete example [#complete-example]
 
