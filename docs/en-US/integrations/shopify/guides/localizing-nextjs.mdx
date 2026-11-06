@@ -1,0 +1,556 @@
+---
+
+title: Localizing a Next.js Shopify storefront
+navTitle: "Localizing Next.js"
+description: How to localize a Vercel Shop storefront with gt-next, locale-prefixed routes, and Cache Components.
+related:
+  links:
+    - /docs/integrations/shopify/guides/localizing-react-router
+    - /docs/integrations/shopify/guides/translating-products
+    - /docs/integrations/shopify/guides/selling-in-markets
+
+---
+
+[Vercel Shop](https://github.com/vercel/shop) is a Next.js App Router template built on Hydrogen, Shopify's framework-agnostic storefront SDK. With `gt-next`, the default locale is served unprefixed, other locales live under a prefix such as `/fr/...`, and every page stays prerenderable once per locale. Every language sells in one Shopify market; to give each language its own market and currency, follow [Selling in multiple markets](/docs/integrations/shopify/guides/selling-in-markets) afterward.
+
+*Note: This guide matches the template with Next.js 16, `cacheComponents: true`, `@shopify/hydrogen` 2026.10, and `gt-next` 11.4, the versions used by the [example storefront](https://gt-shopify-vercel.vercel.app), which is live in English, French, Japanese, Korean, and Indonesian.*
+
+## Before you start [#before-start]
+
+Install `gt-next`, and the `gt` CLI as a dev dependency, as in the [Next.js Quickstart](/docs/react/nextjs-quickstart). This guide replaces the Quickstart's middleware with the template's existing `proxy.ts`.
+
+## Configure gt-next [#configure]
+
+### 1. Add the config plugin
+
+Add [`withGTConfig`](/docs/react/nextjs/config) to the plugin list the template passes to `withShopConfig`:
+
+```ts title="next.config.ts"
+import { withGTConfig } from "gt-next/config";
+
+export default withShopConfig(nextConfig, [
+  (config: NextConfig) => withGTConfig(config), // [!code ++]
+  shopConfig.botid.isEnabled && withBotId,
+  shopConfig.agent.isEnabled && withEve,
+]);
+```
+
+### 2. Add the request functions
+
+Under Cache Components, the locale must come from the `[locale]` root param, not from headers or cookies. Create [`getLocale`](/docs/react/nextjs/reference/functions/get-locale) and [`getRegion`](/docs/react/nextjs/reference/functions/get-region) files at the project root; `withGTConfig` detects them. (See [Using Cache Components](/docs/react/nextjs/cache-components#request-values)).
+
+```ts title="getLocale.ts"
+import { locale } from "next/root-params";
+
+import { defaultLocale } from "@/lib/i18n";
+
+// The `[locale]` root param is part of the static cache key, so reading it keeps pages prerenderable.
+export default async function getLocale(): Promise<string> {
+  return (await locale()) ?? defaultLocale;
+}
+```
+
+```ts title="getRegion.ts"
+import { locale } from "next/root-params";
+
+import { defaultLocale, getCommerceLocale } from "@/lib/i18n";
+
+// The region is the country of the Shopify market the page's locale sells in.
+export default async function getRegion(): Promise<string> {
+  return getCommerceLocale((await locale()) ?? defaultLocale).country;
+}
+```
+
+`getCommerceLocale` maps a locale to its Shopify country and language. (See [Query Shopify in each language](#shopify-language)).
+
+### 3. Generate and load translations locally
+
+Cache Components require a custom [`loadTranslations`](/docs/react/reference/functions/load-translations) function, because remote loading is not safe during prerendering. Write translations into your source with the CLI and import them from the bundle. (See [Storing translations locally](/docs/react/guides/storing-translations)).
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "ja", "ko", "id"],
+  "src": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
+  "files": {
+    "gt": { "output": "public/_gt/[locale].json" }
+  }
+}
+```
+
+- `src` adds `lib/`. By default the CLI scans only `src/`, `app/`, `pages/`, and `components/`, and the template keeps metadata and labels in `lib/`.
+
+```ts title="loadTranslations.ts"
+// `pnpm translate` writes these files before the build; bundling them keeps pages prerenderable.
+const translations: Record<string, () => Promise<{ default: object }>> = {
+  fr: () => import("./public/_gt/fr.json"),
+  ja: () => import("./public/_gt/ja.json"),
+  ko: () => import("./public/_gt/ko.json"),
+  id: () => import("./public/_gt/id.json"),
+};
+
+export default async function loadTranslations(locale: string): Promise<object> {
+  const loaded = await translations[locale]?.();
+  return loaded?.default ?? {};
+}
+```
+
+Run [`npx gt translate`](/docs/cli/reference/commands/translate) after changing copy and commit the generated files, or run it before `next build`. Committed files let the storefront build without a General Translation API key.
+
+## Route requests by locale [#routing]
+
+### Move routes under `[locale]`
+
+1. Move every storefront route into `app/[locale]/` and delete `app/layout.tsx`, so `[locale]` is a root param. Keep `api/`, `md/`, `agent/`, `sitemap*`, `robots.ts`, `manifest.ts`, `llms.txt`, `global-error.tsx`, and static icons directly under `app/`.
+2. Update `PageProps<"/...">` and `LayoutProps<"/...">` type arguments to `"/[locale]/..."`.
+3. In `app/[locale]/layout.tsx`, return every locale from `generateStaticParams`, reject unsupported locales, set `<html lang>`, and wrap the body in [`GTProvider`](/docs/react/reference/components/gt-provider):
+
+   ```tsx title="app/[locale]/layout.tsx"
+   import { GTProvider } from "gt-next";
+   import { getLocale } from "gt-next/server";
+   import { notFound } from "next/navigation";
+
+   import { isSupportedLocale, locales } from "@/lib/i18n";
+
+   export const ensureStatic = "prefetch";
+
+   export function generateStaticParams() {
+     return locales.map((locale) => ({ locale }));
+   }
+
+   export default async function RootLayout({ children }: LayoutProps<"/[locale]">) {
+     const locale = await getLocale();
+     if (!isSupportedLocale(locale)) notFound();
+     return (
+       <html lang={locale}>
+         <body>
+           <GTProvider>{/* skip link, cart provider, nav, main, footer */}{children}</GTProvider>
+         </body>
+       </html>
+     );
+   }
+   ```
+
+4. Add a catch-all route that calls `notFound()`, so unmatched paths render `app/[locale]/not-found.tsx` inside the localized layout instead of Next.js's default 404 page:
+
+   ```tsx title="app/[locale]/[...rest]/page.tsx"
+   import { notFound } from "next/navigation";
+
+   import { PLACEHOLDER_HANDLE } from "@/lib/static-params";
+
+   export function generateStaticParams() {
+     return [{ rest: [PLACEHOLDER_HANDLE] }];
+   }
+
+   export default function CatchAllPage(): never {
+     notFound();
+   }
+   ```
+
+<Callout type="warn">
+  **Warning:** In `gt-next` 11.4, [`GTProvider`](/docs/react/reference/components/gt-provider) reads `usePathname()` on the client. Under Cache Components, a dynamic route with no static params then fails to prerender. Return a placeholder from `generateStaticParams` on routes that have none, such as the catch-all route and `account/orders/[id]`.
+</Callout>
+
+### Route requests in the proxy
+
+Read the locale list once from `gt.config.json` and split the prefix from each path:
+
+```ts title="lib/i18n/index.ts"
+import gtConfig from "@/gt.config.json";
+
+export const defaultLocale = gtConfig.defaultLocale;
+export const locales = [gtConfig.defaultLocale, ...gtConfig.locales];
+
+export function isSupportedLocale(value: string | undefined): value is string {
+  return value !== undefined && locales.includes(value);
+}
+
+/** Splits `/fr/products/x` into `fr` and `/products/x`; unprefixed paths belong to the default locale. */
+export function splitLocalePath(pathname: string): { locale: string; pathname: string } {
+  const [, segment, ...rest] = pathname.split("/");
+  if (segment !== defaultLocale && isSupportedLocale(segment)) {
+    return { locale: segment, pathname: `/${rest.join("/")}` };
+  }
+  return { locale: defaultLocale, pathname };
+}
+
+/** The default locale stays unprefixed so every page keeps one canonical URL. */
+export function localizePath(pathname: string, locale: string): string {
+  if (locale === defaultLocale) return pathname;
+  return pathname === "/" ? `/${locale}` : `/${locale}${pathname}`;
+}
+```
+
+In `proxy.ts`, keep the template's `handleShopifyRoutes` dispatch as it is, so Shopify answers cart, predictive search, and customer account requests first. Then rewrite every other page request to its `/[locale]` route. Leave API and other non-page paths alone:
+
+```ts title="proxy.ts"
+// The template's dispatch, unchanged: with customer accounts enabled, the session-aware
+// branch adds the account handlers and a session manager.
+const shopifyRoute = customerSession
+  ? handleShopifyRoutes({
+      ...routeOptions,
+      handlers: customerHandlers(customerSession, isAuthPath),
+      sessionManager: createCustomerSessionManager(request),
+    })
+  : handleShopifyRoutes({ ...routeOptions, handlers: [cartHandlers, predictiveSearchHandlers] });
+if (shopifyRoute) return shopifyRoute;
+
+const { locale, pathname: unprefixedPathname } = splitLocalePath(pathname);
+const refinedPath = getRefinedCollectionPath(unprefixedPathname, request.nextUrl.search);
+const localizedPath = isUnlocalizedPath(pathname)
+  ? null
+  : `/${locale}${refinedPath ?? (unprefixedPathname === "/" ? "" : unprefixedPathname)}`;
+// Pages live under app/[locale]; the default locale is served unprefixed and rewritten internally.
+const rewritePath =
+  getMarkdownRewritePath(request) ?? (localizedPath === pathname ? null : localizedPath);
+```
+
+```ts title="proxy.ts"
+const UNLOCALIZED_PATH = /^\/(?:api|md|agent|eve|_eve_internal|\.well-known|__shopify)(?:\/|$)/;
+
+function isUnlocalizedPath(pathname: string): boolean {
+  return UNLOCALIZED_PATH.test(pathname);
+}
+
+// Storefront pages, as opposed to API routes and Shopify's dotted endpoints such as `/cart.js`.
+function isPagePath(pathname: string): boolean {
+  return !isUnlocalizedPath(pathname) && !/\.[a-z]+$/i.test(pathname);
+}
+```
+
+Because `splitLocalePath` never treats the default locale as a prefix, `/en/products/x` is rewritten to `/en/en/products/x` and returns 404. Each page has one canonical URL.
+
+### Localize links
+
+Pass string hrefs through [`useLocalizeHref`](/docs/react/nextjs/reference/hooks/use-localize-href) inside the template's `Link` component, so internal links keep the current locale. Do the same for `router.push`, `router.replace`, and search navigation.
+
+```tsx title="components/ui/link.tsx"
+import { useLocalizeHref } from "gt-next/link";
+
+// Keep navigation in the active locale; the default locale stays unprefixed.
+const localizeHref = useLocalizeHref();
+const localizedHref = typeof href === "string" ? localizeHref(href) : href;
+```
+
+For the language switcher, swap the prefix of the current URL and name each language in itself:
+
+```tsx title="components/nav/language-switcher.tsx"
+"use client";
+
+import { T, useLocale, useLocales } from "gt-next";
+import { useId } from "react";
+
+import { localizePath, splitLocalePath } from "@/lib/i18n";
+
+/** Names each language in itself ("Français", "日本語") so shoppers recognize their own. */
+function getEndonym(locale: string): string {
+  const name = new Intl.DisplayNames([locale], { type: "language" }).of(locale) ?? locale;
+  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
+}
+
+export function LanguageSwitcher() {
+  const id = useId();
+  const locale = useLocale();
+  const locales = useLocales();
+  return (
+    <>
+      <label htmlFor={id} className="sr-only">
+        <T>Language</T>
+      </label>
+      <select
+        id={id}
+        value={locale}
+        onChange={(event) => {
+          // Switching locales changes the root layout, so navigate with a full page load.
+          const { pathname } = splitLocalePath(window.location.pathname);
+          window.location.assign(
+            `${localizePath(pathname, event.target.value)}${window.location.search}`,
+          );
+        }}
+      >
+        {locales.map((option) => (
+          <option key={option} lang={option} value={option}>
+            {getEndonym(option)}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+}
+```
+
+### Add SEO metadata
+
+Give each page a canonical URL in its own locale and an `hreflang` alternate for every locale. The template's `buildAlternates` and `buildOpenGraph` in `lib/seo/index.ts` are synchronous and can't read the locale, so move them into `lib/seo/server.ts` as async functions:
+
+1. In `lib/seo/index.ts`, export `buildCanonicalPath`, and delete `buildAlternates` and `buildOpenGraph`.
+2. Add the async versions to `lib/seo/server.ts`:
+
+   ```ts title="lib/seo/server.ts"
+   import { getLocale } from "gt-next/server";
+   import type { Metadata } from "next";
+
+   import { localizePath, locales } from "@/lib/i18n";
+   import { buildCanonicalPath } from "@/lib/seo";
+   import type { SearchParamsInput } from "@/lib/seo/types";
+
+   /** Canonical URL for the request's locale, plus hreflang alternates for every locale. */
+   export async function buildAlternates({
+     pathname,
+     searchParams,
+   }: {
+     pathname: string;
+     searchParams?: SearchParamsInput;
+   }): Promise<Metadata["alternates"]> {
+     const canonicalPath = buildCanonicalPath(pathname, searchParams);
+     const locale = await getLocale();
+     return {
+       canonical: localizePath(canonicalPath, locale),
+       languages: {
+         ...Object.fromEntries(locales.map((code) => [code, localizePath(canonicalPath, code)])),
+         "x-default": canonicalPath,
+       },
+     };
+   }
+   ```
+
+   Make `buildOpenGraph` async the same way, and localize its URL and locales. Open Graph expects `language_TERRITORY` values, such as `fr_FR`, so convert the locale there and keep the plain tag for `hreflang` and `<html lang>`:
+
+   ```ts title="lib/seo/server.ts"
+   /** Open Graph locales use language_TERRITORY, such as fr_FR; "fr" becomes its likeliest territory. */
+   function toOpenGraphLocale(locale: string): string {
+     const { language, region } = new Intl.Locale(locale).maximize();
+     return `${language}_${region}`;
+   }
+
+   // In buildOpenGraph, alongside its existing fields:
+   const locale = await getLocale();
+   return {
+     url: localizePath(url, locale),
+     locale: toOpenGraphLocale(locale),
+     alternateLocale: locales.filter((code) => code !== locale).map(toOpenGraphLocale),
+   };
+   ```
+
+   `maximize()` picks the likeliest territory, such as `fr_FR` for `fr` and `zh_TW` for `zh-Hant`. Replace the conversion with an explicit map for any locale whose likeliest territory isn't the one you serve.
+3. In every page's `generateMetadata`, import both helpers from `@/lib/seo/server` and await them:
+
+   ```tsx title="app/[locale]/page.tsx"
+   import { buildAlternates, buildOpenGraph } from "@/lib/seo/server"; // [!code highlight]
+
+   export async function generateMetadata(): Promise<Metadata> {
+     const gt = await getGT();
+     const title = gt("Home");
+     const description = gt("Explore featured products, curated collections, and seasonal campaigns.");
+     return {
+       title: `${title} | ${shopConfig.site.name}`,
+       description,
+       alternates: await buildAlternates({ pathname: "/" }), // [!code highlight]
+       openGraph: await buildOpenGraph({ title, description, url: "/", type: "website" }), // [!code highlight]
+     };
+   }
+   ```
+
+   A page that still imports from `@/lib/seo` fails to type-check once the old helpers are deleted, which finds every call site you missed.
+
+List every locale's URL in the sitemap too, each with `<xhtml:link rel="alternate" hreflang="...">` entries for every locale.
+
+## Query Shopify in each language [#shopify-language]
+
+Map each locale to the Shopify country and language the template's Storefront API calls take. Every locale shares the store's one market, so only the language changes:
+
+```ts title="lib/i18n/index.ts"
+import type { CommerceLocale } from "@/lib/config/types";
+
+// The market every language sells in. Currency always comes from Shopify's response.
+const STORE_COUNTRY: CommerceLocale["country"] = "US";
+
+// The Storefront API language for each locale in gt.config.json.
+const SHOPIFY_LANGUAGES: Record<string, CommerceLocale["language"]> = {
+  en: "EN",
+  fr: "FR",
+  ja: "JA",
+  ko: "KO",
+  id: "ID",
+};
+
+export function getCommerceLocale(locale: string): CommerceLocale {
+  const language = SHOPIFY_LANGUAGES[locale];
+  if (!language) throw new Error(`No Shopify language for locale: ${locale}`);
+  return { country: STORE_COUNTRY, language };
+}
+
+/** The proxy remembers the page locale in this cookie, so Hydrogen handler calls (`/api/cart`) use the same language. */
+export const LOCALE_COOKIE_NAME = "shop_locale";
+/** The proxy forwards the resolved locale to server actions and the cart seed in this request header. */
+export const LOCALE_HEADER_NAME = "x-shop-locale";
+```
+
+Every language must be a valid Storefront API `LanguageCode`. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)). If you [store catalog translations in Shopify](/docs/integrations/shopify/guides/translating-products#store-in-shopify), also publish each language in the store; Shopify returns the source text for a language it has not published. Translations bundled with the storefront don't need published languages.
+
+### Pass the language to catalog reads
+
+The template's catalog getters already accept a `locale` option of type `CommerceLocale` and pass it to `@inContext`. Pass the locale's value from every page and component. Getters that use `"use cache"` take it as an argument, so each language gets its own cache entry.
+
+```ts title="lib/i18n/server.ts"
+import { getLocale } from "gt-next/server";
+import { headers } from "next/headers";
+
+import type { CommerceLocale } from "@/lib/config/types";
+import { defaultLocale, getCommerceLocale, isSupportedLocale, LOCALE_HEADER_NAME } from "@/lib/i18n";
+
+/** Shopify country and language for the page's `[locale]`; pass it to every catalog read. */
+export async function getRequestCommerceLocale(): Promise<CommerceLocale> {
+  return getCommerceLocale(await getLocale());
+}
+
+/** The same value for dynamic code without route params (server actions, the cart seed), from the proxy's header. */
+export async function getForwardedCommerceLocale(): Promise<CommerceLocale> {
+  const locale = (await headers()).get(LOCALE_HEADER_NAME) ?? undefined;
+  return getCommerceLocale(isSupportedLocale(locale) ? locale : defaultLocale);
+}
+```
+
+```tsx title="app/[locale]/products/[handle]/page.tsx"
+const product = await getProduct({
+  handle,
+  locale: await getRequestCommerceLocale(),
+});
+```
+
+Server actions, such as quick shop and **Load more**, cannot read route params. Read the value with `getForwardedCommerceLocale()` instead.
+
+### Run Hydrogen's handlers in the same language
+
+Hydrogen's cart and predictive search handlers take the language and country from the request context's `i18n`. Requests such as `/api/cart` have no locale prefix, so the proxy remembers the page locale in a cookie and forwards it to Server Components and server actions in a header:
+
+```ts title="proxy.ts"
+import {
+  defaultLocale,
+  getCommerceLocale,
+  isSupportedLocale,
+  LOCALE_COOKIE_NAME,
+  LOCALE_HEADER_NAME,
+  splitLocalePath,
+} from "@/lib/i18n";
+
+const rememberedLocale = request.cookies.get(LOCALE_COOKIE_NAME)?.value;
+const requestLocale = resolveRequestLocale(request);
+// Speculative prefetches must not change the shopper's cart or remembered language.
+const isPageNavigation =
+  request.method === "GET" &&
+  isPagePath(pathname) &&
+  !request.headers.has("next-router-prefetch") &&
+  request.headers.get("purpose") !== "prefetch" &&
+  !request.headers.get("sec-purpose")?.includes("prefetch");
+
+// Hydrogen's cart and search handlers run in the shopper's language.
+const requestContext = createCustomerRequestContext(
+  request,
+  getCommerceLocale(requestLocale),
+  requestLocale,
+);
+
+// After handleShopifyRoutes declines the request:
+const headers = forwardCustomerRefreshAttempt(
+  request.nextUrl,
+  requestContext.getForwardedRequestHeaders(),
+);
+headers.set(LOCALE_HEADER_NAME, requestLocale);
+
+const response = rewritePath
+  ? NextResponse.rewrite(new URL(`${rewritePath}${request.nextUrl.search}`, request.url), {
+      request: { headers },
+    })
+  : NextResponse.next({ request: { headers } });
+
+// On the response:
+if (isPageNavigation && rememberedLocale !== locale) {
+  response.cookies.set(LOCALE_COOKIE_NAME, locale, { path: "/", sameSite: "lax" });
+}
+
+/** The URL's locale for pages; the remembered page locale for unprefixed Shopify endpoints such as `/api/cart`. */
+function resolveRequestLocale(request: NextRequest): string {
+  const { pathname } = request.nextUrl;
+  const { locale } = splitLocalePath(pathname);
+  if (locale !== defaultLocale || isPagePath(pathname)) return locale;
+  const remembered = request.cookies.get(LOCALE_COOKIE_NAME)?.value;
+  return isSupportedLocale(remembered) ? remembered : defaultLocale;
+}
+```
+
+Keep the template's `forwardCustomerRefreshAttempt` import from `@/lib/auth/request`. Apply it before choosing between `NextResponse.rewrite` and `NextResponse.next`, so rewritten account pages also receive the refresh-attempt header and cannot repeatedly retry a failed token refresh.
+
+Accept the Shopify locale and the page locale in `createCustomerRequestContext`, and pass the locale's URL prefix as `i18n.pathPrefix`: `/fr` for French URLs, and an empty string for the default locale. Without it, Hydrogen does not recognize `/fr/products/hoodie?variant=123` as a product URL and skips its variant redirect, so the page can show the default variant instead of the linked one:
+
+```ts title="lib/auth/request.ts"
+import { defaultLocale } from "@/lib/i18n";
+
+export function createCustomerRequestContext(
+  request: Request,
+  i18n: CommerceLocale = shopConfig.localization,
+  locale: string = defaultLocale,
+): ShopifyRequestContext {
+  return createShopifyRequestContext({
+    i18n: {
+      country: i18n.country,
+      language: i18n.language,
+      // Hydrogen matches and redirects product URLs under this prefix.
+      pathPrefix: locale === defaultLocale ? "" : `/${locale}`,
+    },
+    request,
+  });
+}
+```
+
+The defaults keep the template's other callers working. Pass `getCommerceLocale` to the server cart seed (`lib/cart/server.ts`) too, instead of reading `shopConfig.localization`.
+
+## Translate copy [#copy]
+
+Keep copy inline in each component, as the template does:
+
+- Wrap JSX in [`<T>`](/docs/react/reference/components/t). Wrap dynamic values in [`<Var>`](/docs/react/reference/components/var), [`<Num>`](/docs/react/reference/components/num), [`<Currency>`](/docs/react/reference/components/currency), or [`<DateTime>`](/docs/react/reference/components/datetime), and counts in [`<Plural>`](/docs/react/reference/components/plural). [`<T>`](/docs/react/reference/components/t) works in Server and Client Components.
+- Translate strings, such as `aria-label` values, metadata, and props, with [`getGT`](/docs/react/nextjs/reference/functions/get-gt) in Server Components and [`useGT`](/docs/react/reference/hooks/use-gt) in Client Components.
+- Mark labels defined outside a component, such as sort options, with [`msg`](/docs/react/reference/functions/msg). Resolve them where they render with [`getMessages`](/docs/react/nextjs/reference/functions/get-messages) or [`useMessages`](/docs/react/reference/hooks/use-messages).
+
+```tsx title="app/[locale]/page.tsx"
+import { T } from "gt-next";
+import { getGT } from "gt-next/server";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const gt = await getGT();
+  return { title: gt("Home") };
+}
+
+export default async function HomePage() {
+  const gt = await getGT();
+  return (
+    <>
+      <h1>
+        <T>A storefront localized with General Translation</T>
+      </h1>
+      <ProductsGrid title={gt("Products")} />
+    </>
+  );
+}
+```
+
+```tsx title="app/[locale]/search/page.tsx"
+<T>
+  <Plural
+    n={total}
+    one={<><Num>{total}</Num> result</>}
+    other={<><Num>{total}</Num> results</>}
+  />
+</T>
+```
+
+<Callout type="warn">
+  **Warning:** The CLI finds `gt()` strings by tracing the variable assigned from [`getGT()`](/docs/react/nextjs/reference/functions/get-gt) or [`useGT()`](/docs/react/reference/hooks/use-gt). Assign it on its own line, as in `const gt = await getGT()`. Strings read through a destructured `Promise.all` result are not extracted and render in the source language.
+</Callout>
+
+Format Shopify prices with the locale and the currency code Shopify returns. The template's `formatPrice(money, locale)` uses Hydrogen's `formatMoney`, so 36.95 EUR renders as `36,95 €` in French.
+
+## Translate catalog content [#catalog]
+
+Product titles, descriptions, and options come from Shopify. Either store their translations in Shopify and read them with `@inContext(language:)`, which `getCommerceLocale` already passes, or bundle them with the storefront through the CLI, as the example storefront does. (See [Translating Shopify products](/docs/integrations/shopify/guides/translating-products)).

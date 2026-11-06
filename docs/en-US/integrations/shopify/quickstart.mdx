@@ -1,0 +1,130 @@
+---
+
+title: Quickstart
+description: Translate a headless Shopify Hydrogen storefront's interface with gt-react or gt-next and show its catalog in the same language.
+related:
+  links:
+    - /docs/integrations/shopify/guides/localizing-react-router
+    - /docs/integrations/shopify/guides/localizing-nextjs
+    - /docs/integrations/shopify/guides/translating-products
+    - /docs/integrations/shopify/guides/selling-in-markets
+
+---
+
+A localized Shopify storefront has two layers of text, and each is translated in a different place:
+
+- **Catalog content.** Products, collections, and pages come from Shopify through Hydrogen, Shopify's framework-agnostic storefront SDK. You translate them with General Translation, store the results in Shopify's translations, and read them through the Storefront API.
+- **Storefront copy.** Navigation, buttons, cart messages, and other text in your code. The General Translation SDK for your framework translates it: [`gt-react`](/docs/react/react-router-quickstart) on React Router, or [`gt-next`](/docs/react/nextjs-quickstart) on Next.js, including the Vercel Shop template.
+
+Both layers read the same locale for each request, so a French page shows French copy and French product titles.
+
+*Note: This integration is for headless storefronts that use Hydrogen 2026.10 on React Router or Next.js. Online Store themes built with Liquid use Shopify's own translation apps instead.*
+
+## Example storefront [#examples]
+
+[gt-shopify-vercel.vercel.app](https://gt-shopify-vercel.vercel.app) is the Vercel Shop Next.js template with `gt-next`. Locales are path-prefixed with the default locale unprefixed, every page and the catalog are translated into French, Japanese, Korean, and Indonesian, and each language sells in its own Shopify market and currency. It bundles catalog translations with the CLI instead of storing them in Shopify.
+
+## Before you start [#before-start]
+
+You need:
+
+- A headless Shopify storefront that uses `@shopify/hydrogen` on React Router 7 or 8, or the Next.js App Router, such as Vercel Shop.
+- A [project](/docs/platform/dashboard/get-started) and the CLI, signed in with [`gt login`](/docs/cli/reference/commands/login).
+- To store catalog translations in Shopify, access to **Settings > Languages** in the Shopify admin.
+
+## Quickstart [#quickstart]
+
+### 1. Define your locales once
+
+List the default locale and target locales in `gt.config.json`. Routing, `<html lang>`, the provider, the language switcher, and Shopify queries all read from this list.
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["fr", "ja"]
+}
+```
+
+Shopify identifies languages with `LanguageCode` values such as `FR` and `PT_BR`, so keep an explicit map from each locale to its Shopify code. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)). If you store catalog translations in Shopify, also add and publish the same languages in the Shopify admin under **Settings > Languages**.
+
+### 2. Set up storefront translation
+
+<Tabs items={['React Router', 'Next.js']}>
+  <Tab value="React Router">
+    Follow the [React Router Quickstart](/docs/react/react-router-quickstart). Then pass the same locale to Hydrogen's request context in your root middleware. (See [Localizing Shopify Hydrogen with React Router](/docs/integrations/shopify/guides/localizing-react-router)).
+  </Tab>
+
+  <Tab value="Next.js">
+    Add `gt-next`, move storefront routes under `app/[locale]`, and rewrite unprefixed requests to the default locale after Shopify's route handlers run. (See [Localizing a Next.js Shopify storefront](/docs/integrations/shopify/guides/localizing-nextjs)).
+  </Tab>
+</Tabs>
+
+### 3. Query Shopify in the active language
+
+Add `@inContext(language: $language)` to Storefront API queries that return catalog content. Hydrogen's Storefront client fills `$language` and `$country` from the request context's `i18n`, so you never pass them per query.
+
+```ts title="lib/queries.ts"
+import {gql} from '@shopify/hydrogen';
+
+export const PRODUCT_QUERY = gql(`
+  query Product($handle: String!, $country: CountryCode, $language: LanguageCode)
+  @inContext(country: $country, language: $language) {
+    product(handle: $handle) {
+      title
+      description
+    }
+  }
+`);
+```
+
+The country selects the market, which sets prices, currency, and availability. Either keep one country for every language, or sell each language in its own market and move the cart when the language changes. (See [Language and market](/docs/integrations/shopify/reference/locale-handling#language-market)).
+
+Shopify returns the source text for any field without a translation. To fill the catalog, follow [Translating Shopify products with the Admin API](/docs/integrations/shopify/guides/translating-products).
+
+### 4. Generate translations
+
+Mark storefront copy for translation, then generate translations with [`npx gt translate`](/docs/cli/reference/commands/translate). Run it before your build and [store translations locally](/docs/react/guides/storing-translations), so cached and prerendered pages ship with them.
+
+<Tabs items={['React Router', 'Next.js']}>
+  <Tab value="React Router">
+    ```json title="package.json"
+    {
+      "scripts": {
+        "build": "npx gt translate && react-router build"
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="Next.js">
+    ```json title="package.json"
+    {
+      "scripts": {
+        "build": "npx gt translate && next build"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  **Note:** To have new copy wrapped and translated in pull requests instead, connect the repository to [Locadex](/docs/platform/locadex/quickstart).
+</Callout>
+
+### 5. Check a localized page
+
+Start the storefront and request a page in a target locale. Confirm that:
+
+- `<html lang>`, storefront copy, and translated product titles match the locale.
+- Prices keep the currency Shopify returns.
+- The cart, checkout, and account routes still work after switching languages.
+
+## FAQs [#faqs]
+
+### Does Hydrogen translate product content automatically?
+
+No. Hydrogen reads existing Shopify translations through the Storefront API; it does not generate them. Translate catalog fields with General Translation and register the results in Shopify, or bundle translated catalog JSON with your storefront. (See [Translating Shopify products with the Admin API](/docs/integrations/shopify/guides/translating-products)).
+
+### Does changing language change currency?
+
+Not by itself. Shopify's market and the cart's buyer country determine pricing; the page language determines translated text. The example storefront explicitly pairs each language with a market, but you can keep one market across languages or provide a separate country selector. (See [Language and market](/docs/integrations/shopify/reference/locale-handling#language-market)).

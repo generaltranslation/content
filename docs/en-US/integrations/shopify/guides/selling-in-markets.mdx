@@ -1,0 +1,141 @@
+---
+
+title: Selling in multiple markets
+description: How to pair each language with its own Shopify market and move the cart when shoppers switch languages.
+related:
+  links:
+    - /docs/integrations/shopify/guides/localizing-nextjs
+    - /docs/integrations/shopify/guides/translating-products
+    - /docs/integrations/shopify/guides/localizing-react-router
+
+---
+
+Shopify returns prices, currency, and availability for the market selected by the `country` in `@inContext`. The localization guides keep one market for every language, so switching languages changes only the text. This guide pairs each language with its own market, as the [example storefront](https://gt-shopify-vercel.vercel.app) does, so each language also shows its market's prices and currency.
+
+*Note: The code extends the `proxy.ts` and `lib/i18n` modules from [Localizing a Next.js Shopify storefront](/docs/integrations/shopify/guides/localizing-nextjs).*
+
+## Before you start [#before-start]
+
+- Complete [Localizing a Next.js Shopify storefront](/docs/integrations/shopify/guides/localizing-nextjs).
+- Add a Shopify market for each country you pair with a language. If you store catalog translations in Shopify, publish each language in its market.
+
+Pairing languages with markets is optional. To let shoppers choose a country independently of the language, add a separate country selector instead and update the cart's buyer identity when it changes. (See [Language and market](/docs/integrations/shopify/reference/locale-handling#language-market)).
+
+## Map each locale to a market [#market-map]
+
+Replace the single-market `getCommerceLocale` with a map from each locale to a Shopify country and language:
+
+```ts title="lib/i18n/index.ts"
+import type { CommerceLocale } from "@/lib/config/types";
+
+// Each language sells in one Shopify market, so Shopify returns that market's prices and currency.
+// Currency itself always comes from Shopify's response, never from this table.
+const markets: Record<string, CommerceLocale> = {
+  en: { country: "US", language: "EN" },
+  fr: { country: "FR", language: "FR" },
+  ja: { country: "JP", language: "JA" },
+  ko: { country: "KR", language: "KO" },
+  id: { country: "ID", language: "ID" },
+};
+
+export function getCommerceLocale(locale: string): CommerceLocale {
+  const market = markets[locale];
+  if (!market) throw new Error(`No Shopify market for locale: ${locale}`);
+  return market;
+}
+```
+
+Every country in the map must belong to one of the store's Shopify markets, and every language must be a Storefront API `LanguageCode`. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)).
+
+Nothing else changes for catalog reads, Hydrogen's handlers, or [`getRegion`](/docs/react/nextjs/reference/functions/get-region): they already read `getCommerceLocale`, so each locale now queries its own market, and `"use cache"` getters keep a cache entry per market. Create new carts with the market's country as the buyer's `countryCode`.
+
+## Move the cart between markets [#move-cart]
+
+A cart keeps the currency of its buyer country. Hydrogen's cart handlers have no action for the buyer country, so when a page navigation may change the market, the proxy reads the cart's actual country and updates it before the page renders:
+
+```ts title="lib/cart/request.ts"
+const CART_COUNTRY_QUERY = gql(`#graphql
+  query cartCountry($cartId: ID!) {
+    cart(id: $cartId) {
+      buyerIdentity { countryCode }
+    }
+  }
+`);
+
+const CART_COUNTRY_UPDATE_MUTATION = gql(`#graphql
+  mutation cartCountryUpdate($cartId: ID!, $countryCode: CountryCode!) {
+    cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: { countryCode: $countryCode }) {
+      cart { buyerIdentity { countryCode } }
+      userErrors {
+        message
+      }
+    }
+  }
+`);
+
+export async function moveCartToMarket(
+  request: Request,
+  requestContext: ShopifyRequestContext,
+): Promise<void> {
+  const cartId = getCartId({ cookie: request.headers.get("cookie") ?? undefined });
+  if (!cartId) return;
+  const client = createRequestStorefrontClient(requestContext);
+  const countryCode = requestContext.i18n.country;
+  // Read the cart uncached; another tab or session may have moved it.
+  const current = await client.graphql(CART_COUNTRY_QUERY, { variables: { cartId } });
+  if (current.errors) throw new Error("Unable to read the cart's country");
+  const cart = current.data?.cart;
+  // An expired cart is handled by the template's existing cart-creation flow.
+  if (!cart || cart.buyerIdentity.countryCode === countryCode) return;
+
+  const result = await client.graphql(CART_COUNTRY_UPDATE_MUTATION, {
+    variables: { cartId, countryCode },
+  });
+  if (result.errors) throw new Error("Unable to update the cart's country");
+  const updated = result.data.cartBuyerIdentityUpdate;
+  if (
+    !updated ||
+    updated.userErrors.length > 0 ||
+    updated.cart?.buyerIdentity.countryCode !== countryCode
+  ) {
+    throw new Error("The cart's country was not updated");
+  }
+}
+```
+
+In `proxy.ts`, run the move only when the market may change, and set the locale cookie only after it succeeds. This replaces the cookie update from the Next.js guide:
+
+```ts title="proxy.ts"
+// A language switch, or a page view without the locale cookie, may move the cart to another market.
+const marketMayChange = isPageNavigation && rememberedLocale !== locale;
+
+// After handleShopifyRoutes declines the request, before the page response or locale cookie.
+if (marketMayChange) {
+  try {
+    await moveCartToMarket(request, requestContext);
+  } catch {
+    // Do not render new-market prices beside a cart in another market.
+    const failure = new NextResponse("Unable to switch the cart's market. Please reload to retry.", {
+      status: 503,
+      headers: { "Cache-Control": "no-store" },
+    });
+    // The update may have reached Shopify even though it failed here, so forget the
+    // remembered locale; the next page navigation then reads the cart again.
+    failure.cookies.delete(LOCALE_COOKIE_NAME);
+    return failure;
+  }
+}
+
+// On the response. Reached only after moveCartToMarket succeeds.
+if (marketMayChange) {
+  response.cookies.set(LOCALE_COOKIE_NAME, locale, { path: "/", sameSite: "lax" });
+}
+```
+
+How the check behaves:
+
+- **Cost.** Navigations within one language skip the check. A language switch, or a visit without the cookie, adds one uncached cart read, plus a mutation only when the countries differ. Do not cache the cart-country query.
+- **Failures.** Network failures, GraphQL errors, and mutation `userErrors` return 503 instead of rendering new-market prices beside an old-market cart. Because only market changes run the check, a Shopify cart outage blocks switching languages, not browsing.
+- **Recovery.** The locale cookie is set only after a successful move. A failed move, including one that reached Shopify but lost its response, deletes the cookie, so the next page navigation in any language reads the cart again. The cookie remains a hint rather than proof of the cart's country: a country changed outside this proxy is corrected on the next language switch or visit without the cookie.
+
+Shopify reprices the cart lines after a successful country update. The [language switcher](/docs/integrations/shopify/guides/localizing-nextjs#routing) navigates with a full page load, so the proxy sees every switch.

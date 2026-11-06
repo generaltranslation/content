@@ -326,7 +326,7 @@ The **overview** section doubles as a **landing hub**: its `meta.json` lists the
 
 - **Frameworks:** React, React SPA, Next.js App Router, Next.js Pages Router, TanStack Start, React Native, Vue, Node.js, Python, CLI, JSON
 - **Platform:** Dashboard, Locadex, Core, OpenAPI
-- **Integrations:** Google Drive, Mintlify, Payload CMS, Sanity, Storyblok, rrweb
+- **Integrations:** Google Drive, Mintlify, Payload CMS, Sanity, Shopify, Storyblok, rrweb
 
 Treat the Overview sidebar hub, each section's `meta.json`, and the corresponding landing-page card grid as one synchronized navigation surface. Whenever a framework, Platform capability, or integration is added, removed, renamed, or reordered, update all applicable surfaces in the same change and verify every route. Keep the Integrations sidebar and landing page in the order above, with Google Drive first. The structure validator enforces route coverage.
 
