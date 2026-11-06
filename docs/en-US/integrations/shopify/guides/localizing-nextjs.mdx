@@ -379,9 +379,14 @@ export function getCommerceLocale(locale: string): CommerceLocale {
   if (!language) throw new Error(`No Shopify language for locale: ${locale}`);
   return { country: STORE_COUNTRY, language };
 }
+
+/** The proxy remembers the page locale in this cookie, so Hydrogen handler calls (`/api/cart`) use the same language. */
+export const LOCALE_COOKIE_NAME = "shop_locale";
+/** The proxy forwards the resolved locale to server actions and the cart seed in this request header. */
+export const LOCALE_HEADER_NAME = "x-shop-locale";
 ```
 
-Every language must be a Storefront API `LanguageCode` published in the store. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)). Shopify returns the source text for a language the store has not published.
+Every language must be a valid Storefront API `LanguageCode`. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)). If you [store catalog translations in Shopify](/docs/integrations/shopify/guides/translating-products#store-in-shopify), also publish each language in the store; Shopify returns the source text for a language it has not published. Translations bundled with the storefront don't need published languages.
 
 ### Pass the language to catalog reads
 
@@ -420,6 +425,15 @@ Server actions, such as quick shop and **Load more**, cannot read route params. 
 Hydrogen's cart and predictive search handlers take the language and country from the request context's `i18n`. Requests such as `/api/cart` have no locale prefix, so the proxy remembers the page locale in a cookie and forwards it to Server Components and server actions in a header:
 
 ```ts title="proxy.ts"
+import {
+  defaultLocale,
+  getCommerceLocale,
+  isSupportedLocale,
+  LOCALE_COOKIE_NAME,
+  LOCALE_HEADER_NAME,
+  splitLocalePath,
+} from "@/lib/i18n";
+
 const rememberedLocale = request.cookies.get(LOCALE_COOKIE_NAME)?.value;
 const requestLocale = resolveRequestLocale(request);
 // Speculative prefetches must not change the shopper's cart or remembered language.

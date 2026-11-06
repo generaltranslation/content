@@ -90,7 +90,45 @@ export default function LocaleLayout() {
 
 With file-based routes, name the layout `($locale).tsx` and nest page files under it instead.
 
-Hydrogen's own handlers, such as `/api/cart`, `/checkout`, and the Customer Account routes, answer in the root middleware before any page renders, so they stay unprefixed.
+Hydrogen's own handlers, such as `/api/cart`, `/api/predictive-search`, `/checkout`, and the Customer Account routes, answer in the root middleware before any page renders, so they stay unprefixed.
+
+### Keep Hydrogen's handlers in the page's language [#handler-locale]
+
+Requests to `/api/cart` and `/api/predictive-search` have no locale prefix, so `getRequestLocale` resolves them to the default locale. On a French page, the cart and search results would then show English catalog text.
+
+Remember the page's locale in a cookie, and read it only for those unprefixed `/api` requests. The URL stays the only source of the locale for pages. Replace `getRequestLocale` in `app/lib/i18n.ts`:
+
+```ts title="app/lib/i18n.ts"
+export const LOCALE_COOKIE_NAME = 'shop_locale';
+
+const allLocales = [gtConfig.defaultLocale, ...gtConfig.locales];
+
+export function readCookie(request: Request, name: string): string | undefined {
+  const cookie = request.headers.get('Cookie')?.split(/;\s*/).find((part) => part.startsWith(`${name}=`));
+  return cookie?.slice(name.length + 1);
+}
+
+/** Pages use their URL prefix; Hydrogen's `/api` handlers use the locale of the page that called them. */
+export function getRequestLocale(request: Request): string {
+  const {pathname} = new URL(request.url);
+  const [, segment] = pathname.split('/');
+  if (gtConfig.locales.includes(segment)) return segment;
+  if (!pathname.startsWith('/api/')) return gtConfig.defaultLocale;
+  const remembered = readCookie(request, LOCALE_COOKIE_NAME);
+  // Only a configured locale is trusted; anything else falls back to the default.
+  return remembered && allLocales.includes(remembered) ? remembered : gtConfig.defaultLocale;
+}
+```
+
+In the root middleware, set the cookie when a page request's locale differs from the remembered one:
+
+```ts title="app/root.tsx"
+const response = await next();
+const isPageRequest = request.method === 'GET' && !new URL(request.url).pathname.startsWith('/api/');
+if (isPageRequest && readCookie(request, LOCALE_COOKIE_NAME) !== locale) {
+  response.headers.append('Set-Cookie', `${LOCALE_COOKIE_NAME}=${locale}; Path=/; SameSite=Lax`);
+}
+```
 
 ## Pass the language to Shopify [#storefront-language]
 
