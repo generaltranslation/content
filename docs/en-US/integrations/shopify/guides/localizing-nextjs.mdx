@@ -452,8 +452,17 @@ const requestContext = createCustomerRequestContext(
 );
 
 // After handleShopifyRoutes declines the request:
-const headers = requestContext.getForwardedRequestHeaders();
+const headers = forwardCustomerRefreshAttempt(
+  request.nextUrl,
+  requestContext.getForwardedRequestHeaders(),
+);
 headers.set(LOCALE_HEADER_NAME, requestLocale);
+
+const response = rewritePath
+  ? NextResponse.rewrite(new URL(`${rewritePath}${request.nextUrl.search}`, request.url), {
+      request: { headers },
+    })
+  : NextResponse.next({ request: { headers } });
 
 // On the response:
 if (isPageNavigation && rememberedLocale !== locale) {
@@ -469,6 +478,8 @@ function resolveRequestLocale(request: NextRequest): string {
   return isSupportedLocale(remembered) ? remembered : defaultLocale;
 }
 ```
+
+Keep the template's `forwardCustomerRefreshAttempt` import from `@/lib/auth/request`. Apply it before choosing between `NextResponse.rewrite` and `NextResponse.next`, so rewritten account pages also receive the refresh-attempt header and cannot repeatedly retry a failed token refresh.
 
 Accept the Shopify locale and the page locale in `createCustomerRequestContext`, and pass the locale's URL prefix as `i18n.pathPrefix`: `/fr` for French URLs, and an empty string for the default locale. Without it, Hydrogen does not recognize `/fr/products/hoodie?variant=123` as a product URL and skips its variant redirect, so the page can show the default variant instead of the linked one:
 
