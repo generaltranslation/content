@@ -41,14 +41,15 @@ initialize_gt(
 
 Import `initialize_gt` from `gt_flask` or `gt_fastapi`, depending on your framework. The signature is identical in both. There is no core-library `initialize_gt`; without a framework, build an [`I18nManager`](/docs/python/reference/classes/i18n-manager) and call [`set_i18n_manager`](/docs/python/reference/functions/set-i18n-manager) instead.
 
-*Note: There is no `api_key` parameter. CDN delivery is driven by `project_id` and `cache_url`.*
+*Note: There is no `api_key` parameter. CDN delivery is driven by `project_id`, `cache_url`, and the `_versionId` and `_branchId` keys in `gt.config.json`.*
 
 ## How it works [#how-it-works]
 
 - **Config resolution.** It loads config (via `load_config`, an explicit `config_path`, or the default `gt.config.json`), then resolves each setting as the keyword argument, then the config value, then the library default.
 - **Manager setup.** It constructs an [`I18nManager`](/docs/python/reference/classes/i18n-manager) with the resolved settings and registers it with [`set_i18n_manager`](/docs/python/reference/functions/set-i18n-manager).
 - **Locale detection.** On Flask it registers a `before_request` hook; on FastAPI it adds an HTTP middleware and wraps the app lifespan. Each request sets the locale from [`get_locale`](/docs/python/reference/functions/get-locale) if provided, otherwise from the `Accept-Language` header.
-- **Eager loading.** When `eager_loading` is true and target locales are known, it loads all translations up front. On Flask this checks the `locales` argument you pass directly (not config-only locales); on FastAPI it runs inside the wrapped lifespan against the resolved locales.
+- **Eager loading.** When `eager_loading` is true, it loads translations for the resolved target locales up front (at startup on Flask, inside the wrapped lifespan on FastAPI).
+- **Loading per request.** Before the route runs, each request for a configured locale loads that locale's translations if they have never loaded. Translations older than 60 seconds are served while one reload runs in the background, and a failed reload keeps the previous translations.
 
 ## Parameters [#parameters]
 
@@ -101,7 +102,7 @@ Your General Translation project ID. When set (and no `load_translations` is pro
 
 **Type** `str` · **Optional** · **Default** config value
 
-An override for the CDN base URL used to load translations. The General Translation CDN is `https://cdn.gtx.dev`.
+An override for the CDN base URL used to load translations. When neither this argument nor `cacheUrl` in the config is set, the SDK uses the General Translation CDN, `https://cdn.gtx.dev`. An empty string, or `"cacheUrl": null` in the config, turns CDN loading off.
 
 ### `version_id` [#version-id]
 
@@ -140,7 +141,7 @@ initialize_gt(app, load_translations=load_translations)
 
 **Type** `bool` · **Optional** · **Default** `True`
 
-When true, all translations are loaded at startup rather than on first use. See the [How it works](#how-it-works) note on the Flask vs. FastAPI locale-source difference.
+When true, translations for every resolved target locale (from `locales` or `gt.config.json`) are loaded at startup. When false, each locale loads on its first request.
 
 ### `config_path` [#config-path]
 

@@ -32,6 +32,7 @@ I18nManager(
     load_translations: TranslationsLoader | None = None,
     cache_expiry_time: int = 60_000,
     version_id: str | None = None,
+    branch_id: str | None = None,
 )
 ```
 
@@ -40,8 +41,8 @@ Import `I18nManager` from `gt_i18n`. It is not re-exported by the framework pack
 ## How it works [#how-it-works]
 
 - **Locale set.** The default locale is always merged into `locales`, so the manager's locale set always contains it.
-- **Loader selection.** If `load_translations` is given it is used; otherwise, if `project_id` is set, a CDN loader for `{cache_url}/{project_id}/{locale}` is created; otherwise a no-op loader returns an empty dict.
-- **Caching.** Loaded translations are cached per locale for `cache_expiry_time` milliseconds. `get_translations` loads on demand (async); `get_translations_sync` only reads the cache and never blocks.
+- **Loader selection.** If `load_translations` is given it is used; otherwise, if `project_id` is set and `cache_url` is not an empty string, a CDN loader for `{cache_url}/{project_id}/{locale}` is created (followed by `/{version_id}` and `?branchId={branch_id}` when they are set); otherwise a no-op loader returns an empty dict.
+- **Caching.** Loaded translations are cached per locale and expire after `cache_expiry_time` milliseconds. `get_translations` (async) and `get_translations_blocking` (sync) load a locale on first use and reload an expired one in the background; `get_translations_sync` only reads the cache and never blocks.
 - **Locale storage.** The current locale is stored through `store_adapter` (a [`ContextVarStorageAdapter`](/docs/python/reference/classes/context-var-storage-adapter) by default), which isolates the value per request in both threaded and async contexts.
 
 ## Constructor parameters [#parameters]
@@ -57,6 +58,7 @@ Import `I18nManager` from `gt_i18n`. It is not re-exported by the framework pack
 | [`load_translations`](#load-translations) | Custom loader; overrides the CDN loader. | [`TranslationsLoader`](/docs/python/reference/classes/translations-loader) | Yes | `None` |
 | [`cache_expiry_time`](#cache-expiry) | Cache lifetime in milliseconds. | `int` | Yes | `60000` |
 | [`version_id`](#version-id) | Pinned translation version. | `str` | Yes | `None` |
+| [`branch_id`](#branch-id) | Branch of the pinned version. | `str` | Yes | `None` |
 
 ### `default_locale` [#default-locale]
 
@@ -80,7 +82,7 @@ The General Translation project ID. When set and no `load_translations` is provi
 
 **Type** `str` · **Optional** · **Default** `None`
 
-The CDN base URL used by the remote loader. The General Translation CDN is `https://cdn.gtx.dev`.
+The CDN base URL used by the remote loader. `None` uses the General Translation CDN, `https://cdn.gtx.dev`; an empty string turns CDN loading off.
 
 ### `custom_mapping` [#custom-mapping]
 
@@ -104,13 +106,19 @@ A custom loader returning translations for a locale. Overrides the CDN loader wh
 
 **Type** `int` · **Optional** · **Default** `60000`
 
-Cache lifetime in milliseconds (default 60000, i.e. 60 seconds). Once an entry is older than this, it is treated as expired: the async `get_translations` reloads it on its next call, but `get_translations_sync` — the method [`t`](/docs/python/reference/functions/t) uses — returns an empty dict for an expired entry and does **not** trigger a reload. Because the request path reads translations synchronously and nothing re-runs the async loader after startup, expired translations are not reloaded automatically, and [`t`](/docs/python/reference/functions/t) falls back to source strings until `load_all_translations` (or `get_translations`) runs again. [`initialize_gt`](/docs/python/reference/functions/initialize-gt) does not expose this parameter, so framework apps cannot change the 60-second window.
+Cache lifetime in milliseconds (default 60000, i.e. 60 seconds). Once an entry is older than this, the next call to `get_translations` or `get_translations_blocking` returns it at once and starts one reload in the background. The Flask and FastAPI integrations make that call before each request for a configured locale that needs translation. Until a reload succeeds, `get_translations_sync` (what [`t`](/docs/python/reference/functions/t) reads) returns the previous translations. [`initialize_gt`](/docs/python/reference/functions/initialize-gt) does not expose this parameter.
 
 ### `version_id` [#version-id]
 
 **Type** `str` · **Optional** · **Default** `None`
 
-A pinned translation version, returned by [`get_version_id`](/docs/python/reference/functions/get-version-id).
+A pinned translation version, returned by [`get_version_id`](/docs/python/reference/functions/get-version-id). CDN requests add `/{version_id}` after the locale.
+
+### `branch_id` [#branch-id]
+
+**Type** `str` · **Optional** · **Default** `None`
+
+The General Translation branch of the pinned version (the `_branchId` config key). CDN requests add `?branchId={branch_id}`.
 
 ## Properties and methods [#members]
 
@@ -123,8 +131,10 @@ A pinned translation version, returned by [`get_version_id`](/docs/python/refere
 | [`get_version_id`](#member-version-id) | The configured version id, or `None`. | `str \| None` |
 | [`requires_translation`](#member-requires) | Whether a locale needs translation from the default. | `bool` |
 | [`get_translations`](#member-get-translations) | Load (async) and cache a locale's translations. | `dict[str, str]` |
-| [`get_translations_sync`](#member-get-sync) | Read cached translations without blocking. | `dict[str, str]` |
+| [`get_translations_blocking`](#member-get-blocking) | Load a locale's translations from synchronous code; blocks only on the first load. | `dict[str, str]` |
+| [`get_translations_sync`](#member-get-sync) | Read the last loaded translations without blocking. | `dict[str, str]` |
 | [`load_all_translations`](#member-load-all) | Eagerly load all configured locales (async). | `None` |
+| [`load_all_translations_blocking`](#member-load-all-blocking) | Eagerly load all configured locales from synchronous code. | `None` |
 | [`get_gt_instance`](#member-gt-instance) | Build a `GT` instance for the current request. | `GT` |
 
 ### `default_locale` [#member-default-locale]
@@ -153,15 +163,23 @@ Returns whether `locale` (or the current locale) needs translation from the defa
 
 ### `get_translations(locale=None)` [#member-get-translations]
 
-An async method that loads and caches translations for `locale` (or the current locale), deduplicating concurrent loads and returning an empty dict on error.
+An async method that returns translations for `locale` (or the current locale). The first call for a locale waits for its load, and concurrent callers share that load. After expiry it returns the cached translations at once and reloads them in the background. When a load fails, the previous translations are kept, or an empty dict is returned if there are none. A synchronous `load_translations` callback runs on a worker thread, off the event loop.
+
+### `get_translations_blocking(locale=None)` [#member-get-blocking]
+
+The synchronous counterpart of `get_translations`, for synchronous frameworks such as Flask. The first call for a locale blocks until its load finishes, and other threads asking for the same locale wait for that one load. After expiry it returns the cached translations at once while one background thread reloads them.
 
 ### `get_translations_sync(locale=None)` [#member-get-sync]
 
-Returns cached translations for `locale` (or the current locale) without blocking, or an empty dict when nothing is cached (or the cache has expired). This is what [`t`](/docs/python/reference/functions/t) reads.
+Returns the last loaded translations for `locale` (or the current locale) without blocking, even after they expire, or an empty dict when the locale has never loaded. This is what [`t`](/docs/python/reference/functions/t) reads.
 
 ### `load_all_translations()` [#member-load-all]
 
 An async method that eagerly loads translations for every configured locale.
+
+### `load_all_translations_blocking()` [#member-load-all-blocking]
+
+The synchronous counterpart of `load_all_translations`. It works whether or not an event loop is already running in the calling thread, which is how the Flask integration loads translations at startup.
 
 ### `get_gt_instance()` [#member-gt-instance]
 

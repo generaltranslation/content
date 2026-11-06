@@ -63,18 +63,18 @@ Any translation function ([`t`](/docs/python/reference/functions/t), [`get_local
 
 The SDK resolves translations in one of these modes:
 
-- **General Translation CDN:** set `project_id` (in config or as a keyword argument) so translations load from the CDN at `{cache_url}/{project_id}/{locale}`. Override the base URL with `cache_url`.
+- **General Translation CDN:** set `project_id` (in config or as a keyword argument) so translations load from the CDN at `{cache_url}/{project_id}/{locale}`, followed by `/{version_id}` when a version is pinned. `cache_url` defaults to `https://cdn.gtx.dev`.
 - **Local files:** pass a `load_translations` callback that returns a `dict[str, str]` for a locale. This overrides the CDN loader. See [Storing translations locally](/docs/python/guides/storing-translations).
 
-There is no API key. CDN delivery is driven entirely by `project_id` and `cache_url`.
+There is no API key. CDN delivery is driven by `project_id`, `cache_url`, and the `_versionId` and `_branchId` keys the CLI writes to `gt.config.json`. Set `"cacheUrl": null` to turn CDN loading off.
 
 ## Preload translations [#preload]
 
 The [`t`](/docs/python/reference/functions/t) function reads from an in-memory cache, so translations must be loaded before a request uses them. By default [`initialize_gt`](/docs/python/reference/functions/initialize-gt) eager-loads them at startup (`eager_loading=True`).
 
-*Note: Eager loading runs only when target `locales` are known. On Flask this checks the `locales` you pass to [`initialize_gt`](/docs/python/reference/functions/initialize-gt) directly, not those loaded from `gt.config.json` — if your locales come only from the config file, pass them explicitly or load translations yourself. If translations are not yet loaded, [`t`](/docs/python/reference/functions/t) returns the source string.*
+Eager loading runs for the resolved target locales, whether they come from the `locales` argument or from `gt.config.json`. With `eager_loading=False`, each locale loads on its first request instead.
 
-*Note: The in-memory cache expires after `cache_expiry_time` (default 60 seconds), and the synchronous read path that [`t`](/docs/python/reference/functions/t) uses does not reload it — after expiry [`t`](/docs/python/reference/functions/t) falls back to source strings until the async loader runs again. [`initialize_gt`](/docs/python/reference/functions/initialize-gt) does not expose `cache_expiry_time`.*
+Cached translations expire after 60 seconds. When a request arrives for a locale whose translations have expired, the cached translations are served at once and one reload runs in the background; only requests that arrive while a locale's first load is running wait for it. A reload that fails keeps the previous translations. For the CDN, an empty response counts as a failure, because the CDN answers some server-side errors with an empty object. [`initialize_gt`](/docs/python/reference/functions/initialize-gt) does not expose `cache_expiry_time`.
 
 ## Handle missing translations [#missing]
 
