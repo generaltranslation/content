@@ -2,15 +2,16 @@
 
 title: Localizing a Next.js Shopify storefront
 navTitle: "Localizing Next.js"
-description: How to localize a Vercel Shop storefront with gt-next, locale-prefixed routes, Shopify markets, and Cache Components.
+description: How to localize a Vercel Shop storefront with gt-next, locale-prefixed routes, and Cache Components.
 related:
   links:
     - /docs/integrations/shopify/guides/localizing-react-router
     - /docs/integrations/shopify/guides/translating-products
+    - /docs/integrations/shopify/guides/selling-in-markets
 
 ---
 
-[Vercel Shop](https://github.com/vercel/shop) is a Next.js App Router template built on Hydrogen, Shopify's framework-agnostic storefront SDK. With `gt-next`, the default locale is served unprefixed, other locales live under a prefix such as `/fr/...`, and every page stays prerenderable once per locale. Each locale can also sell in its own Shopify market, so prices and checkout use that market's currency.
+[Vercel Shop](https://github.com/vercel/shop) is a Next.js App Router template built on Hydrogen, Shopify's framework-agnostic storefront SDK. With `gt-next`, the default locale is served unprefixed, other locales live under a prefix such as `/fr/...`, and every page stays prerenderable once per locale. Every language sells in one Shopify market; to give each language its own market and currency, follow [Selling in multiple markets](/docs/integrations/shopify/guides/selling-in-markets) afterward.
 
 *Note: This guide matches the template with Next.js 16, `cacheComponents: true`, `@shopify/hydrogen` 2026.10, and `gt-next` 11.4, the versions used by the [example storefront](https://gt-shopify-vercel.vercel.app), which is live in English, French, Japanese, Korean, and Indonesian.*
 
@@ -54,13 +55,13 @@ import { locale } from "next/root-params";
 
 import { defaultLocale, getCommerceLocale } from "@/lib/i18n";
 
-// Each language sells in one Shopify market, so the region is that market's country.
+// The region is the country of the Shopify market the page's locale sells in.
 export default async function getRegion(): Promise<string> {
   return getCommerceLocale((await locale()) ?? defaultLocale).country;
 }
 ```
 
-`getCommerceLocale` maps a locale to its Shopify market. (See [Sell each locale in a market](#markets)). If the store sells in one market only, return that country instead.
+`getCommerceLocale` maps a locale to its Shopify country and language. (See [Query Shopify in each language](#shopify-language)).
 
 ### 3. Generate and load translations locally
 
@@ -72,14 +73,12 @@ Cache Components require a custom [`loadTranslations`](/docs/react/reference/fun
   "locales": ["fr", "ja", "ko", "id"],
   "src": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
   "files": {
-    "gt": { "output": "public/_gt/[locale].json" },
-    "json": { "include": ["catalog/[locale]/labels.json", "catalog/[locale]/content.json"] }
+    "gt": { "output": "public/_gt/[locale].json" }
   }
 }
 ```
 
 - `src` adds `lib/`. By default the CLI scans only `src/`, `app/`, `pages/`, and `components/`, and the template keeps metadata and labels in `lib/`.
-- `files.json` translates the exported catalog in the same run. (See [Translate catalog content](#catalog)).
 
 ```ts title="loadTranslations.ts"
 // `pnpm translate` writes these files before the build; bundling them keeps pages prerenderable.
@@ -262,7 +261,7 @@ export function LanguageSwitcher() {
         id={id}
         value={locale}
         onChange={(event) => {
-          // A full navigation lets the proxy move the cart to the new language's Shopify market.
+          // Switching locales changes the root layout, so navigate with a full page load.
           const { pathname } = splitLocalePath(window.location.pathname);
           window.location.assign(
             `${localizePath(pathname, event.target.value)}${window.location.search}`,
@@ -356,37 +355,37 @@ Give each page a canonical URL in its own locale and an `hreflang` alternate for
 
 List every locale's URL in the sitemap too, each with `<xhtml:link rel="alternate" hreflang="...">` entries for every locale.
 
-## Sell each locale in a market [#markets]
+## Query Shopify in each language [#shopify-language]
 
-Shopify returns prices, currency, and availability for the market selected by the `country` in `@inContext`. Pairing each language with a market is a choice made by this example, not a localization requirement. If the store sells in one market, use the same country for every locale; otherwise, you can let shoppers choose their country independently of the language.
-
-To follow the example's market-per-language setup, map every locale to a Shopify country and language.
+Map each locale to the Shopify country and language the template's Storefront API calls take. Every locale shares the store's one market, so only the language changes:
 
 ```ts title="lib/i18n/index.ts"
 import type { CommerceLocale } from "@/lib/config/types";
 
-// Each language sells in one Shopify market, so Shopify returns that market's prices and currency.
-// Currency itself always comes from Shopify's response, never from this table.
-const markets: Record<string, CommerceLocale> = {
-  en: { country: "US", language: "EN" },
-  fr: { country: "FR", language: "FR" },
-  ja: { country: "JP", language: "JA" },
-  ko: { country: "KR", language: "KO" },
-  id: { country: "ID", language: "ID" },
+// The market every language sells in. Currency always comes from Shopify's response.
+const STORE_COUNTRY: CommerceLocale["country"] = "US";
+
+// The Storefront API language for each locale in gt.config.json.
+const SHOPIFY_LANGUAGES: Record<string, CommerceLocale["language"]> = {
+  en: "EN",
+  fr: "FR",
+  ja: "JA",
+  ko: "KO",
+  id: "ID",
 };
 
 export function getCommerceLocale(locale: string): CommerceLocale {
-  const market = markets[locale];
-  if (!market) throw new Error(`No Shopify market for locale: ${locale}`);
-  return market;
+  const language = SHOPIFY_LANGUAGES[locale];
+  if (!language) throw new Error(`No Shopify language for locale: ${locale}`);
+  return { country: STORE_COUNTRY, language };
 }
 ```
 
-Every country in the map must belong to one of the store's Shopify markets, and every language must be a Storefront API `LanguageCode`. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)). Shopify returns the source text for a language the store has not published.
+Every language must be a Storefront API `LanguageCode` published in the store. (See [Locale codes](/docs/integrations/shopify/reference/locale-handling#locale-codes)). Shopify returns the source text for a language the store has not published.
 
-### Pass the market to catalog reads
+### Pass the language to catalog reads
 
-The template's catalog getters already accept a `locale` option of type `CommerceLocale` and pass it to `@inContext`. Pass the market from every page and component. Getters that use `"use cache"` take it as an argument, so each market gets its own cache entry.
+The template's catalog getters already accept a `locale` option of type `CommerceLocale` and pass it to `@inContext`. Pass the locale's value from every page and component. Getters that use `"use cache"` take it as an argument, so each language gets its own cache entry.
 
 ```ts title="lib/i18n/server.ts"
 import { getLocale } from "gt-next/server";
@@ -400,7 +399,7 @@ export async function getRequestCommerceLocale(): Promise<CommerceLocale> {
   return getCommerceLocale(await getLocale());
 }
 
-/** The same market for dynamic code without route params (server actions, the cart seed), from the proxy's header. */
+/** The same value for dynamic code without route params (server actions, the cart seed), from the proxy's header. */
 export async function getForwardedCommerceLocale(): Promise<CommerceLocale> {
   const locale = (await headers()).get(LOCALE_HEADER_NAME) ?? undefined;
   return getCommerceLocale(isSupportedLocale(locale) ? locale : defaultLocale);
@@ -414,11 +413,11 @@ const product = await getProduct({
 });
 ```
 
-Server actions, such as quick shop and **Load more**, cannot read route params. Read the market with `getForwardedCommerceLocale()` instead.
+Server actions, such as quick shop and **Load more**, cannot read route params. Read the value with `getForwardedCommerceLocale()` instead.
 
-### Run Shopify's handlers in the market
+### Run Hydrogen's handlers in the same language
 
-Hydrogen's cart and predictive search handlers take the market from the request context's `i18n`. Requests such as `/api/cart` have no locale prefix, so the proxy remembers the page locale in a cookie and forwards it to Server Components and server actions in a header:
+Hydrogen's cart and predictive search handlers take the language and country from the request context's `i18n`. Requests such as `/api/cart` have no locale prefix, so the proxy remembers the page locale in a cookie and forwards it to Server Components and server actions in a header:
 
 ```ts title="proxy.ts"
 const rememberedLocale = request.cookies.get(LOCALE_COOKIE_NAME)?.value;
@@ -430,10 +429,8 @@ const isPageNavigation =
   !request.headers.has("next-router-prefetch") &&
   request.headers.get("purpose") !== "prefetch" &&
   !request.headers.get("sec-purpose")?.includes("prefetch");
-// A language switch, or a page view without the locale cookie, may move the cart to another market.
-const marketMayChange = isPageNavigation && rememberedLocale !== locale;
 
-// Hydrogen's cart and search handlers run in the market of the shopper's language.
+// Hydrogen's cart and search handlers run in the shopper's language.
 const requestContext = createCustomerRequestContext(
   request,
   getCommerceLocale(requestLocale),
@@ -444,8 +441,8 @@ const requestContext = createCustomerRequestContext(
 const headers = requestContext.getForwardedRequestHeaders();
 headers.set(LOCALE_HEADER_NAME, requestLocale);
 
-// On the response. Reached only after moveCartToMarket succeeds; a failed move deletes the cookie instead.
-if (marketMayChange) {
+// On the response:
+if (isPageNavigation && rememberedLocale !== locale) {
   response.cookies.set(LOCALE_COOKIE_NAME, locale, { path: "/", sameSite: "lax" });
 }
 
@@ -459,7 +456,7 @@ function resolveRequestLocale(request: NextRequest): string {
 }
 ```
 
-Accept the market and locale in `createCustomerRequestContext`, and pass the locale's URL prefix as `i18n.pathPrefix`: `/fr` for French URLs, and an empty string for the default locale. Without it, Hydrogen does not recognize `/fr/products/hoodie?variant=123` as a product URL and skips its variant redirect, so the page can show the default variant instead of the linked one:
+Accept the Shopify locale and the page locale in `createCustomerRequestContext`, and pass the locale's URL prefix as `i18n.pathPrefix`: `/fr` for French URLs, and an empty string for the default locale. Without it, Hydrogen does not recognize `/fr/products/hoodie?variant=123` as a product URL and skips its variant redirect, so the page can show the default variant instead of the linked one:
 
 ```ts title="lib/auth/request.ts"
 import { defaultLocale } from "@/lib/i18n";
@@ -481,88 +478,7 @@ export function createCustomerRequestContext(
 }
 ```
 
-The defaults keep the template's other callers working. Accept the market in the server cart seed (`lib/cart/server.ts`) too, instead of reading `shopConfig.localization`, and create new carts with the market's country as the buyer's `countryCode`.
-
-### Move the cart when the language changes
-
-A cart keeps the currency of its buyer country. Hydrogen's cart handlers have no action for the buyer country, so when a page navigation may change the market, the proxy reads the cart's actual country and updates it before the page renders:
-
-```ts title="lib/cart/request.ts"
-const CART_COUNTRY_QUERY = gql(`#graphql
-  query cartCountry($cartId: ID!) {
-    cart(id: $cartId) {
-      buyerIdentity { countryCode }
-    }
-  }
-`);
-
-const CART_COUNTRY_UPDATE_MUTATION = gql(`#graphql
-  mutation cartCountryUpdate($cartId: ID!, $countryCode: CountryCode!) {
-    cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: { countryCode: $countryCode }) {
-      cart { buyerIdentity { countryCode } }
-      userErrors {
-        message
-      }
-    }
-  }
-`);
-
-export async function moveCartToMarket(
-  request: Request,
-  requestContext: ShopifyRequestContext,
-): Promise<void> {
-  const cartId = getCartId({ cookie: request.headers.get("cookie") ?? undefined });
-  if (!cartId) return;
-  const client = createRequestStorefrontClient(requestContext);
-  const countryCode = requestContext.i18n.country;
-  // Read the cart uncached; another tab or session may have moved it.
-  const current = await client.graphql(CART_COUNTRY_QUERY, { variables: { cartId } });
-  if (current.errors) throw new Error("Unable to read the cart's country");
-  const cart = current.data?.cart;
-  // An expired cart is handled by the template's existing cart-creation flow.
-  if (!cart || cart.buyerIdentity.countryCode === countryCode) return;
-
-  const result = await client.graphql(CART_COUNTRY_UPDATE_MUTATION, {
-    variables: { cartId, countryCode },
-  });
-  if (result.errors) throw new Error("Unable to update the cart's country");
-  const updated = result.data.cartBuyerIdentityUpdate;
-  if (
-    !updated ||
-    updated.userErrors.length > 0 ||
-    updated.cart?.buyerIdentity.countryCode !== countryCode
-  ) {
-    throw new Error("The cart's country was not updated");
-  }
-}
-```
-
-```ts title="proxy.ts"
-// After handleShopifyRoutes declines the request, before the page response or locale cookie.
-if (marketMayChange) {
-  try {
-    await moveCartToMarket(request, requestContext);
-  } catch {
-    // Do not render new-market prices beside a cart in another market.
-    const failure = new NextResponse("Unable to switch the cart's market. Please reload to retry.", {
-      status: 503,
-      headers: { "Cache-Control": "no-store" },
-    });
-    // The update may have reached Shopify even though it failed here, so forget the
-    // remembered locale; the next page navigation then reads the cart again.
-    failure.cookies.delete(LOCALE_COOKIE_NAME);
-    return failure;
-  }
-}
-```
-
-Run this check before constructing the page response and setting the locale cookie above:
-
-- **Cost.** Navigations within one language skip the check. A language switch, or a visit without the cookie, adds one uncached cart read, plus a mutation only when the countries differ. Do not cache the cart-country query.
-- **Failures.** Network failures, GraphQL errors, and mutation `userErrors` return 503 instead of rendering new-market prices beside an old-market cart. Because only market changes run the check, a Shopify cart outage blocks switching languages, not browsing.
-- **Recovery.** The locale cookie is set only after a successful move. A failed move, including one that reached Shopify but lost its response, deletes the cookie, so the next page navigation in any language reads the cart again. The cookie remains a hint rather than proof of the cart's country: a country changed outside this proxy is corrected on the next language switch or visit without the cookie.
-
-Shopify reprices the cart lines after a successful country update. The [language switcher](#routing) navigates with a full page load, so the proxy sees every switch.
+The defaults keep the template's other callers working. Pass `getCommerceLocale` to the server cart seed (`lib/cart/server.ts`) too, instead of reading `shopConfig.localization`.
 
 ## Translate copy [#copy]
 
@@ -612,67 +528,4 @@ Format Shopify prices with the locale and the currency code Shopify returns. The
 
 ## Translate catalog content [#catalog]
 
-Product titles, descriptions, and options come from Shopify. You have two options:
-
-- **Store translations in Shopify.** Register translations with the Admin API and read them with `@inContext(language:)`, which the market map above already passes. Catalog edits don't need a new storefront build. (See [Translating Shopify products with the Admin API](/docs/integrations/shopify/guides/translating-products)).
-- **Bundle translations with the storefront.** Export the catalog's source text to a JSON file and translate it with the CLI along with your copy. This needs no Shopify Admin access, and is what the example storefront does.
-
-To bundle the catalog, export the text with the Storefront API, keyed by the source text itself. Write short labels (titles, option names and values, alt text) and rich text (descriptions, page bodies) to separate files, so only the labels reach the browser. Sanitize rich text the same way the storefront renders it, so the keys match:
-
-```ts title="scripts/export-catalog.ts"
-const labels = new Set<string>();
-const content = new Set<string>();
-for (const product of catalog.products.nodes) {
-  labels.add(product.title).add(product.productType);
-  content.add(product.description).add(sanitizeShopifyHtml(product.descriptionHtml));
-  for (const image of product.images.nodes) if (image.altText) labels.add(image.altText);
-  for (const option of product.options) {
-    labels.add(option.name);
-    for (const value of option.optionValues) labels.add(value.name);
-  }
-}
-
-async function writeCatalog(file: string, texts: Set<string>): Promise<number> {
-  const entries = [...texts].filter((text) => text.trim()).sort((a, b) => a.localeCompare(b, "en"));
-  await writeFile(
-    new URL(`../catalog/en/${file}`, import.meta.url),
-    `${JSON.stringify(Object.fromEntries(entries.map((text) => [text, text])), null, 2)}\n`,
-  );
-  return entries.length;
-}
-```
-
-[`npx gt translate`](/docs/cli/reference/commands/translate) then writes `catalog/<locale>/labels.json` and `catalog/<locale>/content.json` through the `files.json` entry in `gt.config.json`. Look translations up by the live source text and fall back to it, so anything edited in Shopify after the last export shows its current text:
-
-```ts title="lib/catalog/index.ts"
-/** Looks up merchant text by its live English source and falls back to it when no translation exists. */
-export function translateCatalogText(catalog: Catalog, text: string): string;
-export function translateCatalogText(catalog: Catalog, text: string | undefined): string | undefined;
-export function translateCatalogText(catalog: Catalog, text: string | undefined) {
-  return (text && catalog[text]) || text;
-}
-```
-
-```ts title="lib/catalog/server.ts"
-/** Short labels (titles, option names and values, alt text) for client components such as the cart. */
-export function getCatalogLabels(locale: string): Catalog {
-  return catalogs[locale]?.labels ?? {};
-}
-
-/** Returns a translator for Shopify merchant text in the request's locale. */
-export async function getCatalogText() {
-  const catalog = catalogs[await getLocale()];
-  const merged: Catalog = catalog ? { ...catalog.content, ...catalog.labels } : {};
-  function ct(text: string): string;
-  function ct(text: string | undefined): string | undefined;
-  function ct(text: string | undefined) {
-    return translateCatalogText(merged, text);
-  }
-  return ct;
-}
-```
-
-- Pass translated text into [`<T>`](/docs/react/reference/components/t) through [`<Var>`](/docs/react/reference/components/var), not as source copy.
-- For client components such as the cart and predictive search, pass `getCatalogLabels(locale)` to a context provider in the layout. Don't ship rich text or other locales' catalogs to the browser.
-- Keep option values in their source language wherever they select a variant, build a URL, or reach Shopify. Translate only the label you display.
-- To guide product-name translation, such as keeping brand terms or translating a garment word, add glossary terms and custom prompts to the project's context in the Dashboard.
+Product titles, descriptions, and options come from Shopify. Either store their translations in Shopify and read them with `@inContext(language:)`, which `getCommerceLocale` already passes, or bundle them with the storefront through the CLI, as the example storefront does. (See [Translating Shopify products](/docs/integrations/shopify/guides/translating-products)).
