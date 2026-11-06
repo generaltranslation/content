@@ -1,0 +1,121 @@
+---
+
+title: Translating content
+description: How to translate query results, route responses, and agent output in a Databricks App with the AppKit plugin.
+related:
+  links:
+    - /docs/integrations/databricks/guides/configuring-databricks
+
+---
+
+Translate text where your app produces it: in server routes, from the React client, or inside an agent.
+
+## Before you start [#before-start]
+
+Complete the [Quickstart](/docs/integrations/databricks/quickstart). Every example below uses the locales you passed to `generalTranslation()`.
+
+## Translate on the server [#server]
+
+Call [`translate`](/docs/integrations/databricks/reference/api#translate) on the plugin from your own routes, after plugin setup:
+
+```ts title="server/server.ts"
+import { createApp, server } from '@databricks/appkit';
+import { generalTranslation } from './plugins/general-translation';
+
+createApp({
+  plugins: [
+    generalTranslation({ defaultLocale: 'en', locales: ['en', 'es', 'ja'] }),
+    server(),
+  ],
+  onPluginsReady(appkit) {
+    appkit.server.extend((app) => {
+      app.get('/api/products', async (req, res) => {
+        const rows = await getProducts(); // your query
+        const locale = appkit.gt.detectLocale(req.get('accept-language'));
+        const { translations } = await appkit.gt.translate({
+          texts: rows.map((row) => row.description),
+          targetLocale: locale,
+          context: 'Product descriptions from the catalog table',
+        });
+        res.json(rows.map((row, i) => ({ ...row, description: translations[i] })));
+      });
+    });
+  },
+}).catch(console.error);
+```
+
+- `translations` has one entry per input text, in the same order.
+- `context` tells the translation model where the text appears. Describe the source rather than the wording, such as "Column headers in a sales dashboard."
+- When the target locale is the same dialect as the source, such as `en-US` for `en` content, [`translate`](/docs/integrations/databricks/reference/api#translate) returns the input unchanged without a request.
+
+To follow the language picker instead of the browser's language, send the picked locale with the request and pass it as `targetLocale`. Check it against your supported locales first: unlike the built-in route, [`translate`](/docs/integrations/databricks/reference/api#translate) accepts any locale.
+
+## Translate from the client [#client]
+
+Send text to the built-in [`POST /api/gt/translate`](/docs/integrations/databricks/reference/api#translate-route) route with the locale from the language picker:
+
+```ts title="client/src/lib/translate.ts"
+export async function translate(texts: string[], targetLocale: string) {
+  const res = await fetch('/api/gt/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texts, targetLocale }),
+  });
+  if (!res.ok) return texts; // show the source text if translation fails
+  const data: { translations: string[] } = await res.json();
+  return data.translations;
+}
+```
+
+The route accepts only locales in `locales` and returns `400` for any other. Use it for text that already reaches the browser, such as a Genie answer. Text that never leaves the server is better translated there.
+
+## Translate agent output [#agents]
+
+The plugin provides a [`translate` tool](/docs/integrations/databricks/reference/api#agent-tool) that agents can call. Add it to an agent like any other plugin tool:
+
+<Tabs items={['Markdown agent', 'Code agent']}>
+  <Tab value="Markdown agent">
+    ```md title="server/agents/analyst/agent.md"
+    ---
+    tools:
+      - plugin:gt
+    ---
+
+    Answer questions about sales data. Reply in the user's language.
+    ```
+  </Tab>
+
+  <Tab value="Code agent">
+    ```ts title="server/agents/analyst/agent.ts"
+    import { createAgent } from '@databricks/appkit/beta';
+
+    export default createAgent({
+      instructions: "Answer questions about sales data. Reply in the user's language.",
+      tools(plugins) {
+        return {
+          ...plugins.gt.toolkit(), // adds gt.translate
+        };
+      },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+The tool takes the same input as [`translate`](/docs/integrations/databricks/reference/api#translate). In a markdown agent, listing `tools` turns off the tools it would otherwise inherit, so list every plugin the agent needs. (See [Agent tool](/docs/integrations/databricks/reference/api#agent-tool)).
+
+## Handle errors [#errors]
+
+[`translate`](/docs/integrations/databricks/reference/api#translate) rejects when the input is invalid or General Translation cannot translate the text:
+
+- Invalid input throws a validation error. The route returns `400` with the problems found.
+- Rate limits return `429`. Retry later.
+- Other upstream failures return `502`.
+
+Route error responses never include upstream error details. Fall back to the source text so a failed translation never blocks the page. (See [Errors](/docs/integrations/databricks/reference/api#errors)).
+
+## What to use and when [#when]
+
+- **Server routes:** text from queries, files, or jobs. It is translated before the response leaves the server, and the browser never sees the source.
+- **The built-in route:** text that already reaches the browser, such as streamed Genie or agent replies.
+- **The agent tool:** let the agent decide when to translate, such as replying in the user's language.
+- **[`gt-react`](/docs/react/react-quickstart):** your app's static UI text, translated at build time.

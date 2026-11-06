@@ -25,6 +25,7 @@ const EXPECTED_ROOT_SECTIONS: Readonly<Record<string, readonly string[]>> = {
   python: ['Guides', 'Reference'],
   integrations: [
     'Google Drive',
+    'Databricks',
     'Mintlify',
     'Payload CMS',
     'Sanity',
@@ -46,6 +47,7 @@ const EXPECTED_OVERVIEW_PAGES = [
   '[OpenAPI](/docs/platform/openapi/overview)',
   '---Integrations---',
   '[Google Drive](/docs/integrations/google-drive/quickstart)',
+  '[Databricks](/docs/integrations/databricks/quickstart)',
   '[Mintlify](/docs/integrations/mintlify/quickstart)',
   '[Payload CMS](/docs/integrations/payload/quickstart)',
   '[Sanity](/docs/integrations/sanity/quickstart)',
@@ -77,6 +79,7 @@ const EXPECTED_LANDING_CARDS: Readonly<Record<string, readonly string[]>> = {
   platform: ['Dashboard', 'Locadex', 'Core', 'OpenAPI'],
   integrations: [
     'Google Drive',
+    'Databricks',
     'Mintlify',
     'Payload CMS',
     'Sanity',
