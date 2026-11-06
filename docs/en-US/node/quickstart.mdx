@@ -130,12 +130,51 @@ curl http://localhost:3000/api/greeting
 
 ### 6. Generate translations
 
-Run the CLI before you deploy to production so translations are available at runtime.
+Create a `gt.config.json` in the project root. [`src`](/docs/cli/reference/config#src) tells the CLI to scan `server.js`, and `files.gt.output` is where it writes one translation file per locale:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "fr"],
+  "src": ["server.js"],
+  "files": { "gt": { "output": "translations/[locale].json" } }
+}
+```
+
+Pass a loader for those files to [`initializeGT`](/docs/node/reference/functions/initialize-gt), as in [Storing translations locally](/docs/node/guides/storing-translations):
+
+```js title="server.js"
+import { readFile } from 'node:fs/promises'; // [!code ++]
+import { initializeGT } from 'gt-node';
+
+initializeGT({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr'],
+  loadTranslations: async (locale) => // [!code ++]
+    JSON.parse(await readFile(`./translations/${locale}.json`, 'utf8')), // [!code ++]
+});
+```
+
+Then sign in, set your project ID, and translate your strings. Run the CLI again whenever they change, and before you deploy, so the files stay current.
 
 ```bash
+npx gt login
+export GT_PROJECT_ID="your-project-id"
 npx gt translate
 ```
 
-*Note: [`gt translate`](/docs/cli/reference/commands/translate) reads a `gt.config.json` and requires a project ID and API key. Run [`npx gt init`](/docs/cli/reference/commands/init) first to create them.*
+*Note: [`gt translate`](/docs/cli/reference/commands/translate) needs a project ID and a sign-in or API key. Without `src`, the CLI scans only the `src`, `app`, `pages`, and `components` folders, so list every file whose strings you translate.*
+
+### 7. Check a translated response
+
+Restart the server and request the greeting in Spanish:
+
+```bash
+curl -H "Accept-Language: es" http://localhost:3000/api/greeting
+```
+
+```json title="Output"
+{"message":"¡Hola, Alice!"}
+```
 
 (See [Translating strings](/docs/node/guides/translating-strings) for when to use [`getGT`](/docs/node/reference/functions/get-gt), [`msg`](/docs/node/reference/functions/msg), and [`tx`](/docs/node/reference/functions/tx), and [Configuring gt-node](/docs/node/guides/configuring) for credentials and delivery).
