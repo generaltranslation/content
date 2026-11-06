@@ -1,0 +1,76 @@
+---
+
+title: Configuring Databricks
+description: How to configure the General Translation AppKit plugin for locales, projects, and API keys in local and deployed Databricks Apps.
+related:
+  links:
+    - /docs/integrations/databricks/guides/translating-content
+
+---
+
+Configure the plugin with the options you pass to `generalTranslation()` and the environment it runs in. For every option, see the [plugin configuration reference](/docs/integrations/databricks/reference/plugin-configuration).
+
+## Set locales [#locales]
+
+```ts title="server/server.ts"
+generalTranslation({
+  defaultLocale: 'en',
+  locales: ['en', 'es', 'fr', 'ja'],
+});
+```
+
+- `defaultLocale` is the language your content is written in. It is the source locale for every translation that does not set its own, and the fallback when locale detection finds no match.
+- `locales` lists the languages your app supports. The built-in translate route rejects any other target locale, and the language picker reads this list through the plugin's client config.
+
+Include `defaultLocale` in `locales` so visitors can switch back to it.
+
+## Choose a project [#project]
+
+The plugin finds the project from its API key, because a project API key belongs to exactly one project. To pin a project explicitly, set the `projectId` option or the `GT_PROJECT_ID` environment variable. The option takes precedence.
+
+Without a project ID, the app fails to start when its key can access more than one project, as an Organization API key can.
+
+## Store the API key [#api-key]
+
+The plugin reads its key from `GT_API_KEY` and fails to start without it. The **Runtime translation** permission (`project:translations:generate`) is the only one it needs.
+
+### a) Local development [#local]
+
+Add the key to `.env` in your app's root. AppKit loads it when you run `npm run dev`.
+
+```bash
+echo "GT_API_KEY=$(npx gt api-key create --project-id <project-id> --name 'Databricks app' --permission project:translations:generate)" >> .env
+```
+
+### b) Deployed apps [#deployed-apps]
+
+Deployed apps read the key from a Databricks secret, so it never appears in source or deploy config.
+
+1. Create the key and pipe it into a secret. The value is never shown in your terminal:
+
+   ```bash
+   npx gt api-key create --project-id <project-id> --name 'Databricks app' --permission project:translations:generate \
+     | databricks secrets put-secret gt api-key
+   ```
+
+   Create the `gt` scope first with `databricks secrets create-scope gt` if it does not exist.
+
+2. Bind the secret to your app in `databricks.yml`. The resource name must be `gt-api-key`, which `appkit add` wrote into `app.yaml`:
+
+   ```yaml title="databricks.yml"
+   resources:
+     apps:
+       app:
+         resources:
+           - name: gt-api-key
+             secret:
+               scope: gt
+               key: api-key
+               permission: READ
+   ```
+
+3. Deploy the app. Databricks resolves the secret into `GT_API_KEY` at startup through the `valueFrom` entry in `app.yaml`.
+
+<Callout type="warn">
+  **Warning:** Never put the key in `app.yaml`, `databricks.yml`, or client code. Everything under `client/` ships to the browser.
+</Callout>

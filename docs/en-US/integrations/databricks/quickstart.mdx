@@ -1,0 +1,130 @@
+---
+
+title: Quickstart
+description: Add General Translation to a Databricks App built with AppKit and translate your first text.
+related:
+  links:
+    - /docs/integrations/databricks/guides/translating-content
+    - /docs/integrations/databricks/guides/configuring-databricks
+
+---
+
+AppKit is Databricks' TypeScript SDK for building Databricks Apps. This AppKit plugin translates text your app creates at runtime, such as query results, Genie answers, and agent output. It also detects each visitor's language and comes with a language picker built on AppKit UI.
+
+*Note: The plugin translates dynamic content on each request. To translate the static text in your React client, use [`gt-react`](/docs/react/react-quickstart), which translates at build time.*
+
+## Before you start [#before-start]
+
+You need:
+
+- A Databricks App that uses `@databricks/appkit` and `@databricks/appkit-ui` 0.90.0 or later
+- A [project](/docs/platform/dashboard/get-started) and the CLI, signed in with [`gt login`](/docs/cli/reference/commands/login)
+
+## Quickstart [#quickstart]
+
+### 1. Add the plugin and language picker
+
+Run the AppKit CLI from your app's root:
+
+```bash
+npx appkit add general-translation locale-selector --allow-unverified
+```
+
+The command copies the plugin into `server/plugins/general-translation/` and the picker into `client/src/components/appkit/`, installs their dependencies, registers the plugin in your server entry, and adds `GT_API_KEY` to `app.yaml` and `.env.example`.
+
+<Callout type="info">
+  **Note:** `appkit add` refuses registry items that Databricks has not marked verified. The `--allow-unverified` flag accepts them. Both items are published by General Translation, and their source is copied into your app, where you can review it.
+</Callout>
+
+### 2. Set your locales
+
+Pass the language your content is written in and the languages your app supports:
+
+```ts title="server/server.ts"
+import { createApp, server } from '@databricks/appkit';
+import { generalTranslation } from './plugins/general-translation';
+
+createApp({
+  plugins: [
+    generalTranslation(), // [!code --]
+    generalTranslation({ defaultLocale: 'en', locales: ['en', 'es', 'ja'] }), // [!code ++]
+    server(),
+  ],
+}).catch(console.error);
+```
+
+Without `locales`, the app supports only the default locale. (See [Configuring Databricks](/docs/integrations/databricks/guides/configuring-databricks#locales)).
+
+### 3. Add an API key
+
+Create a project API key with the **Runtime translation** permission (`project:translations:generate`) and add it to `.env` for local development:
+
+```bash
+echo "GT_API_KEY=$(npx gt api-key create --project-id <project-id> --name 'Databricks app' --permission project:translations:generate)" >> .env
+```
+
+[`gt api-key create`](/docs/cli/reference/commands/api-key-create) prints only the new key, so it goes straight into the file. The plugin finds the project from the key.
+
+<Callout type="info">
+  **Note:** Deployed apps read the key from a Databricks secret instead of `.env`. (See [Configuring Databricks](/docs/integrations/databricks/guides/configuring-databricks#deployed-apps)).
+</Callout>
+
+### 4. Add the language picker
+
+Read the supported locales from the plugin, and start from the locale the server detects for the visitor:
+
+```tsx title="client/src/components/Header.tsx"
+import { useEffect, useState } from 'react';
+import { usePluginClientConfig } from '@databricks/appkit-ui/react';
+import { LocaleSelector } from '@/components/appkit/locale-selector';
+
+interface GtClientConfig {
+  defaultLocale: string;
+  locales: string[];
+}
+
+export function Header() {
+  const { defaultLocale, locales } = usePluginClientConfig<GtClientConfig>('gt');
+  const [detected, setDetected] = useState<string>();
+  const [picked, setPicked] = useState<string>();
+  // The visitor's pick wins; the default locale stays if detection fails.
+  const locale = picked ?? detected ?? defaultLocale;
+
+  useEffect(() => {
+    fetch('/api/gt/locale')
+      .then((res) => (res.ok ? res.json() : undefined))
+      .then((data?: { locale?: string }) => setDetected(data?.locale))
+      .catch(() => {});
+  }, []);
+
+  return <LocaleSelector locales={locales} value={locale} onValueChange={setPicked} />;
+}
+```
+
+Pass `locale` as the target locale wherever you translate content. (See [Translating content](/docs/integrations/databricks/guides/translating-content)).
+
+### 5. Translate your first text
+
+Start the app with `npm run dev`, then send text to the plugin's translate route:
+
+```bash
+curl -X POST http://localhost:8000/api/gt/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"texts": ["Revenue by region"], "targetLocale": "es"}'
+```
+
+The response lists one translation per input text, in the same order:
+
+```json title="Output"
+{ "locale": "es", "translations": ["Ingresos por región"] }
+```
+
+## FAQs [#faqs]
+
+### Does the plugin translate my app's buttons and labels?
+
+No. It translates text your app produces at runtime. Wrap the static text in your React client with [`gt-react`](/docs/react/react-quickstart), and use the same locale from the language picker for both.
+
+### Is the same text translated on every request?
+
+No. AppKit caches each identical request for one hour, so repeated text is translated once. (See [Caching](/docs/integrations/databricks/reference/api#caching)).

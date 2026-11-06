@@ -1,0 +1,194 @@
+---
+
+title: Programmatic API
+description: Call the plugin from server code, routes, agents, and the React client. API reference for the General Translation AppKit plugin and LocaleSelector.
+
+---
+
+The plugin's methods are available on the AppKit app as `appkit.gt` once setup finishes. The plugin source is copied into `server/plugins/general-translation/` and the picker into `client/src/components/appkit/locale-selector.tsx`, so you import both from your own app.
+
+## Overview [#overview]
+
+| API | Surface | Description |
+| --- | --- | --- |
+| [`translate`](#translate) | Server | Translate up to 100 strings into one locale. |
+| [`detectLocale`](#detect-locale) | Server | Pick the best supported locale for an `Accept-Language` header. |
+| [`toolkit`](#toolkit) | Server | Add the translate tool to a code-defined agent. |
+| [`GET /api/gt/locale`](#locale-route) | HTTP | Detect the requesting browser's locale. |
+| [`POST /api/gt/translate`](#translate-route) | HTTP | Translate text into a supported locale. |
+| [`gt.translate`](#agent-tool) | Agent tool | Let an agent translate text. |
+| [Client config](#client-config) | Client | Read the default locale and locales in React. |
+| [`<LocaleSelector>`](#locale-selector) | Client | Language picker built on AppKit UI. |
+
+## `translate` [#translate]
+
+**Input** [`TranslateRequest`](#translate-request) · **Signal** `AbortSignal` (optional) · **Returns** `Promise<TranslateResponse>`
+
+Translates strings from the source locale into `targetLocale`. Reach it as `appkit.gt.translate` in `onPluginsReady`.
+
+```ts
+const { locale, translations } = await appkit.gt.translate({
+  texts: rows.map((row) => row.product_description),
+  targetLocale: 'es',
+  context: 'Product descriptions from the catalog table',
+});
+```
+
+### How it works
+
+- Validates the input. Invalid input throws a `ZodError` before any request.
+- Uses `sourceLocale`, or [`defaultLocale`](/docs/integrations/databricks/reference/plugin-configuration#default-locale) when it is not set.
+- When the source and target are the same dialect, such as `en` and `en-US`, returns `texts` unchanged without a request.
+- Otherwise sends all texts in one request and returns one translation per text, in input order. Identical requests are served from the [cache](#caching).
+- Does not check `targetLocale` against [`locales`](/docs/integrations/databricks/reference/plugin-configuration#locales). Validate locales that come from users.
+- When the signal aborts, rejects with the signal's reason. A request already in flight keeps running for other callers waiting on the same text.
+- Throws [`GeneralTranslationError`](#errors) when General Translation cannot translate a text.
+
+### `TranslateRequest` [#translate-request]
+
+| Field | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `texts` | Strings to translate, 1–100, each up to 10,000 characters. | `string[]` | No | — |
+| `targetLocale` | Locale to translate into. | `string` | No | — |
+| `sourceLocale` | Locale of `texts`. | `string` | Yes | `defaultLocale` |
+| `context` | Where the text appears, up to 1,000 characters. Improves translation and is part of the cache key. | `string` | Yes | — |
+
+Locale codes are 2–35 characters. Unknown fields are rejected.
+
+### `TranslateResponse` [#translate-response]
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `locale` | The target locale. | `string` |
+| `translations` | One translation per input text, in input order. | `string[]` |
+
+## `detectLocale` [#detect-locale]
+
+**Input** `string` (an `Accept-Language` header, optional) · **Returns** `string`
+
+Returns the supported locale that best matches the header, weighing each language by its `q` value. Returns [`defaultLocale`](/docs/integrations/databricks/reference/plugin-configuration#default-locale) when nothing matches or the header is missing.
+
+```ts
+appkit.gt.detectLocale('fr-CA,fr;q=0.9,en;q=0.8'); // "fr" when locales includes "fr"
+```
+
+Entries with `q=0`, and the `*` wildcard, are ignored.
+
+## `toolkit` [#toolkit]
+
+**Input** `ToolkitOptions` (optional) · **Returns** `Record<string, ToolkitEntry>`
+
+Returns the plugin's agent tools for a code-defined agent, keyed [`gt.translate`](#agent-tool) by default. Reach it as `plugins.gt.toolkit()` in an agent's `tools` function.
+
+```ts title="server/agents/analyst/agent.ts"
+tools(plugins) {
+  return { ...plugins.gt.toolkit() };
+},
+```
+
+Accepts AppKit's toolkit options: `only` and `except` filter tools by name, `prefix` replaces the `gt.` key prefix, and `rename` maps a tool name to a new key.
+
+## `GET /api/gt/locale` [#locale-route]
+
+Returns the result of [`detectLocale`](#detect-locale) for the request's `Accept-Language` header.
+
+```json title="Response"
+{ "locale": "es" }
+```
+
+## `POST /api/gt/translate` [#translate-route]
+
+Calls [`translate`](#translate) with the request body, which takes the [`TranslateRequest`](#translate-request) fields.
+
+```bash
+curl -X POST http://localhost:8000/api/gt/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"texts": ["Revenue by region"], "targetLocale": "es"}'
+```
+
+```json title="Response"
+{ "locale": "es", "translations": ["Ingresos por región"] }
+```
+
+| Status | Body | When |
+| --- | --- | --- |
+| `200` | [`TranslateResponse`](#translate-response) | Translation succeeded. |
+| `400` | `{ error: "Unsupported targetLocale", locales }` | `targetLocale` is not in [`locales`](/docs/integrations/databricks/reference/plugin-configuration#locales). |
+| `400` | `{ error: "Invalid translate request", issues }` | The body failed validation. `issues` lists each problem. |
+| `429` | `{ error: "Translation failed.", plugin: "gt" }` | General Translation rate-limited the request. |
+| `502` | `{ error: "Translation failed.", plugin: "gt" }` | General Translation could not translate the text, or the request timed out. |
+| `500` | `{ error: "Translation failed.", plugin: "gt" }` | Any other error. |
+
+The route runs without a user context, so its [cache](#caching) is shared by every user.
+
+## Agent tool [#agent-tool]
+
+The plugin provides one agent tool, `translate`, which takes a [`TranslateRequest`](#translate-request) and returns a [`TranslateResponse`](#translate-response). It is marked read-only and does not require a user context.
+
+| Agent type | How to add it | Tool key |
+| --- | --- | --- |
+| Markdown | `plugin:gt` in the frontmatter `tools` list | [`gt.translate`](#agent-tool) |
+| Code | `...plugins.gt.toolkit()` in `tools` | [`gt.translate`](#agent-tool) |
+
+The tool description tells the agent that text is sent to General Translation.
+
+## Client config [#client-config]
+
+The plugin exposes its locale settings to the browser. Read them with AppKit UI's `usePluginClientConfig`:
+
+```tsx
+import { usePluginClientConfig } from '@databricks/appkit-ui/react';
+
+const { defaultLocale, locales } = usePluginClientConfig<{
+  defaultLocale: string;
+  locales: string[];
+}>('gt');
+```
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `defaultLocale` | The configured [`defaultLocale`](/docs/integrations/databricks/reference/plugin-configuration#default-locale). | `string` |
+| `locales` | The configured [`locales`](/docs/integrations/databricks/reference/plugin-configuration#locales). | `string[]` |
+
+## `<LocaleSelector>` [#locale-selector]
+
+A controlled language picker built on AppKit UI's `Select`. Each option shows the locale's name in its own language, such as "español" or "日本語", using the browser's `Intl.DisplayNames`. A code the browser cannot name is shown as-is.
+
+```tsx
+import { LocaleSelector } from '@/components/appkit/locale-selector';
+
+<LocaleSelector locales={['en', 'es', 'ja']} value={locale} onValueChange={setLocale} />;
+```
+
+| Prop | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| `locales` | Locale codes to offer. | `string[]` | No | — |
+| `value` | The selected locale. | `string` | No | — |
+| `onValueChange` | Called with the new locale when the user picks one. | `(locale: string) => void` | No | — |
+| `label` | Accessible label for the trigger. | `string` | Yes | `'Language'` |
+| `className` | Extra classes for the trigger. | `string` | Yes | — |
+
+The picker only reports the choice. Store it and pass it as `targetLocale` when you translate.
+
+## Caching [#caching]
+
+AppKit caches each identical request for one hour by default. A request is identical when its texts, source locale, target locale, context, and project match.
+
+- The built-in route has no user context, so all users share one cache.
+- Calls made in a user context, such as agent tool calls, are cached separately for each user.
+- Concurrent identical requests share one call to General Translation.
+
+Change or turn off caching with the [`cache`](/docs/integrations/databricks/reference/plugin-configuration#cache) option.
+
+## Errors [#errors]
+
+`translate` throws `GeneralTranslationError` when General Translation rejects a request or cannot translate a text. Import it from `server/plugins/general-translation/general-translation.ts`.
+
+| Property | Description | Type |
+| --- | --- | --- |
+| `code` | Always `'GT_ERROR'`. | `string` |
+| `statusCode` | `429` when rate-limited, otherwise `502`. | `429 \| 502` |
+| `isRetryable` | `true` only for `429`. | `boolean` |
+| `message` | Upstream error details for your logs. Not sent to clients. | `string` |
+
+Invalid input throws a `ZodError` instead.

@@ -1,0 +1,112 @@
+---
+
+title: Databricks plugin configuration
+navTitle: "Plugin configuration"
+description: Configure the General Translation plugin for AppKit with locales, a project, credentials, and execution limits. API reference for generalTranslation.
+
+---
+
+Register the plugin by passing `generalTranslation()` to AppKit's `createApp`. It takes one options object, and its name in the app is `gt`.
+
+```ts title="server/server.ts"
+import { createApp, server } from '@databricks/appkit';
+import { generalTranslation } from './plugins/general-translation';
+
+createApp({
+  plugins: [
+    generalTranslation({ defaultLocale: 'en', locales: ['en', 'es', 'ja'] }),
+    server(),
+  ],
+}).catch(console.error);
+```
+
+## Options [#options]
+
+| Option | Description | Type | Optional | Default |
+| --- | --- | --- | --- | --- |
+| [`defaultLocale`](#default-locale) | Locale your source content is written in. | `string` | Yes | `'en'` |
+| [`locales`](#locales) | Locales the app supports. | `string[]` | Yes | `[defaultLocale]` |
+| [`projectId`](#project-id) | Project to translate in. | `string` | Yes | `GT_PROJECT_ID`, then the API key's project |
+| [`timeout`](#timeout) | Time limit for each translation request, in milliseconds. | `number` | Yes | `30000` |
+| [`cache`](#cache) | Caching of identical requests. | `{ enabled?: boolean; ttl?: number }` | Yes | `{ enabled: true, ttl: 3600 }` |
+| [`retry`](#retry) | Retries for failed requests. | AppKit retry config | Yes | `{ enabled: false }` |
+
+The plugin also accepts AppKit's common plugin options, such as `telemetry`.
+
+### `defaultLocale` [#default-locale]
+
+**Type** `string` · **Optional** · **Default** `'en'`
+
+The locale your source content is written in, such as `en`. It is the source locale for every translation that does not set `sourceLocale`, and the result of [`detectLocale`](/docs/integrations/databricks/reference/api#detect-locale) when no supported locale matches.
+
+### `locales` [#locales]
+
+**Type** `string[]` · **Optional** · **Default** `[defaultLocale]`
+
+The locales the app supports, such as `['en', 'es', 'ja']`. Include `defaultLocale`.
+
+- [`detectLocale`](/docs/integrations/databricks/reference/api#detect-locale) only returns locales from this list.
+- The [translate route](/docs/integrations/databricks/reference/api#translate-route) rejects any other target locale with `400`.
+- The [client config](/docs/integrations/databricks/reference/api#client-config) exposes this list to the browser.
+
+[`translate`](/docs/integrations/databricks/reference/api#translate) called from server code is not limited to this list.
+
+### `projectId` [#project-id]
+
+**Type** `string` · **Optional** · **Default** `GT_PROJECT_ID`, then the API key's project
+
+The project that translations run in. The plugin resolves it at startup in this order:
+
+1. The `projectId` option.
+2. The `GT_PROJECT_ID` environment variable.
+3. The only project the API key can access.
+
+If the key can access more than one project, set `projectId` or `GT_PROJECT_ID`; otherwise the app fails to start.
+
+### `timeout` [#timeout]
+
+**Type** `number` · **Optional** · **Default** `30000`
+
+The time limit for each request to General Translation, in milliseconds. A request that runs over it fails with `502`.
+
+### `cache` [#cache]
+
+**Type** `{ enabled?: boolean; ttl?: number }` · **Optional** · **Default** `{ enabled: true, ttl: 3600 }`
+
+Caches each identical request (the same texts, source locale, target locale, context, and project). `ttl` is in seconds. (See [Caching](/docs/integrations/databricks/reference/api#caching)).
+
+```ts
+generalTranslation({
+  locales: ['en', 'es'],
+  cache: { ttl: 86_400 }, // keep translations for a day
+});
+```
+
+### `retry` [#retry]
+
+**Type** AppKit retry config · **Optional** · **Default** `{ enabled: false }`
+
+Retries are off by default. When you turn them on with AppKit's retry options, rate-limited requests (`429`) are retried, while other errors General Translation returns are not.
+
+## Environment variables [#env]
+
+| Variable | Description | Required |
+| --- | --- | --- |
+| `GT_API_KEY` | Project API key with the **Runtime translation** permission (`project:translations:generate`). The app fails to start without it. | Yes |
+| `GT_PROJECT_ID` | Project ID, used when the `projectId` option is not set. | No |
+
+Both are read on the server only and never reach the client.
+
+## Databricks resource [#resource]
+
+The plugin's manifest declares one required resource, which `appkit add` wires into `app.yaml`:
+
+| Field | Value |
+| --- | --- |
+| Type | `secret` |
+| Alias | `apiKey` |
+| Resource key | `gt-api-key` |
+| Permission | `READ` |
+| Environment variable | `GT_API_KEY` |
+
+Bind it to a Databricks secret in `databricks.yml` before you deploy. (See [Configuring Databricks](/docs/integrations/databricks/guides/configuring-databricks#deployed-apps)).
