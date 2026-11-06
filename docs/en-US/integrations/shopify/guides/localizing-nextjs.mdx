@@ -182,10 +182,18 @@ export function localizePath(pathname: string, locale: string): string {
 }
 ```
 
-In `proxy.ts`, let `handleShopifyRoutes` answer cart, predictive search, and customer account requests first. Then rewrite every other page request to its `/[locale]` route. Leave API and other non-page paths alone:
+In `proxy.ts`, keep the template's `handleShopifyRoutes` dispatch as it is, so Shopify answers cart, predictive search, and customer account requests first. Then rewrite every other page request to its `/[locale]` route. Leave API and other non-page paths alone:
 
 ```ts title="proxy.ts"
-const shopifyRoute = handleShopifyRoutes({ ...routeOptions, handlers: [cartHandlers, predictiveSearchHandlers] });
+// The template's dispatch, unchanged: with customer accounts enabled, the session-aware
+// branch adds the account handlers and a session manager.
+const shopifyRoute = customerSession
+  ? handleShopifyRoutes({
+      ...routeOptions,
+      handlers: customerHandlers(customerSession, isAuthPath),
+      sessionManager: createCustomerSessionManager(request),
+    })
+  : handleShopifyRoutes({ ...routeOptions, handlers: [cartHandlers, predictiveSearchHandlers] });
 if (shopifyRoute) return shopifyRoute;
 
 const { locale, pathname: unprefixedPathname } = splitLocalePath(pathname);
@@ -274,27 +282,59 @@ export function LanguageSwitcher() {
 
 ### Add SEO metadata
 
-Give each page a canonical URL in its own locale and an `hreflang` alternate for every locale:
+Give each page a canonical URL in its own locale and an `hreflang` alternate for every locale. The template's `buildAlternates` and `buildOpenGraph` in `lib/seo/index.ts` are synchronous and can't read the locale, so move them into `lib/seo/server.ts` as async functions:
 
-```ts title="lib/seo/server.ts"
-export async function buildAlternates({
-  pathname,
-  searchParams,
-}: {
-  pathname: string;
-  searchParams?: SearchParamsInput;
-}): Promise<Metadata["alternates"]> {
-  const canonicalPath = buildCanonicalPath(pathname, searchParams);
-  const locale = await getLocale();
-  return {
-    canonical: localizePath(canonicalPath, locale),
-    languages: {
-      ...Object.fromEntries(locales.map((code) => [code, localizePath(canonicalPath, code)])),
-      "x-default": canonicalPath,
-    },
-  };
-}
-```
+1. In `lib/seo/index.ts`, export `buildCanonicalPath`, and delete `buildAlternates` and `buildOpenGraph`.
+2. Add the async versions to `lib/seo/server.ts`:
+
+   ```ts title="lib/seo/server.ts"
+   import { getLocale } from "gt-next/server";
+   import type { Metadata } from "next";
+
+   import { localizePath, locales } from "@/lib/i18n";
+   import { buildCanonicalPath } from "@/lib/seo";
+   import type { SearchParamsInput } from "@/lib/seo/types";
+
+   /** Canonical URL for the request's locale, plus hreflang alternates for every locale. */
+   export async function buildAlternates({
+     pathname,
+     searchParams,
+   }: {
+     pathname: string;
+     searchParams?: SearchParamsInput;
+   }): Promise<Metadata["alternates"]> {
+     const canonicalPath = buildCanonicalPath(pathname, searchParams);
+     const locale = await getLocale();
+     return {
+       canonical: localizePath(canonicalPath, locale),
+       languages: {
+         ...Object.fromEntries(locales.map((code) => [code, localizePath(canonicalPath, code)])),
+         "x-default": canonicalPath,
+       },
+     };
+   }
+   ```
+
+   Make `buildOpenGraph` async the same way, and return `url: localizePath(url, locale)`, `locale`, and `alternateLocale: locales.filter((code) => code !== locale)` alongside its existing fields.
+3. In every page's `generateMetadata`, import both helpers from `@/lib/seo/server` and await them:
+
+   ```tsx title="app/[locale]/page.tsx"
+   import { buildAlternates, buildOpenGraph } from "@/lib/seo/server"; // [!code highlight]
+
+   export async function generateMetadata(): Promise<Metadata> {
+     const gt = await getGT();
+     const title = gt("Home");
+     const description = gt("Explore featured products, curated collections, and seasonal campaigns.");
+     return {
+       title: `${title} | ${shopConfig.site.name}`,
+       description,
+       alternates: await buildAlternates({ pathname: "/" }), // [!code highlight]
+       openGraph: await buildOpenGraph({ title, description, url: "/", type: "website" }), // [!code highlight]
+     };
+   }
+   ```
+
+   A page that still imports from `@/lib/seo` fails to type-check once the old helpers are deleted, which finds every call site you missed.
 
 List every locale's URL in the sitemap too, each with `<xhtml:link rel="alternate" hreflang="...">` entries for every locale.
 
@@ -376,7 +416,11 @@ const isPageNavigation =
 const marketMayChange = isPageNavigation && rememberedLocale !== locale;
 
 // Hydrogen's cart and search handlers run in the market of the shopper's language.
-const requestContext = createCustomerRequestContext(request, getCommerceLocale(requestLocale));
+const requestContext = createCustomerRequestContext(
+  request,
+  getCommerceLocale(requestLocale),
+  requestLocale,
+);
 
 // After handleShopifyRoutes declines the request:
 const headers = requestContext.getForwardedRequestHeaders();
@@ -397,7 +441,29 @@ function resolveRequestLocale(request: NextRequest): string {
 }
 ```
 
-Accept the market in `createCustomerRequestContext` (`lib/auth/request.ts`) and in the server cart seed (`lib/cart/server.ts`) instead of reading `shopConfig.localization`. Create new carts with the market's country as the buyer's `countryCode`.
+Accept the market and locale in `createCustomerRequestContext`, and pass the locale's URL prefix as `i18n.pathPrefix`: `/fr` for French URLs, and an empty string for the default locale. Without it, Hydrogen does not recognize `/fr/products/hoodie?variant=123` as a product URL and skips its variant redirect, so the page can show the default variant instead of the linked one:
+
+```ts title="lib/auth/request.ts"
+import { defaultLocale } from "@/lib/i18n";
+
+export function createCustomerRequestContext(
+  request: Request,
+  i18n: CommerceLocale = shopConfig.localization,
+  locale: string = defaultLocale,
+): ShopifyRequestContext {
+  return createShopifyRequestContext({
+    i18n: {
+      country: i18n.country,
+      language: i18n.language,
+      // Hydrogen matches and redirects product URLs under this prefix.
+      pathPrefix: locale === defaultLocale ? "" : `/${locale}`,
+    },
+    request,
+  });
+}
+```
+
+The defaults keep the template's other callers working. Accept the market in the server cart seed (`lib/cart/server.ts`) too, instead of reading `shopConfig.localization`, and create new carts with the market's country as the buyer's `countryCode`.
 
 ### Move the cart when the language changes
 
