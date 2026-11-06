@@ -48,6 +48,21 @@ function HitItem({ children }: { children?: React.ReactNode }) {
   return <li>✕ {children}</li>;
 }
 
+// The production blog lays the steps out as a horizontal timeline; the
+// preview stacks each step's name above its sentence and code block.
+function LocaleTwinsTimeline({ children }: { children?: React.ReactNode }) {
+  return <ol style={{ display: 'grid', gap: 24, listStyle: 'none', padding: 0, margin: '2rem 0' }}>{children}</ol>;
+}
+
+function TimelineStep({ name, children }: { name?: string; children?: React.ReactNode }) {
+  return (
+    <li>
+      <strong>{name}</strong>
+      {children}
+    </li>
+  );
+}
+
 function CarouselItem({ src, alt }: { src: string; alt?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- static blog asset
@@ -159,8 +174,11 @@ const customComponents = {
   FumadocsArchitecture: StubComponent,
   GitHub,
   IntroFeature,
+  LocaleTwinsGraph: StubComponent,
+  LocaleTwinsTimeline,
   OpenSourceGrants: StubComponent,
   SupportedLocales: StubComponent,
+  TimelineStep,
   Tweet,
   Video,
 } satisfies MDXComponents;

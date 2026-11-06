@@ -1,0 +1,216 @@
+---
+title: "The future of i18n libraries is moving from runtime to buildtime"
+summary: A new approach serving one bundle per locale
+date: 2026-11-04
+authors: [default]
+tags: ['engineering', 'i18n', 'build', 'vite', 'bundling']
+images: ['/static/blogs/locale-twins/cover-dark.webp?v=20261103-2045']
+imagesLight: ['/static/blogs/locale-twins/cover-light.webp?v=20261103-2045']
+ogImages: ['/static/blogs/locale-twins/og.png?v=20261103-2045']
+---
+
+## Why buildtime
+
+The simple goal of any i18n library is to load translations and display them to the user. Strings which live on a server must appear on a client’s browser.
+
+Most i18n libraries load content dynamically. At runtime, a library loads the full set of strings an app may need, because it can’t know what the app needs to render. But there’s a problem with this approach: a given page doesn't need to display all strings, in fact, it likely displays only a small percentage of them.
+
+Take this simple example app: a travel planner called Wayfinder.
+
+```text
+wayfinder/                    # Vite + React, 5 locales (en fr es ja zh)
+  src/
+    components/
+      Nav.tsx                 # shared: 8 strings
+      ...                     # 40 more components: ~430 strings
+    routes/
+      Home.tsx                # 72 strings
+      Trips.tsx               # lazy route: 95 strings
+      Settings.tsx            # lazy route: 65 strings
+      ...                     # 9 more lazy routes: ~330 strings
+  public/locales/
+    en.json fr.json es.json ja.json zh.json   # 1,000 strings each, ~80 KB gzip
+```
+
+Loading at runtime means shipping the visitor their entire locale file: all 300 strings in the app must be loaded before the first page can render in French. (This becomes even more unsustainable when apps can reach 20,000 or more entries, with a single page rendering 100 or fewer of these entries.)
+
+This is what makes build time powerful. The bundler already compiles and knows exactly which code each page uses, so it can ship only the strings that page needs.
+
+In this post, we’re sharing a new experimental “locale twins” approach we’re developing. The goal is build-time granularity without the usual tradeoff between locale count and bytes downloaded. With this approach, each visitor downloads only their locale’s strings, only for the pages they visit, no matter how many locales your app supports.
+
+## Why namespacing doesn’t work
+
+First, let’s talk about how i18n libraries traditionally avoid shipping the whole dictionary: namespacing. This is the approach of most i18n libraries, including i18next, react-intl, and next-intl. Namespacing requires splitting the dictionary by hand into named buckets and loading only the bucket(s) a page needs. Taking our example app, this looks like:
+
+```text
+public/locales/fr.json      # before: one 1,000-string dictionary
+
+public/locales/fr/          # after: you split it into buckets, by hand
+  common.json               #  90 strings – nav, buttons, errors
+  home.json                 #  72 strings
+  trips.json                #  95 strings
+  settings.json             #  65 strings
+  ...                       #  9 more buckets to maintain
+```
+
+With i18next, you declare the buckets inside each component, wherever you call useTranslation.
+
+```tsx
+// Trips.tsx
+const { t } = useTranslation(['trips', 'common']); // fetches trips.json + common.json
+return <h1>{t('trips:title')}</h1>;                // keys now carry the bucket name
+```
+
+With next-intl, you pick the buckets once per page, deciding what gets sent to the client at all.
+
+```tsx
+// Trips.tsx
+<NextIntlClientProvider messages={pick(messages, ['Trips', 'Common'])}>
+  <TripsPage />
+</NextIntlClientProvider>
+```
+
+The namespacing approach does reduce payload size. But it costs the developer, who now needs to maintain a second mirror structure of the code in the dictionary. Drift from the source is easy; if a component is moved to another route, its strings still stay in the old namespace.
+
+Every t() call in the codebase now makes both a loading decision and string lookup; and since buckets are not drawn per component, buckets still carry unused strings.
+
+In the meantime, there’s already a tool in your build that already knows, precisely and automatically, which code each page uses. It’s the bundler. What if translations were visible to it at build time?
+
+## Why build injection is based (but still limited)
+
+Paraglide JS developed a new approach: make strings part of the build itself. Translations are compiled into the bundle at buildtime, so the treeshaker removes unused translations automatically. This means each page ships only the strings it needs.
+
+Here’s how it plays out in our example app. Message files are written one per locale, just like a dictionary:
+
+```json
+// messages/en.json            // messages/fr.json
+{ "trips_title": "Your trips" }   { "trips_title": "Vos voyages" }
+```
+
+The compiler then turns each message into its own exported function, with every locale inlined in the function body:
+
+```js
+// paraglide/messages/trips_title.js (generated, simplified)
+export const trips_title = () => {
+  const locale = getLocale();
+  if (locale === 'fr') return 'Vos voyages';
+  if (locale === 'es') return 'Tus viajes';
+  if (locale === 'ja') return '旅行一覧';
+  if (locale === 'zh') return '您的行程';
+  return 'Your trips';
+};
+```
+
+An import is a static binding the bundler can read at build time, as opposed to a t() runtime lookup. The treeshaker deletes any unused messages.
+
+```tsx
+// Trips.tsx
+import { m } from './paraglide/messages.js';
+return <h1>{m.trips_title()}</h1>;
+```
+
+With this approach, Wayfinder ships only the 95 messages used on the Trips page, without drift or hand-maintained buckets.
+
+We believe this is the right direction for i18n: the more of the problem that lives at buildtime, the more of it the bundler can address. The build is where code can be analyzed. We’ve already seen this shift from runtime to buildtime in routing, CSS, and data fetching.
+
+Build injection does have limitations, though. Although unused messages are deleted by the treeshaker, each message itself still carries all of its locales (as you can’t determine a request’s locale at buildtime).
+
+So the payload (entries used x locales supported) has a breakeven point, past which you’re better off just shipping the whole file for each locale.
+
+<LocaleTwinsGraph figure='breakeven' strings='1000' kb='80' page='95' locales='5' />
+
+Further, a user who needs zero translations still downloads French, Japanese, Chinese, and every other language inside every message function.
+
+<LocaleTwinsGraph figure='visitors' strings='1000' kb='80' page='95' locales='5' />
+
+## How locale twins work
+
+We’ve been trying a new method we’re excited to release in beta. The basic approach is to serve a separate bundle for each locale. This keeps the bundler’s knowledge of which strings each chunk needs, but moves the locale choice from buildtime back to serve time.
+
+With this approach, you get treeshaking’s granularity without loading every locale. A visitor downloads one locale’s strings only for pages they visit, and the default-locale visitor gets zero translation bytes. In fact, there’s no translation request at all: the strings are inside the code chunks themselves. So the page doesn’t wait on a fetch or flash untranslated content while one loads.
+
+Here are the same graphs with the new locale twins approach:
+
+<LocaleTwinsGraph figure='breakeven' twins='true' strings='1000' kb='80' page='95' locales='5' />
+
+<LocaleTwinsGraph figure='visitors' twins='true' strings='1000' kb='80' page='95' locales='5' />
+
+Here’s how it works:
+
+<LocaleTwinsTimeline>
+<TimelineStep name='Compile'>
+
+Per client module, hash each translatable entry, blank its source text in the code, and add one registration call whose placeholder lists the module’s hashes and carries their source text.
+
+```tsx
+// 1. Compile: what you write. In gt.config.json:
+// "experimental": { "splitting": "locale-twins" }
+import { vite as gtCompiler } from
+  '@generaltranslation/compiler/experimental';
+import { T } from 'gt-react/experimental';
+export function Trips() {
+  return <T><h1>Your trips</h1></T>;
+}
+```
+
+</TimelineStep>
+<TimelineStep name='Bundle'>
+
+Vite chunks as usual, plus one vendor chunk that keeps library code shared; placeholders ride inside the chunks that use them. We inherit the code splitting.
+
+```js
+// 2. Bundle: what the compiler emits (client)
+import { GtInternalRegisterLocaleTwin
+  as _GtInternalRegisterLocaleTwin }
+  from "gt-react/experimental";
+_GtInternalRegisterLocaleTwin(
+  "__GT_LOCALE_TWIN__:78e2ed3d440072a9:W3si…");
+export function Trips() {
+  return jsx(T, { children: jsx("h1",
+    { children: "" }), _hash: "78e2ed3d440072a9" });
+}
+```
+
+</TimelineStep>
+<TimelineStep name='Twin'>
+
+Post-build: every chunk carrying a placeholder, plus every chunk that imports a twinned chunk, up the import graph, gets one copy per locale, the default locale included, with the placeholder filled and its imports renamed to that locale’s twins. Everything else, such as the vendor chunk, is emitted once.
+
+```text
+// 3. Twin: what the build writes
+dist/
+  index.html            ← bootstrap picks twins
+  gt-locale-twins.json  ← manifest
+  assets/
+    vendor-Bx7kQ2mN.js  ← shared, emitted once
+    index-DGIdfwLW.js   ← original, never loaded
+    index-DGIdfwLW.en-5e6f7a8b.js  ← one per locale
+    index-DGIdfwLW.fr-0c1d2e3f.js
+    Trips-C7otXMrN.fr-0c1d2e3f.js
+```
+
+</TimelineStep>
+<TimelineStep name='Serve'>
+
+The locale cookie, then the browser’s languages, then the default locale pick the locale; the document points at that locale’s entry twin, which imports only same-locale twins and shared chunks.
+
+```js
+// 4. Serve: the SPA's index.html reads the
+// generaltranslation.locale cookie, then
+// navigator.languages, then defaultLocale.
+// TanStack Start, src/server.ts:
+import { manifest }
+  from 'virtual:gt-locale-twins-manifest';
+createStartHandler({ handler: defaultStreamHandler,
+  transformAssets:
+    createLocaleTwinAssets({ manifest }) });
+```
+
+</TimelineStep>
+</LocaleTwinsTimeline>
+
+There are still drawbacks to this approach. It’s not supported by every framework yet, because something at serve time must pick the locale: either the bootstrap script in your HTML or a server or edge handler that maps asset URLs per request. And switching locales is a full page reload, since the other locales’ twins were never shipped.
+
+Today, the beta works with Vite 7 and 8 apps using gt-react (SPA) or TanStack Start. It only runs on production builds, and your translation files must be on disk at buildtime.
+
+We invite you to test it out. Let us know what you think! The GitHub repo is here: LINK.
