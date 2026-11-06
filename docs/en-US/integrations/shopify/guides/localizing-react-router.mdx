@@ -118,17 +118,19 @@ export function getRequestLocale(request: Request): string {
   // Only a configured locale is trusted; anything else falls back to the default.
   return remembered && allLocales.includes(remembered) ? remembered : gtConfig.defaultLocale;
 }
-```
 
-In the root middleware, set the cookie when a page request's locale differs from the remembered one:
-
-```ts title="app/root.tsx"
-const response = await next();
-const isPageRequest = request.method === 'GET' && !new URL(request.url).pathname.startsWith('/api/');
-if (isPageRequest && readCookie(request, LOCALE_COOKIE_NAME) !== locale) {
-  response.headers.append('Set-Cookie', `${LOCALE_COOKIE_NAME}=${locale}; Path=/; SameSite=Lax`);
+/** Page loads and client navigations, but not `/api` calls or speculative prefetches. */
+export function isPageNavigation(request: Request): boolean {
+  const purpose = `${request.headers.get('Purpose') ?? ''} ${request.headers.get('Sec-Purpose') ?? ''}`;
+  return (
+    request.method === 'GET' &&
+    !new URL(request.url).pathname.startsWith('/api/') &&
+    !purpose.includes('prefetch')
+  );
 }
 ```
+
+The root middleware in the next section sets the cookie when a page navigation's locale differs from the remembered one. Prefetches don't set it, so a prefetched link to another language can't change the language of the cart before the shopper follows it.
 
 ## Pass the language to Shopify [#storefront-language]
 
@@ -142,7 +144,7 @@ import {
   handleShopifyRoutes,
 } from '@shopify/hydrogen';
 import gtConfig from '../gt.config.json';
-import {getRequestLocale} from '~/lib/i18n';
+import {getRequestLocale, isPageNavigation, LOCALE_COOKIE_NAME, readCookie} from '~/lib/i18n';
 import type {Route} from './+types/root';
 
 // One entry for every locale in gt.config.json.
@@ -173,13 +175,18 @@ export const middleware: Route.MiddlewareFunction[] = [
       const redirect = await handleShopifyRedirects({request, routeTemplates, storefrontClient});
       if (redirect) return redirect;
     }
+    // Remember the page's locale for Hydrogen's `/api` handlers. Set the cookie before
+    // applyResponseHeaders, which makes any response that sets a cookie private and uncacheable.
+    if (isPageNavigation(request) && readCookie(request, LOCALE_COOKIE_NAME) !== locale) {
+      response.headers.append('Set-Cookie', `${LOCALE_COOKIE_NAME}=${locale}; Path=/; SameSite=Lax`);
+    }
     storefrontClient.requestContext.applyResponseHeaders(response.headers);
     return response;
   },
 ];
 ```
 
-`config`, `routeTemplates`, `handlers`, and `storefrontClientContext` come from your existing Hydrogen setup; only `i18n` changes.
+`config`, `routeTemplates`, `handlers`, and `storefrontClientContext` come from your existing Hydrogen setup; only `i18n` and the locale cookie are new. A page response that sets the cookie isn't cached, so this happens only on a shopper's first page view and when they change language.
 
 This guide keeps the US market for every language, so switching to French changes the copy without changing the cart's buyer country or currency. For multiple markets, let shoppers select their country separately, or pair each locale with a market and move the cart when the language changes. (See [Selling in multiple markets](/docs/integrations/shopify/guides/selling-in-markets)).
 
