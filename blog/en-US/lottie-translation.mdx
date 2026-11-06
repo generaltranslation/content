@@ -1,0 +1,131 @@
+---
+title: Introducing Lottie translation
+summary: How we translate .lottie animation files for multilingual landing pages
+date: 2026-11-04
+authors: [default]
+tags: ['engineering', 'lottie', 'animation', 'formats', 'cli']
+images: ['/static/blogs/lottie-translation/cover-dark.webp?v=20261104-2257']
+imagesLight: ['/static/blogs/lottie-translation/cover-light.webp?v=20261104-2257']
+ogImages: ['/static/blogs/lottie-translation/og.png?v=20261104-2257']
+---
+
+## We now translate Lottie animations
+
+We’re excited to announce our translation of Lottie (dotLottie) animation files. We built these specialized translations at the request of customers who use Lottie animations on their landing pages, including Ramp.
+
+Translating an animation is hard. A Lottie file has no layout engine: every word is placed at fixed coordinates and timed to a frame, often inside a shape that was drawn to fit the source language exactly. Sometimes text is composed of shape outlines instead of a font. And everything is moving: text fades in, types on letter by letter, or slides behind a mask.
+
+Our localization pipeline involves parsing the text layers in a file, translating with the correct context, fixing the layout with a vision model that checks every frame, and recomposing the file.
+
+See how our Lottie animation translations adapt to each language:
+
+<LottieTranslation label='Three Ramp animations, translated by General Translation' />
+
+Try translating your own Lottie animation into any language with the [General Translation CLI](/docs/cli/reference/formats/lottie-files)!
+
+In this post, we’re sharing a bit of engineering behind how we built a production-grade translation workflow for Lottie animations.
+
+## First, what are Lottie animation files?
+
+Lottie is a performant animation style for the web: lightweight, vectorized, and easily interactive and themeable.
+
+Lottie encodes animations as a set of vector instructions rather than pixels. Paths, shapes, color, movement, and timing are all encoded as JSON values. A Lottie file is tiny (much smaller than GIF or video) and its resolution stays crisp at any size. Thanks to open-source players, Lottie plays the same across web, desktop, iOS, and Android.
+
+<LottieFigure figure='vector' />
+
+Lottie animations can be edited after they are designed: recolored, recomposed, themed, or made interactive.
+
+dotLottie (the .lottie format) is the compressed, production-ready version of Lottie. .lottie bundles Lottie animations with assets like images, themes, and even interactive state machines. With state machines, logic can be stored directly inside the animation file itself. Animations can play, pause, or branch on click, hover, press, or completion. These interactive states can thus be defined by the designer inside the file, rather than written afterwards by a developer.
+
+(The name Lottie honors the pioneering German film director Lotte Reiniger, who created intricate silhouette films with imaginative cutout figures and invented a proto-multiplane camera, the precursor to a technique made famous by Walt Disney.)
+
+<LottieFigure figure='reiniger' />
+
+Lottie is well-loved for landing pages and apps across the web, which is why we received so many requests to translate .lottie files.
+
+## How Lottie translation works
+
+A Lottie animation is a list of layers with keyframes, reusable sub-compositions (precomps), and text layers whose words live in "text documents" at a path like `layers[i].t.d.k[j].s.t`, which can change over time.
+
+Translation can easily break layouts. For example, a German string is often 30% longer than its English counterpart. But a text box or speech bubble which contains text doesn’t “know” how long that text is. Preserving layout is what makes translating animations hard.
+
+<LottieFigure figure='layers' />
+
+Our Lottie translation pipeline involves a four-step process. We parse the text layers in a file, translate with the correct context, fix the layout with a vision model that checks every frame, and recompose the file.
+
+### Parsing the text
+
+<LottieFigure figure='parse' />
+
+First, we need to find the text within the animation.
+
+A .lottie file is a ZIP bundle that can hold several animations, each one a JSON file. We unzip it and collect every text string from every animation. Each string gets a stable key: its path in the JSON, so a translation can be cached across versions of the file and written back to exactly the right place.
+
+A key looks like this:
+
+```text
+animations/anim_0.json::layers/0/t/d/k/0/s/t
+```
+
+- `animations/anim_0.json` is the animation inside the bundle.
+- `layers/0` is the first layer.
+- `t/d/k/0/s/t` is that layer’s text. The `k/0` matters: text can change mid-animation, and each version is its own string with its own key.
+
+Precomps (reusable sub-animations, like a component) have their own layer lists, so we search those too.
+
+We only change the text strings. Everything else in the bundle, such as the manifest, images, and other assets, is repacked with its contents unchanged.
+
+### Translating text (and handling edge cases)
+
+The text goes through the same translation pipeline as every format GT supports: so your context, glossary terms, and custom prompts apply and your translations stay consistent across every surface.
+
+To handle edge cases, we add two extra instruction sets.
+
+Line breaks are the first special case. Most animation text doesn’t wrap on its own; to make two lines, the designer presses Enter at the exact spot they want the break. So after translating text, that break is no longer in the right place.
+
+We keep the source’s line count and move the breaks to natural spots (never inside a word or number, keeping multi-word names together). For CJK (Chinese, Japanese, and Korean writing systems), we add breaks between characters to preserve line count.
+
+<LottieFigure figure='linebreaks' />
+
+Missing letters are the second special case. Many animations don’t include a font; they instead save each letter as a small vector drawing, and only the letters from the original text are saved. So if the English text doesn’t use ñ, ü, or any Japanese character, those drawings would simply not render.
+
+We fill in the missing outlines by drawing them from the font itself, at the same scale and baseline the exporter used, so new letters sit in line with the original ones. If you’ve uploaded your brand font, we draw from that first. If a letter isn’t in your font, we fall back to a matching open font so the text still renders.
+
+<LottieFigure figure='glyphs' />
+
+### Fixing layout and visual QA
+
+<LottieFigure figure='layout' />
+
+We rebuild the structure of a file so that translated text stays inside the corresponding shape.
+
+Before checking anything visually, we work out how the file is put together:
+
+- **Track layer geometry across important frames.** We sample where each layer sits across many frames: since bubbles and cards move, scale, and fade.
+- **Match text to its container.** We find which bubble, card, or pill holds each piece of text and check that the text stays inside it when both are visible.
+- **Find repeated copies.** Some layers are copies of the same element. We group copies so they’re resized the same way and stay consistent.
+- **Keep rows together.** Move elements that sit on one line together (for example, a label and an icon next to it should be shifted together rather than being overlapped).
+
+Deterministic fixes (like text boxes colliding) run first and handle most cases without a model. These fixes shift neighbors or widen boxes.
+
+We then run visual QA:
+
+1. **Pick the frames to check.** We compute the frames where text has finished appearing and is holding still. Then we pick the smallest set of frames that covers every text.
+2. **Render frames.** We draw them with [lottie-web](https://github.com/airbnb/lottie-web), the open-source Lottie player, in an isolated sandbox.
+3. **Have a vision model judge.** It compares each frame to the original and flags text that spills out of its bubble or card, sits too tight against an edge, or runs into neighboring text.
+
+If this visual QA step finds “collisions” (text not properly fitting in bounding boxes), we perform another fixing step on the affected text and shapes.
+
+### Repacking
+
+When layout processing finishes and our visual QA no longer finds any collisions, we write each translated animation back into a copy of the original .lottie bundle, keeping the same structure, images, and manifest.
+
+You get one .lottie file per source file per locale. `gt download` saves each one to the path your `gt.config.json` sets for that locale (for example, `animations/es/`), so the outputs are again compact and ready to drop into your site.
+
+## How to translate your own Lottie files
+
+Translate your .lottie files with the General Translation CLI: see the [docs](/docs/cli/reference/formats/lottie-files).
+
+You will get back a translated .lottie file for every locale you select; we support 120 languages and regional variants. If your animations use a brand font, include your font files so the translated text is drawn in your exact typeface.
+
+If you’re new to GT, start with the [Quickstart](/docs/cli/quickstart). .lottie joins the other formats supported on our full-stack localization platform: including for your app, docs, slides, marketing site, and videos.

@@ -163,6 +163,8 @@ const customComponents = {
   LogoCardContainer: StubComponent,
   LogoCardContent: StubComponent,
   LogoCardImage: StubComponent,
+  LottieFigure: StubComponent,
+  LottieTranslation: StubComponent,
   Mermaid: StubComponent,
   ShadCard: StubComponent,
   Spotlight: StubComponent,
