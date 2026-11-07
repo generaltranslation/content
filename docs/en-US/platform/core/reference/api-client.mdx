@@ -7,7 +7,7 @@ description: Create a typed client for the General Translation API and call gene
 
 Import the TypeScript client from `generaltranslation/api` when you need endpoint-level control without constructing HTTP requests yourself. The module combines an authenticated, versioned, retrying transport with generated endpoint helpers and opt-in utilities for batching and translation-job polling.
 
-`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.5.8 and the equivalent standalone `@generaltranslation/api` 0.5.5 package.
+`generaltranslation/api` is available in `generaltranslation` 9.2.0 and later. The examples below target `generaltranslation` 9.5.11 and the equivalent standalone `@generaltranslation/api` 0.6.0 package. Generated helpers from 0.5.5 are unchanged. The [file-upload helpers](#file-uploads) require 0.6.0.
 
 The generated helpers reflect the installed package version, which can differ from the current hosted [public OpenAPI contract](/docs/platform/openapi/overview). Use the public reference when checking which endpoints and file formats are live. Helpers that call a `2026-03-06.v1` route link to that version's page.
 
@@ -208,6 +208,8 @@ The installed 0.5.5 SDK provides generated helpers for these 48 public operation
 | [`exportContextContent`](/docs/platform/openapi/reference/context-groups/export-context-content) | Export Glossary terms and Custom Prompts. |
 
 <Callout type="info">
+  **Changed in v0.6.0:** [`createFileUploads`](#file-uploads), [`putFileUpload`](#file-uploads), and [`uploadSourceFileReferences`](#file-uploads) send source files that do not fit in an inline upload. [`uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) on `generaltranslation` 9.5.11 calls them automatically.
+
   **Changed in v0.5.4:** [`ApiError`](#api-error) no longer uses an HTML error page as its message; it falls back to the response status text, or to the HTTP status when there is none.
 
   **Changed in v0.5.2:** The generated client added Context Management helpers for Context Groups, assignments, Glossary terms, Custom Prompts, and imports and exports.
@@ -245,6 +247,66 @@ Project creation requires an Organization key with `org:projects:create` and tak
 For [`createProjectApiKey`](/docs/platform/openapi/reference/projects/create-project-api-key), select explicit least-privilege `permissions`. Omitting them requests all delegable project permissions held by the caller; you must hold every selected permission. Store the returned secret securely and never log it.
 
 These generated discovery and creation helpers are not methods on [`GT`](/docs/platform/core/reference/gt-class/constructor).
+
+## File uploads [#file-uploads]
+
+`createFileUploads`, `putFileUpload`, and `uploadSourceFileReferences` cover source files that do not fit in [`uploadSourceFiles`](/docs/platform/openapi/reference/versions/2026-03-06.v1/files/upload-source-files). They require `project:files:write` and send `gt-api-version: 2026-10-08.v1`. [`GT.uploadSourceFiles`](/docs/platform/core/reference/gt-class-methods/translation/upload-source-files) calls them when a file's decoded content is over 20MB (20,000,000 bytes), or when the inline files in a request, including `formatMetadata`, would exceed 90 × 1024 × 1024 bytes.
+
+`createFileUploads` and `uploadSourceFileReferences` return `{ data, error, request, response }`, the same shape as a generated helper. They do not read `throwOnError`. A file the project already stores comes back from `createFileUploads` as `exists` and has no URL. `uploadSourceFileReferences` returns `200` even when a file fails; that item has `status: "failed"` and an `error`, and nothing from that file is saved.
+
+`putFileUpload` PUTs the file bytes to the presigned URL. The URL authorizes the request, so this call does not add an API key. It resolves when storage accepts the bytes and throws [`ApiError`](#api-error) otherwise. Retries stop when the URL's `expiresAt` passes. Pass the raw file bytes, not a base64 string. A non-media file over 150MB is rejected when the reference is submitted.
+
+```ts title="upload-by-reference.ts"
+import { createHash } from 'node:crypto';
+import {
+  createFileUploads,
+  putFileUpload,
+  uploadSourceFileReferences,
+} from 'generaltranslation/api';
+
+const bytes = new TextEncoder().encode('{"greeting":"Hello"}');
+const sha256 = createHash('sha256').update(bytes).digest('hex');
+
+const created = await createFileUploads({
+  client,
+  path: { projectId },
+  body: {
+    files: [{ sha256, fileFormat: 'JSON', size: bytes.byteLength }],
+  },
+});
+
+if (created.error) {
+  throw new Error('Could not prepare the file upload');
+}
+
+const upload = created.data.files[0]?.upload;
+if (upload) await putFileUpload(upload, bytes);
+
+const saved = await uploadSourceFileReferences({
+  client,
+  path: { projectId },
+  body: {
+    sourceLocale: 'en',
+    data: [
+      {
+        source: {
+          fileName: 'locales/en/common.json',
+          fileFormat: 'JSON',
+          locale: 'en',
+          upload: { sha256 },
+        },
+      },
+    ],
+  },
+});
+
+const result = saved.data?.results[0];
+if (!result || result.status !== 'succeeded') {
+  throw new Error('Could not save the source file');
+}
+```
+
+To send `formatMetadata` by reference, include its JSON bytes in the `createFileUploads` request and set `formatMetadata: { upload: { sha256 } }` on the source. Pass `formatMetadata: { content }` instead when the metadata fits in the reference request. Provide exactly one of `content` or `upload` for both the file and its metadata.
 
 ## `paginate` [#pagination]
 
@@ -386,7 +448,7 @@ const results = await processBatches(files, async (batch) => {
 
 ## Types and errors [#types-errors]
 
-The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, and the generated OpenAPI types for the public operations listed above.
+The module exports `Client`, `Options`, `ApiClientConfig`, `ApiVersion`, `RetryPolicy`, `AwaitJobsOptions`, `AwaitJobsResult`, `GetJobStatuses`, `JobResult`, `BatchOptions`, `RuntimeFileFormat`, `CreateFileUploadsResponse`, `PresignedFileUpload`, `SourceFileReference`, `UploadSourceFileReferencesResponse`, and the generated OpenAPI types for the public operations listed above.
 
 For each public operation listed above, the package exports:
 

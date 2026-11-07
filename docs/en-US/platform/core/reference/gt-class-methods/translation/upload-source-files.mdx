@@ -32,7 +32,8 @@ uploadSourceFiles(
 
 ## How it works [#how-it-works]
 
-- **File encoding.** Text content is automatically base64-encoded for safe transmission. Binary `LOTTIE` content must already be base64-encoded.
+- **File encoding.** Pass text as a string. Inline uploads base64-encode it. Binary `LOTTIE` content must already be base64-encoded. A file sent by reference is stored as decoded bytes.
+- **Large files.** A file stays inline when its decoded content is at most 20MB (20,000,000 bytes) and the inline files in that request, including their `formatMetadata`, stay within 90 × 1024 × 1024 bytes. A larger file is uploaded to storage and sent by reference, and its `formatMetadata` is stored with it. A non-media file over 150MB is rejected. Pass `content` the same way on either path.
 - **File references.** The returned file references (including `fileId`, `versionId`, and `branchId`) are required inputs for later operations.
 - **Typical workflow.** `uploadSourceFiles` is the entry point of the file pipeline: upload source files, then [`setupProject`](/docs/platform/core/reference/gt-class-methods/translation/setup-project) → [`enqueueFiles`](/docs/platform/core/reference/gt-class-methods/translation/enqueue-files) → [`queryFileData`](/docs/platform/core/reference/gt-class-methods/translation/query-file-data) → [`downloadFileBatch`](/docs/platform/core/reference/gt-class-methods/translation/download-file-batch).
 
@@ -220,9 +221,13 @@ const uploadedFiles = await uploadAllJsonFiles();
 
 ## Notes [#notes]
 
-- Text content is automatically base64-encoded for safe transmission. Pass binary `LOTTIE` content as a base64-encoded `.lottie` ZIP file.
+<Callout type="info">
+  **Changed in v9.5.11:** Files over the inline limits above are uploaded to storage and sent by reference, including `formatMetadata`. [`gt translate`](/docs/cli/reference/commands/translate) and [`gt stage`](/docs/cli/reference/commands/stage) use this method, so those commands no longer fail when a source file exceeds the inline request limit.
+</Callout>
+
+- Pass text as a string. Pass binary `LOTTIE` content as a base64-encoded `.lottie` ZIP file.
 - File names should be unique identifiers, typically including the file path.
 - The `locale` field in each file should match the `sourceLocale` option.
-- Large files or many files may require increased timeout values.
+- A referenced upload can take longer than an inline request. Raise `timeout` for a large file or a large batch.
 - File references returned from this method are needed for subsequent operations, and include `branchId` for versioning with branch support.
 - **Supported formats:** [`FileFormat`](/docs/platform/core/reference/types/file-format).
