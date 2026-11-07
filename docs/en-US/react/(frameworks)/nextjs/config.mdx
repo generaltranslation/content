@@ -43,34 +43,41 @@ Set your project ID and API keys as environment variables, never as plugin optio
 
 | Variable | Description |
 | --- | --- |
-| `GT_PROJECT_ID` (or `NEXT_PUBLIC_GT_PROJECT_ID`) | Your General Translation project ID. |
-| `GT_API_KEY` | Project API key (prefixed `gtx-api-`) for server runtime or explicit CLI authentication; optional when the CLI uses login. |
-| `GT_DEV_API_KEY` (or `NEXT_PUBLIC_GT_DEV_API_KEY`) | Project API key (prefixed `gtx-api-`) with runtime translation permission, for development hot reload. |
+| `GT_PROJECT_ID` | Project ID. `NEXT_PUBLIC_GT_PROJECT_ID` is still read when this is unset. |
+| `GT_API_KEY` | Project API key (prefixed `gtx-api-`) for server runtime translation and, in development, hot reload. |
 
 CLI sessions do not provide runtime SDK credentials. (See [CLI authentication](/docs/cli/guides/configuring#credentials)).
 
 ### Development
 
-Use the `NEXT_PUBLIC_` variants so both server and client components can translate during development. [`gt init`](/docs/cli/reference/commands/init) writes these names in `gt` 2.23.0 and later. Development hot reload does not need `GT_API_KEY`.
+Put both variables in `.env.local`. [`gt init`](/docs/cli/reference/commands/init) writes these names for Next.js in `gt` 2.27.1 and later. During `next dev`, `GT_API_KEY` is the hot-reload key, and `withGTConfig` passes `GT_PROJECT_ID` and `GT_API_KEY` to client code so client components can translate. Production builds do not include the key.
 
 ```bash title=".env.local"
-NEXT_PUBLIC_GT_PROJECT_ID="your-project-id"
-NEXT_PUBLIC_GT_DEV_API_KEY="gtx-api-your-runtime-key"
+GT_PROJECT_ID="your-project-id"
+GT_API_KEY="gtx-api-your-runtime-key"
 ```
+
+A project set up by an earlier [`gt init`](/docs/cli/reference/commands/init) can keep `NEXT_PUBLIC_GT_PROJECT_ID` and `NEXT_PUBLIC_GT_DEV_API_KEY`. Those names still enable development hot reload when the unprefixed names are unset. `GT_DEV_API_KEY` is not read.
+
+To keep the key out of the browser while you develop, set [`runtimeUrl`](#runtime-url) to an empty string. That turns off runtime translation.
 
 ### Production
 
-Set these in the deployed server's environment only:
+Set the same names in the deployed server's environment:
 
 ```bash
 GT_PROJECT_ID="your-project-id"
 GT_API_KEY="gtx-api-your-production-key"
 ```
 
-The key needs **Runtime translation** for server-side [`tx`](/docs/react/nextjs/reference/functions/tx) and [`<Tx>`](/docs/react/nextjs/reference/components/tx). If your build runs [`gt translate`](/docs/cli/reference/commands/translate) with the same key, also grant **Files > Write** and **Translation queue > Enabled**. `GT_API_KEY` does not enable development hot reload in production, and [`<T>`](/docs/react/reference/components/t) and [`useGT`](/docs/react/reference/hooks/use-gt) only look up already-generated translations. Send browser requests that need runtime translation to your authenticated server endpoint instead of exposing the key.
+`GT_API_KEY` in `.env.local` is also used by a local `next build` or `next start` for server runtime translation, and it is not added to the client bundle. The key needs **Runtime translation** for server-side [`tx`](/docs/react/nextjs/reference/functions/tx) and [`<Tx>`](/docs/react/nextjs/reference/components/tx). If your build runs [`gt translate`](/docs/cli/reference/commands/translate) with the same key, also grant **Files > Write** and **Translation queue > Enabled**. [`<T>`](/docs/react/reference/components/t) and [`useGT`](/docs/react/reference/hooks/use-gt) only look up already-generated translations. Send browser requests that need runtime translation to your authenticated server endpoint instead of exposing the key.
 
 <Callout type="warn">
-  **Warning:** Never include any API key in deployed client bundles or prefix `GT_API_KEY` with `NEXT_PUBLIC_`. We recommend development keys with only **Runtime translation** enabled. Remove both `GT_DEV_API_KEY` and `NEXT_PUBLIC_GT_DEV_API_KEY` from production; the build throws if either is set with `NODE_ENV=production`.
+  **Warning:** Never include any API key in a deployed client bundle, and do not prefix `GT_API_KEY` with `NEXT_PUBLIC_`. We recommend a key with only **Runtime translation** enabled for local development. Next.js still inlines every `NEXT_PUBLIC_` variable into the client bundle, including in production, so remove `NEXT_PUBLIC_GT_DEV_API_KEY` from production environments.
+</Callout>
+
+<Callout type="info">
+  **Changed in v11.4.19:** Next.js reads `GT_PROJECT_ID` and `GT_API_KEY`. Development hot reload uses `GT_API_KEY`, and a production build no longer fails when `GT_DEV_API_KEY` or `NEXT_PUBLIC_GT_DEV_API_KEY` is set.
 </Callout>
 
 ## Options [#options]

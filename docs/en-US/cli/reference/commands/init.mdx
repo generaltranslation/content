@@ -15,7 +15,7 @@ npx gt init
 
 ## How it works [#how-it-works]
 
-1. Detects your framework. For a Next.js App Router or Mintlify project, it offers to connect the [Locadex](/docs/platform/locadex/quickstart) AI agent instead.
+1. Detects your framework. An Expo or React Native app stops here, before any file change, and points to the [React Native Quickstart](/docs/react/react-native-quickstart). For a Next.js App Router or Mintlify project, it offers to connect the [Locadex](/docs/platform/locadex/quickstart) AI agent instead.
 2. For a React-based project, optionally installs the matching runtime and configures the framework (experimental):
    - **Next.js App Router:** [`GTProvider`](/docs/react/reference/components/gt-provider) and `withGTConfig`.
    - **Vite:** an [`initializeGTSPA`](/docs/react/reference/config#initialize-spa) bootstrap that runs before the existing app entry.
@@ -34,19 +34,19 @@ A configured project ID is reused. Otherwise, the wizard lists [accessible proje
 
 Selecting an existing project does not require Organization project-creation access. Provisioning a key still requires key-write authorization and permission to delegate runtime generation. An invalid or insufficient explicit tooling key never falls back to login.
 
-Provisioning creates one key named `Development key (gt init)` with only `project:translations:generate`. It writes the project ID and development key without printing the secret or changing an existing `GT_API_KEY`. This runtime key does not authenticate later CLI management commands; use your login or a separately scoped tooling key. (See [credentials](/docs/cli/guides/configuring#credentials)).
+Provisioning creates one key named `Development key (gt init)` with only `project:translations:generate`. It writes the project ID and development key without printing the secret. For Next.js, that key is stored as `GT_API_KEY` and replaces an existing `GT_API_KEY` in `.env.local`. Other frameworks leave `GT_API_KEY` unchanged. This runtime key does not authenticate later CLI management commands when you are signed in; use your login or a separately scoped tooling key. (See [credentials](/docs/cli/guides/configuring#credentials)).
 
-Existing framework runtime credentials for the same project can skip provisioning. Server-only setups with a project ID and `GT_API_KEY` also skip it; frameworks that translate in the browser do not treat unprefixed `GT_API_KEY` as a runtime key.
+Existing framework runtime credentials for the same project can skip provisioning. Next.js treats `GT_API_KEY`, or `NEXT_PUBLIC_GT_DEV_API_KEY` from an earlier setup, together with a project ID, as those credentials. Other browser frameworks look for their prefixed development key and do not treat an unprefixed `GT_API_KEY` as one. Server-only setups skip provisioning when a project ID and `GT_API_KEY` are already set.
 
-The generated variables are `GT_PROJECT_ID` and `GT_DEV_API_KEY`, with these prefixes for frameworks that translate in the browser:
+The generated variables are:
 
-- Next.js (App Router and Pages Router): `NEXT_PUBLIC_`
-- Vite, TanStack Start, and React Router: `VITE_`
-- Gatsby: `GATSBY_`
-- React: `REACT_APP_`
-- Redwood: `REDWOOD_ENV_`
+- Next.js (App Router and Pages Router): `GT_PROJECT_ID` and `GT_API_KEY`
+- Vite, TanStack Start, and React Router: `VITE_GT_PROJECT_ID` and `VITE_GT_DEV_API_KEY`
+- Gatsby: `GATSBY_GT_PROJECT_ID` and `GATSBY_GT_DEV_API_KEY`
+- React: `REACT_APP_GT_PROJECT_ID` and `REACT_APP_GT_DEV_API_KEY`
+- Redwood: `REDWOOD_ENV_GT_PROJECT_ID` and `REDWOOD_ENV_GT_DEV_API_KEY`
 
-Other setups use unprefixed variables. Development keys are for local development only; for production credentials, see [Next.js credentials](/docs/react/nextjs/config#credentials). Never include API keys in deployed browser or mobile bundles.
+Other setups use unprefixed `GT_PROJECT_ID` and `GT_DEV_API_KEY`. For Next.js production credentials, see [Next.js credentials](/docs/react/nextjs/config#credentials). Never include API keys in deployed browser or mobile bundles.
 
 ## Flags [#flags]
 
@@ -105,7 +105,9 @@ Setup signs in only when it provisions credentials and has no tooling key or sav
 
 - `authorization_required` — `verificationUri`, `userCode`, and, when available, `verificationUriComplete`.
 - `handoff` — the Locadex GitHub `url`, with `reason: "locadex"`.
-- `result` — `command`, `outcome` (`success`, `needs_human_action`, or `failed`), `completedSteps`, and, when present, `url`, `actions` for manual follow-up, `missingOptions`, and `error`.
+- `result` — `command`, `outcome` (`success`, `needs_human_action`, or `failed`), `completedSteps`, and, when present, `url`, `actions` for manual follow-up, `missingOptions`, `error`, and `nextSteps`.
+
+When React setup finishes, `nextSteps` lists the remaining work: mark content for translation, add a language switcher, run [`gt translate`](/docs/cli/reference/commands/translate), and start the dev server. The command prints one completion message followed by those steps. Setup does not mark any content for translation.
 
 `completedSteps` leaves unchanged `gt.config.json` and generated translation-loader files out of the list. When either file changes, the step identifies it as created or updated.
 
