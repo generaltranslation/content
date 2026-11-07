@@ -1,0 +1,56 @@
+---
+
+title: Translating data
+description: How to translate query results and model answers in a Databricks App with gt-node.
+related:
+  links:
+    - /docs/integrations/databricks/guides/deploying
+
+---
+
+Data in a Databricks App, such as query results and model answers, only exists at runtime. Translate it on the server with `gt-node` before it reaches the browser.
+
+## Before you start [#before-start]
+
+Complete the [Quickstart](/docs/integrations/databricks/quickstart). Every example below runs inside a route under `/api`, where the Quickstart's middleware has bound the request's locale with [`withGT`](/docs/node/reference/functions/with-gt).
+
+## Translate query results [#query-results]
+
+Call [`tx`](/docs/node/reference/functions/tx) on each text column you show to people. Leave identifiers, numbers, and dates as they are:
+
+```ts title="server/server.ts"
+app.get('/api/products', async (_req, res) => {
+  const rows = await getProducts(); // your query
+  const translated = await Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      description: await tx(row.description, {
+        $context: 'Product description from the catalog table',
+      }),
+    }))
+  );
+  res.json(translated);
+});
+```
+
+- `$context` tells the translation model where the text appears. Describe the source rather than the wording, such as "Column headers in a sales dashboard."
+- `gt-node` caches each translation, so a description repeated across rows or requests is translated once per server process.
+- When the request's locale is `defaultLocale`, [`tx`](/docs/node/reference/functions/tx) returns the text unchanged.
+
+## Translate model answers [#model-answers]
+
+To show a model's answer in the visitor's language, translate it on the server after the model responds:
+
+```ts title="server/server.ts"
+app.get('/api/summary', async (_req, res) => {
+  const answer = await summarizeSales(); // your serving endpoint or agent
+  res.json({ answer: await tx(answer, { $context: 'Answer from a data assistant' }) });
+});
+```
+
+For a model that writes in the visitor's language on its own, pass the locale to the model instead. Read it with [`getLocale`](/docs/node/reference/functions/get-locale).
+
+## What to use and when [#when]
+
+- **[`<T>`](/docs/react/reference/components/t) in `client/`:** interface text, translated at build time. Keep messages people read in the client, so the CLI translates them ahead of time.
+- **[`tx`](/docs/node/reference/functions/tx) on the server:** data known only at runtime, such as query results and model answers.

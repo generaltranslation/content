@@ -1,0 +1,68 @@
+---
+
+title: Deploying to Databricks
+description: How to deploy a translated Databricks App with its translations and a General Translation API key stored as a Databricks secret.
+related:
+  links:
+    - /docs/integrations/databricks/guides/translating-data
+
+---
+
+A deployed app needs two things from General Translation: the interface translations, which ship with your source, and an API key for translating data at runtime, which Databricks provides from a secret.
+
+## Before you start [#before-start]
+
+Complete the [Quickstart](/docs/integrations/databricks/quickstart), and install the [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/) signed in to your workspace.
+
+## Ship interface translations [#translations]
+
+Run [`npx gt translate`](/docs/cli/reference/commands/translate) before each deploy, and commit the files it writes to `client/src/_gt/`. Databricks builds your app from source, so translations that are not in the source tree are not in the app.
+
+To translate in CI instead, run [`npx gt translate`](/docs/cli/reference/commands/translate) there with a `GT_API_KEY` from your CI secret store before you deploy. (See [CLI credentials](/docs/cli/guides/configuring#credentials)).
+
+## Store the API key as a secret [#api-key]
+
+The server reads `GT_PROJECT_ID` and `GT_API_KEY`. The project ID is not secret, but the key is, so keep it in a Databricks secret:
+
+1. Create the key and pipe it into a secret. The value is never shown in your terminal:
+
+   ```bash
+   npx gt api-key create --project-id <project-id> --name 'Databricks app' --permission project:translations:generate \
+     | databricks secrets put-secret gt api-key
+   ```
+
+   Create the `gt` scope first with `databricks secrets create-scope gt` if it does not exist.
+
+2. Bind the secret to your app in `databricks.yml`:
+
+   ```yaml title="databricks.yml"
+   resources:
+     apps:
+       app:
+         resources:
+           - name: gt-api-key
+             secret:
+               scope: gt
+               key: api-key
+               permission: READ
+   ```
+
+3. Set both variables in `app.yaml`. `valueFrom` names the resource from the previous step:
+
+   ```yaml title="app.yaml"
+   env:
+     - name: GT_PROJECT_ID
+       value: <project-id>
+     - name: GT_API_KEY
+       valueFrom: gt-api-key
+   ```
+
+4. Deploy the app. Databricks resolves the secret into `GT_API_KEY` when the app starts.
+
+<Callout type="warn">
+  **Warning:** Never put the key itself in `app.yaml`, `databricks.yml`, or client code. Everything under `client/` ships to the browser.
+</Callout>
+
+## Check the deployed app [#check]
+
+Open the app, pick a language, and confirm that both the interface and the data switch. If the interface switches but data stays in the source language, the server is missing `GT_PROJECT_ID` or `GT_API_KEY`: in production, [`tx`](/docs/node/reference/functions/tx) logs an error and returns the source text, so the app keeps working.

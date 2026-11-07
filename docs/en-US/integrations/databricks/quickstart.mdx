@@ -1,0 +1,193 @@
+---
+
+title: Quickstart
+description: Translate a Databricks App built with AppKit, from its React interface to query results, with gt-react and gt-node.
+related:
+  links:
+    - /docs/integrations/databricks/guides/translating-data
+    - /docs/integrations/databricks/guides/deploying
+
+---
+
+AppKit is Databricks' TypeScript SDK for building Databricks Apps. An AppKit app is an Express server with a React client built by Vite, so it has two layers of text, and each is translated in a different place:
+
+- **Interface text.** Headings, buttons, and labels in `client/`. [`gt-react`](/docs/react/react-spa-quickstart) translates them ahead of time with the CLI and ships the translations with your build.
+- **Data.** Query results, Genie answers, and agent output that only exist at runtime. [`gt-node`](/docs/node/quickstart) translates them on the server as requests come in.
+
+Both layers read the same locale, so a visitor who picks Spanish sees Spanish labels and Spanish data.
+
+## Before you start [#before-start]
+
+You need:
+
+- An AppKit app, such as one created with `databricks apps init`
+- A [project](/docs/platform/dashboard/get-started) and the CLI, signed in with [`gt login`](/docs/cli/reference/commands/login)
+
+## Quickstart [#quickstart]
+
+### 1. Install the packages
+
+Run this from your app's root:
+
+```bash
+npm i gt-react gt-node
+npm i -D gt
+```
+
+### 2. Define your locales
+
+Create `gt.config.json` in your app's root. AppKit keeps client code in `client/src/`, so point the CLI there:
+
+```json title="gt.config.json"
+{
+  "defaultLocale": "en",
+  "locales": ["es", "ja"],
+  "src": ["client/src/**/*.{ts,tsx}"],
+  "files": {
+    "gt": {
+      "output": "client/src/_gt/[locale].json"
+    }
+  }
+}
+```
+
+Both the client and the server import this file, so the locale list lives in one place.
+
+### 3. Initialize the client
+
+Create an empty JSON file for each target locale, so imports resolve before you generate translations:
+
+```bash
+mkdir -p client/src/_gt
+echo '{}' > client/src/_gt/es.json
+echo '{}' > client/src/_gt/ja.json
+```
+
+Add a loader for the translation files:
+
+```ts title="client/src/loadTranslations.ts"
+export default async function loadTranslations(locale: string) {
+  const translations = await import(`./_gt/${locale}.json`);
+  return translations.default;
+}
+```
+
+Create a bootstrap file that initializes `gt-react` before your app renders:
+
+```ts title="client/src/index.ts"
+import { initializeGTSPA } from 'gt-react';
+import gtConfig from '../../gt.config.json';
+import loadTranslations from './loadTranslations';
+
+await initializeGTSPA({ ...gtConfig, loadTranslations });
+
+await import('./main'); // render the app only after translations load
+```
+
+Then point `client/index.html` at the new file:
+
+```html title="client/index.html"
+<script type="module" src="/src/main.tsx"></script> <!-- [!code --] -->
+<script type="module" src="/src/index.ts"></script> <!-- [!code ++] -->
+```
+
+(See [Configuring a Vite SPA](/docs/react/guides/spa/configuring-vite-spa)).
+
+### 4. Translate your interface
+
+Wrap interface text in [`<T>`](/docs/react/reference/components/t), and add a [`<LocaleSelector>`](/docs/react/reference/components/locale-selector):
+
+```tsx title="client/src/components/Header.tsx"
+import { T, LocaleSelector } from 'gt-react';
+
+export function Header() {
+  return (
+    <header>
+      <T>
+        <h1>Sales dashboard</h1>
+      </T>
+      <LocaleSelector />
+    </header>
+  );
+}
+```
+
+When a visitor picks a language, `gt-react` saves it in the `generaltranslation.locale` cookie and reloads the page. The server reads the same cookie in the next step.
+
+### 5. Translate data on the server
+
+Initialize `gt-node`, bind each request's locale, and translate runtime text with [`tx`](/docs/node/reference/functions/tx):
+
+```ts title="server/server.ts"
+import type { Request } from 'express';
+import { createApp, server } from '@databricks/appkit';
+import { initializeGT, withGT, getRequestLocale, tx } from 'gt-node';
+import gtConfig from '../gt.config.json' with { type: 'json' };
+
+initializeGT(gtConfig);
+
+// The language picker's choice, then the browser's language
+function resolveLocale(req: Request) {
+  const picked = req.headers.cookie?.match(/(?:^|;\s*)generaltranslation\.locale=([^;]+)/)?.[1];
+  return picked ?? getRequestLocale(req);
+}
+
+createApp({
+  plugins: [server()],
+  onPluginsReady(appkit) {
+    appkit.server.extend((app) => {
+      app.use('/api', (req, _res, next) => withGT(resolveLocale(req), () => next()));
+
+      app.get('/api/regions', async (_req, res) => {
+        const rows = [{ region: 'North America', note: 'Revenue grew in every quarter' }]; // your query
+        const translated = await Promise.all(
+          rows.map(async (row) => ({
+            ...row,
+            note: await tx(row.note, { $context: 'Analyst note in a sales dashboard' }),
+          }))
+        );
+        res.json(translated);
+      });
+    });
+  },
+}).catch(console.error);
+```
+
+Keep the plugins your app already registers; add only `onPluginsReady`, or extend the one you have. An unsupported locale falls back to `defaultLocale`.
+
+### 6. Add credentials
+
+Create a project API key with the **Runtime translation** permission (`project:translations:generate`), and add it to `.env` with your project ID:
+
+```bash
+echo "GT_PROJECT_ID=<project-id>" >> .env
+echo "GT_API_KEY=$(npx gt api-key create --project-id <project-id> --name 'Databricks app' --permission project:translations:generate)" >> .env
+```
+
+[`gt api-key create`](/docs/cli/reference/commands/api-key-create) prints only the new key, so it goes straight into the file. AppKit loads `.env` in development, and the CLI reads it too.
+
+<Callout type="warn">
+  **Warning:** Keep `.env` out of version control, and never import these values in `client/`. Everything under `client/` ships to the browser.
+</Callout>
+
+### 7. Generate translations and run
+
+Translate your interface text into every target locale:
+
+```bash
+npx gt translate
+```
+
+The CLI writes `client/src/_gt/es.json` and `client/src/_gt/ja.json`. Run it again whenever interface text changes.
+
+Start the app with `npm run dev`, then pick **español** in the language picker. The heading switches to Spanish after the page reloads, and `/api/regions` returns its note in Spanish.
+
+## FAQs [#faqs]
+
+### Which text goes through gt-react and which through gt-node?
+
+Text written in your code, such as headings and labels, goes through `gt-react`. It is translated once with the CLI, so it costs nothing at runtime. Text that comes from data, such as tables, Genie, or agents, goes through [`tx`](/docs/node/reference/functions/tx) on the server, because it is not known until a request runs. (See [Translating data](/docs/integrations/databricks/guides/translating-data)).
+
+### Do I need a Databricks plugin?
+
+No. `gt-react` and `gt-node` are ordinary npm packages, and AppKit runs them like any other dependency.
